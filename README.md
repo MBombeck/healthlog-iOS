@@ -26,8 +26,9 @@
 ---
 
 <p align="center">
-  <img src="docs/screenshots/ios-dashboard.png" width="240" alt="Dashboard with Health Score ring, vitals tiles, medication compliance" />
-  <img src="docs/screenshots/ios-insights.png" width="240" alt="Insights tab with Ask-the-Coach card and reference-range bars" />
+  <img src="docs/screenshots/ios-dashboard.png" width="240" alt="Dashboard with vitals tiles — weight, blood pressure, pulse and sleep, each with a sparkline trend" />
+  <img src="docs/screenshots/ios-insights.png" width="240" alt="Insights overview with four health-score rings — daily condition, sleep score, daily load and recovery — above the vitals list" />
+  <img src="docs/screenshots/ios-sharing.png" width="240" alt="Share screen: choose what is included, the time range, and the output form — revocable link, PDF report or ZIP record" />
 </p>
 
 ## What it is
