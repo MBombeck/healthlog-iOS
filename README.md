@@ -26,9 +26,10 @@
 ---
 
 <p align="center">
-  <img src="docs/screenshots/ios-dashboard.png" width="240" alt="Dashboard with vitals tiles — weight, blood pressure, pulse and sleep, each with a sparkline trend" />
-  <img src="docs/screenshots/ios-insights.png" width="240" alt="Insights overview with four health-score rings — daily condition, sleep score, daily load and recovery — above the vitals list" />
-  <img src="docs/screenshots/ios-sharing.png" width="240" alt="Share screen: choose what is included, the time range, and the output form — revocable link, PDF report or ZIP record" />
+  <img src="docs/screenshots/ios-dashboard.png" width="240" alt="Dark-mode dashboard greeting with a medication-compliance ring — 2 of 3 doses taken today — above vitals tiles for weight, blood pressure and pulse, each with a sparkline trend" />
+  <img src="docs/screenshots/ios-insights.png" width="240" alt="Dark-mode Insights overview with four health-score rings — daily condition, sleep score, daily load and recovery — above the vitals list" />
+  <img src="docs/screenshots/ios-medications.png" width="240" alt="Dark-mode medications list with per-medication cards — last and next intake, 7- and 30-day compliance bars, and one-tap Taken / Skipped actions" />
+  <img src="docs/screenshots/ios-sharing.png" width="240" alt="Dark-mode Share screen: choose what is included, the time range, and the output form — revocable link, PDF report or ZIP record" />
 </p>
 
 ## What it is
