@@ -175,7 +175,7 @@ The most useful things you can do:
 - **Run the app** against your own server (or `demo.healthlog.dev`) and tell me where it breaks.
 - **Open an [issue](https://github.com/MBombeck/healthlog-iOS/issues)** with the build number from **More → About**, one line on what you tried, one line on what happened vs. what you expected, a screenshot if it's visual, and whether it reproduces.
 - **Suggest what's missing.** The roadmap is driven by what real self-hosters actually reach for.
-- **Pull requests** are welcome for small fixes and tests. For larger work please open an issue first so we don't duplicate effort.
+- **Pull requests** are welcome for small fixes and tests. For larger work please open an issue first so we don't duplicate effort. Working with AI tooling is fine — see [CONTRIBUTING-AI.md](CONTRIBUTING-AI.md) for the ground rules.
 
 If you find a **security issue**, please disclose responsibly via the [server project's security channel](https://github.com/MBombeck/HealthLog/security) rather than a public issue.
 
