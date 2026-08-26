@@ -1,0 +1,107 @@
+# Immutable v1.37.19 medication-cadence contract extract.
+#
+# Provenance (all values independently reproducible):
+#   repository : https://github.com/MBombeck/HealthLog
+#   tag        : v1.37.19
+#   tag commit : d8cbe2596fb9612cfda82b047611178884351c7b
+#   source     : docs/api/openapi.yaml at that tag
+#   full-file SHA-256 : 75c7279f251936411c434fae77cd72b4f31c9ef2da467727c885956a50bf9994
+#
+# Every non-comment line below is copied BYTE-FOR-BYTE (including indentation)
+# from that file. Only two things are subsets, and neither rewrites a line:
+#   * `properties:` carries only the four dose/stock properties this plan pins;
+#   * `required:` carries only those same names, in the published order, out of
+#     the schema's full required list.
+# Nothing was reformatted, re-typed, re-worded or invented. `origin/main` is
+# NOT an input: acceptance is pinned to the immutable tag bytes above.
+#
+# Extracted line ranges in the source file (42,259 lines total):
+#   MedicationSchedule.unitsPerDose             17929-17935
+#   MedicationSchedule.resolvedUnitsPerDose     17936-17940
+#   MedicationScheduleOutput.unitsPerDose       41796-41802
+#   MedicationScheduleOutput.resolvedUnitsPerDose 41803-41807
+#   MedicationListEntry.stockDosesRemaining     23731-23741
+#   MedicationListEntry.runwayDays              23742-23750
+#   MedicationDetail.stockDosesRemaining        23957-23963
+#   MedicationDetail.runwayDays                 23964-23971
+components:
+  schemas:
+    MedicationSchedule:
+      properties:
+        unitsPerDose:
+          anyOf:
+            - type: number
+            - type: "null"
+          description: v1.37.10 (#219) — per-slot inventory-units override (may be a split-pill fraction). NULL means the schedule
+            inherits the medication-level `unitsPerDose`. Kept raw so an edit surface can distinguish an explicit value
+            from inheritance; consumers wanting the effective figure read `resolvedUnitsPerDose`.
+        resolvedUnitsPerDose:
+          type: number
+          description: v1.37.19 — the EFFECTIVE units one dose of this slot consumes, resolved server-side (`schedule.unitsPerDose
+            ?? medication.unitsPerDose`, matching the intake consumption resolver). Always present; clients never
+            re-derive the inheritance rule.
+      required:
+        - unitsPerDose
+        - resolvedUnitsPerDose
+    MedicationScheduleOutput:
+      properties:
+        unitsPerDose:
+          anyOf:
+            - type: number
+            - type: "null"
+          description: v1.37.10 (#219) — per-slot inventory-units override (may be a split-pill fraction). NULL means the schedule
+            inherits the medication-level `unitsPerDose`. Kept raw so an edit surface can distinguish an explicit value
+            from inheritance; consumers wanting the effective figure read `resolvedUnitsPerDose`.
+        resolvedUnitsPerDose:
+          type: number
+          description: v1.37.19 — the EFFECTIVE units one dose of this slot consumes, resolved server-side (`schedule.unitsPerDose
+            ?? medication.unitsPerDose`, matching the intake consumption resolver). Always present; clients never
+            re-derive the inheritance rule.
+      required:
+        - unitsPerDose
+        - resolvedUnitsPerDose
+    MedicationListEntry:
+      properties:
+        stockDosesRemaining:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+          description: "v1.16.10 — dose-derived stock as a whole-dose count. v1.37.19 — slot-aware: the divisor is the
+            schedule-weighted average units per dose (each slot's `resolvedUnitsPerDose` weighted by its cadence share),
+            falling back to the medication-level `unitsPerDose` when no schedule derives a consumption rate.
+            `unitsPerDose` may be a fraction (½ tablet ⇒ twice the doses). NULL when inventory tracking is off. Drives
+            the table view's Bestand column. Read-only — aggregated, not stored."
+        runwayDays:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+          description: v1.37.19 — projected whole days the usable stock covers under the slot-aware burn rate (the same math the
+            low-stock notification engine runs, so the wire and the push can never disagree). NULL = inventory tracking
+            off or no consuming cadence derivable; 0 = tracking on, supply ran out. Read-only — computed, not stored.
+      required:
+        - stockDosesRemaining
+        - runwayDays
+    MedicationDetail:
+      properties:
+        stockDosesRemaining:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+          description: v1.37.19 — slot-aware dose-derived stock, mirroring the list entry's field.
+        runwayDays:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+          description: v1.37.19 — projected whole days the usable stock covers under the slot-aware burn rate; NULL = tracking off
+            or no consuming cadence.
+      required:
+        - stockDosesRemaining
+        - runwayDays

@@ -1,0 +1,418 @@
+openapi: 3.1.0
+info:
+  title: HealthLog iOS consumed server contract
+  version: "1.37.3"
+  description: >-
+    Minimal released subset consumed by iOS. This is not a server API
+    replacement; use the immutable upstream blob for the complete contract.
+x-healthlog-provenance:
+  tag: v1.37.3
+  commit: 1c7efd9b9aa0d83ec3f16fcbc1f2a6c09a31270b
+  openapi-blob: eda74e0de7f28bc63e61ec9eb96ed88b5dee8629
+  openapi-sha256: 8ad940edbb00013a19d34a6bf947c7f4c398e795b2be6b94e43267b057b9cf30
+paths:
+  /api/workouts/batch:
+    post:
+      summary: Typed workout batch ingest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkoutBatchRequest"
+      responses:
+        "200":
+          description: Batch processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkoutBatchEnvelope"
+        "413":
+          description: Request exceeds the 5 MiB HTTP body ceiling
+  /api/insights/ecg:
+    post:
+      summary: Ingest one Apple Health ECG recording
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EcgIngestRequest"
+      responses:
+        "200":
+          description: Existing recording updated or found as a duplicate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EcgIngestEnvelope"
+        "201":
+          description: New recording inserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EcgIngestEnvelope"
+  /api/meta/capabilities:
+    get:
+      summary: Live capability and vocabulary discovery
+      responses:
+        "200":
+          description: Released capability envelope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilitiesEnvelope"
+  /api/auth/me:
+    get:
+      summary: Actor identity and accessible record accounts
+      responses:
+        "200":
+          description: Signed-in actor payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMeEnvelope"
+  /api/mood-entries:
+    get:
+      summary: List mood entries with additive level-A and context fields
+      responses:
+        "200":
+          description: Released mood list envelope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoodListEnvelope"
+components:
+  schemas:
+    WorkoutBatchRequest:
+      type: object
+      required: [workouts]
+      properties:
+        workouts:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/WorkoutIngest"
+    WorkoutIngest:
+      type: object
+      x-consumed-fields-only: true
+      required: [sportType, startedAt, endedAt]
+      properties:
+        sportType:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [MANUAL, APPLE_HEALTH]
+          default: MANUAL
+        externalId:
+          type: string
+          maxLength: 128
+        samples:
+          type: array
+          minItems: 1
+          maxItems: 30000
+          items:
+            $ref: "#/components/schemas/WorkoutSample"
+    WorkoutSample:
+      type: object
+      x-ios-emits-only: [t, hr]
+      required: [t]
+      properties:
+        t:
+          type: string
+          format: date-time
+        hr:
+          type: integer
+          minimum: 20
+          maximum: 300
+        speedMs:
+          type: number
+          minimum: 0
+          maximum: 50
+        power:
+          type: number
+          minimum: 0
+          maximum: 3000
+        cadence:
+          type: number
+          minimum: 0
+          maximum: 400
+    WorkoutBatchEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, error]
+      properties:
+        data:
+          $ref: "#/components/schemas/WorkoutBatchResponse"
+        error:
+          type: "null"
+    WorkoutBatchResponse:
+      type: object
+      additionalProperties: false
+      required: [processed, inserted, duplicates, skipped, entries]
+      properties:
+        processed: { type: integer, minimum: 0 }
+        inserted: { type: integer, minimum: 0 }
+        duplicates: { type: integer, minimum: 0 }
+        skipped:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [index, reason]
+            properties:
+              index: { type: integer, minimum: 0 }
+              reason: { type: string }
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkoutBatchEntry"
+    WorkoutBatchEntry:
+      type: object
+      additionalProperties: false
+      required: [index, status]
+      properties:
+        index: { type: integer, minimum: 0 }
+        status:
+          type: string
+          enum: [inserted, duplicate, enriched, skipped]
+        reason: { type: string }
+    EcgIngestRequest:
+      type: object
+      additionalProperties: false
+      required: [externalRecordingId, recordedAt, samplingFrequency, samples, source]
+      properties:
+        externalRecordingId: { type: string, minLength: 1, maxLength: 120 }
+        recordedAt: { type: string, format: date-time }
+        samplingFrequency: { type: integer, minimum: 1, maximum: 10000 }
+        samples:
+          type: array
+          minItems: 1
+          maxItems: 32768
+          items: { type: integer, minimum: -1000000, maximum: 1000000 }
+        lead:
+          type: [string, "null"]
+          maxLength: 40
+        averageHeartRate:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 300
+        classification:
+          type: [string, "null"]
+          enum: [IRREGULAR, NOT_DETECTED, INCONCLUSIVE, null]
+        source:
+          type: string
+          const: APPLE_HEALTH
+    EcgIngestEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, error]
+      properties:
+        data:
+          $ref: "#/components/schemas/EcgIngestResponse"
+        error:
+          type: "null"
+    EcgIngestResponse:
+      type: object
+      additionalProperties: false
+      required: [id, status, recordedAt, sampleCount, durationSeconds]
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [inserted, updated, duplicate]
+        recordedAt: { type: string, format: date-time }
+        sampleCount: { type: integer }
+        durationSeconds: { type: [number, "null"] }
+    ShareGroup:
+      type: object
+      additionalProperties: false
+      required: [id, leaves]
+      properties:
+        id: { type: string }
+        leaves:
+          type: array
+          items: { type: string }
+        sensitive:
+          type: boolean
+          description: Present and true only for the fenced tier.
+    ShareCapabilities:
+      type: object
+      additionalProperties: false
+      required: [supported, maxDays, reportDownload, selectionVersion, groups, leaves]
+      properties:
+        supported: { type: boolean }
+        maxDays: { type: integer }
+        reportDownload:
+          type: array
+          items: { type: string }
+        selectionVersion: { type: integer }
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareGroup"
+        leaves:
+          type: array
+          items: { type: string }
+    CapabilitiesEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, error]
+      properties:
+        data:
+          type: object
+          x-consumed-fields-only: true
+          required: [apiContractVersion, share]
+          properties:
+            apiContractVersion: { type: string }
+            share:
+              $ref: "#/components/schemas/ShareCapabilities"
+        error:
+          type: "null"
+    AccountAccessEntry:
+      type: object
+      additionalProperties: false
+      required: [accountId, username, displayName, fullName, access, level, recordKind, sections, canWrite]
+      properties:
+        accountId: { type: string, minLength: 1 }
+        username: { type: string, minLength: 1 }
+        displayName: { type: [string, "null"] }
+        fullName: { type: [string, "null"] }
+        access: { type: string, enum: [read, write] }
+        level: { type: string, enum: [read, write, manage] }
+        recordKind: { type: string, enum: [shared, managed] }
+        sections:
+          type: [array, "null"]
+          items:
+            type: string
+            enum: [measurements, medications, labs, profile, illness, mind, cycle, documents]
+        canWrite: { type: boolean }
+    AccountAccess:
+      type: object
+      additionalProperties: false
+      required: [accounts, active]
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountAccessEntry"
+        active:
+          oneOf:
+            - $ref: "#/components/schemas/AccountAccessEntry"
+            - type: "null"
+    AuthMeEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, error]
+      properties:
+        data:
+          type: object
+          x-consumed-fields-only: true
+          required: [id, username, accountAccess, recordSession]
+          properties:
+            id: { type: string }
+            username: { type: string }
+            accountAccess:
+              $ref: "#/components/schemas/AccountAccess"
+            recordSession:
+              type: [object, "null"]
+        error:
+          type: "null"
+    MoodListEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, error]
+      properties:
+        data:
+          $ref: "#/components/schemas/MoodListResponse"
+        error:
+          type: "null"
+    MoodListResponse:
+      type: object
+      additionalProperties: false
+      required: [entries, meta]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoodEntryAdditive"
+        meta:
+          type: object
+          x-consumed-fields-only: true
+          required: [total, limit, offset]
+          properties:
+            total: { type: integer, minimum: 0 }
+            limit: { type: integer, minimum: 1, maximum: 500 }
+            offset: { type: integer, minimum: 0 }
+    MoodEntryAdditive:
+      type: object
+      x-consumed-fields-only: true
+      x-ios-tolerates-additive: [a1, a2, a3, a4, a5, context]
+      required: [id, mood, tags, tagKeys, moodLoggedAt, source, note, ratedFactors, a1, a2, a3, a4, a5, context]
+      properties:
+        id: { type: string }
+        mood:
+          type: string
+          enum: [SUPER_GUT, GUT, OKAY, SCHLECHT, LAUSIG]
+        tags:
+          type: array
+          items: { type: string }
+        tagKeys:
+          type: array
+          items: { type: string }
+        moodLoggedAt: { type: string, format: date-time }
+        source: { type: string }
+        note: { type: [string, "null"] }
+        ratedFactors:
+          type: array
+          items:
+            type: object
+            required: [key, rating]
+            properties:
+              key: { type: string }
+              rating: { type: integer, minimum: 1, maximum: 5 }
+        a1: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        a2:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 10
+          description: Inverse-oriented stress; a higher value means more stress.
+        a3: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        a4: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        a5: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        context:
+          anyOf:
+            - $ref: "#/components/schemas/MoodContextOutput"
+            - type: "null"
+    MoodContextOutput:
+      type: object
+      x-consumed-fields-only: true
+      properties:
+        workStatus: { type: [string, "null"], enum: [off, partial, regular, overtime, null] }
+        workMinutes: { type: [integer, "null"], minimum: 0, maximum: 1440 }
+        overtimeMinutes: { type: [integer, "null"], minimum: 0, maximum: 1440 }
+        workLoad: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        workSatisfaction: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        contactCircles:
+          type: array
+          items: { type: string }
+        contactForm: { type: [string, "null"] }
+        contactExtent: { type: [string, "null"] }
+        contactQuality: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        contactSupport: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        leisureCategories:
+          type: array
+          items: { type: string }
+        leisureMinutes: { type: [integer, "null"], minimum: 0, maximum: 1440 }
+        leisureJoy: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        leisureRecovery: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        eventType: { type: [string, "null"] }
+        eventValence: { type: [integer, "null"], minimum: -5, maximum: 5 }
+        eventAt: { type: [string, "null"], format: date-time }
+        note: { type: [string, "null"] }

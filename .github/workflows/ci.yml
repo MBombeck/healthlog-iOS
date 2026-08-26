@@ -1,0 +1,151 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — manual dispatch from the GitHub
+  # Actions tab so the operator can re-run CI on a branch without
+  # pushing an empty commit. No inputs — same matrix as push/PR.
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: macos-26
+    # C1 (audit v0.16.2): a cold build that compiles mlx-swift's C++/Metal
+    # core does not fit 25 min without a warm DerivedData cache; give the
+    # cold-cache path headroom.
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # C1 (audit v0.16.2): CI must run an Xcode with a Swift 6.2+ toolchain
+      # — SpeziScheduler 1.2.20 (exact-pinned direct dep) ships a
+      # `swift-tools-version:6.2` manifest, which SwiftPM 6.1 (Xcode 16.4)
+      # hard-errors on, so package resolution was structurally impossible.
+      # 26.6 matches the exact release/archive `xcodeVersion` pin in project.yml.
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26.6"
+
+      # W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — cache key now folds in
+      # `project.yml` alongside `Package.swift` so a dep / scheme change
+      # busts the cache, while routine source edits hit the warm cache.
+      # Path adds `~/Library/Caches/org.swift.swiftpm/` for SPM's
+      # resolved-package cache (the per-repo `.build` already lives in
+      # the workspace).
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'project.yml') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      # W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — DerivedData cache. xcodebuild
+      # writes module / build intermediates here; reusing them across
+      # runs cuts cold-build time roughly in half on the macos-15 runner.
+      # Same key shape as the SPM cache so dep changes bust both at once.
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('Package.swift', 'project.yml') }}
+          restore-keys: |
+            deriveddata-${{ runner.os }}-
+
+      - name: Install Tooling
+        run: |
+          brew install xcodegen swiftlint swiftformat
+
+      - name: Verify pinned server contract
+        run: |
+          bash scripts/verify-server-contract-fixtures.sh
+          bash scripts/verify-server-contract-fixtures.sh --self-test
+
+      - name: Verify CI release gate contract
+        run: scripts/test-ci-workflow-contract.sh
+
+      - name: Lint
+        run: |
+          swiftformat --lint .
+          # Fail closed: prove the exact-baseline comparator rejects new
+          # warnings/errors, then run it against the complete source tree.
+          bash scripts/lint-strict-baseline.sh --self-test
+          bash scripts/lint-strict-baseline.sh
+          # i18n boundary (v0.8.0 W5): localization-API-scoped German-leak gate.
+          python3 scripts/i18n-guard.py HealthLog
+          # UI-Standard E8 (R18) — Katalog-Hygiene, von U9 verdrahtet: das
+          # Skript existiert seit W0, lief aber nur von Hand. Es prueft
+          # unreferenzierte Schluessel (gegen Server-, Dynamik- und
+          # Test-Allowlist), fehlende DE/EN-Uebersetzungen und Mojibake.
+          scripts/check-strings.sh
+
+      - name: Generate Xcode project
+        run: xcodegen
+
+      # `-skipMacroValidation` since v0.5.5 — SpeziHealthKit 1.4.2 pulls in
+      # the `ThreadLocal` macro which fails xcodebuild's default
+      # macro-fingerprint trust check on a fresh CI runner. Same flag as
+      # the private release pipeline to keep CI vs release-build parity.
+      - name: Build (iOS Simulator)
+        run: |
+          xcodebuild build \
+            -project HealthLog.xcodeproj \
+            -scheme HealthLog \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -skipMacroValidation \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Test (iOS Simulator)
+        run: |
+          xcodebuild test \
+            -project HealthLog.xcodeproj \
+            -scheme HealthLog \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -skipMacroValidation \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            -enableCodeCoverage YES
+
+      # W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — when SnapshotTesting fails, it
+      # writes the recorded references and the failure diffs alongside the
+      # test files (`__Snapshots__/` for the reference PNGs,
+      # `__FailureDiffs__/` for the rendered failure artifacts when the
+      # `record: false` path produces a mismatch). Uploading both lets the
+      # operator inspect the diff without rerunning locally.
+      # `if: failure()` so a green run leaves no artifact noise.
+      - name: Upload Snapshot Failure Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-failures
+          path: |
+            HealthLogTests/**/__Snapshots__/**
+            HealthLogTests/**/__FailureDiffs__/**
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # SPM Core Build verifies the iOS-free subset compiles. SPM `swift test` is
+      # intentionally NOT run — the same suites run under xcodebuild test (above)
+      # against an iOS Simulator with the URLProtocol-mock infrastructure that
+      # macOS-host SPM doesn't honour identically.
+      #
+      # 09-15 — this step invoked `swift build` raw and was therefore red from
+      # `a617af3f` onwards without anything noticing, because a red step nobody
+      # reads is indistinguishable from a green one. Worse, the manifest error
+      # aborted before a file was compiled, so the module-purity claim the step
+      # exists to enforce had never actually been checked. The gate asserts the
+      # exit code, the absence of `Invalid Source` warnings (which do NOT fail
+      # `swift build`), the absence of `error:` lines, and — the point — that
+      # the core module really compiled. Self-test first, live gate second,
+      # matching the fail-closed ordering of the Lint step above.
+      - name: SPM Core Build
+        run: |
+          bash scripts/verify-spm-core-build.sh --self-test
+          bash scripts/verify-spm-core-build.sh

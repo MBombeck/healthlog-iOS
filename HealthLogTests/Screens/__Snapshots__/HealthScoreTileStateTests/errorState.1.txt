@@ -1,0 +1,13 @@
+▿ 4 key/value pairs
+  ▿ (2 elements)
+    - key: "cta"
+    - value: "Erneut versuchen"
+  ▿ (2 elements)
+    - key: "message"
+    - value: "Kein Netzwerk."
+  ▿ (2 elements)
+    - key: "state"
+    - value: "error"
+  ▿ (2 elements)
+    - key: "title"
+    - value: "Health Score nicht verfügbar"

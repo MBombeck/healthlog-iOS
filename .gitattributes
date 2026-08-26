@@ -1,0 +1,3 @@
+# Keep server-contract fixtures byte-exact: they are captured evidence of the
+# server's actual responses, and normalizing them would edit the evidence.
+HealthLogTests/Fixtures/** -whitespace

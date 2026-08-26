@@ -1,0 +1,69 @@
+{
+  "_comment": [
+    "20-01 — the seeded localhost origin the R4 separation is measured against.",
+    "Longest-prefix match; every unlisted path answers 200 {} on purpose (see",
+    "latency-proxy.py). The counts are the ONLY thing that matters here: they are",
+    "what MeasurementsRepository.kinds(withDataIn:) turns into availableKinds, and",
+    "an availableKinds that is non-empty is what puts the operator's missing",
+    "Insights sections back on the strip. Keys are the server MeasurementType",
+    "enum (Measurement+KindRouting.availabilityKeyTable), not the camelCase",
+    "domain raw values."
+  ],
+  "/api/analytics": {
+    "status": 200,
+    "body": {
+      "data": {
+        "summaries": {
+          "WEIGHT": { "count": 412 },
+          "BLOOD_PRESSURE_SYS": { "count": 88 },
+          "PULSE": { "count": 1904 },
+          "RESTING_HEART_RATE": { "count": 260 },
+          "ACTIVITY_STEPS": { "count": 5210 },
+          "ACTIVE_ENERGY_BURNED": { "count": 5180 },
+          "SLEEP_DURATION": { "count": 240 },
+          "HEART_RATE_VARIABILITY": { "count": 231 },
+          "BODY_MASS_INDEX": { "count": 400 },
+          "OXYGEN_SATURATION": { "count": 96 }
+        }
+      },
+      "error": null
+    }
+  },
+  "_comment_measurements": [
+    "The recent page is seeded too, because `availableKinds` is only half of",
+    "`liveAvailableKinds` — the strip unions it with the kinds present in",
+    "`MeasurementsStore.recent`. Without this the pull-to-refresh row could not",
+    "tell 'the pull restored nothing' from 'the pull had nothing to restore'."
+  ],
+  "/api/measurements": {
+    "status": 200,
+    "body": {
+      "data": {
+        "measurements": [
+          {
+            "id": "seed-weight-1",
+            "type": "WEIGHT",
+            "value": 81.4,
+            "unit": "kg",
+            "measuredAt": "2026-08-23T06:12:00.000Z",
+            "source": "MANUAL"
+          },
+          {
+            "id": "seed-pulse-1",
+            "type": "PULSE",
+            "value": 62,
+            "unit": "bpm",
+            "measuredAt": "2026-08-23T06:13:00.000Z",
+            "source": "MANUAL"
+          }
+        ],
+        "meta": { "total": 2, "limit": 400, "offset": 0 }
+      },
+      "error": null
+    }
+  },
+  "/api/health": {
+    "status": 200,
+    "body": { "status": "ok" }
+  }
+}

@@ -1,0 +1,9 @@
+▿ HealthLog.MedicationQuickMarkState.PresentationDescriptor
+  - symbolName: "checkmark.circle.fill"
+  - isSymbolHidden: false
+  - isActionable: false
+  - isDisabled: true
+  - visualSize: 32.0
+  - hitTarget: 32.0
+  - accessibilityLabel: "Heute genommen"
+  - accessibilityHint: ""

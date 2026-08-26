@@ -1,0 +1,44 @@
+{
+  "data": {
+    "apiContractVersion": "1.37.3",
+    "derivedMetricIds": [],
+    "vitalsBaselineTypes": [],
+    "layoutTileIds": [],
+    "metricStatusIds": [],
+    "ingest": {
+      "quantityTypes": [],
+      "eventTypes": [],
+      "computedScores": [],
+      "writeAllowlist": ["APPLE_HEALTH"]
+    },
+    "fhir": {
+      "atcSystem": "http://fixture.invalid/codes/atc",
+      "snomedRoute": "http://fixture.invalid/codes/snomed",
+      "germanAtcDefaultLocales": [],
+      "restBaseUrl": "/api/fhir",
+      "scopeMintable": false,
+      "resourceTypes": [],
+      "operations": [],
+      "searchParams": []
+    },
+    "share": {
+      "supported": true,
+      "maxDays": 90,
+      "reportDownload": ["pdf"],
+      "selectionVersion": 2,
+      "groups": [
+        {
+          "id": "vitals",
+          "leaves": ["BLOOD_PRESSURE_SYS", "PULSE"]
+        },
+        {
+          "id": "sensitive",
+          "leaves": ["MOOD", "CYCLE"],
+          "sensitive": true
+        }
+      ],
+      "leaves": ["BLOOD_PRESSURE_SYS", "PULSE", "MOOD", "CYCLE"]
+    }
+  },
+  "error": null
+}

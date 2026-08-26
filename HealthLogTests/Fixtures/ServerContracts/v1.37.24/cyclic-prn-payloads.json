@@ -1,0 +1,104 @@
+{
+  "_comment": [
+    "09-14 — representative payloads for the accepted v1.37.24 cyclic/PRN contract.",
+    "Synthetic throughout: invented ids, invented names, no health value, no owner",
+    "id, no token, no host, no captured response body.",
+    "",
+    "`cyclicMedication` and `prnMedication` carry the published READ shape",
+    "(MedicationListEntry + MedicationScheduleOutput at tag v1.37.24, commit",
+    "e00d013459d88bb8be4b197138cf72da489c1645). Every key present on a schedule",
+    "row is declared by MedicationScheduleOutput, which is additionalProperties:",
+    "false — so a key iOS expects that is missing here is missing on the wire too.",
+    "",
+    "`legacyCachedSchedule` and `legacyOutboxCreate` are the PRE-FIX on-device",
+    "shapes: a MedicationSchedule blob written into the SWR cache by a build that",
+    "still had an anchor on Cadence.cyclic, and a MedicationCreate body queued in",
+    "the outbox by a build that still emitted cycleWeeksOn / cycleWeeksOff /",
+    "cycleAnchor and a schedule-level asNeeded. They exist so the update path is",
+    "tested rather than assumed."
+  ],
+  "cyclicMedication": {
+    "id": "med_cyc_0001",
+    "name": "Testpräparat Zyklus",
+    "dose": "1 Tablette",
+    "active": true,
+    "notificationsEnabled": true,
+    "oneShot": false,
+    "asNeeded": false,
+    "startsOn": "2026-06-01",
+    "endsOn": null,
+    "createdAt": "2026-05-20T09:00:00Z",
+    "unitsPerDose": 1,
+    "stockDosesRemaining": null,
+    "runwayDays": null,
+    "schedules": [
+      {
+        "id": "sched_cyc_0001",
+        "medicationId": "med_cyc_0001",
+        "windowStart": "08:00",
+        "windowEnd": "09:00",
+        "label": null,
+        "dose": null,
+        "unitsPerDose": null,
+        "resolvedUnitsPerDose": 1,
+        "daysOfWeek": null,
+        "timesOfDay": ["08:00"],
+        "reminderGraceMinutes": null,
+        "rrule": "FREQ=DAILY",
+        "rollingIntervalDays": null,
+        "scheduleType": "CYCLIC",
+        "cyclicOnWeeks": 3,
+        "cyclicOffWeeks": 1
+      }
+    ]
+  },
+  "prnMedication": {
+    "id": "med_prn_0001",
+    "name": "Testpräparat bei Bedarf",
+    "dose": "1 Tablette",
+    "active": true,
+    "notificationsEnabled": true,
+    "oneShot": false,
+    "asNeeded": true,
+    "startsOn": null,
+    "endsOn": null,
+    "createdAt": "2026-05-20T09:00:00Z",
+    "unitsPerDose": 1,
+    "stockDosesRemaining": null,
+    "runwayDays": null,
+    "schedules": []
+  },
+  "legacyCachedSchedule": {
+    "times": [{ "hour": 8, "minute": 0 }],
+    "intervalWeeks": 1,
+    "entries": [
+      {
+        "cadence": {
+          "cyclic": {
+            "weeksOn": 3,
+            "weeksOff": 1,
+            "anchor": "2026-06-01T00:00:00Z"
+          }
+        },
+        "timesOfDay": [{ "hour": 8, "minute": 0 }],
+        "windowStart": { "hour": 8, "minute": 0 }
+      }
+    ]
+  },
+  "legacyOutboxCreate": {
+    "name": "Testpräparat Zyklus",
+    "dose": "1 Tablette",
+    "active": true,
+    "schedules": [
+      {
+        "windowStart": "08:00",
+        "windowEnd": "08:00",
+        "timesOfDay": ["08:00"],
+        "cycleWeeksOn": 3,
+        "cycleWeeksOff": 1,
+        "cycleAnchor": "2026-06-01",
+        "asNeeded": true
+      }
+    ]
+  }
+}

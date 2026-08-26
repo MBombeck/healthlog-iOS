@@ -1,0 +1,415 @@
+# SwiftLint configuration for HealthLog iOS.
+#
+# Notable custom rules in this file:
+#   * mdr_no_predictive_copy / mdr_no_clinical_recommendation — GROUND RULE
+#     9 + 15 boundary protection for GLP-1 surfaces.
+#   * forbidden_color — Theme-2.0 monochrome contract for screen code.
+#   * hllog_public_privacy_interpolation — defence-in-depth review prompt
+#     for log-privacy decisions at call-sites.
+#   * dynamic_type_bypass — flags `.system(size:)` font calls so callers
+#     reach for HLFont semantic tokens (.hlBody, .hlTitle1 etc.) that
+#     scale with Accessibility text sizes instead of pixel-locking against
+#     "Large". Fixed-size escape hatches must be opted-in explicitly with
+#     `// swiftlint:disable:next dynamic_type_bypass` immediately above the
+#     `.font(...)` call (intent documented inline). Severity = warning so
+#     v0.7.x can land the canonical escape-hatch annotations without
+#     breaking the build; tighten to error once all hits are either token-
+#     converted or annotated.
+
+disabled_rules:
+  - todo
+  - trailing_comma
+  # Pragmatic for current state — re-enable case-by-case after first stable beta.
+  #
+  # `function_body_length` LEFT this list in Phase 9 (09-08). It is enforced
+  # repository-wide at 60/120. The pre-existing debt is explicit — every
+  # accepted warning carries its exact fingerprint in
+  # `scripts/swiftlint-warning-baseline.json`, so a new one fails and a fixed
+  # one forces the baseline down. The bodies that cannot shrink (exhaustive
+  # FHIR/clinical mapping tables, the designated `AppContainer` init and its
+  # ordered wiring, two exhaustive contract tests) carry a narrow
+  # `swiftlint:disable`/`enable` region with a rationale and an owner instead.
+  # `scripts/verify-function-body-baseline.sh` refuses a re-disable, a weakened
+  # threshold, baseline growth, an unattested exception and an unclosed region.
+  - function_parameter_count    # WebAuthn / Passkey shapes carry 7 params by spec.
+  - nesting                     # Server-DTO mirroring needs nested helper types.
+  - type_name                   # WebAuthn uses `RP` (Relying Party) — domain term.
+  - blanket_disable_command     # Test files use `swiftlint:disable force_unwrapping force_try` headers.
+  - closure_parameter_position  # SwiftFormat already enforces a consistent style.
+  - opening_brace               # SwiftFormat handles opening-brace placement.
+  - static_over_final_class     # Stylistic; not a quality signal.
+  - superfluous_disable_command # Triggered by file-header disable directives that ARE used.
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - explicit_init
+  - first_where
+  - force_unwrapping
+  - implicit_return
+  - last_where
+  - literal_expression_end_indentation
+  - operator_usage_whitespace
+  - overridden_super_call
+  - prefer_self_type_over_type_of_self
+  - private_action
+  - private_outlet
+  - prohibited_super_call
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - vertical_parameter_alignment_on_call
+  - yoda_condition
+
+excluded:
+  - .build
+  - DerivedData
+  - HealthLog.xcodeproj
+  - HealthLog/Resources
+  - .derived
+
+# Tests have relaxed rules for force_try / force_unwrapping (controlled fixture data only).
+analyzer_rules: []
+custom_rules:
+  # MDR boundary — files in Pharmacokinetics/** + MedicationDetailScreen +
+  # MDRGatedDrugLevelSection must NEVER ship predictive / advisory copy.
+  # GROUND RULE 9 (no dose recommendations) + GROUND RULE 15 (no drug-level
+  # interpretation) apply universally regardless of Research Mode state.
+  # See `08-locked-contracts.md` §1.2 + `14-coach-mental-model.md`.
+  #
+  # The match list is **string-literal** scoped (the regex looks for "…").
+  # Comments + identifier names are NOT flagged — we explain WHY we don't
+  # render these strings in code comments routinely.
+  mdr_no_predictive_copy:
+    name: "MDR boundary — no predictive copy in GLP-1 surfaces"
+    regex: '"[^"]*(?:next dose|next peak|next trough|predicted|nächste Dosis|nächster Peak|sollte (?:einnehmen|spritzen|nehmen))[^"]*"'
+    match_kinds:
+      - string
+    included:
+      - "HealthLog/Pharmacokinetics/.*"
+      - "HealthLog/Screens/Medications/MedicationDetailScreen\\.swift"
+      - "HealthLog/Screens/Medications/MDRGatedDrugLevelSection\\.swift"
+    message: "MDR boundary: predictive / advisory copy (e.g. 'next dose', 'predicted peak', 'sollte spritzen') is forbidden in GLP-1 surfaces per GROUND RULE 15. Only display-only descriptive language allowed."
+    severity: error
+
+  # MDR boundary — explicit clinical-recommendation verbs.
+  mdr_no_clinical_recommendation:
+    name: "MDR boundary — no clinical recommendations"
+    regex: '"[^"]*(?:recommend|empfehlen|empfiehl|should take|ought to|musst .* nehmen|increase your dose|decrease your dose|step up|escalate)[^"]*"'
+    match_kinds:
+      - string
+    included:
+      - "HealthLog/Pharmacokinetics/.*"
+      - "HealthLog/Screens/Medications/MedicationDetailScreen\\.swift"
+      - "HealthLog/Screens/Medications/MDRGatedDrugLevelSection\\.swift"
+    message: "MDR boundary: clinical-recommendation verbs forbidden in GLP-1 surfaces per GROUND RULE 9. Defer all dose questions to the prescribing clinician."
+    severity: error
+
+  # Theme-2.0 color contract — Screen-Code muss durch HLColor/HLAccent
+  # gehen statt SwiftUI's System-Color-Konstanten direkt zu referenzieren.
+  # Verhindert Drift wie der v0.5.5.1-Operator-Befund "rote HK-Einladung
+  # liest als Error" (Banner trug Color.red statt HLColor.statusBad bzw.
+  # `.tint`). Erlaubt sind die Token-Definitionen selbst (DesignSystem/
+  # Tokens.swift) und Test-Fixtures.
+  #
+  # Word-Boundary vor `Color` verhindert False-Positives auf `HLColor.…`.
+  # Ausserdem ausgenommen: `Color.clear`, `Color.accentColor`, `Color.primary`,
+  # `Color.secondary` — neutrale System-Aliasse, die kein Theme-Bypass sind.
+  #
+  # Severity = warning bis ein dedizierter Sweep die pre-existing Hits in
+  # `NotificationInboxScreen`, `DoctorReportChartRenderer`, `MeasurementListFilters`,
+  # `SettingsDashboardScreen` (Color.white als Onboarding-Preview-Mirror)
+  # bereinigt hat. Sobald jene auf `HLColor`/`HLAccent` umgestellt sind,
+  # auf `error` heben.
+  # (v0.14: the `HLColor.purple/purpleDeep/pink` alternatives were dropped from
+  # this regex — those tokens were deleted in the purple-sweep, and the dedicated
+  # `forbidden_purple` rule below now locks purple at error severity.)
+  forbidden_color:
+    name: "Theme-2.0 — no raw SwiftUI system colors in screen code"
+    # Also catches the ShapeStyle shorthands `.foregroundStyle(.white)` /
+    # `.fill(.black)` etc. that the `Color.`-prefixed pattern missed
+    # (audit-01 H5 — the PersonalRecords `.white` shorthands slipped through).
+    regex: '\bColor\.(?:red|green|blue|orange|yellow|pink|purple|gray|white|black)\b|\.(?:foregroundStyle|fill)\(\.(?:red|green|blue|orange|yellow|pink|purple|gray|white|black)\b'
+    excluded:
+      - "HealthLog/DesignSystem/.*"
+      - "HealthLogTests/.*"
+      - "HealthLogUITests/.*"
+    message: "Theme-2.0: route through HLColor (statusOK/statusBad/accent) instead of Color.red/.green/etc. Tokens live in HealthLog/DesignSystem/Tokens.swift; user-accent surfaces should use .foregroundStyle(.tint)."
+    severity: warning
+
+  # Purple lock (v0.14 purple-sweep) — HealthLog is monochrome-graphite; purple
+  # is permanently forbidden everywhere. The dormant `HLColor.purple/purpleDeep/
+  # pink/lavender` token literals were DELETED in the purple-sweep, so unlike the
+  # broad `forbidden_color` rule above this rule carries NO DesignSystem
+  # exclusion — every directory (incl. DesignSystem/) must stay purple-clean, and
+  # any reintroduced purple fails the build. `severity: error` is safe because
+  # the project lints 0 violations against this rule post-cleanup.
+  #
+  # Scope is purple-specific so it never collides with the broader debt the
+  # `forbidden_color` warning tracks: it matches `Color.purple/.pink/.indigo`,
+  # UIColor `.systemPurple`, and the (now-removed) `HLColor.purple/purpleDeep/
+  # pink/lavender` token accessors. It deliberately does NOT match bare enum
+  # cases like `.purple` (HLTint/HLBadge persistence-compat case names) or
+  # `case purple`, which are dot-prefixed identifiers, not color literals.
+  #
+  # NOTE — asset-catalog guard: `*.colorset/Contents.json` is JSON, not Swift,
+  # so this regex rule cannot cover it. If a purple-ish colorset is ever added
+  # (R&B-high, G-low components), add a CI grep over
+  # `HealthLog/Resources/Assets.xcassets/**/Contents.json`. No scripts/ lint
+  # pattern exists for asset Contents.json today, so this stays a documented
+  # recommendation rather than invented CI infra.
+  forbidden_purple:
+    name: "Purple lock — purple is permanently forbidden (monochrome contract)"
+    regex: '\b(?:Color\.(?:purple|pink|indigo)|UIColor\.systemPurple|\.systemPurple|HLColor\.(?:purple|purpleDeep|pink|lavender))\b'
+    # `identifier` match-kind only: code comments that mention the (now-removed)
+    # purple tokens for historical context must NOT trip the rule — same pattern
+    # the MDR string-rules use. Only real `.purple` member accesses are flagged.
+    match_kinds:
+      - identifier
+    message: "Purple is forbidden — HealthLog is monochrome-graphite (v0.14 purple-sweep). The purple/pink/lavender tokens were removed; route data-ink through HLColor.inkGraphite / HLChartTints.series and chrome through HLText.primary. Status/threshold semantics use HLColor.statusOK/statusWarn/statusBad."
+    severity: error
+
+  # M-7 — Logger privacy boundary review. Flags `HLLog.<cat>.<lvl>(... \(value, privacy: .public) ...)`
+  # so each new `.public` interpolation is an explicit acknowledgement that the
+  # value is operator-grade (not PII, not a secret). The LogSanitizer is the
+  # defence-in-depth layer — this rule pushes call-sites to think about the
+  # OS-level privacy boundary too. Severity = warning because legacy call-sites
+  # all default to `.public`; new code should switch to `.private` / `.sensitive`
+  # for anything resembling identifiers, free text, paths beyond host, etc.
+  #
+  # Tests are excluded — fixtures intentionally pin the `.public` behaviour.
+  hllog_public_privacy_interpolation:
+    name: "M-7 — HLLog .public interpolation review"
+    regex: 'HLLog\.\w+\.\w+\([^)]*\\\([^)]*,\s*privacy:\s*\.public\)'
+    excluded:
+      - "HealthLogTests/.*"
+      - "HealthLogUITests/.*"
+      - "HealthLog/Services/Logger\\.swift"
+    message: "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths)."
+    severity: warning
+
+  # Dynamic Type boundary — `.system(size:)` pixel-locks the font against
+  # Apple's "Large" default Dynamic Type setting and ignores Accessibility
+  # text sizes (XS .. AX5). Per audit finding C-2 (`.planning/v070-marathon/
+  # v070-A-UIUX-audit.md`), 170+ call-sites across Insights, Settings,
+  # GLP1, DeleteAccount and PR / tile chrome were bypassing Dynamic Type;
+  # this rule pins the boundary so new code reaches for `HLFont.hlTitle1`,
+  # `.hlBody`, `.hlFootnote` etc. (see Tokens.swift) instead. Apple's
+  # semantic styles scale ~80% (XS) up to ~250% (AX5).
+  #
+  # Suppress per-call only with an inline `// swiftlint:disable:next
+  # dynamic_type_bypass` placed directly above the `.font(...)` line.
+  # Every survivor should also carry a short `// Intentional fixed size:`
+  # comment explaining WHY a pixel-exact font is required (icons inside
+  # fixed-frame chips, initials inside fixed-diameter avatars, chart-
+  # overlay markers etc.).
+  #
+  # Severity = ERROR since the audit-01 coherence pass (2026-07-18): every
+  # hit is either token-converted (`.hlIcon(HLIconSize.*)` / `Font.hl*` /
+  # `hlMetric(TextStyle)`) or carries an explicit annotated escape hatch
+  # (share-PNG canvas, PDF print renderer, watermark glyphs). New
+  # unannotated pixel-locked fonts now fail the build.
+  #
+  # `Tokens.swift` is excluded because it owns the canonical `hlMetric(_
+  # size:)` pixel-exact escape hatch (callers opt in by picking that
+  # overload).
+  dynamic_type_bypass:
+    name: "Dynamic Type bypass — prefer HLFont semantic tokens"
+    regex: '\.system\(size:'
+    excluded:
+      - "HealthLog/DesignSystem/Tokens.swift"
+      - "HealthLogTests/.*"
+      - "HealthLogUITests/.*"
+    message: "Dynamic Type: `.system(size:)` pixel-locks the font against the Large setting and ignores Accessibility text sizes. Prefer a semantic HLFont token (.hlTitle1/2/3, .hlHeadline, .hlBody, .hlCallout, .hlSubhead, .hlFootnote, .hlCaption) or `.font(.system(.body, weight: .semibold))` so the call participates in Dynamic Type. If a fixed pixel size is genuinely required (icon inside a fixed-frame chip etc.), annotate with `// swiftlint:disable:next dynamic_type_bypass` and explain WHY in a comment."
+    severity: error
+
+  # Percent-format boundary (Build 8, item 8.9.4) — raw percent interpolation
+  # (`"\(x)%"` / `"\(x) %"`, or the printf `%%` form) ships an ASCII-glued or
+  # ordinary-space percent instead of the DIN-5008 narrow-no-break-space "83 %"
+  # produced by `HLNumberFormat.percent(_:)`. This rule pins the seam on the
+  # Screens surface; the in-suite counterpart is `PercentFormatLintTests`
+  # (one convention, two enforcement organs).
+  #
+  # Severity = warning: the raw→`HLNumberFormat.percent` conversion is item 8.5
+  # (sibling scope, landed with the `HLNumberFormat.percent` type). The ~14
+  # pre-existing Screens sites are tracked by the test's `pendingConversionFiles`
+  # baseline; flip this rule to `error` once 8.5 has converted them (same
+  # pre-existing-debt discipline as `forbidden_color`).
+  percent_use_hlnumberformat:
+    name: "Percent format — route through HLNumberFormat.percent"
+    regex: '\)\s?%"|%\.[0-9]f%%'
+    included:
+      - "HealthLog/Screens/.*"
+    message: "Percent format: raw `\"\\(x)%\"` / `\"\\(x) %\"` bypasses the DIN-5008 narrow-space rendering. Use HLNumberFormat.percent(_:) so the percent sign carries a U+202F narrow no-break space (\"83 %\")."
+    severity: warning
+
+  # ---------------------------------------------------------------------
+  # UI-Standard E5 (`.planning/ux/STANDARD-ui.md` §4) — Bausteinsprache.
+  #
+  # Alle Regeln starten laut Umsetzungsschnitt auf `warning`; U9
+  # ("Scharfschalten") hebt sie auf `error`, sobald U1–U7 die Flächen geräumt
+  # haben.
+  #
+  # ## Stand nach U9 — was scharf ist und was bewusst Warnung bleibt
+  #
+  # Scharf (`error`) sind die zwei Regeln, deren Restmenge in der Ratsche bei
+  # **null** steht: `hl_no_hlcard_in_settings` (U2 hat Gerüst C→A migriert) und
+  # `hl_no_sectionlabel_in_settings` (U4 hat `SettingsAIScreen` auf Gerüst A
+  # gehoben). Kehrt `HLCard(` oder `HLSectionLabel(` in die Einstellungen
+  # zurück, bricht ab jetzt der Build.
+  #
+  # Die übrigen bleiben `warning`. Das ist eine Entscheidung, keine
+  # Nachlässigkeit: ihre Restmenge liegt zum großen Teil **außerhalb** der
+  # Einstellungen und damit außerhalb aller sieben Wellen — U1–U7 waren nach
+  # Fläche geschnitten, nicht nach Regel. Stand der Ratsche (Summe 137,
+  # `HealthLogTests/Resources/UIStandardBaseline.json`):
+  #
+  #   hl_no_raw_toggle          70  Cycle, Medications, Notifications,
+  #                                 DoctorReport, Illness, Onboarding, Labs …
+  #   hl_button_legacy_variant  41  (nur Ratsche — kein SwiftLint-Regex, weil
+  #                                 jede Fundstelle die R9-Entscheidung braucht)
+  #   hl_no_handmade_chevron    18  Insights, Charts, Labs, Coach, Cycle …
+  #   hl_no_system_buttonstyle   7
+  #   hl_card_both_slots         1  (nur Ratsche — Argumentlisten-Sonderfall)
+  #
+  # Eine Regel scharfzuschalten, die sofort siebzig Verstöße meldet, ist eine
+  # Regel, die am nächsten Tag wieder abgeschaltet wird — und bis dahin färbt
+  # sie jeden anderen, echten Fehler grau. Gehalten wird der Bestand ohnehin
+  # nicht von der Severity, sondern vom zählenden Ratschen-Test
+  # `UIStandardBaselineTests`: der vergleicht **exakt** und pro Datei, also kann
+  # keine dieser Zahlen unbemerkt steigen. Wer eine Fläche außerhalb der
+  # Einstellungen aufräumt, senkt dort seine Zeile; steht eine Regel bei null,
+  # wird sie hier auf `error` gehoben — dieselbe Prozedur, die U9 für die zwei
+  # oberen gefahren ist.
+  #
+  # **Wichtig:** diese Regeln tragen bewusst KEINE Datei-Allowlist.
+  # Eine `excluded:`-Liste würde neue Verstöße in bereits gelisteten Dateien
+  # stillschweigend schlucken. Der Bestand hängt stattdessen am zählenden
+  # Ratschen-Test `UIStandardBaselineTests` (+ `UIStandardBaseline.json`):
+  # der kennt die Verletzungen PRO DATEI und schlägt in beide Richtungen an —
+  # eine neue Verletzung failt, eine beseitigte Verletzung failt ebenfalls
+  # (mit der Aufforderung, die Zahl zu senken). Die Baseline kann damit nur
+  # schrumpfen; SwiftLint liefert dazu die Fundstelle im Editor.
+  # ---------------------------------------------------------------------
+
+  # R8 — die handgebaute Chevron-Zeile ist kein Muster mehr, sondern ein
+  # Primitive: `HLSettingsActionRow(icon:title:presents:)`. Der Chevron gehört
+  # dem Primitive; `presents: .push` malt ihn und kapselt den NavigationLink.
+  hl_no_handmade_chevron:
+    name: "UI-Standard R8 — kein handgebauter Disclosure-Chevron"
+    regex: '\bHLDisclosureChevron\('
+    excluded:
+      - "HealthLog/DesignSystem/.*"
+      - "HealthLogTests/.*"
+      - "HealthLogUITests/.*"
+    message: "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen."
+    severity: warning
+
+  # R8 — rohe System-Button-Styles fallen aus dem Designsystem heraus.
+  hl_no_system_buttonstyle:
+    name: "UI-Standard R8 — keine rohen System-Button-Styles"
+    regex: '\.buttonStyle\(\.(?:borderedProminent|bordered|borderless)\b'
+    included:
+      - "HealthLog/Screens/.*"
+    message: "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`."
+    severity: warning
+
+  # R11 — genau ein Umschalt-Baustein.
+  hl_no_raw_toggle:
+    name: "UI-Standard R11 — kein roher Toggle in Screens"
+    regex: '\bToggle\('
+    included:
+      - "HealthLog/Screens/.*"
+    message: "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap."
+    severity: warning
+
+  # R12 — `HLCard` ist Dashboard-/Insights-Primitive. In den Einstellungen
+  # gilt `HLSettingsCard` (14pt Inset, 0,5pt Kontur, eigener Kartentitel).
+  hl_no_hlcard_in_settings:
+    name: "UI-Standard R12 — kein HLCard in den Einstellungen"
+    regex: '\bHLCard\('
+    included:
+      - "HealthLog/Screens/Settings/.*"
+      - "HealthLog/Screens/PersonalSettings/.*"
+    message: "R12: Einstellungs-Flächen benutzen `HLSettingsPage` + `HLSettingsCard`. `HLCard(style: .elevated)` bringt einen anderen Innenabstand, eine andere Kontur und keinen Kartentitel — daher die 17-pt-Kartenköpfe der vier Integrations-Screens."
+    # U9 scharfgeschaltet: Ratsche steht bei 0 (U2 hat Gerüst C→A migriert).
+    severity: error
+
+  # R12 — die Abschnittsmarke in den Einstellungen ist der Kartentitel.
+  hl_no_sectionlabel_in_settings:
+    name: "UI-Standard R12 — kein HLSectionLabel in den Einstellungen"
+    regex: '\bHLSectionLabel\('
+    included:
+      - "HealthLog/Screens/Settings/.*"
+      - "HealthLog/Screens/PersonalSettings/.*"
+    message: "R12: die Abschnittsmarke einer Einstellungsseite ist der `HLSettingsCard`-Titel (15pt semibold). `HLSectionLabel` ist eine Eigenheit eines einzigen Screens (`SettingsAIScreen`) und wandert mit dessen Migration auf Gerüst A weg."
+    # U9 scharfgeschaltet: Ratsche steht bei 0 (U4 hat SettingsAIScreen migriert).
+    severity: error
+
+  # R14 / E5 `hl_no_system_font_size` — bewusst KEINE eigene Regel: die
+  # bestehende `dynamic_type_bypass` oben deckt exakt dasselbe Muster
+  # (`\.system\(size:`) ab, gilt bereits repo-weit statt nur unter `Screens/`
+  # und steht schon auf `error`. Eine zweite Regel mit gleichem Regex würde
+  # jede Fundstelle doppelt melden, ohne irgendetwas zusätzlich zu verbieten.
+  # E5 ist an dieser Stelle also strenger erfüllt als gefordert.
+
+  # i18n boundary (v0.8.0 W5): the German-leak guard is enforced by
+  # `scripts/i18n-guard.py` (wired into the CI lint step), NOT a SwiftLint
+  # custom rule. SwiftLint custom rules are single-line regex with no call-site
+  # context, so a "string literal contains äöüÄÖÜß" rule cannot tell a
+  # localization-API leak (`Text("Löschen")` — renders raw German under `en`)
+  # from intentional non-catalogue German (`Text(verbatim:)`, on-device-AI
+  # prompt builders, non-localized HLError / MetricKind display strings). That
+  # over-breadth would dump 100+ out-of-scope hits into `--strict`. The guard
+  # script reproduces flip-literals.py's exact localization-API surface, honours
+  # the same allow-list (AI/**, StatistikMode, DoctorReport, lang-branched
+  # digests, verbatim, dotted IDs, `// i18n-guard: allow`), and fails the build
+  # only on a genuine loc-API German leak — low false positive by construction.
+
+# Per-path overrides — SwiftLint v0.59+ supports `analyzer_rules`/`only_rules` only globally;
+# we instead annotate test files with `// swiftlint:disable force_unwrapping force_try` headers.
+
+line_length:
+  warning: 200
+  error: 240
+  ignores_urls: true
+  ignores_comments: true
+
+type_body_length:
+  warning: 350
+  error: 500
+
+file_length:
+  warning: 600
+  error: 1000
+
+function_body_length:
+  warning: 60
+  error: 120
+
+cyclomatic_complexity:
+  warning: 12
+  error: 20
+
+identifier_name:
+  min_length:
+    warning: 1
+    error: 1
+  # Design tokens (xs/sm/md/lg/xl/2xl), color/coordinate components, math idioms,
+  # and common closure-variable conventions are intentionally short.
+  excluded:
+    - id
+    - to
+    - r
+    - g
+    - b
+    - x
+    - y
+    - dx
+    - dy
+    # Trailing-underscore escape for Swift keywords (`import` is reserved).
+    - import_
+
+force_cast: error
+force_try: error
+force_unwrapping: error

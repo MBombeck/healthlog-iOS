@@ -1,0 +1,23 @@
+▿ 2 elements
+  ▿ HealthLog.AnamnesisHistoryRow
+    - id: "rev-2"
+    - labelKey: "anamnesis.value.SMOKING_STATUS.FORMER"
+    ▿ provenanceKey: Optional("anamnesis.provenance.userCorrection")
+      - some: "anamnesis.provenance.userCorrection"
+    ▿ validFrom: 2024-01-11 19:06:40 +0000
+      - timeIntervalSinceReferenceDate: 726692800.0
+    - validUntil: nil
+    - isCurrent: true
+    - isCorrection: true
+  ▿ HealthLog.AnamnesisHistoryRow
+    - id: "rev-1"
+    - labelKey: "anamnesis.value.SMOKING_STATUS.CURRENT"
+    ▿ provenanceKey: Optional("anamnesis.provenance.userReported")
+      - some: "anamnesis.provenance.userReported"
+    ▿ validFrom: 2023-11-14 22:13:20 +0000
+      - timeIntervalSinceReferenceDate: 721692800.0
+    ▿ validUntil: Optional(2024-01-11 19:06:40 +0000)
+      ▿ some: 2024-01-11 19:06:40 +0000
+        - timeIntervalSinceReferenceDate: 726692800.0
+    - isCurrent: false
+    - isCorrection: false

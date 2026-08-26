@@ -1,0 +1,106 @@
+# 09-14 — byte-verbatim extract of the accepted v1.37.24 medication cyclic/PRN contract.
+#
+# Source: MBombeck/HealthLog, tag v1.37.24, commit
+# e00d013459d88bb8be4b197138cf72da489c1645, docs/api/openapi.yaml,
+# SHA-256 355d1f145b8c03b3c714ac6c21bc454865bcc329389216f957d9579e0d8fabb8,
+# 44,337 lines. Read twice over independent transports (local object store and
+# the GitHub REST raw-content API pinned to that commit) and compared byte for
+# byte with cmp.
+#
+# Every non-comment line below is copied byte for byte, indentation included,
+# from a line of that file. Two things are narrowed and neither rewrites a
+# line: `properties:` carries only the pinned properties, and `required:`
+# carries only the pinned names out of each schema's full required list.
+# Nothing was reformatted, re-typed, re-worded or invented. The source line
+# range of every block is recorded in 09-14-CONTRACT-RECEIPT.md.
+components:
+  schemas:
+    MedicationScheduleInput:
+      type: object
+      properties:
+        scheduleType:
+          description: Schedule type. SCHEDULED (default) = rrule / rolling / legacy cadence. PRN = as-needed (never projected,
+            reminded, or counted in compliance expected; still loggable via the intake route). CYCLIC = N weeks on / M
+            weeks off, gating whichever inner cadence the rrule / legacy fields describe.
+          type: string
+          enum:
+            - SCHEDULED
+            - PRN
+            - CYCLIC
+        cyclicOnWeeks:
+          description: Cyclic "on" weeks (1..52). Required when `scheduleType` is CYCLIC; ignored otherwise.
+          type: integer
+          minimum: 1
+          maximum: 52
+        cyclicOffWeeks:
+          description: Cyclic "off" weeks (0..52). Required when `scheduleType` is CYCLIC; ignored otherwise.
+          type: integer
+          minimum: 0
+          maximum: 52
+      required:
+        - windowStart
+        - windowEnd
+    MedicationScheduleOutput:
+      type: object
+      properties:
+        scheduleType:
+          type: string
+          enum:
+            - SCHEDULED
+            - PRN
+            - CYCLIC
+          description: v1.7.0 schedule-type discriminator. SCHEDULED = rrule / rolling / legacy cadence. PRN = as-needed (never
+            projected, reminded, or counted in compliance expected; still loggable via the intake route). CYCLIC = N
+            weeks on / M weeks off, gating whichever inner cadence the rrule / legacy fields describe.
+        cyclicOnWeeks:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+          description: v1.7.0 cyclic "on" weeks. Only meaningful when `scheduleType` is CYCLIC; null otherwise.
+        cyclicOffWeeks:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+          description: v1.7.0 cyclic "off" weeks. Only meaningful when `scheduleType` is CYCLIC; null otherwise.
+      required:
+        - scheduleType
+        - cyclicOnWeeks
+        - cyclicOffWeeks
+      additionalProperties: false
+    CreateMedicationRequest:
+      type: object
+      properties:
+        asNeeded:
+          description: "As-needed (PRN) medication (pain relief, rescue inhaler). When true the medication carries NO schedules
+            (supplying any schedule entry is a 422): it is never due, never reminded, and excluded from compliance
+            rates/streaks, but intakes still log (ad-hoc), inventory still consumes, and the history renders. Stays
+            active indefinitely. Mutually exclusive with `oneShot`."
+          type: boolean
+        schedules:
+          type: array
+          items:
+            $ref: "#/components/schemas/MedicationScheduleInput"
+      required:
+        - name
+        - dose
+    MedicationListEntry:
+      type: object
+      properties:
+        asNeeded:
+          type: boolean
+          description: "v1.16.11 as-needed (PRN) flag. When true the medication carries ZERO schedules (the write routes 422 on
+            any schedule entry alongside the flag): it is never due (`nextDueAt` stays null), never reminded, and
+            excluded from every compliance rate/streak — but intakes still log as ad-hoc rows, inventory still consumes
+            per `unitsPerDose`, and the history renders. Stays active indefinitely. Mutually exclusive with `oneShot`."
+        schedules:
+          type: array
+          items:
+            $ref: "#/components/schemas/MedicationScheduleOutput"
+      required:
+        - asNeeded
+        - schedules
+      additionalProperties: false

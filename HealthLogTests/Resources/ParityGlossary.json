@@ -1,0 +1,35 @@
+{
+  "_comment": "Build-8 (b239) parity glossary — the checked-in canonical German term convention for HealthLog iOS + the forbidden legacy terms the coherence guard enforces against the DE catalog. Web is the reference (messages/de.json). 'forbiddenTerms' are enforced by GlossaryGuardTests against every DE stringUnit value (with per-term key exceptions). 'canonicalTerms' is the reviewed convention record — advisory reference, not all hard-enforced, because their sweep (item 8.4) is per-hit / partial. English keys + English values are never touched (compliance/record are correct English terminology).",
+  "canonicalTerms": [
+    { "forbidden": "Compliance", "canonical": "Therapietreue", "note": "Item 8.3. Composita: 'Therapietreue-Heatmap', 'Medikamenten-Therapietreue'." },
+    { "forbidden": "Medis", "canonical": "Medikamente", "note": "Item 8.2 — Home/Meds tab de-value." },
+    { "forbidden": "Start (Tab)", "canonical": "Dashboard", "note": "Item 8.2 — Home tab de-value only. NOT enforced as a substring: 'Start'/'starten' are common German words; the tab rename is verified by the Co-Named / tab-descriptor tests, not by a catalog-wide scan." },
+    { "forbidden": "Arztbericht", "canonical": "Gesundheitsbericht", "note": "Item 8.4 — EXPORT surfaces only. The inbound document TYPE (documents.kind.doctorReport) keeps 'Arztbericht'." },
+    { "forbidden": "Rekorde", "canonical": "Bestleistungen", "note": "Item 8.4 — 'Rekorde & Erfolge' → 'Bestleistungen & Erfolge' + section-level values. Advisory only: partial per-hit sweep, not catalog-wide enforced." },
+    { "forbidden": "Ovulation", "canonical": "Eisprung", "note": "Item 8.3 word-drift. Advisory: 'Ovulationstest' is the established kit term — per-hit decision." },
+    { "forbidden": "Dosis (Vorgang)", "canonical": "Einnahme", "note": "CU-24 / GH iOS #73 — one intent, one term: the ACT of logging or marking a taken medication is 'Einnahme' (EN 'intake') on every surface. 'Dosis' / 'dose' stays correct for the AMOUNT (med.form.dose, Abweichende Dosis, Dosen pro Einheit, Dosisstärke). NOT enforced catalog-wide for that reason; the logging surfaces (meds.quick.*, med.freelog.*) are enforced by MedicationLoggingEmptyStateTests." }
+  ],
+  "forbiddenTerms": [
+    {
+      "term": "compliance",
+      "caseSensitive": false,
+      "canonical": "Therapietreue",
+      "exceptKeys": [],
+      "rationale": "Item 8.3 — 'Compliance' / 'Medikamenten-Compliance' / 'Compliance-Heatmap' → 'Therapietreue' in every German value. English keys and English values keep 'compliance' (correct clinical English). Code identifiers (ComplianceRingCard, complianceHeatmapWeeks) are not catalog values and are unaffected."
+    },
+    {
+      "term": "Medis",
+      "caseSensitive": true,
+      "canonical": "Medikamente",
+      "exceptKeys": [],
+      "rationale": "Item 8.2 — the German tab value 'Medis' becomes 'Medikamente'. Key 'Meds' + its English value are untouched."
+    },
+    {
+      "term": "Arztbericht",
+      "caseSensitive": true,
+      "canonical": "Gesundheitsbericht",
+      "exceptKeys": ["documents.kind.doctorReport"],
+      "rationale": "Item 8.4 — the export surfaces ('Doctor report' family, settings.localreport.title, onboarding feature mentions) become 'Gesundheitsbericht'. The single exception is the inbound document TYPE 'documents.kind.doctorReport', which names the web's inbound doc kind and deliberately keeps 'Arztbericht' — that name collision is exactly what the export rename resolves. If the copy sweep (sibling agent) decides to keep 'Arztbericht' on any further key, add that key here."
+    }
+  ]
+}

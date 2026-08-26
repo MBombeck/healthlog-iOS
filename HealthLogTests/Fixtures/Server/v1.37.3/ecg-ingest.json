@@ -1,0 +1,45 @@
+{
+  "request": {
+    "externalRecordingId": "fixture-ecg-alpha",
+    "recordedAt": "2001-01-02T03:04:05Z",
+    "samplingFrequency": 512,
+    "samples": [-101, 0, 101],
+    "lead": "I",
+    "averageHeartRate": 77,
+    "classification": "NOT_DETECTED",
+    "source": "APPLE_HEALTH"
+  },
+  "responses": {
+    "inserted": {
+      "data": {
+        "id": "fixture-ecg-row-alpha",
+        "status": "inserted",
+        "recordedAt": "2001-01-02T03:04:05Z",
+        "sampleCount": 3,
+        "durationSeconds": 0.005859375
+      },
+      "error": null
+    },
+    "updated": {
+      "data": {
+        "id": "fixture-ecg-row-alpha",
+        "status": "updated",
+        "recordedAt": "2001-01-02T03:04:05Z",
+        "sampleCount": 3,
+        "durationSeconds": 0.005859375
+      },
+      "error": null
+    },
+    "duplicate": {
+      "data": {
+        "id": "fixture-ecg-row-existing",
+        "status": "duplicate",
+        "recordedAt": "2001-01-02T03:04:05Z",
+        "sampleCount": 3,
+        "durationSeconds": 0.005859375
+      },
+      "error": null
+    }
+  }
+}
+

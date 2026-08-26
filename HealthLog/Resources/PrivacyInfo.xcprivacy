@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+    HealthLog Privacy Manifest. Quellen:
+    - .planning/v030-marathon/A7-apple-compliance-research.md §6 (BLOCKER 5)
+    - Apple "Describing data use in privacy manifests"
+      https://developer.apple.com/documentation/bundleresources/privacy-manifest-files
+
+    Aenderungen ggu. v0.2.x:
+    - +Name (Registrierung + Profilname)
+    - +Email (Login + Account-Recovery)
+    - +OtherUserContent (Notes auf Measurement + Mood — siehe Models)
+    - +SensitiveInfo (free-text Notes koennen sensitive Disclosures enthalten,
+      A7 PM-B-Empfehlung)
+    - +DeviceID (X-Device-Id-Header pro Request + zukuenftiger APNs-Token)
+    - +PhotosOrVideos (Avatar + ausdruecklich ausgewaehlte Bilder/Scans im
+      Dokumententresor werden an den konfigurierten HealthLog-Server geladen)
+    - SystemBootTime entfernt (audit-v021 L-4: keine tatsaechliche
+      API-Verwendung im Code).
+    - FileTimestamp WIEDER aufgenommen (v0.6.2.3): SwiftData-Adoption seit
+      v0.3.0 (Outbox-Store + spaeter Caches) liest/schreibt
+      `createdAt`/`updatedAt`-Timestamps via Foundation-File-APIs. Apple
+      ITMS-91053 Post-Upload-Risk wenn nicht deklariert. Reason C617.1
+      ("Display file timestamps to the user") deckt die Anzeige der
+      Outbox-Replay-Zeitstempel + SwiftData-Model-Timestamps in
+      Sync-/Diagnose-Surfaces ab.
+    - DDA9.1 ergaenzt (v0.7.0 W-APPSTORE): die Outbox-Diagnose-Surface
+      (Sync-Diagnostiken + Outbox-Inspector) zeigt SwiftData-
+      `createdAt`/`updatedAt`-Timestamps direkt an den User aus. Der
+      zweite Reason im FileTimestamp-Bucket ist nicht-exklusiv zu
+      C617.1 und Apple verlangt nicht einen-und-nur-einen Reason pro
+      Kategorie; beide werden im Array deklariert, weil beide Pfade
+      real existieren.
+    - CrashData wird bewusst NICHT deklariert: MetricKit-Upload ist heute
+      OFF (kein `MXMetricManager`-Usage). Wird mit Wave-3 (MetricKit-
+      Adoption) nachgezogen — sonst waere es Over-Declaration.
+    - FoundationModels (on-device LLM, iOS 26+) ist KEINE Datensammlung
+      gem. Apple WWDC25-286: Inferenz laeuft on-device, nichts verlaesst
+      das Geraet. Kein neuer NSPrivacyCollectedDataType erforderlich.
+      Quelle: R4 §9.1.
+    - Reine Vision-OCR (Medication/Lab Scan) laeuft on-device. Daneben gibt es
+      den ausdruecklichen Dokumententresor-/Avatar-Upload; deshalb sind Fotos
+      und Videos als gesammelte, verknuepfte App-Funktionalitaet deklariert.
+    -->
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array>
+        <!-- Display/full name from registration/profile management. -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeName</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+                <string>NSPrivacyCollectedDataTypePurposeAccountManagement</string>
+            </array>
+        </dict>
+        <!-- Health & Fitness samples (HK + manual entry, incl. HKStateOfMind
+             mood read/write since v0.10.0 W-Mood-B) — Linked + not-tracking. -->
+
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeHealthFitness</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+        <!-- User ID (server-issued account UUID) -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeUserID</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+                <string>NSPrivacyCollectedDataTypePurposeAccountManagement</string>
+            </array>
+        </dict>
+        <!--
+        Email — Login (`/api/auth/login`) + Account-Recovery + Onboarding
+        Email-Fallback. Niemals fuer Marketing/Analytics.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeEmailAddress</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+                <string>NSPrivacyCollectedDataTypePurposeAccountManagement</string>
+            </array>
+        </dict>
+        <!--
+        OtherUserContent — free-text Notes auf Measurement + Mood. User
+        kann z.B. "Kopfschmerzen seit gestern" oder Coach-Prompts schreiben.
+        Bleibt am Server, wird nicht weitergeleitet (ausser via Coach-Feature
+        an AI-Provider — siehe `5.1.2(i)`-Consent-Surface, separater Wave).
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+        <!--
+        SensitiveInfo — free-text Notes auf Mood + Medikamenten-Side-Effect-
+        Logs koennen sensitive Disclosures enthalten (sexuelle Orientierung,
+        Schwangerschaft, mentale Gesundheit, Religion, etc.). Apple zaehlt das
+        seperat zu HealthFitness; A7 PM-B empfiehlt explizit, defensiv zu
+        deklarieren — Under-Declaration ist der Rejection-Risiko-Pfad.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeSensitiveInfo</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+        <!--
+        DeviceID — `X-Device-Id`-Header auf jedem authentifizierten Request
+        (siehe `KeychainKey.deviceID` + Refresh-Token-Binding). Server bindet
+        Refresh-Token an die Device-Row, dient der Revocation. Spaeter (A6)
+        kommt der APNs-Token unter dieselbe Kategorie.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeDeviceID</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+        <!-- Avatar and user-selected document-vault images/scans. Local-only
+             Vision OCR images are not uploaded by that OCR path. -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+    </array>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <!--
+        UserDefaults — UI-Prefs (`SettingsStore`) + HK-Anchors
+        (`HealthKitService.AnchorPersistence`). v0.10.0 W-Mood-B adds: the
+        mood-reminder hour (`hl.mood.reminderHour`), the Apple-Health mood-sync
+        toggle (`hl.mood.syncWithAppleHealth`), and the per-user State-of-Mind
+        import anchor (`hl.mood.stateOfMind.anchor.*`) — all UI-pref / sync-
+        cursor echoes, same CA92.1 rationale (no new reason code needed). Reason
+        CA92.1: "Access info about the user from the same app, with no need for
+        it to be available across the network or to other apps".
+        GH #74 adds the same two shapes for the Apple-Health ECG upload: the
+        device-local opt-in switch (`hl.ecg.uploadFromAppleHealth`) and the
+        per-user HealthKit cursor (`hl.ecg.hk.anchor.*`). A UI-pref and an
+        opaque sync cursor — CA92.1 unchanged, no new reason code. The ECG
+        WAVEFORM itself never touches UserDefaults, nor any other local store:
+        it exists for the duration of the request that carries it and no
+        longer, and is covered by the existing HealthFitness collected-data
+        declaration above.
+        -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+        <!--
+        FileTimestamp — SwiftData-Outbox-Store (`outbox.sqlite`) und
+        kuenftige Read-Caches greifen ueber Foundation-File-APIs auf
+        `createdAt`/`updatedAt`-Attribute zu; ausserdem rendert die
+        Sync-/Outbox-Diagnose-Surface die Zeitstempel an die User-UI.
+        Reason C617.1: "Display file timestamps to the user". Ohne diese
+        Deklaration loest ITMS-91053 post-upload aus.
+        -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>C617.1</string>
+                <string>DDA9.1</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

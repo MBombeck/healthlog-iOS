@@ -1,0 +1,3 @@
+default-rect: width=nil height=16 cornerRadius=8
+default-capsule: width=nil height=16 cornerRadius=8
+default-circle: width=nil height=16 cornerRadius=8

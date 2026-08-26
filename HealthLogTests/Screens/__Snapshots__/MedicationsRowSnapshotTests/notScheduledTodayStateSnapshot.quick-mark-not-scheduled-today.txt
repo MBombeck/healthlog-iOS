@@ -1,0 +1,9 @@
+▿ HealthLog.MedicationQuickMarkState.PresentationDescriptor
+  - symbolName: "circle"
+  - isSymbolHidden: true
+  - isActionable: false
+  - isDisabled: true
+  - visualSize: 32.0
+  - hitTarget: 32.0
+  - accessibilityLabel: "Heute kein Eintrag"
+  - accessibilityHint: ""

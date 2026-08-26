@@ -1,0 +1,66 @@
+▿ 5 elements
+  ▿ 4 key/value pairs
+    ▿ (2 elements)
+      - key: "action"
+      - value: "no"
+    ▿ (2 elements)
+      - key: "id"
+      - value: "home"
+    ▿ (2 elements)
+      - key: "symbol"
+      - value: "house.fill"
+    ▿ (2 elements)
+      - key: "title"
+      - value: "Home"
+  ▿ 4 key/value pairs
+    ▿ (2 elements)
+      - key: "action"
+      - value: "no"
+    ▿ (2 elements)
+      - key: "id"
+      - value: "meds"
+    ▿ (2 elements)
+      - key: "symbol"
+      - value: "pills.fill"
+    ▿ (2 elements)
+      - key: "title"
+      - value: "Meds"
+  ▿ 4 key/value pairs
+    ▿ (2 elements)
+      - key: "action"
+      - value: "yes"
+    ▿ (2 elements)
+      - key: "id"
+      - value: "measure"
+    ▿ (2 elements)
+      - key: "symbol"
+      - value: "plus.circle.fill"
+    ▿ (2 elements)
+      - key: "title"
+      - value: "Log"
+  ▿ 4 key/value pairs
+    ▿ (2 elements)
+      - key: "action"
+      - value: "no"
+    ▿ (2 elements)
+      - key: "id"
+      - value: "insights"
+    ▿ (2 elements)
+      - key: "symbol"
+      - value: "sparkles"
+    ▿ (2 elements)
+      - key: "title"
+      - value: "Insights"
+  ▿ 4 key/value pairs
+    ▿ (2 elements)
+      - key: "action"
+      - value: "no"
+    ▿ (2 elements)
+      - key: "id"
+      - value: "more"
+    ▿ (2 elements)
+      - key: "symbol"
+      - value: "ellipsis"
+    ▿ (2 elements)
+      - key: "title"
+      - value: "More"

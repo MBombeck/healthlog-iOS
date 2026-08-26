@@ -1,0 +1,17 @@
+▿ HealthLog.Achievement
+  - id: "bp-50"
+  - key: "bp-50"
+  - title: "Vitalwerte-Profi"
+  - description: "Erfasse 50 Blutdruck-Messungen."
+  ▿ iconName: Optional("Heart")
+    - some: "Heart"
+  - unlocked: false
+  - unlockedAt: nil
+  - progress: 0.42
+  ▿ points: Optional(90)
+    - some: 90
+  - category: nil
+  - current: nil
+  - target: nil
+  - format: nil
+  - isHidden: false

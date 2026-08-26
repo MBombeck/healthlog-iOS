@@ -1,0 +1,6 @@
+{
+  "accept": "application/pdf",
+  "body": "{\"format\":\"pdf\",\"locale\":\"de\",\"practiceName\":\"Praxis Test\",\"range\":{\"days\":90},\"selection\":{\"leaves\":[\"WEIGHT\",\"PULSE\",\"LAB_RESULTS\",\"MEDICATION_LIST\",\"MOOD\",\"INSURANCE\"],\"v\":2}}",
+  "method": "POST",
+  "path": "/api/export/health-record"
+}

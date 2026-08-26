@@ -1,0 +1,62 @@
+▿ HealthLogTests.ActiveMedicationRowSnapshot
+  ▿ medication: HealthLog.Medication
+    - id: "m1"
+    - name: "Lisinopril"
+    - dose: "5 mg"
+    - treatmentClass: nil
+    - category: nil
+    - dosesPerUnit: nil
+    - unitsPerDose: nil
+    ▿ schedule: HealthLog.MedicationSchedule
+      ▿ times: 2 elements
+        ▿ HealthLog.TimeOfDay
+          - hour: 8
+          - minute: 0
+        ▿ HealthLog.TimeOfDay
+          - hour: 20
+          - minute: 0
+      - weekdays: nil
+      - intervalWeeks: 1
+      ▿ entries: 1 element
+        ▿ HealthLog.ScheduleEntry
+          - cadence: HealthLog.Cadence.daily
+          ▿ timesOfDay: 2 elements
+            ▿ HealthLog.TimeOfDay
+              - hour: 8
+              - minute: 0
+            ▿ HealthLog.TimeOfDay
+              - hour: 20
+              - minute: 0
+          - reminderGraceMinutes: nil
+          - label: nil
+          - dose: nil
+          ▿ windowStart: HealthLog.TimeOfDay
+            - hour: 8
+            - minute: 0
+          - windowEnd: nil
+          - doseWindows: nil
+          - unitsPerDose: nil
+          - resolvedUnitsPerDose: nil
+    - lastTakenAt: nil
+    - todayEventCount: nil
+    - notificationsEnabled: true
+    - active: true
+    - archivedAt: nil
+    - pausedAt: nil
+    - startsOn: nil
+    - endsOn: nil
+    - oneShot: false
+    - asNeeded: false
+    - deliveryForm: nil
+    - createdAt: nil
+    - nextDueAt: nil
+    - nextDueOverdue: nil
+    - liveActivityEnabled: nil
+    - criticalAlarmEnabled: nil
+    - trackInjectionSites: false
+    - allowedInjectionSites: 0 elements
+    - externalSource: nil
+    - externalId: nil
+    - stockDosesRemaining: nil
+    - runwayDays: nil
+  - displayState: HealthLog.ActiveMedicationDisplayState.aktiv

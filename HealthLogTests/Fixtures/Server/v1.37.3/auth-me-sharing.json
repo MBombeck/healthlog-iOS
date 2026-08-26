@@ -1,0 +1,46 @@
+{
+  "data": {
+    "id": "fixture-actor-account",
+    "username": "fixture_actor",
+    "accountAccess": {
+      "accounts": [
+        {
+          "accountId": "fixture-shared-record",
+          "username": "fixture_shared",
+          "displayName": "Fixture Shared Record",
+          "fullName": null,
+          "access": "read",
+          "level": "read",
+          "recordKind": "shared",
+          "sections": null,
+          "canWrite": false
+        },
+        {
+          "accountId": "fixture-managed-record",
+          "username": "fixture_managed",
+          "displayName": "Fixture Managed Record",
+          "fullName": "Fixture Person",
+          "access": "write",
+          "level": "manage",
+          "recordKind": "managed",
+          "sections": [],
+          "canWrite": true
+        }
+      ],
+      "active": {
+        "accountId": "fixture-shared-record",
+        "username": "fixture_shared",
+        "displayName": "Fixture Shared Record",
+        "fullName": null,
+        "access": "read",
+        "level": "read",
+        "recordKind": "shared",
+        "sections": null,
+        "canWrite": false
+      }
+    },
+    "recordSession": null
+  },
+  "error": null
+}
+

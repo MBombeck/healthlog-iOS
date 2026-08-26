@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+    HealthLogWidgets (app-extension) Privacy Manifest.
+
+    Apple's privacy-manifest rule is per-binary; the widget extension is a
+    separate binary from the host app, and ITMS-91053 static analysis scans the
+    appex's linked symbols independently.
+
+    Rationale (audit v0.16.2 H3 — the earlier "no Required-Reason API" claim was
+    stale once the shared Services set grew):
+    - The widget appex compiles `Services/AIConsentStore.swift`
+      (`private let defaults: UserDefaults`, `.standard` read/write) and
+      `Services/FeatureFlagsService.swift` (`UserDefaultsFeatureFlagsService`)
+      from the project.yml HealthLogWidgets source set, so the binary links the
+      UserDefaults Required-Reason API → NSPrivacyAccessedAPICategoryUserDefaults
+      / CA92.1 is declared (same reason as the host app manifest). Leaving it
+      empty is the under-declaration / rejection-risk direction.
+    - The widget's own persistence (`WidgetSnapshotStore`) still uses only the
+      App-Group snapshot file via `Data(contentsOf:)` / atomic write — no file
+      timestamps and no system boot time cross into the extension (grep-verified:
+      no creationDate/contentModificationDate/systemUptime call sites), so no
+      FileTimestamp / SystemBootTime reason is declared.
+    - The extension does NO independent data collection or transmission. It only
+      renders mood/medication data the host app already wrote into the shared
+      App-Group container; the host app's own `PrivacyInfo.xcprivacy` declares
+      the underlying collection (HealthFitness etc.). The extension's interactive
+      quick-log buttons fire shared App Intents that reuse the host's server-first
+      write path — no parallel collection path lives in this binary →
+      NSPrivacyCollectedDataTypes is empty.
+    - No tracking, no third-party SDKs, no tracking domains.
+    -->
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array/>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <!--
+        UserDefaults — the appex links UserDefaults via the compiled
+        AIConsentStore (BYO-consent flags) + UserDefaultsFeatureFlagsService.
+        Reason CA92.1: "Access info about the user from the same app, with no
+        need for it to be available across the network or to other apps".
+        Mirrors the host-app manifest's UserDefaults declaration.
+        -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

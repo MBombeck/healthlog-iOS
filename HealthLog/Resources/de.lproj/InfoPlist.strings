@@ -1,0 +1,10 @@
+"NSHealthShareUsageDescription" = "HealthLog liest die von dir freigegebenen Gesundheitsdaten aus Apple Health – darunter Vitalwerte, Aktivität, Ernährung, Schlaf, Stimmung, Zyklusdaten, EKGs, Trainings- und Pulsdaten sowie Medikamente – um sie anzuzeigen, zu synchronisieren und Trends zu berechnen.";
+"NSHealthUpdateUsageDescription" = "HealthLog speichert von dir erfasste Messungen, Stimmungs- und Zykluseinträge sowie Messungen aus von dir verbundenen Geräten oder Importen in Apple Health, wenn du HealthLog Schreibzugriff erlaubst.";
+"NSFaceIDUsageDescription" = "HealthLog nutzt Face ID, um deine Daten zu schützen.";
+"NSUserNotificationsUsageDescription" = "HealthLog erinnert dich an Medikamente und Messungen.";
+"NSAlarmKitUsageDescription" = "HealthLog stellt laute Alarme für zeitkritische Medikamente, die du ausdrücklich aktivierst. Sie durchbrechen Stummschaltung und Fokus, damit du keine wichtige Dosis verpasst.";
+"NSSpeechRecognitionUsageDescription" = "HealthLog nutzt Spracherkennung, um deine diktierte Frage an den Coach in Text umzuwandeln – wo möglich direkt auf dem Gerät. Du prüfst den Text vor dem Senden.";
+"NSMicrophoneUsageDescription" = "HealthLog nutzt das Mikrofon, um deine Frage an den Coach zu diktieren. Die Aufnahme wird auf dem Gerät in Text umgewandelt und nicht gespeichert.";
+"NSCameraUsageDescription" = "HealthLog nutzt die Kamera, um Medikamenten-Packungen und Laborberichte auf dem Gerät auszulesen oder von dir ausgewählte Scans in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen.";
+"NSPhotoLibraryUsageDescription" = "HealthLog liest nur von dir ausgewählte Fotos, um dein Profilbild festzulegen, sie auf dem Gerät auszulesen oder in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen.";
+"NSBluetoothAlwaysUsageDescription" = "HealthLog koppelt Blutdruckmessgeräte, Glukose-Sensoren und Waagen über Bluetooth, damit Messungen automatisch landen.";

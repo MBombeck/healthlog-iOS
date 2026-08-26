@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+    NotificationServiceExtension (app-extension) Privacy Manifest.
+
+    Apple's privacy-manifest rule is per-binary; this appex is a separate
+    binary from the host app, and ITMS-91053 static analysis scans its linked
+    symbols independently (mirrors the HealthLogWidgets manifest rationale).
+
+    - The appex compiles `Services/LockScreenPrivacy.swift`, which reads the
+      "hide medication name" opt-out from the SHARED App-Group
+      `UserDefaults(suiteName: "group.dev.healthlog.app")`, so the binary links
+      the UserDefaults Required-Reason API → CA92.1 is declared (same reason as
+      the host app + widget manifests). Leaving it empty is the
+      under-declaration / rejection-risk direction.
+    - The extension does NO independent data collection or transmission. It
+      only redacts the drug name the host app / server already produced, in the
+      lock-screen text of a push the OS delivers → NSPrivacyCollectedDataTypes
+      is empty. No file timestamps, no boot time, no tracking, no third-party
+      SDKs, no tracking domains.
+    -->
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array/>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

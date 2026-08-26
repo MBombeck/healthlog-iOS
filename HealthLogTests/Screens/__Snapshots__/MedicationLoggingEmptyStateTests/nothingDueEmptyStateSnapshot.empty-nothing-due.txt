@@ -1,0 +1,6 @@
+▿ HealthLog.MedicationLoggingEmptyState.Descriptor
+  - icon: "checkmark.seal"
+  - titleKey: "meds.quick.empty.title"
+  - messageKey: "meds.quick.empty.subtitle"
+  - primaryAction: nil
+  - offersManualLog: true

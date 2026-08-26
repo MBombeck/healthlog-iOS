@@ -1,0 +1,6 @@
+{
+  "accept": "application/zip",
+  "body": "{\"format\":\"package\",\"includeCharts\":true,\"range\":{\"days\":90},\"selection\":{\"leaves\":[\"WEIGHT\",\"PULSE\",\"LAB_RESULTS\",\"MEDICATION_LIST\",\"MOOD\",\"INSURANCE\"],\"v\":2}}",
+  "method": "POST",
+  "path": "/api/export/health-record"
+}

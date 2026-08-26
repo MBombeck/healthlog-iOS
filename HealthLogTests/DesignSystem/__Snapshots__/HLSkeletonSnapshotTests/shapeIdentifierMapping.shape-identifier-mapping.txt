@@ -1,0 +1,3 @@
+skeleton.rect (rawValue=rect)
+skeleton.capsule (rawValue=capsule)
+skeleton.circle (rawValue=circle)

@@ -1,0 +1,898 @@
+# HealthLog server contract fragment — measurement-reminder snooze / skip / ledger
+#
+# Owner      : phase 08 plan 18 (ROUTE-07). Consumed by plan 08-19 (model and
+#              repository adoption) and plan 08-22 (store and UI adoption).
+# tag        : v1.37.20
+# tag commit : 3a2c0e757e5f0a4ea8bf6be899b3a04547ddd423
+# release    : public, draft=false, prerelease=false, published 2026-08-14T13:21:51Z
+# source     : docs/api/openapi.yaml at that tag
+# openapi    : sha256 839b960a45ba9b91ec70b04eed49ae26ce868ea3e8aec83300da4db9ff1d985e
+# fragment   : sha256 16abea94dac4046602a26f68095e58d5966482e3f47aa956932d7c5112ba2b06
+#              (canonical extraction, `ruby scripts/extract-phase8-reminder-openapi.rb`)
+#
+# THIS FILE IS AN EXTRACT, NOT A RE-SPECIFICATION. Every line below that is not
+# a `#` comment is byte-identical to a line of the accepted 44,337-line source,
+# indentation included. Nothing was reformatted, re-typed, re-worded, widened,
+# narrowed or invented, and no shape here comes from the announcement in iOS
+# issue #92 — that issue was read only after this extraction existed, and only
+# to enumerate what it had left unspecified.
+#
+# Selection is mechanical rather than hand-picked: every `paths` key beginning
+# with `/api/measurement-reminders`, plus the transitive `$ref` closure of those
+# path items over `#/components/schemas/*`. Seven paths, twenty schemas. The
+# closure is why `ErrorEnvelope`, `MeasurementReminderCreate` and the pre-existing
+# satisfy/complete surface appear here too: the reminder routes reference them,
+# so pinning the new three without them would pin half a contract.
+#
+# One mechanical adjustment, which changes no line's bytes. The source declares
+# its shared error responses as YAML anchors (`&a1`, `&a3`, `&a4`, `&a6`) at
+# their first use elsewhere in the file, and the reminder paths reach them by
+# alias (`"401": *a1`). Carrying the alias without its anchor would leave this
+# fragment unparseable, so each of those four anchors is carried by its own
+# defining block — copied verbatim from the source — at its first use here. The
+# resolved document is therefore identical to the source's, which is checkable
+# rather than asserted: running the canonical extractor over this file
+# reproduces the `fragment` hash above exactly.
+#
+# The `404` anchor needs no such treatment: `&a13` is defined inside
+# `/api/measurement-reminders/{id}`, which is part of this extract already.
+#
+# Later movement of `origin/main` is audit context, never an invalidation input.
+# At acceptance `main` was already three patch releases ahead at 1.37.23 and the
+# extracted fragment was byte-identical to the tag's.
+paths:
+  /api/measurement-reminders:
+    get:
+      tags:
+        - MeasurementReminders
+      summary: List Vorsorge reminders (v1.17.1)
+      description: Returns the owner's live (non-tombstoned) Vorsorge reminders, sorted by server-computed nextDueAt ascending
+        (nulls last). Each row carries the canonical nextDueAt the client renders without recomputing.
+      responses:
+        "200":
+          description: The owner's measurement reminders.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderListEnvelope"
+        "401": &a1
+          description: Authentication required or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403": &a6
+          description: "Refused: this request named a record the caller may not act on (`meta.errorCode` =
+            `sharing.access.denied`). Byte-identical for an account that does not exist, an account that granted
+            nothing, a grant whose sections do not reach this surface, and a read grant on a request that writes — the
+            response carries no reason, so it is not an account-enumeration oracle. The reason reaches the record
+            owner's activity feed and the operator's audit trail instead. On the cookie transport the same code answers
+            one further case: a session that has entered a shared record and sends a request without its record-context
+            assertion, which is a client older than the fence — leave the record and reload. A request that names no
+            record but the caller's own never reaches this response, so a client that never switches and never sends the
+            per-request account selector will not see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422": &a3
+          description: Request validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429": &a4
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - MeasurementReminders
+      summary: Create a Vorsorge reminder (v1.17.1)
+      description: Creates a reminder and computes its server-authoritative nextDueAt. Exactly one of intervalDays (rolling)
+        or rrule (RFC-5545) is required. Wrapped in withIdempotency. 201 on insert.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeasurementReminderCreate"
+      responses:
+        "201":
+          description: Reminder created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderCreatedEnvelope"
+        "401": *a1
+        "403": *a6
+        "422": *a3
+        "429": *a4
+  /api/measurement-reminders/{id}:
+    get:
+      tags:
+        - MeasurementReminders
+      summary: Read a single Vorsorge reminder (v1.17.1)
+      description: Owner-scoped; a cross-user or tombstoned id 404s.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: The reminder.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderEnvelope"
+        "401": *a1
+        "403": *a6
+        "404": &a13
+          description: Measurement reminder not found / not owned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422": *a3
+        "429": *a4
+    patch:
+      tags:
+        - MeasurementReminders
+      summary: Edit a Vorsorge reminder (v1.17.1)
+      description: Partial edit; omitted fields are left untouched. nextDueAt is recomputed server-side after the cadence
+        merge. Owner-scoped.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeasurementReminderUpdate"
+      responses:
+        "200":
+          description: Reminder updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderPatchEnvelope"
+        "401": *a1
+        "403": *a6
+        "404": *a13
+        "422": *a3
+        "429": *a4
+    delete:
+      tags:
+        - MeasurementReminders
+      summary: Soft-delete a Vorsorge reminder (v1.17.1)
+      description: Sets deletedAt (tombstone). Idempotent. Owner-scoped.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: Soft-deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderDeleteEnvelope"
+        "401": *a1
+        "403": *a6
+        "404": *a13
+        "422": *a3
+        "429": *a4
+  /api/measurement-reminders/{id}/satisfy:
+    post:
+      tags:
+        - MeasurementReminders
+      summary: Mark a Vorsorge reminder done (v1.17.1)
+      description: "Manual 'Erledigt': stamps lastSatisfiedAt = now and recomputes nextDueAt past now. Free-text reminders
+        resolve only through this path; typed reminders also auto-resolve in the cron when a matching reading lands."
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: Reminder satisfied; next-due re-anchored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderSatisfyEnvelope"
+        "401": *a1
+        "403": *a6
+        "404": *a13
+        "422": *a3
+        "429": *a4
+  /api/measurement-reminders/{id}/complete:
+    post:
+      tags:
+        - MeasurementReminders
+      summary: Complete a Vorsorge reminder (v1.18.6)
+      description: "Explicit user-action completion (iOS #23): the app marks a reminder done server-side instead of only
+        dismissing it locally. Routes through the same satisfaction primitive as the cron auto-resolve — stamps
+        lastSatisfiedAt = now, re-anchors nextDueAt, fires no notification. Idempotent: completing an already-completed
+        / auto-satisfied reminder returns 200 with completed=false. Owner-scoped."
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: Completion applied (completed=true) or already-satisfied no-op (completed=false); reminder carries the
+            canonical post-completion DTO.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderCompleteEnvelope"
+        "401": *a1
+        "403": *a6
+        "404": *a13
+        "422": *a3
+        "429": *a4
+  /api/measurement-reminders/{id}/skip:
+    post:
+      tags:
+        - MeasurementReminders
+      summary: Skip the current due cycle (v1.37.20)
+      description: "Honestly skips the current due cycle — no body; the skip instant is the server clock. The interval
+        restarts from the skip (rolling: skip + N days at the notify hour; rrule: next occurrence strictly after the
+        skip), lastSkippedAt is stamped, skipCount incremented, any snooze cleared, and a SKIPPED row lands in the
+        completion ledger. lastSatisfiedAt is never touched: a skip is not a completion. Screening reminders are
+        skippable (the satisfy-side 409 guards claimed fulfilment; a skip claims the opposite). Owner-scoped; an
+        appointment (encounter) reminder 404s."
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: Skip applied (skipped=true) or forward-only no-op (skipped=false); reminder carries the canonical post-skip
+            DTO.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderSkipEnvelope"
+        "401": *a1
+        "403": *a6
+        "404": *a13
+        "422": *a3
+        "429": *a4
+  /api/measurement-reminders/{id}/snooze:
+    post:
+      tags:
+        - MeasurementReminders
+      summary: Snooze to a calendar day (v1.37.20)
+      description: "Pushes the current due date back to a named calendar day (YYYY-MM-DD), resolved server-side to the
+        reminder's notifyHour in the profile timezone. snoozedUntil and nextDueAt are set to the same instant, so every
+        due-state consumer moves together and the cursor self-expires. The regular cadence is untouched —
+        lastSatisfiedAt, lastSkippedAt and the anchor stay put. Must be at least tomorrow and at most five years out
+        (422 otherwise). Repeated snoozes: last one wins. Owner-scoped; an appointment reminder 404s."
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeasurementReminderSnooze"
+      responses:
+        "200":
+          description: Snooze applied; reminder carries the resolved DTO.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderSnoozeEnvelope"
+        "401": *a1
+        "403": *a6
+        "404": *a13
+        "422": *a3
+        "429": *a4
+  /api/measurement-reminders/{id}/history:
+    get:
+      tags:
+        - MeasurementReminders
+      summary: Completion ledger, newest first (v1.37.20)
+      description: "Paginated completion ledger for one reminder (iOS #68): one row per satisfy (from any path) and per skip,
+        newest first. onTime is derived server-side at write time against the due instant that was current when the
+        event landed. History begins at the release that introduced the ledger — the single-cursor engine holds nothing
+        to backfill from. Owner-scoped; an appointment reminder 404s."
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+        - in: query
+          name: limit
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: offset
+          schema:
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+      responses:
+        "200":
+          description: The reminder's completion ledger page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeasurementReminderHistoryEnvelope"
+        "401": *a1
+        "403": *a6
+        "404": *a13
+        "422": *a3
+        "429": *a4
+components:
+  schemas:
+    ErrorEnvelope:
+      type: object
+      properties:
+        data:
+          type: "null"
+        error:
+          type: string
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+            errorCode:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+      description: "Standard error response: data is null, error is human prose."
+    MeasurementReminderCompleteEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MeasurementReminderCompletion"
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderCompletion:
+      type: object
+      properties:
+        completed:
+          type: boolean
+        reminder:
+          $ref: "#/components/schemas/MeasurementReminderDTO"
+      required:
+        - completed
+        - reminder
+      additionalProperties: false
+      description: Result of an explicit reminder completion. completed=true when this call advanced lastSatisfiedAt;
+        completed=false when an earlier satisfy or a matching reading already fulfilled the current cycle (idempotent
+        no-op). reminder is the canonical post-completion DTO.
+    MeasurementReminderCreate:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        measurementType:
+          anyOf:
+            - $ref: "#/components/schemas/MeasurementReminderType"
+            - type: "null"
+        intervalDays:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 3650
+            - type: "null"
+        rrule:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 512
+            - type: "null"
+        anchorDate:
+          anyOf:
+            - type: string
+              format: date-time
+              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            - type: "null"
+        notifyHour:
+          default: 9
+          type: integer
+          minimum: 0
+          maximum: 23
+        location:
+          anyOf:
+            - type: string
+              maxLength: 200
+            - type: "null"
+        enabled:
+          default: true
+          type: boolean
+      required:
+        - label
+      description: Create a Vorsorge reminder. Exactly one of intervalDays (rolling, every N days) or rrule (RFC-5545, e.g.
+        FREQ=YEARLY) is required. measurementType enables auto-resolve from an incoming reading; omit it for a free-text
+        checklist reminder.
+    MeasurementReminderCreatedEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MeasurementReminderDTO"
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderDTO:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        measurementType:
+          anyOf:
+            - $ref: "#/components/schemas/MeasurementReminderType"
+            - type: "null"
+        intervalDays:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        rrule:
+          anyOf:
+            - type: string
+            - type: "null"
+        anchorDate:
+          anyOf:
+            - type: string
+              format: date-time
+              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            - type: "null"
+        endsOn:
+          anyOf:
+            - type: string
+              format: date-time
+              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            - type: "null"
+        origin:
+          type: string
+          enum:
+            - VORSORGE
+            - COACH
+        notifyHour:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        location:
+          anyOf:
+            - type: string
+            - type: "null"
+        nextDueAt:
+          anyOf:
+            - type: string
+              format: date-time
+              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            - type: "null"
+        lastSatisfiedAt:
+          anyOf:
+            - type: string
+              format: date-time
+              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            - type: "null"
+        snoozedUntil:
+          anyOf:
+            - type: string
+              format: date-time
+              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            - type: "null"
+        lastSkippedAt:
+          anyOf:
+            - type: string
+              format: date-time
+              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            - type: "null"
+        skipCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        updatedAt:
+          type: string
+          format: date-time
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+      required:
+        - id
+        - label
+        - measurementType
+        - intervalDays
+        - rrule
+        - anchorDate
+        - endsOn
+        - origin
+        - notifyHour
+        - location
+        - nextDueAt
+        - lastSatisfiedAt
+        - snoozedUntil
+        - lastSkippedAt
+        - skipCount
+        - enabled
+        - createdAt
+        - updatedAt
+      additionalProperties: false
+      description: "A Vorsorge reminder. nextDueAt is server-computed (server-authoritative). A free-text reminder carries
+        measurementType=null and resolves only on a manual satisfy. origin distinguishes a user-created (VORSORGE)
+        reminder from one minted by a Coach cadence suggestion (COACH); endsOn bounds a finite course window (null =
+        open-ended). snoozedUntil/lastSkippedAt/skipCount are resolved values: snoozed means snoozedUntil > now, a
+        skipped cycle means lastSkippedAt > lastSatisfiedAt; clients compare against the clock and never recompute
+        cadence. lastSatisfiedAt stays the only completed signal — skip and snooze never move it."
+    MeasurementReminderDeleteEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            deleted:
+              type: boolean
+          required:
+            - deleted
+          additionalProperties: false
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MeasurementReminderDTO"
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum:
+            - SATISFIED
+            - SKIPPED
+        occurredAt:
+          type: string
+          format: date-time
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        onTime:
+          type: boolean
+        source:
+          type: string
+          enum:
+            - manual
+            - auto_measurement
+            - auto_lab
+            - telegram
+            - vaccination
+            - encounter
+            - skip
+        createdAt:
+          type: string
+          format: date-time
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+      required:
+        - id
+        - kind
+        - occurredAt
+        - onTime
+        - source
+        - createdAt
+      additionalProperties: false
+      description: "One completion-ledger row: an honest fulfilment (SATISFIED) or an honest skip (SKIPPED). onTime is derived
+        server-side at write time against the due instant that was current when the event landed — clients never
+        re-derive it. History begins at the release that introduced the ledger."
+    MeasurementReminderHistory:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeasurementReminderEvent"
+        meta:
+          type: object
+          properties:
+            total:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            limit:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            offset:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+          required:
+            - total
+            - limit
+            - offset
+          additionalProperties: false
+      required:
+        - events
+        - meta
+      additionalProperties: false
+      description: Paginated completion ledger for one reminder, newest first.
+    MeasurementReminderHistoryEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MeasurementReminderHistory"
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderListEnvelope:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeasurementReminderDTO"
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderPatchEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MeasurementReminderDTO"
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderSatisfyEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MeasurementReminderDTO"
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderSkip:
+      type: object
+      properties:
+        skipped:
+          type: boolean
+        reminder:
+          $ref: "#/components/schemas/MeasurementReminderDTO"
+      required:
+        - skipped
+        - reminder
+      additionalProperties: false
+      description: Result of skipping the current due cycle. skipped=true when this call recorded the skip and restarted the
+        interval from the skip instant; skipped=false when a concurrent skip or satisfy already advanced the row
+        (idempotent no-op). A skip never touches lastSatisfiedAt — it is recorded honestly as a skip, not a completion.
+    MeasurementReminderSkipEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MeasurementReminderSkip"
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderSnooze:
+      type: object
+      properties:
+        until:
+          type: string
+          format: date
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+      required:
+        - until
+      description: "Push a reminder's current due date back to a calendar day (YYYY-MM-DD). The server resolves the day to the
+        reminder's notifyHour in the profile timezone. Must be at least tomorrow and at most five years out. The regular
+        cadence is untouched: lastSatisfiedAt and the anchor stay where they are, and the reminder resumes its normal
+        interval after the snoozed cycle."
+    MeasurementReminderSnoozeEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            reminder:
+              $ref: "#/components/schemas/MeasurementReminderDTO"
+          required:
+            - reminder
+          additionalProperties: false
+        error:
+          type: "null"
+        meta:
+          type: object
+          properties:
+            requestId:
+              type: string
+          additionalProperties: false
+      required:
+        - data
+        - error
+      additionalProperties: false
+    MeasurementReminderType:
+      type: string
+      enum:
+        - WEIGHT
+        - BLOOD_PRESSURE_SYS
+        - PULSE
+        - BLOOD_GLUCOSE
+        - OXYGEN_SATURATION
+        - BODY_TEMPERATURE
+        - BODY_FAT
+        - FAT_MASS
+        - FAT_FREE_MASS
+        - MUSCLE_MASS
+        - LEAN_BODY_MASS
+        - BONE_MASS
+        - TOTAL_BODY_WATER
+        - VISCERAL_FAT
+        - BODY_MASS_INDEX
+        - WAIST_CIRCUMFERENCE
+        - PHQ9_SCORE
+        - GAD7_SCORE
+        - WHO5_SCORE
+        - SCI_SCORE
+      description: Auto-resolve target metric (vitals + body-composition family + the PHQ-9 / GAD-7 / WHO-5 / SCI screenings).
+        BP resolves on BLOOD_PRESSURE_SYS (the SYS row is the 'a BP was measured' sentinel); a screening reminder
+        resolves on the server-written *_SCORE row when a check-in completes. Omit for a free-text Vorsorge that
+        resolves only on a manual satisfy or a matching lab result.
+    MeasurementReminderUpdate:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        measurementType:
+          anyOf:
+            - $ref: "#/components/schemas/MeasurementReminderType"
+            - type: "null"
+        intervalDays:
+          anyOf:
+            - type: integer
+              minimum: 1
+              maximum: 3650
+            - type: "null"
+        rrule:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 512
+            - type: "null"
+        anchorDate:
+          anyOf:
+            - type: string
+              format: date-time
+              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            - type: "null"
+        notifyHour:
+          type: integer
+          minimum: 0
+          maximum: 23
+        location:
+          anyOf:
+            - type: string
+              maxLength: 200
+            - type: "null"
+        enabled:
+          type: boolean
+      description: Partial edit of a Vorsorge reminder. Omitted fields are left untouched; nextDueAt is recomputed server-side
+        after the patch applies.

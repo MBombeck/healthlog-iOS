@@ -1,0 +1,6 @@
+{
+  "accept": "application/json",
+  "body": "{\"expiresAt\":\"2023-12-14T22:13:20Z\",\"label\":\"Dr. Test\",\"rangeEnd\":null,\"rangeStart\":\"2023-08-16T22:13:20Z\",\"selection\":{\"leaves\":[],\"v\":2}}",
+  "method": "POST",
+  "path": "/api/share-links"
+}

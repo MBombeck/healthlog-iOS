@@ -1,0 +1,17 @@
+▿ HealthLog.Achievement
+  - id: "hidden-night-owl"
+  - key: "hidden-night-owl"
+  - title: "achievements.hiddenCard.title"
+  - description: "achievements.hiddenCard.description"
+  ▿ iconName: Optional("HelpCircle")
+    - some: "HelpCircle"
+  - unlocked: false
+  - unlockedAt: nil
+  - progress: 0.0
+  ▿ points: Optional(25)
+    - some: 25
+  - category: nil
+  - current: nil
+  - target: nil
+  - format: nil
+  - isHidden: false

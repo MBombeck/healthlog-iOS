@@ -1,0 +1,9 @@
+▿ HealthLog.MedicationQuickMarkState.PresentationDescriptor
+  - symbolName: "circle"
+  - isSymbolHidden: false
+  - isActionable: true
+  - isDisabled: false
+  - visualSize: 32.0
+  - hitTarget: 44.0
+  - accessibilityLabel: "Heute als genommen markieren"
+  - accessibilityHint: "Doppeltippen, um die fällige Einnahme als genommen zu markieren"

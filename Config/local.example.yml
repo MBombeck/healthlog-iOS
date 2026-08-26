@@ -1,0 +1,79 @@
+# Vorlage fuer das lokale Betreiber-Overlay.
+#
+# Kopieren nach `Config/local.yml` (dort per `.gitignore` ausgeschlossen —
+# die Datei darf NIE eingecheckt werden) und die Platzhalter durch die
+# eigenen Werte ersetzen. Danach:
+#
+#     HL_LOCAL_CONFIG=1 xcodegen
+#
+# Ohne gesetzte Variable ignoriert XcodeGen das Overlay komplett; ein
+# frischer Clone generiert dann ein Projekt ohne Pinning, ohne Passkeys und
+# ohne Universal Links. Das ist der gueltige Normalzustand — die App bringt
+# keinen eingebauten Server mit, also auch keine eingebauten Hosts.
+#
+# ACHTUNG — hier stand bis 2026-08-25 das Gegenteil der Wahrheit:
+# Das Release-Skript setzt `HL_LOCAL_CONFIG` **nicht**. Das Skript
+# erwaehnt die Variable an keiner Stelle; es ruft `xcodegen` in seinem eigenen
+# Checkout auf, und ohne gesetzte Variable erzeugt das ein Projekt OHNE
+# Overlay. Wer einen Release-Build mit Pinning will, setzt die Variable selbst
+# in der Umgebung, aus der der Producer laeuft — sonst baut der Kandidat ohne
+# Pinning, ohne Passkeys und ohne Universal Links, und niemand erfaehrt es.
+# Nachgemessen, nicht vermutet (Phase 23, Legibility-Sweep).
+
+targets:
+  HealthLog:
+    info:
+      properties:
+        # --- TLS Public-Key-Pinning ---------------------------------------
+        # SPKI-SHA-256 (base64) der eigenen Kette. Ziehen mit:
+        #     scripts/extract-spki.sh health.example.com
+        #
+        # MINDESTENS ZWEI Eintraege: primaer plus Backup. Ein Ein-Pin-Set
+        # sperrt alle Nutzer aus, sobald das Zertifikat rotiert. Empfohlen
+        # sind die beiden langlebigen CA-Keys (Intermediate + Root) statt des
+        # Leafs — dann ueberleben routinemaessige Leaf-Erneuerungen ohne
+        # App-Update.
+        HLPinnedSPKIHashes:
+          - "REPLACE_WITH_YOUR_PRIMARY_SPKI_SHA256_BASE64="
+          - "REPLACE_WITH_YOUR_BACKUP_SPKI_SHA256_BASE64="
+        # Host-Suffixe, gegen die das Pin-Set DURCHGESETZT wird. Ein Eintrag
+        # `example.com` trifft den Apex exakt und jede Subdomain, die auf
+        # `.example.com` endet (die fuehrende Punkt-Labelgrenze schliesst
+        # `evilexample.com` aus). Hosts ausserhalb der Liste fallen auf die
+        # System-Trust-Validierung zurueck.
+        #
+        # Hashes ohne Hosts wuerden nie greifen, Hosts ohne (genug) Hashes
+        # nie schuetzen — beides laesst der Release-Guard nicht durch.
+        HLPinnedHosts:
+          - "example.com"
+        # --- Passkeys ------------------------------------------------------
+        # Spiegel der `webcredentials:`-Domains unten. Zur Laufzeit ist das
+        # Entitlement nicht lesbar, deshalb steht dieselbe Liste zusaetzlich
+        # in der Info.plist: `ServerAuthStep` zeigt die Passkey-Schaltflaeche
+        # genau dann, wenn der eingerichtete Server hier gedeckt ist.
+        # Exakte Hosts; ein fuehrendes `*.` erlaubt direkte Subdomains.
+        HLPasskeyRelyingPartyHosts:
+          - "healthlog.example.com"
+    entitlements:
+      properties:
+        # `webcredentials:` ist Pflicht fuer den Passkey-WebAuthn-Austausch,
+        # `applinks:` fuer den Invite-Universal-Link. Beide brauchen eine
+        # erreichbare AASA-Datei unter
+        # `https://<host>/.well-known/apple-app-site-association` mit der
+        # eigenen appID (`<TEAMID>.<bundle-id>`).
+        com.apple.developer.associated-domains:
+          - webcredentials:healthlog.example.com
+          - applinks:healthlog.example.com
+
+  # Die Widget-/Live-Activity-/Siri-Extension laeuft in einem EIGENEN Prozess
+  # mit eigener Info.plist. Ohne diese Keys pinnt sie nicht, obwohl sie
+  # Bearer-Token und PHI schreibt. Byte-gleich zum App-Target halten —
+  # jede Pin-Rotation muss BEIDE Bloecke anfassen.
+  HealthLogWidgets:
+    info:
+      properties:
+        HLPinnedSPKIHashes:
+          - "REPLACE_WITH_YOUR_PRIMARY_SPKI_SHA256_BASE64="
+          - "REPLACE_WITH_YOUR_BACKUP_SPKI_SHA256_BASE64="
+        HLPinnedHosts:
+          - "example.com"

@@ -1,0 +1,55 @@
+{
+  "request": {
+    "workouts": [
+      {
+        "sportType": "running",
+        "startedAt": "2001-01-01T00:00:00Z",
+        "endedAt": "2001-01-01T00:10:00Z",
+        "source": "APPLE_HEALTH",
+        "externalId": "fixture-workout-alpha",
+        "samples": [
+          { "t": "2001-01-01T00:00:05Z", "hr": 123 },
+          { "t": "2001-01-01T00:00:10Z", "hr": 124 }
+        ]
+      }
+    ]
+  },
+  "responses": {
+    "inserted": {
+      "processed": 1,
+      "inserted": 1,
+      "duplicates": 0,
+      "skipped": [],
+      "entries": [{ "index": 0, "status": "inserted" }]
+    },
+    "enriched": {
+      "processed": 1,
+      "inserted": 0,
+      "duplicates": 1,
+      "skipped": [],
+      "entries": [{ "index": 0, "status": "enriched" }]
+    },
+    "skipped": {
+      "processed": 1,
+      "inserted": 0,
+      "duplicates": 0,
+      "skipped": [{ "index": 0, "reason": "invalid_samples" }],
+      "entries": [{ "index": 0, "status": "skipped", "reason": "invalid_samples" }]
+    },
+    "future-additive": {
+      "processed": 1,
+      "inserted": 0,
+      "duplicates": 1,
+      "skipped": [],
+      "entries": [
+        {
+          "index": 0,
+          "status": "reconciled",
+          "futureDetail": { "fixtureOnly": true }
+        }
+      ],
+      "futureSummary": "fixture-only"
+    }
+  }
+}
+

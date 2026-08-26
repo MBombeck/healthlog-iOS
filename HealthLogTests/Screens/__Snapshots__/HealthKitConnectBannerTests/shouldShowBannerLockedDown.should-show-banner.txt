@@ -1,0 +1,5 @@
+.unknown → false
+.notRequested → true
+.partiallyGranted([a]) → true
+.fullyGranted → false
+.denied → true

@@ -1,0 +1,7 @@
+▿ HealthLog.MedicationLoggingEmptyState.Descriptor
+  - icon: "pills"
+  - titleKey: "No medications yet"
+  - messageKey: "meds.empty.noMeds.logging.message"
+  ▿ primaryAction: Optional(HealthLog.MedicationLoggingEmptyState.PrimaryAction.addMedication)
+    - some: HealthLog.MedicationLoggingEmptyState.PrimaryAction.addMedication
+  - offersManualLog: false

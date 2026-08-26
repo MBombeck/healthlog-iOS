@@ -1,0 +1,152 @@
+{
+  "_provenance": {
+    "repository": "https://github.com/MBombeck/HealthLog",
+    "tag": "v1.37.19",
+    "tagCommit": "d8cbe2596fb9612cfda82b047611178884351c7b",
+    "openapiSha256": "75c7279f251936411c434fae77cd72b4f31c9ef2da467727c885956a50bf9994",
+    "shapeSource": "components.schemas.MedicationListEntry + MedicationScheduleOutput",
+    "note": "Representative payloads. Every key present is a key the pinned schema publishes; the object is a SUBSET of MedicationListEntry restricted to the fields iOS decodes plus the four fields plan 08-17 pins. No key, type or nullability was invented — see openapi-medication-cadence.yaml for the verbatim shapes."
+  },
+
+  "slotAwareTruth": {
+    "id": "med_slot_aware",
+    "name": "Metformin",
+    "dose": "1000 mg",
+    "treatmentClass": "GENERIC",
+    "dosesPerUnit": 60,
+    "unitsPerDose": 1,
+    "category": "DIABETES",
+    "active": true,
+    "notificationsEnabled": true,
+    "lastTakenAt": "2026-08-14T06:30:00.000Z",
+    "todayEventCount": 1,
+    "createdAt": "2026-01-04T08:00:00.000Z",
+    "stockUnitsRemaining": 33.5,
+    "stockDosesRemaining": 45,
+    "runwayDays": 30,
+    "schedules": [
+      {
+        "id": "sched_morning",
+        "medicationId": "med_slot_aware",
+        "windowStart": "08:00",
+        "windowEnd": "09:00",
+        "label": "Morgens",
+        "dose": null,
+        "unitsPerDose": null,
+        "resolvedUnitsPerDose": 1,
+        "daysOfWeek": null,
+        "timesOfDay": ["08:00"],
+        "reminderGraceMinutes": 60,
+        "rrule": "FREQ=DAILY",
+        "rollingIntervalDays": null,
+        "scheduleType": "SCHEDULED",
+        "cyclicOnWeeks": null,
+        "cyclicOffWeeks": null
+      },
+      {
+        "id": "sched_evening",
+        "medicationId": "med_slot_aware",
+        "windowStart": "20:00",
+        "windowEnd": "21:00",
+        "label": "Abends",
+        "dose": "500 mg",
+        "unitsPerDose": 0.5,
+        "resolvedUnitsPerDose": 0.5,
+        "daysOfWeek": null,
+        "timesOfDay": ["20:00"],
+        "reminderGraceMinutes": 60,
+        "rrule": "FREQ=DAILY",
+        "rollingIntervalDays": null,
+        "scheduleType": "SCHEDULED",
+        "cyclicOnWeeks": null,
+        "cyclicOffWeeks": null
+      }
+    ]
+  },
+
+  "trackingOff": {
+    "id": "med_tracking_off",
+    "name": "Vitamin D",
+    "dose": "2000 IE",
+    "unitsPerDose": 1,
+    "active": true,
+    "notificationsEnabled": true,
+    "stockUnitsRemaining": null,
+    "stockDosesRemaining": null,
+    "runwayDays": null,
+    "schedules": [
+      {
+        "id": "sched_vitd",
+        "medicationId": "med_tracking_off",
+        "windowStart": "08:00",
+        "windowEnd": "10:00",
+        "label": null,
+        "dose": null,
+        "unitsPerDose": null,
+        "resolvedUnitsPerDose": 1,
+        "daysOfWeek": null,
+        "timesOfDay": ["08:00"],
+        "reminderGraceMinutes": null,
+        "rrule": "FREQ=DAILY",
+        "rollingIntervalDays": null,
+        "scheduleType": "SCHEDULED",
+        "cyclicOnWeeks": null,
+        "cyclicOffWeeks": null
+      }
+    ]
+  },
+
+  "exhausted": {
+    "id": "med_exhausted",
+    "name": "Lisinopril",
+    "dose": "5 mg",
+    "unitsPerDose": 2,
+    "active": true,
+    "notificationsEnabled": true,
+    "stockUnitsRemaining": 0,
+    "stockDosesRemaining": 0,
+    "runwayDays": 0,
+    "schedules": [
+      {
+        "id": "sched_lisinopril",
+        "medicationId": "med_exhausted",
+        "windowStart": "07:30",
+        "windowEnd": "08:30",
+        "label": null,
+        "dose": null,
+        "unitsPerDose": null,
+        "resolvedUnitsPerDose": 2,
+        "daysOfWeek": null,
+        "timesOfDay": ["07:30"],
+        "reminderGraceMinutes": null,
+        "rrule": "FREQ=DAILY",
+        "rollingIntervalDays": null,
+        "scheduleType": "SCHEDULED",
+        "cyclicOnWeeks": null,
+        "cyclicOffWeeks": null
+      }
+    ]
+  },
+
+  "legacyWithoutServerTruth": {
+    "id": "med_legacy",
+    "name": "Trulicity",
+    "dose": "5 mg",
+    "unitsPerDose": 1,
+    "active": true,
+    "notificationsEnabled": true,
+    "schedules": [
+      {
+        "windowStart": "09:00",
+        "windowEnd": "11:00",
+        "label": null,
+        "dose": null,
+        "daysOfWeek": "1",
+        "timesOfDay": ["09:00"],
+        "reminderGraceMinutes": null,
+        "rrule": null,
+        "rollingIntervalDays": null
+      }
+    ]
+  }
+}

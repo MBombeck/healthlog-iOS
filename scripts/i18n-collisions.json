@@ -1,0 +1,244 @@
+{
+  "After meal": {
+    "canonical_de_key": "Nach Mahlzeit",
+    "canonical_de_value": "Nach Mahlzeit",
+    "comment": "v0.7.1 W-APPINTENTS — Siri / Shortcuts intent strings (Log BG / Log BP / Mark medication taken).",
+    "merged_keys": [
+      "Nach Mahlzeit"
+    ],
+    "de_values": {
+      "Nach Mahlzeit": "Nach Mahlzeit"
+    },
+    "absorbs_existing_en_key": true
+  },
+  "Bedtime": {
+    "canonical_de_key": "Schlafenszeit",
+    "canonical_de_value": "Schlafenszeit",
+    "comment": "v0.7.1 W-APPINTENTS — Siri / Shortcuts intent strings (Log BG / Log BP / Mark medication taken).",
+    "merged_keys": [
+      "Schlafenszeit"
+    ],
+    "de_values": {
+      "Schlafenszeit": "Schlafenszeit"
+    },
+    "absorbs_existing_en_key": true
+  },
+  "Before meal": {
+    "canonical_de_key": "Vor Mahlzeit",
+    "canonical_de_value": "Vor Mahlzeit",
+    "comment": "v0.7.1 W-APPINTENTS — Siri / Shortcuts intent strings (Log BG / Log BP / Mark medication taken).",
+    "merged_keys": [
+      "Vor Mahlzeit"
+    ],
+    "de_values": {
+      "Vor Mahlzeit": "Vor Mahlzeit"
+    },
+    "absorbs_existing_en_key": true
+  },
+  "Body fat": {
+    "canonical_de_key": "Körperfett",
+    "canonical_de_value": "Körperfett",
+    "comment": "v0.7.1 W-TARGETS-EDITOR — personal target-range editor.",
+    "merged_keys": [
+      "Koerperfett",
+      "Körperfett"
+    ],
+    "de_values": {
+      "Koerperfett": "Koerperfett",
+      "Körperfett": "Körperfett"
+    },
+    "absorbs_existing_en_key": false
+  },
+  "Body water": {
+    "canonical_de_key": "Körperwasser",
+    "canonical_de_value": "Körperwasser",
+    "comment": "v0.7.1 W-TARGETS-EDITOR — personal target-range editor.",
+    "merged_keys": [
+      "Koerperwasser",
+      "Körperwasser"
+    ],
+    "de_values": {
+      "Koerperwasser": "Koerperwasser",
+      "Körperwasser": "Körperwasser"
+    },
+    "absorbs_existing_en_key": false
+  },
+  "Context": {
+    "canonical_de_key": "Kontext",
+    "canonical_de_value": "Kontext",
+    "comment": "v0.7.1 W-APPINTENTS — Siri / Shortcuts intent strings (Log BG / Log BP / Mark medication taken).",
+    "merged_keys": [
+      "Kontext"
+    ],
+    "de_values": {
+      "Kontext": "Kontext"
+    },
+    "absorbs_existing_en_key": true
+  },
+  "Create your HealthLog account on the selected server. You can then sign in with passkey, email, or both.": {
+    "canonical_de_key": "Erstelle dein HealthLog-Konto auf dem ausgewählten Server. Du kannst dich danach mit Passkey, Email oder beidem anmelden.",
+    "canonical_de_value": "Erstelle dein HealthLog-Konto auf dem ausgewählten Server. Du kannst dich danach mit Passkey, Email oder beidem anmelden.",
+    "comment": "",
+    "merged_keys": [
+      "Erstelle dein HealthLog-Konto auf dem ausgewaehlten Server. Du kannst dich danach mit Passkey, Email oder beidem anmelden.",
+      "Erstelle dein HealthLog-Konto auf dem ausgewählten Server. Du kannst dich danach mit Passkey, Email oder beidem anmelden."
+    ],
+    "de_values": {
+      "Erstelle dein HealthLog-Konto auf dem ausgewaehlten Server. Du kannst dich danach mit Passkey, Email oder beidem anmelden.": "Erstelle dein HealthLog-Konto auf dem ausgewaehlten Server. Du kannst dich danach mit Passkey, Email oder beidem anmelden.",
+      "Erstelle dein HealthLog-Konto auf dem ausgewählten Server. Du kannst dich danach mit Passkey, Email oder beidem anmelden.": "Erstelle dein HealthLog-Konto auf dem ausgewählten Server. Du kannst dich danach mit Passkey, Email oder beidem anmelden."
+    },
+    "absorbs_existing_en_key": false
+  },
+  "Fasting": {
+    "canonical_de_key": "Nüchtern",
+    "canonical_de_value": "Nüchtern",
+    "comment": "v0.7.1 W-APPINTENTS — Siri / Shortcuts intent strings (Log BG / Log BP / Mark medication taken).",
+    "merged_keys": [
+      "Nüchtern"
+    ],
+    "de_values": {
+      "Nüchtern": "Nüchtern"
+    },
+    "absorbs_existing_en_key": true
+  },
+  "First time on this device? Tap here anyway — your password manager will offer saved passkeys.": {
+    "canonical_de_key": "Erstes Mal auf diesem Gerät? Tippe trotzdem hier — dein Passwort-Manager bietet gespeicherte Passkeys an.",
+    "canonical_de_value": "Erstes Mal auf diesem Gerät? Tippe trotzdem hier — dein Passwort-Manager bietet gespeicherte Passkeys an.",
+    "comment": "",
+    "merged_keys": [
+      "Erstes Mal auf diesem Geraet? Tippe trotzdem hier — dein Passwort-Manager bietet gespeicherte Passkeys an.",
+      "Erstes Mal auf diesem Gerät? Tippe trotzdem hier — dein Passwort-Manager bietet gespeicherte Passkeys an."
+    ],
+    "de_values": {
+      "Erstes Mal auf diesem Geraet? Tippe trotzdem hier — dein Passwort-Manager bietet gespeicherte Passkeys an.": "Erstes Mal auf diesem Geraet? Tippe trotzdem hier — dein Passwort-Manager bietet gespeicherte Passkeys an.",
+      "Erstes Mal auf diesem Gerät? Tippe trotzdem hier — dein Passwort-Manager bietet gespeicherte Passkeys an.": "Erstes Mal auf diesem Gerät? Tippe trotzdem hier — dein Passwort-Manager bietet gespeicherte Passkeys an."
+    },
+    "absorbs_existing_en_key": false
+  },
+  "How far back should we sync?": {
+    "canonical_de_key": "Wie weit zurück synchronisieren?",
+    "canonical_de_value": "Wie weit zurück synchronisieren?",
+    "comment": "Onboarding HealthKit step — backfill window picker title",
+    "merged_keys": [
+      "Wie weit zurueck synchronisieren?",
+      "Wie weit zurück synchronisieren?"
+    ],
+    "de_values": {
+      "Wie weit zurueck synchronisieren?": "Wie weit zurueck synchronisieren?",
+      "Wie weit zurück synchronisieren?": "Wie weit zurück synchronisieren?"
+    },
+    "absorbs_existing_en_key": false
+  },
+  "Not unlocked yet": {
+    "canonical_de_key": "Noch nicht freigeschaltet",
+    "canonical_de_value": "Noch nicht freigeschaltet",
+    "comment": "",
+    "merged_keys": [
+      "Noch nicht erreicht",
+      "Noch nicht freigeschaltet"
+    ],
+    "de_values": {
+      "Noch nicht erreicht": "Noch nicht erreicht",
+      "Noch nicht freigeschaltet": "Noch nicht freigeschaltet"
+    },
+    "absorbs_existing_en_key": false
+  },
+  "Oxygen saturation": {
+    "canonical_de_key": "Sauerstoffsättigung",
+    "canonical_de_value": "Sauerstoffsättigung",
+    "comment": "v0.7.1 W-TARGETS-EDITOR — personal target-range editor.",
+    "merged_keys": [
+      "Sauerstoffsaettigung",
+      "Sauerstoffsättigung"
+    ],
+    "de_values": {
+      "Sauerstoffsaettigung": "Sauerstoffsaettigung",
+      "Sauerstoffsättigung": "Sauerstoffsättigung"
+    },
+    "absorbs_existing_en_key": false
+  },
+  "Save": {
+    "canonical_de_key": "Speichern",
+    "canonical_de_value": "Speichern",
+    "comment": "M2-A6 — EditProfileScreen toolbar save button.",
+    "merged_keys": [
+      "Sichern",
+      "Speichern"
+    ],
+    "de_values": {
+      "Sichern": "Sichern",
+      "Speichern": "Speichern"
+    },
+    "absorbs_existing_en_key": false
+  },
+  "Tap to choose this option": {
+    "canonical_de_key": "Tippe um diese Option zu wählen",
+    "canonical_de_value": "Tippe um diese Option zu wählen",
+    "comment": "",
+    "merged_keys": [
+      "Tippe um diese Option zu waehlen",
+      "Tippe um diese Option zu wählen"
+    ],
+    "de_values": {
+      "Tippe um diese Option zu waehlen": "Tippe um diese Option zu waehlen",
+      "Tippe um diese Option zu wählen": "Tippe um diese Option zu wählen"
+    },
+    "absorbs_existing_en_key": false
+  },
+  "This action cannot be undone.": {
+    "canonical_de_key": "Diese Aktion kann nicht rückgängig gemacht werden.",
+    "canonical_de_value": "Diese Aktion kann nicht rückgängig gemacht werden.",
+    "comment": "PB3 — SettingsAdvancedScreen Danger-Zone card footer",
+    "merged_keys": [
+      "Diese Aktion kann nicht rückgängig gemacht werden.",
+      "Dieser Vorgang ist unumkehrbar."
+    ],
+    "de_values": {
+      "Diese Aktion kann nicht rückgängig gemacht werden.": "Diese Aktion kann nicht rückgängig gemacht werden.",
+      "Dieser Vorgang ist unumkehrbar.": "Dieser Vorgang ist unumkehrbar."
+    },
+    "absorbs_existing_en_key": false
+  },
+  "Works with Face ID, Touch ID, iCloud Keychain, Bitwarden, 1Password and Proton Pass.": {
+    "canonical_de_key": "Funktioniert mit Face ID, Touch ID, iCloud-Schlüsselbund, Bitwarden, 1Password und Proton Pass.",
+    "canonical_de_value": "Funktioniert mit Face ID, Touch ID, iCloud-Schlüsselbund, Bitwarden, 1Password und Proton Pass.",
+    "comment": "",
+    "merged_keys": [
+      "Funktioniert mit Face ID, Touch ID, iCloud-Schluesselbund, Bitwarden, 1Password und Proton Pass.",
+      "Funktioniert mit Face ID, Touch ID, iCloud-Schlüsselbund, Bitwarden, 1Password und Proton Pass."
+    ],
+    "de_values": {
+      "Funktioniert mit Face ID, Touch ID, iCloud-Schluesselbund, Bitwarden, 1Password und Proton Pass.": "Funktioniert mit Face ID, Touch ID, iCloud-Schluesselbund, Bitwarden, 1Password und Proton Pass.",
+      "Funktioniert mit Face ID, Touch ID, iCloud-Schlüsselbund, Bitwarden, 1Password und Proton Pass.": "Funktioniert mit Face ID, Touch ID, iCloud-Schlüsselbund, Bitwarden, 1Password und Proton Pass."
+    },
+    "absorbs_existing_en_key": false
+  },
+  "You can change this choice later in Settings at any time.": {
+    "canonical_de_key": "Du kannst die Wahl später jederzeit in den Einstellungen ändern.",
+    "canonical_de_value": "Du kannst die Wahl später jederzeit in den Einstellungen ändern.",
+    "comment": "",
+    "merged_keys": [
+      "Du kannst die Wahl spaeter jederzeit in den Einstellungen aendern.",
+      "Du kannst die Wahl später jederzeit in den Einstellungen ändern."
+    ],
+    "de_values": {
+      "Du kannst die Wahl spaeter jederzeit in den Einstellungen aendern.": "Du kannst die Wahl spaeter jederzeit in den Einstellungen aendern.",
+      "Du kannst die Wahl später jederzeit in den Einstellungen ändern.": "Du kannst die Wahl später jederzeit in den Einstellungen ändern."
+    },
+    "absorbs_existing_en_key": false
+  },
+  "https:// is added automatically. Self-signed certificates are currently not supported.": {
+    "canonical_de_key": "https:// wird automatisch ergänzt. Self-Signed-Zertifikate aktuell nicht unterstützt.",
+    "canonical_de_value": "https:// wird automatisch ergänzt. Self-Signed-Zertifikate aktuell nicht unterstützt.",
+    "comment": "",
+    "merged_keys": [
+      "https:// wird automatisch ergaenzt. Self-Signed-Zertifikate aktuell nicht unterstuetzt.",
+      "https:// wird automatisch ergänzt. Self-Signed-Zertifikate aktuell nicht unterstützt."
+    ],
+    "de_values": {
+      "https:// wird automatisch ergaenzt. Self-Signed-Zertifikate aktuell nicht unterstuetzt.": "https:// wird automatisch ergaenzt. Self-Signed-Zertifikate aktuell nicht unterstuetzt.",
+      "https:// wird automatisch ergänzt. Self-Signed-Zertifikate aktuell nicht unterstützt.": "https:// wird automatisch ergänzt. Self-Signed-Zertifikate aktuell nicht unterstützt."
+    },
+    "absorbs_existing_en_key": false
+  }
+}

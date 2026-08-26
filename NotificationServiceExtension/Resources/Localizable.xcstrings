@@ -1,0 +1,40 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "notif.med.redacted.title" : {
+      "comment" : "AUDIT-v0162 H2 — neutral lock-screen title shown instead of the medication name when the 'hide medication name' opt-out is on.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medikamenten-Erinnerung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medication reminder"
+          }
+        }
+      }
+    },
+    "notif.med.redacted.body" : {
+      "comment" : "AUDIT-v0162 H2 — neutral lock-screen body shown instead of the dose text when the 'hide medication name' opt-out is on. Keeps the reminder actionable (the OS still shows the delivery time) without naming the drug.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es ist Zeit für dein Medikament."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It's time for your medication."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

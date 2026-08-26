@@ -1,0 +1,51 @@
+{
+  "response": {
+    "entries": [
+      {
+        "id": "fixture-mood-additive-1",
+        "mood": "GUT",
+        "tags": ["fixture-calm"],
+        "tagKeys": ["fixture-reflection"],
+        "moodLoggedAt": "2026-08-09T12:00:00.000Z",
+        "source": "WEB",
+        "note": "Synthetic fixture note",
+        "ratedFactors": [
+          {
+            "key": "fixture-energy",
+            "rating": 4
+          }
+        ],
+        "a1": 7,
+        "a2": 2,
+        "a3": 8,
+        "a4": null,
+        "a5": 6,
+        "context": {
+          "workStatus": "regular",
+          "workMinutes": 360,
+          "overtimeMinutes": 0,
+          "workLoad": 3,
+          "workSatisfaction": 8,
+          "contactCircles": ["friends"],
+          "contactForm": "written",
+          "contactExtent": "brief",
+          "contactQuality": 7,
+          "contactSupport": 6,
+          "leisureCategories": ["reading"],
+          "leisureMinutes": 45,
+          "leisureJoy": 8,
+          "leisureRecovery": 7,
+          "eventType": "goodNews",
+          "eventValence": 3,
+          "eventAt": "2026-08-09T10:00:00.000Z",
+          "note": "Synthetic context note"
+        }
+      }
+    ],
+    "meta": {
+      "total": 1,
+      "limit": 500,
+      "offset": 0
+    }
+  }
+}

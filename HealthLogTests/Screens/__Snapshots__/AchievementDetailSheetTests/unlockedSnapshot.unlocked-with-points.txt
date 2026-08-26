@@ -1,0 +1,19 @@
+▿ HealthLog.Achievement
+  - id: "intake-total-50"
+  - key: "intake-total-50"
+  - title: "Konsequenter Pillenfreund"
+  - description: "Du hast 50 Medikamenten-Einnahmen erfasst."
+  ▿ iconName: Optional("Pill")
+    - some: "Pill"
+  - unlocked: true
+  ▿ unlockedAt: Optional(2024-05-27 08:53:20 +0000)
+    ▿ some: 2024-05-27 08:53:20 +0000
+      - timeIntervalSinceReferenceDate: 738492800.0
+  - progress: 1.0
+  ▿ points: Optional(60)
+    - some: 60
+  - category: nil
+  - current: nil
+  - target: nil
+  - format: nil
+  - isHidden: false

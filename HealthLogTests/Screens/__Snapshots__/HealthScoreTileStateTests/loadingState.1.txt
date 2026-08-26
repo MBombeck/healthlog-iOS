@@ -1,0 +1,7 @@
+▿ 2 key/value pairs
+  ▿ (2 elements)
+    - key: "accessibility"
+    - value: "Health Score wird geladen"
+  ▿ (2 elements)
+    - key: "state"
+    - value: "loading"

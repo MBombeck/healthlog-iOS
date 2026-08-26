@@ -1,0 +1,6 @@
+.unknown → Status wird geprüft …
+.notRequested → Nicht verbunden
+.partiallyGranted(1 missing) → Teilweise verbunden — 1 Typ(en) fehlen
+.partiallyGranted(3 missing) → Teilweise verbunden — 3 Typ(en) fehlen
+.fullyGranted → Verbunden
+.denied → Vom Nutzer abgelehnt

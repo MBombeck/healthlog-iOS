@@ -1,0 +1,24 @@
+{
+  "layer": "deployment-overlay",
+  "supersedes": null,
+  "extends": "v1.37.3",
+  "tag": "v1.37.12",
+  "revision": "d21fe48",
+  "route": "/api/measurements/batch",
+  "capturedAt": "2026-08-14",
+  "capturedFrom": "authoritative server checkout at tag v1.37.12, revision d21fe48",
+  "contents": "synthetic request/response documents only; no live response body, host, account identifier, credential, or recorded health value",
+  "entryStatusVocabulary": ["inserted", "updated", "duplicate", "skipped", "failed"],
+  "statExternalIdIsMutableUpsert": true,
+  "lastMatchingStatInBatchWins": true,
+  "supersededInBatchReason": "superseded_in_batch",
+  "baselineMustRemainUnchanged": {
+    "auth-me-sharing.json": "73d2a57a7df74fdeacdc187cac97f1db06da0c551247de5c95571648be6940d5",
+    "capabilities.json": "05caded720644fe1af14400d76ab131424d8a9a85563c46d311c3d2b52761e3e",
+    "ecg-ingest.json": "7ab8d9a26bfec9f7f58732d963b78bde1ff753d83324a8a01b5b1599a9839813",
+    "mood-entry-additive.json": "05545c8d3c5babef62e3a7e4d8dbb240882c965f3e71046d2f4c30a7187f18ac",
+    "openapi-consumed.yaml": "1cb60e9735c3a5c24137c36e709aa6c7efd713174b0590c011b25ce6d94f4bd2",
+    "README.md": "be194e30b58fc0bfd8871000b5340967a5327c86c0fb85d44c02ebafa3317343",
+    "workouts-batch.json": "18487284e72e613eefdaa11172c0f5d19f200003a8d72180a6d068273135fffd"
+  }
+}

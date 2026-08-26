@@ -1,0 +1,929 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "control.capture.description": {
+      "comment": "Erfassen control — gallery description shown when adding the control",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet HealthLog direkt zum Erfassen eines Eintrags."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens HealthLog straight to logging an entry."
+          }
+        }
+      }
+    },
+    "control.capture.display_name": {
+      "comment": "Erfassen control — name in the Controls gallery / Action Button picker",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture"
+          }
+        }
+      }
+    },
+    "control.capture.title": {
+      "comment": "Erfassen control — button label rendered on the control tile",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture"
+          }
+        }
+      }
+    },
+    "control.log_mood.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open HealthLog's mood picker."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HealthLogs Stimmungs-Auswahl öffnen."
+          }
+        }
+      },
+      "comment": "Log-mood control — gallery description"
+    },
+    "control.log_mood.display_name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log mood"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung erfassen"
+          }
+        }
+      },
+      "comment": "Log-mood control — name shown in the controls gallery"
+    },
+    "control.log_mood.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log mood"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung erfassen"
+          }
+        }
+      },
+      "comment": "Log-mood control — button label rendered on the control tile"
+    },
+    "control.next_dose_taken.description": {
+      "comment": "Next-dose-taken control — gallery description shown when adding the control",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markiert deine nächste fällige Dosis als genommen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marks your next due dose as taken."
+          }
+        }
+      }
+    },
+    "control.next_dose_taken.display_name": {
+      "comment": "Next-dose-taken control — name in the Controls gallery / Action Button picker",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächste Dosis – Genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next dose – Taken"
+          }
+        }
+      }
+    },
+    "control.next_dose_taken.title": {
+      "comment": "Next-dose-taken control — button label rendered on the control tile",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken"
+          }
+        }
+      }
+    },
+    "la.med.a11y.due_in": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fällig in %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Due in %@"
+          }
+        }
+      }
+    },
+    "la.med.a11y.overdue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Überfällig seit %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overdue by %@"
+          }
+        }
+      }
+    },
+    "la.med.a11y.taken": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken"
+          }
+        }
+      }
+    },
+    "la.med.action.taken": {
+      "comment": "Live Activity — one-tap button that marks the dose taken",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken"
+          }
+        }
+      }
+    },
+    "la.med.action.taken.confirm": {
+      "comment": "Live Activity — armed two-step confirm label: second tap records the dose",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut tippen zum Bestätigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap again to confirm"
+          }
+        }
+      }
+    },
+    "la.med.action.taken.confirm.hint": {
+      "comment": "Live Activity — VoiceOver hint for the armed confirm button",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nochmal tippen, um die Einnahme zu bestätigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap again to confirm the intake"
+          }
+        }
+      }
+    },
+    "la.med.action.taken.hint": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasst %@ als eingenommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Records %@ as taken"
+          }
+        }
+      }
+    },
+    "la.med.due_at": {
+      "comment": "Live Activity — scheduled due time sub-line, %@ is a short time like 08:00",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fällig um %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "due at %@"
+          }
+        }
+      }
+    },
+    "la.med.overdue_short": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "überfällig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "overdue"
+          }
+        }
+      }
+    },
+    "la.med.remaining_short": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verbleibend"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "remaining"
+          }
+        }
+      }
+    },
+    "la.med.status.snoozed": {
+      "comment": "Live Activity — status when the dose reminder was snoozed",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerung verschoben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reminder snoozed"
+          }
+        }
+      }
+    },
+    "la.med.status.taken": {
+      "comment": "Live Activity — confirmation label after the dose was marked taken",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken"
+          }
+        }
+      }
+    },
+    "la.med.taken_at": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genommen um %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken at %@"
+          }
+        }
+      }
+    },
+    "widget.compliance.description": {
+      "comment": "Compliance widget — gallery description",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine heutige Medikamenten-Einnahme als Ring."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today’s medication adherence as a ring."
+          }
+        }
+      }
+    },
+    "widget.compliance.doses": {
+      "comment": "Compliance widget — “x/y doses” label, %1$lld taken, %2$lld scheduled",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld von %2$lld Dosen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld doses"
+          }
+        }
+      }
+    },
+    "widget.compliance.header": {
+      "comment": "Compliance widget — small header label",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einnahme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adherence"
+          }
+        }
+      }
+    },
+    "widget.compliance.title": {
+      "comment": "Compliance widget — display name in the gallery",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heutige Einnahme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today’s adherence"
+          }
+        }
+      }
+    },
+    "widget.compliance.today": {
+      "comment": "Compliance widget — ring caption",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "heute"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "today"
+          }
+        }
+      }
+    },
+    "widget.health_score.band.fair": {
+      "comment": "Health-score widget — band word for a fair (yellow) score",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mittel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fair"
+          }
+        }
+      }
+    },
+    "widget.health_score.band.low": {
+      "comment": "Health-score widget — band word for a low (red) score",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niedrig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low"
+          }
+        }
+      }
+    },
+    "widget.health_score.band.strong": {
+      "comment": "Health-score widget — band word for a strong (green) score",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stark"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strong"
+          }
+        }
+      }
+    },
+    "widget.health_score.configured": {
+      "comment": "Health-score widget — provenance mark: the composition behind the number was chosen by the person",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene Auswahl"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your selection"
+          }
+        }
+      }
+    },
+    "widget.health_score.description": {
+      "comment": "Health-score ring widget — gallery description",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt deinen aktuellen Gesundheitswert als Ring."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows your current health score as a ring."
+          }
+        }
+      }
+    },
+    "widget.health_score.empty": {
+      "comment": "Health-score widget — empty state when no score has loaded yet",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Daten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data"
+          }
+        }
+      }
+    },
+    "widget.health_score.header": {
+      "comment": "Health-score widget — header label above the ring",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Score"
+          }
+        }
+      }
+    },
+    "widget.health_score.title": {
+      "comment": "Health-score ring widget — gallery title",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesundheitswert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health score"
+          }
+        }
+      }
+    },
+    "widget.latest_measurement.description": {
+      "comment": "Latest-measurement widget — gallery description",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt deine zuletzt erfasste Messung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows your most recent reading."
+          }
+        }
+      }
+    },
+    "widget.latest_measurement.empty": {
+      "comment": "Latest-measurement widget — empty state when no reading has loaded yet",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Messung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No reading yet"
+          }
+        }
+      }
+    },
+    "widget.latest_measurement.header": {
+      "comment": "Latest-measurement widget — fallback header when no reading is present",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Measurement"
+          }
+        }
+      }
+    },
+    "widget.latest_measurement.title": {
+      "comment": "Latest-measurement widget — gallery title",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letzte Messung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest measurement"
+          }
+        }
+      }
+    },
+    "widget.mood.a11y.log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log mood: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung erfassen: %@"
+          }
+        }
+      },
+      "comment": "Mood widget — accessibility label for a quick-log face button (%@ = level)"
+    },
+    "widget.mood.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See your latest mood and log a new one with one tap."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sieh deine letzte Stimmung und erfasse mit einem Tipp eine neue."
+          }
+        }
+      },
+      "comment": "Mood widget — configuration description"
+    },
+    "widget.mood.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not logged today"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute noch nicht erfasst"
+          }
+        }
+      },
+      "comment": "Mood widget — empty state when nothing logged today"
+    },
+    "widget.mood.header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mood"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung"
+          }
+        }
+      },
+      "comment": "Mood widget — header label"
+    },
+    "widget.mood.logged_at": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logged %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasst %@"
+          }
+        }
+      },
+      "comment": "Mood widget — last-logged time line (%@ = short time)"
+    },
+    "widget.mood.prompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How are you?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie geht's dir?"
+          }
+        }
+      },
+      "comment": "Mood widget — quick-log prompt above the face row"
+    },
+    "widget.mood.tap_to_log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to log"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Erfassen tippen"
+          }
+        }
+      },
+      "comment": "Mood widget (systemSmall) — whole-tile deep-link hint; tapping opens the in-app mood quick-entry sheet"
+    },
+    "widget.mood.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mood"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung"
+          }
+        }
+      },
+      "comment": "Mood widget — configuration display name"
+    },
+    "widget.next_dose.description": {
+      "comment": "Next-dose widget — gallery description",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine nächste geplante Einnahme mit Schnell-Button „Genommen“."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your next scheduled medication with a one-tap “Taken” button."
+          }
+        }
+      }
+    },
+    "widget.next_dose.due_at": {
+      "comment": "Next-dose widget — due time line, %@ is a localized short time",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fällig um %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "due at %@"
+          }
+        }
+      }
+    },
+    "widget.next_dose.empty": {
+      "comment": "Next-dose widget — shown when no dose is due",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts fällig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing due"
+          }
+        }
+      }
+    },
+    "widget.next_dose.header": {
+      "comment": "Next-dose widget — small header label above the medication name",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächste Dosis"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next dose"
+          }
+        }
+      }
+    },
+    "widget.next_dose.taken": {
+      "comment": "Next-dose widget — interactive button that marks the dose taken",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken"
+          }
+        }
+      }
+    },
+    "widget.next_dose.title": {
+      "comment": "Next-dose widget — display name in the gallery",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächste Dosis"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next dose"
+          }
+        }
+      }
+    },
+    "widget.stale.open_app": {
+      "comment": "Shown on the next-dose / compliance widget when the snapshot is too old to trust (app hasn't refreshed it in a long time) — prompts the user to open the app.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht aktuell – App öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Out of date – open app"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

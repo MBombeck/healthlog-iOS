@@ -1,0 +1,47 @@
+{
+  "_doc": "UI-Standard E6 (R21) + E7 (R22). Zwei Töpfe pro Regel. `protected` ist die abschließende Ausnahmeliste aus §3 R16 des Standards — sie bleibt. `pending` ist Restschuld: Fundstellen, die die genannte Arbeitseinheit noch aufräumt. Beide Töpfe sind exakt-abgeglichen: ein Schlüssel, der die Phrase nicht mehr trägt, MUSS gestrichen werden, sonst schlägt der Test an. Damit kann die Liste nicht auf Vorrat wachsen — ein Eintrag ist nur eintragbar, wenn die Verletzung bereits existiert.",
+  "wegweiser": {
+    "phrases": [
+      "in den Einstellungen unter",
+      "in der Web-App",
+      "eine Ebene höher",
+      "in den iOS-Einstellungen"
+    ],
+    "protected": {
+      "focus.filter.card.body": "R16 Klasse 4 — Fokus-Filter-Durchlass-Zusage, nicht verhandelbar."
+    },
+    "pending": {
+      "documents.chat.consentRequired": "OFFEN nach U8 — als einziger Eintrag beider Töpfe lebt die Fundstelle noch: `DocumentChatSheet.swift:155` rendert den Schlüssel als Fehlerzustand des Dokument-Chats, und der deutsche Wert trägt den Wegweiser („Aktiviere sie in den Einstellungen unter Assistent.“). U1 hat die Zeile nicht geräumt. Der R4-Ersatz ist hier kein Textumbau, sondern ein Absprung aus einem Sheet nach Einstellungen → Assistent — eine Navigationsarbeit auf U1-Fläche, nicht auf der Katalogfläche von U8. Bleibt Restschuld, mit Fundstelle statt mit Einheitennummer."
+    }
+  },
+  "disclaimer": {
+    "phrases": [
+      "keine Diagnose",
+      "kein medizinischer Rat",
+      "keine medizinische Beratung"
+    ],
+    "phrasePatterns": [
+      "Ärztin oder .{0,20}Arzt"
+    ],
+    "protected": {
+      "I understand: no medical recommendations, no diagnoses, no therapy suggestions.": "R16 — die aktive Coach-Bestätigungszeile im Onboarding; an ihr hängt R15.",
+      "PDF report and FHIR export for your doctor.": "R17 (U8) — Fehltreffer des Musters „Ärztin oder … Arzt\": der Satz beschreibt auf `SettingsModulesScreen` den Empfänger des Exports, er ist kein Pauschal-Schwanz. Zuschreibung ist Inhalt, kein Disclaimer.",
+      "shareLink.remint.body": "R17/R19 (U8) — Fehltreffer desselben Musters: „deine Ärztin oder dein Arzt\" nennt hier den Empfänger des Freigabe-Links. Klasse-D-Text, bleibt nach R19 vollständig.",
+      "These are alerts your device produced using its own built-in detection. They are shown here for your awareness only. This is not a medical assessment by HealthLog, and HealthLog does not diagnose any condition. If a notification concerns you, talk to your doctor.": "R16 — VERBATIM-Copy-Contract (InsightsRhythmEventsCard.swift:133).",
+      "appstore.disclaimer.consult_doctor": "R16 Klasse 2 — Export-/App-Store-Karte, verlässt die App.",
+      "cycle.prediction.disclaimer.local": "R16 — konkrete Aussage über eine konkrete Fehlnutzung (Verhütung).",
+      "disclaimer.ack.intro.body": "R15 — das Ack-Sheet ist einer der zwei erlaubten Orte des Pauschaltexts.",
+      "export.disclaimer.not_certified": "R16 Klasse 2 — Export-Karte, verlässt die App.",
+      "insights.ecg.clinicianNote": "R16 — erscheint nur bei nicht-normalem Gerätebefund, verhält sich wie Klasse 4.",
+      "mentalHealth.considerProfessional": "R16 Klasse 4 + R18 — serverseitig lieferbar.",
+      "mentalHealth.considerWellbeing": "R16 Klasse 4 + R18 — serverseitig lieferbar.",
+      "mentalHealth.disclaimer": "R16 Klasse 4 + R18 — serverseitig lieferbar.",
+      "mentalHealth.followUpHint.gad7": "R16 Klasse 4 — GAD-7-Band, nicht verhandelbar.",
+      "mentalHealth.followUpHint.phq9": "R16 Klasse 4 — PHQ-9-Band, nicht verhandelbar.",
+      "mentalHealth.followUpHint.sci": "R16 Klasse 4 — SCI-Band, nicht verhandelbar.",
+      "mentalHealth.followUpHint.who5": "R16 Klasse 4 — WHO-5-Band, nicht verhandelbar.",
+      "threshold.nudge.disclaimer": "R16 — Push verlässt die App; bleibt (U1 kürzt auf einen Satz)."
+    },
+    "pending": {}
+  }
+}

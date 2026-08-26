@@ -1,0 +1,975 @@
+name: HealthLog
+options:
+  bundleIdPrefix: dev.healthlog
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: de
+  groupSortPosition: top
+  generateEmptyDirectories: true
+  # 03-03 release preflight pins the exact installed archive toolchain rather
+  # than accepting an unproven older value. Keep in lockstep with PROJECT_GUIDE.md.
+  xcodeVersion: "26.6"
+
+settings:
+  base:
+    # 11-19 THE SINGLE MARKETING-VERSION POINT. Every target that ships a
+    # CFBundleShortVersionString reads it through `$(MARKETING_VERSION)`. Until
+    # 2026-08-21 three of them hardcoded "0.19.0" instead — the same split as
+    # the build number below, and it would have shipped a stale marketing
+    # version on the first release that changed one.
+    MARKETING_VERSION: "0.19.0"
+    # 11-03 THE SINGLE FROZEN BUILD-NUMBER ALLOCATION POINT.
+    #
+    # This is the ONLY `CURRENT_PROJECT_VERSION:` assignment in this file, and
+    # scripts/verify-release-ui-manifest.py fails if a second one ever appears.
+    #
+    # 11-19, 2026-08-21 — THIS COMMENT WAS FALSE FOR THE PART THAT MATTERED,
+    # AND IT COST BUILD 264. It claimed every embedded target read the value
+    # through `CFBundleVersion: $(CURRENT_PROJECT_VERSION)`. Two did — the app
+    # and the notification service. Three hardcoded the literal `"263"`
+    # (widgets, the watch app, the watch complications) and `xcodegen generate`
+    # wrote that literal straight into the plist each `info:` block names, so
+    # build 264 archived with the app at 264 and three embedded bundles at 263.
+    # That is D-11-18-A. The three literals are now variable references, so the
+    # sentence is true by construction rather than by the reader's goodwill —
+    # a single assignment here now genuinely reaches all eight bundles.
+    #
+    # The check that DISCRIMINATES is not this comment, not a pbxproj grep and
+    # not `xcodebuild -showBuildSettings` (which reported 264 for all eight
+    # targets on the broken tree, truthfully and irrelevantly). It is reading
+    # CFBundleVersion out of every bundle inside the ARCHIVE, which
+    # scripts/verify-release-archive.sh now does exhaustively.
+    #
+    # It is changed EXACTLY ONCE per candidate, by the operator, at Task 3 of
+    # plan 11-03, to the next unused 0.19.0 build computed by
+    # scripts/allocate-build-number.py — a value that must be greater than the
+    # historical 264, which App Store Connect has held a buildUploads record
+    # for since 2026-08-21. Never hardcode a guess.
+    #
+    # The procedure and the receipt it must produce live in
+    # .planning/active/apple-review-reliability/CANDIDATE-FREEZE.md.
+    CURRENT_PROJECT_VERSION: "269"
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    DEVELOPMENT_TEAM: "S8WDX4W5KX"
+
+configs:
+  Debug: debug
+  Release: release
+
+packages:
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: 1.17.0
+  Pow:
+    # Pow ships the change-effect + .movingParts.* transitions used by the
+    # central "Erfassen" picker (v0.5.2-A4). The canonical repo moved from
+    # movingparts-io to EmergeTools in 2024; SPM resolves either URL via
+    # GitHub's 301 redirect, the EmergeTools URL stays the source of truth.
+    url: https://github.com/EmergeTools/Pow
+    from: 1.0.0
+  SpeziHealthKit:
+    # Stanford Spezi HealthKit module — exact-pinned to 1.4.2 as the working
+    # baseline for HealthLogStandard adoption. 1.4.2 ships the collection-
+    # based `HealthKitConstraint` API (`handleNewSamples` /
+    # `handleDeletedObjects`) plus SpeziLocalStorage-backed per-account
+    # anchor persistence (replaces the un-partitioned UserDefaults storage
+    # used in 0.6.0). Exact-pin protects against silent prefix-rotation in
+    # minor releases until a canary test covers the contract.
+    url: https://github.com/StanfordSpezi/SpeziHealthKit
+    exactVersion: 1.4.2
+  SpeziStorage:
+    # SpeziLocalStorage is a transitive dependency of SpeziHealthKit 1.4.2 —
+    # SpeziHealthKit persists per-sample-type `QueryAnchor` blobs inside
+    # `Application Support/edu.stanford.spezi/LocalStorage/` keyed by
+    # `"edu.stanford.Spezi.SpeziHealthKit.queryAnchors.<sampleType.id>"`.
+    # We need the product explicitly listed so the v0.5.5 anchor migrator
+    # (SpeziAnchorMigrator) can seed the new store from the legacy
+    # `HealthKitService` UserDefaults blobs. Pinned to the same minor as
+    # the version SpeziHealthKit 1.4.2 resolves so a future bump there
+    # cannot silently drift our anchor key formula.
+    url: https://github.com/StanfordSpezi/SpeziStorage
+    exactVersion: 2.1.4
+  SpeziDevices:
+    # v0.5.6 F.1 — scaffolding-only adoption of SpeziDevices for the
+    # paired-BLE-device pipeline (BPM, scale, glucose meter, pulse-ox).
+    # 1.6.1 transitively pulls SpeziBluetooth 3.3.2 — both ship
+    # `swift-tools-version:6.0` and `.iOS(.v17)`, comfortably under our
+    # iOS 18 baseline. SPM resolves Spezi-core 1.9.x to satisfy
+    # SpeziDevices' `Spezi from: 1.9.1` constraint while staying
+    # backwards-compatible with the SpeziHealthKit 1.4.2 anchor migrator
+    # surface (`@_spi(APISupport) import Spezi` + `SpeziAppDelegate.spezi`).
+    # Exact-pinned to immobilise the BLE permission-prompt timing during
+    # the F.1 / F.2 acceptance loop. SpeziBluetooth itself stays implicit
+    # via the transitive resolution — adding it again would mask future
+    # SpeziDevices upgrades that re-pivot the BLE pin.
+    url: https://github.com/StanfordSpezi/SpeziDevices
+    exactVersion: 1.6.1
+  SpeziLLM:
+    # v0.5.7 G.1 — scaffolding-only adoption of SpeziLLM. The umbrella
+    # package vends three products we care about: `SpeziLLM`
+    # (`LLMRunner` actor + `LLMSchema`/`LLMSession` protocols),
+    # `SpeziLLMLocal` (`LLMLocalPlatform` + Foundation-Models adapter on
+    # iOS 26+, llama.cpp / MLX fallback on iOS 18), and `SpeziChat`-
+    # adjacent surfaces. G.1 wires only `LLMRunner { LLMLocalPlatform()
+    # }` into `HealthLogSpeziDelegate.configuration` behind
+    # `if #available(iOS 26.0, *)`; G.3 will pull `LLMLocalSession` /
+    # `LLMLocalSchema` into the AskCoach store.
+    #
+    # **Version-pin reality check (2026-05-22):** the v057-research
+    # brief named `0.10.0` as the floor. SPM resolves that line happily
+    # in isolation, but the `mlx-swift-examples 2.21.2` exact-pin in
+    # 0.10.x is broken against the current `swift-transformers 0.1.24`
+    # — `MLXLMCommon/Tokenizer.swift:66` fails with
+    # `'ambiguous use of dictionary'`. SpeziLLM `0.13.x` bumps to
+    # `mlx-swift 0.29.x` / `mlx-swift-examples 2.29.x` /
+    # `swift-transformers 1.0+` which are internally consistent; the
+    # SpeziChat pin moves to `.upToNextMinor(from: "0.2.5")` (we already
+    # track 0.2.x), the Spezi-core pin stays `from: 1.9.0` (we resolve
+    # to 1.10.2 alongside SpeziHealthKit 1.4.2 / SpeziDevices 1.6.1).
+    # v0.14.8 Tech-Audit D1.3 — the "tighten once v0.5.7 ships" intent
+    # was never executed; resolved == latest upstream (0.13.8,
+    # 2026-04-04), so the exact pin lands on the tag the range already
+    # picked. Exact-pinned like every other Spezi package for
+    # reproducible resolution.
+    url: https://github.com/StanfordSpezi/SpeziLLM
+    exactVersion: 0.13.8
+  SpeziChat:
+    # v0.5.7 G.1 — scaffolding-only. SpeziChat vends `ChatView`,
+    # `Chat`, `ChatEntity`; G.3 will replace the
+    # `AskCoachSheet.comingSoonNote` panel with `ChatView($store.chat)`.
+    # G.1 only adds the dependency so the package graph resolves once,
+    # surfacing any Spezi 1.x pin drift now rather than mid-G.3.
+    # **Version-pin reality check (2026-05-22):** the v057-research
+    # brief named "0.4.x" as the line to track — verified via SPM
+    # `git ls-remote`, the latest tagged release is `0.2.5`. SpeziLLM
+    # 0.10.1 transitively pins `SpeziChat .upToNextMinor(from: "0.2.3")`
+    # (see SpeziLLM Package.swift), so our explicit pin lives inside
+    # the `[0.2.3, 0.3.0)` window the umbrella expects. The 0.2.x line
+    # is the line operator intent translates to once the brief's
+    # raw "0.4" number is corrected against upstream reality —
+    # SpeziLLM has not opened a 0.3.x / 0.4.x SpeziChat line yet.
+    # v0.14.8 Tech-Audit D1.3 — tightened to the exact tag the range
+    # already resolved (0.2.5 == latest upstream); stays inside the
+    # `[0.2.3, 0.3.0)` window SpeziLLM's umbrella pin expects.
+    url: https://github.com/StanfordSpezi/SpeziChat
+    exactVersion: 0.2.5
+  HealthKitOnFHIR:
+    # v0.6.0 H.0 — transitive of SpeziFHIR 0.10.0, but pinned
+    # explicitly to 1.2.2 because SPM's "highest satisfying" pick
+    # otherwise lands on **1.2.1**, which declares
+    # `FHIRModels .upToNextMajor(from: "0.7.0")` and silently resolves
+    # to FHIRModels 0.9.1 — a release that flipped abstract FHIR types
+    # from `open class` to `public struct/protocol` (the "Sendable
+    # Release"). HealthKitOnFHIR 1.2.1 still uses `extension Element`
+    # inheritance clauses + mutable struct properties on `Observation`,
+    # so the umbrella refuses to compile against FHIRModels 0.9.x.
+    # HealthKitOnFHIR 1.2.2 (published 2026-04-14) caps the FHIRModels
+    # constraint at `"0.8.0"..<"0.9.0"` — explicitly excluding 0.9.x
+    # — which both restores compilation and pins the transitive
+    # FHIRModels version below 0.8.x for us. Without this explicit
+    # pin, `Package.resolved` resurrects the broken 1.2.1 / 0.9.1
+    # combo any time `xcodebuild -resolvePackageDependencies` runs
+    # on a clean checkout. Tighten / relax once SpeziFHIR ships
+    # a release that bumps its own HealthKitOnFHIR floor past 1.2.2.
+    url: https://github.com/StanfordBDHG/HealthKitOnFHIR
+    exactVersion: 1.2.2
+  SpeziScheduler:
+    # v0.6.0.7 — Stanford Spezi Scheduler. Declarative task scheduling
+    # with a versioned, append-only SwiftData store (`Task` + `Outcome`
+    # `@Model`s) and a bundled local-notification queue that respects
+    # `time-sensitive` interruption levels + uses BGAppRefresh to top
+    # the queue up to 30 pending requests over the next four weeks.
+    #
+    # Adoption shape (per S0 research):
+    # - Local medication-reminder banners move off `MedicationReminder-
+    #   Scheduler` + `NotificationService.scheduleLocalBackups` onto a
+    #   Spezi `Module` (`MedicationsSchedulerModule`) which re-derives
+    #   `Task`s from `MedicationsStore.medications` after every load.
+    # - Action-buttons + server `mark-intake` round-trip stay on the
+    #   custom `NotificationService.dispatchAction` path. The custom
+    #   `categoryMedication` (`MEDICATION_REMINDER`) wins over Spezi's
+    #   derived id via `HealthLogStandard: SchedulerNotificationsConstraint`
+    #   rewriting `content.categoryIdentifier` per task.
+    # - APNs server-driven reminders stay on the existing pipeline;
+    #   the local Spezi queue is the new local-fallback layer
+    #   replacing the dead `MedicationReminderScheduler`.
+    #
+    # **Version-pin reality check (2026-05-22):** the v0.6.0.7 research
+    # brief named `1.3.0` as the target. `gh api .../tags` returns
+    # `1.2.20` as the latest tag, so we pin to that. SpeziScheduler
+    # 1.2.20 declares `swift-tools-version:6.2`, iOS 18 floor, Spezi
+    # `from: 1.10.2`, SpeziNotifications `from: 1.0.8`, SpeziLocal-
+    # Storage `from: 2.1.4`, all of which the existing SpeziHealthKit
+    # 1.4.2 / SpeziDevices 1.6.1 / SpeziLLM 0.13.x graph satisfies. The
+    # transitive `SQLite.swift 0.16.x` pull is new but stays inside the
+    # SpeziScheduler library scope. Exact-pin protects the notification
+    # scheduling contract against silent minor bumps until the
+    # walkthrough lands.
+    url: https://github.com/StanfordSpezi/SpeziScheduler
+    exactVersion: 1.2.20
+  SpeziFHIR:
+    # v0.6.0 H.0 — skeleton-only adoption of SpeziFHIR for the
+    # Doctor-Report FHIR-bundle emitter (mirrors the existing
+    # `DoctorReportSpec` → PDF pipeline so the same spec can render
+    # both a clinician-friendly PDF and a machine-readable FHIR R4
+    # Bundle for EHR ingest).
+    #
+    # The umbrella package vends three products:
+    # - `SpeziFHIR` (Resource / Observation / Bundle wrappers around
+    #   `apple/FHIRModels` ModelsR4 + ModelsDSTU2),
+    # - `SpeziFHIRHealthKit` (HKSample → FHIR Observation bridge via
+    #   `StanfordBDHG/HealthKitOnFHIR`),
+    # - `SpeziFHIRMockPatients` (Synthea-style R4 bundles for tests).
+    # H.0 wires only `SpeziFHIR` so the umbrella resolves and the
+    # `import SpeziFHIR` smoke compiles; H.2+ pulls
+    # `SpeziFHIRHealthKit` when the LOINC mapping table replaces
+    # hand-rolled `Observation` constructors.
+    #
+    # **Version-pin reality check (2026-05-22):** the v060-research
+    # brief expected "~0.5.x aligned with Spezi 1.9". Verified via
+    # `gh api repos/StanfordSpezi/SpeziFHIR/tags` the latest tagged
+    # release is `0.10.0` (published 2026-01-11). The 0.10.0
+    # Package.swift declares `swift-tools-version:6.1`, iOS 17+,
+    # `Spezi from: 1.8.0`, `SpeziHealthKit from: 1.2.0`,
+    # `FHIRModels from: 0.7.0`, `HealthKitOnFHIR from: 1.0.0` —
+    # all four constraints satisfy our existing pins (Spezi 1.10.x
+    # resolved alongside SpeziHealthKit 1.4.2 / SpeziDevices 1.6.1
+    # / SpeziLLM 0.13.x; iOS 18 baseline; Swift 6.0 compiler).
+    # Exact-pin protects against the same upstream churn that hit
+    # SpeziLLM 0.10.x → 0.13.x in v0.5.7; tighten or relax once
+    # H.2 lands the LOINC table and the build graph stabilises.
+    url: https://github.com/StanfordSpezi/SpeziFHIR
+    exactVersion: 0.10.0
+  SpeziAccessGuard:
+    # GH issue #8 Path 2 (2026-06-11) — incremental SpeziAccessGuard
+    # adoption with **no UX regression**. The app-root lock stays on the
+    # custom `Services/BiometricGate.swift` (W1j logout escape hatch,
+    # DE strings, unified biometric+device-passcode via
+    # `.deviceOwnerAuthentication`, no forced fallback-passcode setup —
+    # issue blockers B1-B4 apply to the root surface only). Path 2
+    # registers the `AccessGuards` Spezi module in
+    # `HealthLogSpeziDelegate.configuration` and wraps only per-feature
+    # sensitive surfaces (share-link token reveal, health-record ZIP
+    # export, FHIR export) in `AccessGuarded(.sensitiveScreens)`, where
+    # the logout escape hatch does not apply.
+    #
+    # **Version-pin reality check (2026-06-11):** latest upstream tag is
+    # `0.5.0` (verified against the GitHub tag list in issue #8). 0.5.0
+    # declares an iOS 17 floor + `Spezi from: 1.8.0` — both satisfied by
+    # the Spezi-core 1.10.x graph the SpeziHealthKit 1.4.2 /
+    # SpeziScheduler 1.2.20 pins already resolve. Exact-pinned like every
+    # other Spezi package for reproducible resolution; the 0.5.x line
+    # reworked the public API (`AccessGuards` builder module + typed
+    # `AccessGuardIdentifier` + `BiometricAccessGuard`/`CodeAccessGuard`
+    # configs), so a silent minor bump would be source-breaking.
+    url: https://github.com/StanfordSpezi/SpeziAccessGuard
+    exactVersion: 0.5.0
+
+targets:
+  HealthLog:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: HealthLog
+        excludes:
+          - "**/*.md"
+    resources:
+      - path: HealthLog/Resources
+    dependencies:
+      - package: Pow
+      - package: SpeziHealthKit
+      - package: SpeziStorage
+        product: SpeziLocalStorage
+      - package: SpeziDevices
+        product: SpeziDevices
+      - package: SpeziDevices
+        product: SpeziDevicesUI
+      - package: SpeziDevices
+        product: SpeziOmron
+      - package: SpeziLLM
+        product: SpeziLLM
+      - package: SpeziLLM
+        product: SpeziLLMLocal
+      - package: SpeziChat
+        product: SpeziChat
+      - package: SpeziFHIR
+        product: SpeziFHIR
+      - package: SpeziScheduler
+        product: SpeziScheduler
+      - package: SpeziAccessGuard
+      # v0.8.4 WWIDGET-1 — embed the WidgetKit extension into the app so
+      # the Live Activity / widgets ship inside HealthLog.app/PlugIns.
+      # `embed: true` + `codeSign: true` are the XcodeGen defaults for an
+      # app-extension dependency; stated explicitly for clarity.
+      - target: HealthLogWidgets
+        embed: true
+        codeSign: true
+      # AUDIT-v0162 H2 — embed the Notification Service Extension so it ships
+      # inside HealthLog.app/PlugIns and can redact mutable medication pushes.
+      - target: HealthLogNotificationService
+        embed: true
+        codeSign: true
+      # v0.12 P2 — embed the watchOS companion so it ships + installs inside
+      # HealthLog.app/Watch alongside the phone app.
+      - target: HealthLogWatch
+        embed: true
+    info:
+      path: HealthLog/Resources/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: "HealthLog"
+        UILaunchScreen:
+          UIColorName: Background
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiredDeviceCapabilities:
+          - arm64
+        ITSAppUsesNonExemptEncryption: false
+        # v0.8.4 WWIDGET-1 — opt the MAIN APP into ActivityKit Live
+        # Activities. This key MUST live in the app Info.plist (not the
+        # widget extension) — it is what lets the app call
+        # `Activity.request` and what surfaces the "Live Activities" toggle
+        # in Settings → HealthLog. The Live Activity *UI* renders in the
+        # widget extension, but the capability is declared here.
+        NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - remote-notification
+          - processing
+          # v0.15.5 AUD-1 F1 (Critical) — Background App Refresh. REQUIRED by
+          # SpeziScheduler: its `SchedulerNotifications` module gates the
+          # registration of its notification-top-up `BGAppRefreshTask` on
+          # `backgroundFetchEnabled` ≡ `UIBackgroundModes.contains("fetch")`
+          # (see `SchedulerNotifications.swift:543`). Without `fetch` the
+          # module silently logs "Background fetch is not enabled…" and the
+          # pending med-reminder queue ONLY ever refreshes on app foreground —
+          # so non-daily cadences (monthly / everyNWeeks>1 / rolling / cyclic,
+          # which materialize as one-shot triggers) go silent once their
+          # horizon elapses without the app being opened. `fetch` is a
+          # legitimate App-Store background mode for Background App Refresh.
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - dev.healthlog.app.healthkit-sync
+          # #66 P0.1 (Baustein 1) — leichter BGAppRefreshTask. Wird vom System
+          # deutlich häufiger als der schwere `healthkit-sync`-Processing-Task
+          # gewährt und pullt die ~28 `start: .manual`-HealthKit-Typen (Steps,
+          # Sleep, Mass, Heart-Rate …) zwischen den seltenen Processing-Wakes
+          # zum Server. Braucht — wie der Scheduler-Identifier unten — den
+          # `fetch`-UIBackgroundMode (oben bereits deklariert).
+          - dev.healthlog.app.refresh
+          # v0.6.0.7 — SpeziScheduler's `SchedulerNotifications` module
+          # registers a `BGAppRefreshTask` to top up the pending-local-
+          # notification queue ahead of expiry. Identifier is hard-coded
+          # upstream as `edu.stanford.spezi.scheduler.notifications-
+          # scheduling` (see `PermittedBackgroundTaskIdentifier.swift`
+          # in SpeziScheduler 1.2.20).
+          #
+          # v0.15.5 AUD-1 F2 — CORRECTION: this permitted-identifier entry is
+          # NECESSARY but NOT SUFFICIENT. SpeziScheduler still refuses to call
+          # `BGTaskScheduler.register(...)` at all unless the `fetch`
+          # `UIBackgroundMode` is also declared (see the `fetch` entry above).
+          # The earlier comment here claimed this identifier alone enabled the
+          # background top-up — it does not. With `fetch` absent the identifier
+          # sat permitted-but-unregistered and the queue never refreshed in the
+          # background. Both the `fetch` mode AND this identifier are required.
+          - edu.stanford.spezi.scheduler.notifications-scheduling
+        # Custom-URL-Scheme für Deep Links aus APNs-Payloads + Share-Sheet.
+        # Routen: dashboard, coach, insights/<metric>, medications/<id>,
+        # medications/<id>/history, personal-records/<id>, settings/notifications,
+        # mood, invite?token=hlv_… (b182 W-B182-INVITE, GH #16 — custom-scheme
+        # fallback für die Web-Invite-QR wenn der Universal Link nicht feuert /
+        # Non-AASA-Hosts).
+        # Universal Links sind seit b182 live (apple-app-site-association
+        # serverseitig gehostet, `applinks:` auf den Managed-Host in den
+        # Associated Domains) — sie matchen ausschliesslich `/auth/register?invite=`.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.healthlog.app.deeplink
+            CFBundleURLSchemes:
+              - healthlog
+        NSHealthShareUsageDescription: "HealthLog liest die von dir freigegebenen Gesundheitsdaten aus Apple Health – darunter Vitalwerte, Aktivität, Ernährung, Schlaf, Stimmung, Zyklusdaten, EKGs, Trainings- und Pulsdaten sowie Medikamente – um sie anzuzeigen, zu synchronisieren und Trends zu berechnen."
+        NSHealthUpdateUsageDescription: "HealthLog speichert von dir erfasste Messungen, Stimmungs- und Zykluseinträge sowie Messungen aus von dir verbundenen Geräten oder Importen in Apple Health, wenn du HealthLog Schreibzugriff erlaubst."
+        # v0.7.0 W-APPSTORE — NSHealthClinicalHealthRecordsShareUsageDescription
+        # entfernt. Per R-HK-research liest kein Code-Pfad `HKClinicalType` aus
+        # Apple Health (FHIR-Funktionalitaet ist Out-Bound Export, kein In-Bound
+        # Read). Apple-App-Review flagt Privacy-Strings ohne tatsaechliche
+        # API-Verwendung als Over-Declaration. Eintrag kehrt zurueck mit v0.7.1+
+        # falls FHIR-In-Bound-Read realisiert wird.
+        NSFaceIDUsageDescription: "HealthLog nutzt Face ID, um deine Daten zu schützen."
+        NSUserNotificationsUsageDescription: "HealthLog erinnert dich an Medikamente und Messungen."
+        # v0.9.0 — AlarmKit critical-med alarms (iOS 26+). Required for
+        # `AlarmManager.requestAuthorization()`; without it the request
+        # denies/traps. The alarm is opt-in per medication (default OFF) for
+        # genuinely time-critical doses and breaks through Silent/Focus.
+        NSAlarmKitUsageDescription: "HealthLog stellt laute Alarme für zeitkritische Medikamente, die du ausdrücklich aktivierst — sie durchbrechen Stummschaltung und Fokus, damit du keine wichtige Dosis verpasst."
+        # v0151 COACH-DICTATION (web-parity v1.18.7): the AskCoach composer now
+        # has a real voice-dictation mic (`CoachDictationModel` →
+        # `SFSpeechRecognizer` + `AVAudioEngine`), so the app genuinely uses both
+        # microphone + speech recognition. Strings updated from the prior
+        # "no speech usage" wording (which was only true while the sole reason for
+        # the key was the transitive SpeziChat/Speech.framework link — that link
+        # also still satisfies ITMS-90683). Transcription is on-device where
+        # supported; the user reviews the text before sending.
+        NSSpeechRecognitionUsageDescription: "HealthLog nutzt Spracherkennung, um deine diktierte Frage an den Coach in Text umzuwandeln – wo möglich direkt auf dem Gerät. Du prüfst den Text vor dem Senden."
+        NSMicrophoneUsageDescription: "HealthLog nutzt das Mikrofon, um deine Frage an den Coach zu diktieren. Die Aufnahme wird auf dem Gerät in Text umgewandelt und nicht gespeichert."
+        # Camera + Photo Library serve two explicit user-driven flows: local
+        # Vision OCR for medication/lab entry, and the optional document vault
+        # whose selected images/scans are uploaded to the configured server.
+        NSCameraUsageDescription: "HealthLog nutzt die Kamera, um Medikamenten-Packungen und Laborberichte auf dem Gerät auszulesen oder von dir ausgewählte Scans in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen."
+        NSPhotoLibraryUsageDescription: "HealthLog liest nur von dir ausgewählte Fotos, um dein Profilbild festzulegen, sie auf dem Gerät auszulesen oder in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen."
+        # v0.5.6 F.1 — SpeziBluetooth lazily allocates a `CBCentralManager`
+        # the first time a `scanNearbyDevices` / `powerOn()` call mounts.
+        # iOS requires `NSBluetoothAlwaysUsageDescription` for any
+        # `CBCentralManager` init since iOS 13; the prompt fires the first
+        # time the central is needed, NOT at app boot. F.1 ships the
+        # scaffolding (Bluetooth + PairedDevices + HealthMeasurements as
+        # registered Spezi modules) plus the empty Settings → Geräte screen
+        # with a disabled "Gerät hinzufügen" CTA — no scan is started yet,
+        # so the prompt stays dormant until F.2 wires the first device
+        # profile. Localized permission copy lives in de/en InfoPlist.strings.
+        NSBluetoothAlwaysUsageDescription: "HealthLog koppelt Blutdruckmessgeräte, Glukose-Sensoren und Waagen über Bluetooth, damit Messungen automatisch landen."
+        CFBundleLocalizations:
+          - de
+          - en
+        # No server identity is compiled into the distributed app. HTTPS uses
+        # system trust and the user enters a server during onboarding.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_OBJC_BRIDGING_HEADER: ""
+        ENABLE_PREVIEWS: YES
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        # v0.6.2.9 (H-1) — APNs environment selection is now build-config-driven
+        # instead of relying on Xcode's archive-time rewrite of a hard-coded
+        # `aps-environment = development` entry. The rewrite has been observed
+        # to silently no-op when bitcode/entitlement order changes between
+        # Xcode releases, which would ship a Release build talking to the APNs
+        # sandbox (api.development.push.apple.com). Driving the value through
+        # a build setting that is read by `$(APS_ENVIRONMENT)` in the
+        # generated `.entitlements` makes the wiring explicit and visible in
+        # the build log. The .p8 APNs-Auth-Key (your own Key ID + Team,
+        # Topic = the app's bundle id) lives server-side; iOS token
+        # registration completes either way, deliveries only start once the
+        # operator drops the key into the server env.
+        Debug:
+          APS_ENVIRONMENT: development
+        Release:
+          APS_ENVIRONMENT: production
+    entitlements:
+      path: HealthLog/Resources/HealthLog.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
+        # v0.6.0.7 — Time Sensitive Notifications. SpeziScheduler sets
+        # `interruptionLevel = .timeSensitive` on every non-allDay event;
+        # without this entitlement iOS silently downgrades the level to
+        # `.active`, which Focus modes can suppress. Apple Dev Portal
+        # must also have the capability enabled on the App ID — if
+        # codesign rejects the entitlement, the operator enables the
+        # capability there first.
+        com.apple.developer.usernotifications.time-sensitive: true
+        # See `settings.configs` above — Debug resolves to `development`,
+        # Release to `production`. Xcode expands `$(VAR)` references in
+        # entitlements plist values at codesign time.
+        aps-environment: $(APS_ENVIRONMENT)
+        # Associated Domains are intentionally absent: a distributed
+        # self-hosting client cannot bind one operator-owned RP/domain without
+        # disclosing and privileging that operator. Password login and custom
+        # scheme routes remain available.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)dev.healthlog.app
+        # v0.8.4 WWIDGET-1 — App Group shared between the app and the
+        # `dev.healthlog.app.widgets` extension. Lets the widget / Live
+        # Activity process read a cached snapshot (next dose, today's
+        # compliance) without a network round-trip in the sibling widget
+        # waves. The Live Activity itself runs server-first via the shared
+        # Keychain token, but the group is the agreed shared-storage surface
+        # and is registered in the Apple Developer Portal as
+        # `group.dev.healthlog.app`.
+        com.apple.security.application-groups:
+          - group.dev.healthlog.app
+  HealthLogTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - HealthLogTests
+    dependencies:
+      - target: HealthLog
+      - package: SnapshotTesting
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.tests
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/HealthLog.app/HealthLog
+        GENERATE_INFOPLIST_FILE: YES
+
+  HealthLogUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - HealthLogUITests
+    dependencies:
+      - target: HealthLog
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.uitests
+        TEST_TARGET_NAME: HealthLog
+        GENERATE_INFOPLIST_FILE: YES
+
+  # v0.8.4 WWIDGET-1 — WidgetKit extension. Foundation target that hosts
+  # the medication Live Activity now and the sibling widgets / ControlWidget
+  # later. Bundle id is the operator-registered child of the app id.
+  #
+  # **Intent / model sharing — by SOURCE MEMBERSHIP, not duplication.**
+  # The Live Activity's "Genommen" button fires the already-shipped
+  # `MarkMedicationTakenIntent`, whose `perform()` resolves the full
+  # server-first repository stack via `IntentDependencies`. That stack is
+  # exactly the plattform-free "HealthLogCore" file set already documented
+  # in `Package.swift` (Models, APIClient, Keychain, CertificatePinner,
+  # IdempotencyKey, Reachability, Repositories, Cache, Sync, Util,
+  # AppEnvironment + the few Core-listed Services). We give the extension
+  # the SAME source membership — so the extension compiles the identical
+  # intent + repository code the app does, with NO parallel write path and
+  # NO copied logic. The `Intents/` folder and the shared
+  # `LiveActivity/MedicationActivityAttributes.swift` round it out.
+  #
+  # The set is an explicit allowlist (mirrors the Package.swift rationale):
+  # an exclude-denylist would silently leak app-only files (Screens,
+  # Stores, HealthKit/Spezi services, FoundationModels @Generable) into the
+  # extension and break it. The allowlist documents positively what the
+  # extension shares and fails loudly the next build if the closure drifts.
+  HealthLogWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      # Extension-owned UI + bundle + Localizable.xcstrings (auto-detected
+      # as a resource). Info.plist + entitlements are driven by the
+      # `info:` / `entitlements:` blocks below, so they are excluded from
+      # the source tree to avoid a duplicate-Info.plist build phase.
+      - path: HealthLogWidgets
+        excludes:
+          - "Resources/Info.plist"
+          - "HealthLogWidgets.entitlements"
+      # Shared Live Activity attributes (compiled into both targets).
+      - path: HealthLog/LiveActivity/MedicationActivityAttributes.swift
+      # v0.8.4 WWIDGET-2 — shared widget snapshot model + App Group I/O +
+      # the pure medications→snapshot mapper + the widget `kind` ids. The
+      # app writes the snapshot (`WidgetSnapshotWriter`, app-only); the
+      # extension's TimelineProviders read it via `WidgetSnapshotStore`.
+      # Foundation-only, no app-target coupling, so it crosses cleanly.
+      - path: HealthLog/WidgetShared
+      # The pure Live-Activity plan is the shared "soonest due dose"
+      # decision the widget snapshot reuses (`WidgetSnapshot.make`), so it
+      # must compile into the extension too. Foundation-only.
+      - path: HealthLog/LiveActivity/MedicationLiveActivityPlan.swift
+      # Shared App Intents (the "Genommen" button reuses these verbatim).
+      # v0.9.0 — the AlarmKit critical-med intents are app-only: AlarmKit
+      # fires its LiveActivityIntents in the app process and they depend on
+      # the app-only `CriticalMedAlarmService`. Excluded from the widget
+      # extension (no widget surface uses them).
+      - path: HealthLog/Intents
+        excludes:
+          - "MedicationAlarmIntents.swift"
+          # W-FOCUS-FILTER — the Focus-filter intent is app-only: no widget
+          # surface uses it, and it depends on the app-only
+          # `FocusFilterConfig` / `FocusFilterConfigStore` (Services/, not in
+          # the extension's shared set). Excluded so the extension still builds.
+          - "HealthLogFocusFilterIntent.swift"
+      # Shared plattform-free "Core" closure the intent's server-first
+      # write path depends on. Mirrors the Package.swift HealthLogCore
+      # allowlist — Models + APIClient/Keychain/CertificatePinner/Outbox
+      # + Repositories + Cache + Sync + Util + the Core-listed Services.
+      - path: HealthLog/Models
+        excludes:
+          - "CoachInsight.swift"
+      # The intent's server-first write path only needs the Medications /
+      # Measurements repos + the Outbox + SWR plumbing. A handful of other
+      # repos (audit-log / passkey / Withings) reference model types that
+      # are defined inside app-only Screen files, so they are excluded from
+      # the extension — including them would drag the whole Screens layer
+      # across the target boundary. Excluded explicitly (not narrowed
+      # file-by-file) so a new repo that stays plattform-free is picked up
+      # automatically; a new repo that leaks an app-only type fails the
+      # extension build loudly and gets added here.
+      - path: HealthLog/Repositories
+        excludes:
+          - "AuditLogRepository.swift"
+          - "PasskeyRepository.swift"
+          - "WithingsRepository.swift"
+      - path: HealthLog/Cache
+      - path: HealthLog/Sync
+      - path: HealthLog/Pharmacokinetics
+      - path: HealthLog/Util
+      - path: HealthLog/DesignSystem/Tokens.swift
+      # W-B188 — Tokens.swift was split into thematic files (file-length). The
+      # extension cherry-picks DesignSystem files (it does not glob the dir), so
+      # the split siblings must be listed alongside Tokens.swift to keep the full
+      # token surface (HLSurface/HLText/HLAccent etc., used by the compiled
+      # HealthLog/Models descriptors) in scope for the widget target.
+      - path: HealthLog/DesignSystem/Tokens+Layout.swift
+      - path: HealthLog/DesignSystem/Tokens+Motion.swift
+      - path: HealthLog/DesignSystem/Tokens+Charts.swift
+      - path: HealthLog/DesignSystem/Tokens+Surfaces.swift
+      - path: HealthLog/DesignSystem/Tokens+Shadow.swift
+      # v0.8.5 WFIX-LA — shared, asset-catalog-free Tonal-Mono palette for the
+      # Live Activity + widgets (`LAColor`). Replaces the prior extension-local
+      # Dracula palette so the surfaces match the app's documented design
+      # system in both the app and the extension process.
+      - path: HealthLog/DesignSystem/LiveActivityTokens.swift
+      # W-B183 — the canonical time-format helper so the widgets render dose
+      # times with the SAME 12h/24h/auto clock the app does (resolved from the
+      # snapshot-carried preference). Foundation-only (Locale/Date.FormatStyle),
+      # crosses the target boundary cleanly.
+      - path: HealthLog/DesignSystem/HLTimeFormat.swift
+      - path: HealthLog/Services/AIConsentStore.swift
+      # v0.13 — AIConsentStore references BYOProviderID (the BYO-key consent
+      # namespace), so any target compiling it must also compile this type.
+      - path: HealthLog/Services/AI/BYO/BYOProviderID.swift
+      # v0.13 W2 — AuthService.deleteAccount wipes the BYO API key bytes via
+      # BYOKeyStore.wipeAll(), so the extension (which compiles AuthService)
+      # needs the store + its typed-error dependency. Both are Foundation-only
+      # (KeychainStoring + BYOProviderID), so they cross the target boundary
+      # cleanly. The adapters + BYOLLMService stay app-only (URLSession path).
+      - path: HealthLog/Services/AI/BYO/BYOKeyStore.swift
+      - path: HealthLog/Services/AI/BYO/BYOLLMError.swift
+      - path: HealthLog/Services/APIClient.swift
+      # Phase 09 / plan 09-02 — APIClient's conformance to the file-backed
+      # upload requirement. Without it this target would silently fall back
+      # to the protocol's throwing default and diverge from the app.
+      - path: HealthLog/Services/APIClient+FileUpload.swift
+      - path: HealthLog/Services/APIClient+HealthProbe.swift
+      - path: HealthLog/Services/APIClient+Pinning.swift
+      - path: HealthLog/Services/APIClient+ServerVersion.swift
+      # Phase 09 / plan 09-02 — `APIClientProtocol` carries the file-backed
+      # upload requirement, so any target compiling APIClient.swift must also
+      # compile the request value it names. Foundation-only.
+      - path: HealthLog/Services/APIFileUploadRequest.swift
+      - path: HealthLog/Services/APIRequest.swift
+      - path: HealthLog/Services/AuthService.swift
+      - path: HealthLog/Services/AuthService+WireDTOs.swift
+      - path: HealthLog/Services/OidcStatus.swift
+      - path: HealthLog/Services/AvatarCache.swift
+      - path: HealthLog/Services/BatchSyncThrottle.swift
+      - path: HealthLog/Services/BiometricGate.swift
+      - path: HealthLog/Services/CertificatePinner.swift
+      # W-COACH-SSE — APIClient references CoachStreamTimeoutPolicy (the coach
+      # SSE streaming-session timeout values), so any target compiling
+      # APIClient.swift must also compile this Foundation-only value type.
+      - path: HealthLog/Services/CoachStreamTimeoutPolicy.swift
+      - path: HealthLog/Services/DoctorReportService.swift
+      - path: HealthLog/Services/DoctorReportTmpSweeper.swift
+      - path: HealthLog/Services/FeatureFlagsService.swift
+      - path: HealthLog/Services/HealthIngestRoute.swift
+      - path: HealthLog/Services/IdempotencyKey.swift
+      - path: HealthLog/Services/KeychainStore.swift
+      - path: HealthLog/Services/Logger.swift
+      # Audit M2 — shared non-trapping in-memory floor used by the SwiftData
+      # recovery ladders (OutboxQueue/SWRCache, both compiled here). Foundation
+      # + SwiftData only, crosses the target boundary cleanly.
+      - path: HealthLog/Services/ModelContainerRecovery.swift
+      - path: HealthLog/Services/PasskeyProtocol.swift
+      - path: HealthLog/Services/Reachability.swift
+      - path: HealthLog/Services/RefreshCoordinator.swift
+      - path: HealthLog/Services/RefreshOutcome.swift
+      - path: HealthLog/Services/ServerReachabilityProbe.swift
+      # 13-02 — `APIClientProtocol` inherits `WebLoginRouteProbing` and
+      # `AuthService.webLoginRouteStatus()` returns `WebLoginRouteStatus`, so
+      # any target compiling APIClient.swift / AuthService.swift must compile
+      # the probe too — and with it `OidcPKCE`, whose throwaway S256 challenge
+      # the probe sends. Both are Foundation/CryptoKit only.
+      - path: HealthLog/Services/WebLoginRouteProbe.swift
+      - path: HealthLog/Services/OidcPKCE.swift
+      - path: HealthLog/Services/StatistikModeBriefingService.swift
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    info:
+      path: HealthLogWidgets/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: "HealthLog"
+        # 11-19 / D-11-18-A. These two were hardcoded `"0.19.0"` and `"263"`
+        # until 2026-08-21, and xcodegen wrote the literals into the plist
+        # named above — which is how build 264 shipped an app at 264 with this
+        # extension at 263. They now inherit from the single assignments in
+        # `settings.base`, like the app and the notification service always did.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleLocalizations:
+          - de
+          - en
+        # The extension follows the same operator-neutral system-trust posture
+        # as the host app and carries no compiled server identity.
+        # WidgetKit extension point — without this the extension never
+        # registers and the Live Activity / widgets are invisible.
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: HealthLogWidgets/HealthLogWidgets.entitlements
+      properties:
+        # v0.8.4 WWIDGET-1 — shared App Group + shared keychain group so
+        # the extension reads the same auth token the app + intents use
+        # (server-first, launch-independent). Both are registered on the
+        # `dev.healthlog.app.widgets` App ID in the Apple Developer Portal.
+        com.apple.security.application-groups:
+          - group.dev.healthlog.app
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)dev.healthlog.app
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.widgets
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: NO
+        # The extension reuses the app's plattform-free Core source set;
+        # it links no Spezi / HealthKit, so no extra frameworks beyond
+        # WidgetKit + SwiftUI (+ AppIntents/ActivityKit which the SDK
+        # auto-links from the imports).
+
+  # AUDIT-v0162 H2 — Notification Service Extension. Fires on medication-
+  # reminder APNs pushes (the server MUST send `mutable-content: 1` for iOS to
+  # invoke it — SERVER-COORD item; the appex is a no-op until then) and redacts
+  # the drug name + dose on the lock screen when the device-local
+  # `LockScreenPrivacy` opt-out is ON — so the in-app "hide medication name"
+  # toggle finally reaches the remote-push path the OS previously rendered
+  # verbatim. Reads the opt-out from the SHARED App-Group `UserDefaults`
+  # (`group.dev.healthlog.app`, the same suite the app writes it to). Only
+  # `MEDICATION_REMINDER` pushes are mutated; everything else passes through.
+  #
+  # The source set is a tight allowlist (mirrors the widget-extension
+  # rationale): the appex shares ONLY the two Foundation-only files it needs —
+  # `LockScreenPrivacy` (the shared opt-out) + `MedicationReminderRedactor`
+  # (the pure redaction, unit-tested in HealthLogTests). No app / Spezi /
+  # networking coupling crosses the target boundary.
+  HealthLogNotificationService:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: NotificationServiceExtension/NotificationService.swift
+      - path: HealthLog/Services/LockScreenPrivacy.swift
+      - path: HealthLog/Services/MedicationReminderRedactor.swift
+      - path: NotificationServiceExtension/Resources/Localizable.xcstrings
+        buildPhase: resources
+      - path: NotificationServiceExtension/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    info:
+      path: NotificationServiceExtension/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: "HealthLog"
+        # Must expand from the same inherited build settings as the host.
+        # Archive validation in 03-03 still has to compare the signed bundles.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleLocalizations:
+          - de
+          - en
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: NotificationServiceExtension/NotificationServiceExtension.entitlements
+      properties:
+        # Reads the same device-local lock-screen privacy preference as the app.
+        com.apple.security.application-groups:
+          - group.dev.healthlog.app
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.notification-service
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+
+  # v0.12 P2 — watchOS companion. A THIN remote: it renders the glanceable
+  # `WatchSnapshot` the iPhone pushes (today's doses + compliance + latest
+  # mood) and sends med-intake / mood actions back via WatchConnectivity. The
+  # phone funnels each action into the EXISTING server-first store/Outbox
+  # pipeline (see `WatchSessionCoordinator` + `AppContainer+Watch`). The watch
+  # holds NO auth token, NO API client, NO Outbox — single write path, no
+  # schema-drift risk. Single-target SwiftUI watch app (WKApplication), no
+  # WatchKit extension (watchOS 9+ shape).
+  HealthLogWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: HealthLogWatch
+        excludes:
+          - "Info.plist"
+      # Shared WatchConnectivity contract (Foundation-only, compiled into BOTH
+      # the app + the watch — no app-Models coupling). The watch's design
+      # tokens live in `HealthLogWatch/DesignSystem/WatchTokens.swift` (a
+      # self-contained mirror of HLSpace/HLRadius/Font.hl*/LAColor) — the iOS
+      # `Tokens.swift` / `LiveActivityTokens.swift` use UIKit APIs unavailable
+      # on watchOS, so they are deliberately NOT compiled here.
+      - path: HealthLog/WatchConnectivity/WatchPayload.swift
+      # Shared PHI backup policy. The phone, widgets, watch app, and watch
+      # complication all apply the same no-iCloud-backup contract.
+      - path: HealthLog/Util/SensitiveDataBackupExclusion.swift
+    dependencies:
+      - sdk: WatchConnectivity.framework
+      # WidgetCenter — reload the complication on a fresh push.
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      # v0.12 P2 — embed the watch complication extension into the watch app.
+      - target: HealthLogWatchWidgets
+        embed: true
+    info:
+      path: HealthLogWatch/Info.plist
+      properties:
+        CFBundleDisplayName: "HealthLog"
+        # 11-19 / D-11-18-A — see the widget block above. Hardcoded until
+        # 2026-08-21; this plist is TRACKED, which is why every historical bump
+        # commit from ≤256 through 263 carries it.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Single-target SwiftUI watch app (no WatchKit extension) + the
+        # companion binding back to the phone app id.
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: dev.healthlog.app
+        CFBundleLocalizations:
+          - de
+          - en
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.watchkitapp
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTED_PLATFORMS: "watchos watchsimulator"
+        TARGETED_DEVICE_FAMILY: "4"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        # YES (not NO): the watch app is EMBEDDED in the iOS app (under
+        # HealthLog.app/Watch/) via the `embed: true` dependency. With
+        # SKIP_INSTALL=NO it ALSO installed as a standalone top-level product in
+        # the archive → Xcode saw two top-level apps + mis-classified the whole
+        # thing as a watchOS archive → app-store export offered only watchOS
+        # methods + failed ("Unknown Distribution Error"). YES keeps it
+        # embedded-only so the archive stays iOS-primary + exports to App Store.
+        SKIP_INSTALL: YES
+    entitlements:
+      path: HealthLogWatch/HealthLogWatch.entitlements
+      properties:
+        # Shared App Group between the watch app + its complication extension
+        # (same device). The app writes the pushed snapshot here; the
+        # complication reads it. Per-device — NOT shared with the phone's
+        # container (phone↔watch sync is WatchConnectivity).
+        com.apple.security.application-groups:
+          - group.dev.healthlog.app
+
+  # v0.12 P2 — watchOS complication extension. Glanceable next-due dose +
+  # today's compliance on the watch face, reading the App-Group snapshot the
+  # watch app keeps fresh from the phone push. WidgetKit accessory families.
+  HealthLogWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: HealthLogWatchWidgets
+        excludes:
+          - "Info.plist"
+      # Shared snapshot type + the App-Group store (read side here).
+      - path: HealthLog/WatchConnectivity/WatchPayload.swift
+      - path: HealthLogWatch/Shared/WatchSnapshotStore.swift
+      - path: HealthLog/Util/SensitiveDataBackupExclusion.swift
+      # v0.15.2 W-WATCH-COMPLICATIONS — the watch-local design tokens (LAColor
+      # signal palette) so the score-ring complication colours its band signal
+      # from the SAME Tonal-Mono palette as the watch app + phone widgets.
+      - path: HealthLogWatch/DesignSystem/WatchTokens.swift
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    info:
+      path: HealthLogWatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: "HealthLog"
+        # 11-19 / D-11-18-A — see the widget block above. Hardcoded until
+        # 2026-08-21; this plist is TRACKED for the same reason the watch app's
+        # is.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleLocalizations:
+          - de
+          - en
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: HealthLogWatchWidgets/HealthLogWatchWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.healthlog.app
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.watchkitapp.complications
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTED_PLATFORMS: "watchos watchsimulator"
+        TARGETED_DEVICE_FAMILY: "4"
+        # YES: embedded-only (under the watch app's PlugIns) — never a
+        # standalone archive product. See the HealthLogWatch note above.
+        SKIP_INSTALL: YES
+
+  # H4 — first tests for the watchOS target (audit-v0162). The watch app shipped
+  # ZERO tests; the phone-side WatchConnectivity contract was covered in
+  # `HealthLogTests`, but the WATCH-side snapshot store + the shared payload
+  # logic AS COMPILED FOR watchOS were not. This is a self-contained watchOS
+  # logic-test bundle: it compiles the two Foundation-only source files under
+  # test directly (source membership — the SAME files the watch app + its
+  # complication compile), so it needs no host app and no app-Models coupling.
+  # Swift Testing, mirroring the app test target's tooling.
+  HealthLogWatchTests:
+    type: bundle.unit-test
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - HealthLogWatchTests
+      # The units under test (Foundation-only, identical to the watch build).
+      - path: HealthLogWatch/Shared/WatchSnapshotStore.swift
+      - path: HealthLog/WatchConnectivity/WatchPayload.swift
+      - path: HealthLog/Util/SensitiveDataBackupExclusion.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.watchkitapp.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SUPPORTED_PLATFORMS: "watchos watchsimulator"
+        TARGETED_DEVICE_FAMILY: "4"
+
+schemes:
+  HealthLog:
+    build:
+      targets:
+        HealthLog: all
+        HealthLogWidgets: all
+        HealthLogWatch: all
+        HealthLogTests: [test]
+        HealthLogUITests: [test]
+    test:
+      gatherCoverageData: true
+      coverageTargets:
+        - HealthLog
+      targets:
+        - HealthLogTests
+        - HealthLogUITests
+  HealthLogWatch:
+    build:
+      targets:
+        HealthLogWatch: all
+        HealthLogWatchWidgets: all
+        HealthLogWatchTests: [test]
+    test:
+      targets:
+        - HealthLogWatchTests

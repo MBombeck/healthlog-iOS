@@ -1,0 +1,29 @@
+--swiftversion 5.10
+--indent 4
+--maxwidth 140
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--closingparen balanced
+--commas inline
+--trimwhitespace always
+--stripunusedargs closure-only
+--self remove
+--semicolons never
+--patternlet hoist
+--ranges spaced
+--operatorfunc spaced
+--elseposition same-line
+--guardelse same-line
+--exclude .build,DerivedData,HealthLog.xcodeproj
+
+# 2026-08-08 — SwiftFormat 0.62 fuehrt `wrapIfStatementBodies` ein und aktiviert
+# sie per Default. Sie klappt jedes `if x { return }` auf drei Zeilen auf: 476
+# von 2111 Dateien wuerden sich aendern, ohne dass eine Zeile Verhalten gewinnt.
+# Das Repo hat die einzeilige Form immer benutzt; wir uebernehmen die Regel
+# bewusst NICHT, statt einen 476-Datei-Diff durchzuwinken, den niemand liest.
+# Ohne diese Zeile scheitert das `swiftformat --lint`-Tor von
+# `scripts/ship-to-testflight.sh` auf jeder Maschine mit aktuellem SwiftFormat.
+# Dieselbe Familie, dieselbe Version: `wrapIfExpressionBodies` betrifft die
+# `let x = if …`-Form und traf weitere 9 Dateien.
+--disable wrapIfStatementBodies,wrapIfExpressionBodies

@@ -1,0 +1,6 @@
+{
+  "accept": "application/fhir+json",
+  "method": "GET",
+  "path": "/api/fhir/Patient/$everything",
+  "query": "_count=200&_offset=0"
+}

@@ -1,0 +1,70 @@
+{
+  "request": {
+    "entries": [
+      {
+        "hkIdentifier": "HKQuantityTypeIdentifierBodyMass",
+        "value": 70,
+        "unit": "kg",
+        "startDate": "2026-08-14T06:00:00+02:00",
+        "endDate": "2026-08-14T06:00:00+02:00",
+        "externalId": "00000000-0000-4000-8000-000000000001"
+      },
+      {
+        "hkIdentifier": "HKQuantityTypeIdentifierStepCount",
+        "value": 1234,
+        "unit": "count",
+        "startDate": "2026-08-14T00:00:00+02:00",
+        "endDate": "2026-08-14T23:59:59+02:00",
+        "externalId": "stats:HKQuantityTypeIdentifierStepCount:2026-08-14"
+      }
+    ],
+    "syncTrigger": "foreground"
+  },
+  "responses": {
+    "inserted": {
+      "processed": 1,
+      "inserted": 1,
+      "duplicates": 0,
+      "skipped": [],
+      "entries": [{ "index": 0, "status": "inserted" }]
+    },
+    "updated": {
+      "processed": 1,
+      "inserted": 0,
+      "duplicates": 0,
+      "skipped": [],
+      "entries": [{ "index": 0, "status": "updated" }]
+    },
+    "duplicate": {
+      "processed": 1,
+      "inserted": 0,
+      "duplicates": 1,
+      "skipped": [],
+      "entries": [{ "index": 0, "status": "duplicate" }]
+    },
+    "skipped": {
+      "processed": 1,
+      "inserted": 0,
+      "duplicates": 0,
+      "skipped": [{ "index": 0, "reason": "unmappable_identifier" }],
+      "entries": [{ "index": 0, "status": "skipped", "reason": "unmappable_identifier" }]
+    },
+    "failed": {
+      "processed": 1,
+      "inserted": 0,
+      "duplicates": 0,
+      "skipped": [],
+      "entries": [{ "index": 0, "status": "failed", "reason": "persistence_error" }]
+    },
+    "superseded-in-batch": {
+      "processed": 2,
+      "inserted": 0,
+      "duplicates": 1,
+      "skipped": [],
+      "entries": [
+        { "index": 0, "status": "duplicate", "reason": "superseded_in_batch" },
+        { "index": 1, "status": "updated" }
+      ]
+    }
+  }
+}

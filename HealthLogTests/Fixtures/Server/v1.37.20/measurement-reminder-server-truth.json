@@ -1,0 +1,218 @@
+{
+  "_provenance": {
+    "tag": "v1.37.20",
+    "tagCommit": "3a2c0e757e5f0a4ea8bf6be899b3a04547ddd423",
+    "openapiSha256": "839b960a45ba9b91ec70b04eed49ae26ce868ea3e8aec83300da4db9ff1d985e",
+    "relevantFragmentSha256": "16abea94dac4046602a26f68095e58d5966482e3f47aa956932d7c5112ba2b06",
+    "note": "Representative payloads for the accepted v1.37.20 measurement-reminder surface. Every key below is a key the pinned schemas publish and every value satisfies the published type, nullability and enum; nothing here comes from the announcement in iOS issue #92. The values themselves are invented — synthetic labels, ids and instants — because this is a shape fixture, not a capture. No health value, owner id, token, host, mailbox or real response body appears in it. The ledger rows are likewise synthetic: a real ledger begins at the release that introduced it and cannot be backfilled, so an honest fixture must not pretend to be a recovered history."
+  },
+
+  "reminderPristine": {
+    "id": "rem_pristine_0001",
+    "label": "Zahnarzt-Kontrolle",
+    "measurementType": null,
+    "intervalDays": 180,
+    "rrule": null,
+    "anchorDate": "2026-02-14T08:00:00Z",
+    "endsOn": null,
+    "origin": "VORSORGE",
+    "notifyHour": 9,
+    "location": null,
+    "nextDueAt": "2026-08-13T07:00:00Z",
+    "lastSatisfiedAt": "2026-02-14T08:00:00Z",
+    "snoozedUntil": null,
+    "lastSkippedAt": null,
+    "skipCount": 0,
+    "enabled": true,
+    "createdAt": "2026-02-14T08:00:00Z",
+    "updatedAt": "2026-02-14T08:00:00Z"
+  },
+
+  "reminderSnoozed": {
+    "id": "rem_snoozed_0002",
+    "label": "Blutdruck messen",
+    "measurementType": "BLOOD_PRESSURE_SYS",
+    "intervalDays": 30,
+    "rrule": null,
+    "anchorDate": null,
+    "endsOn": null,
+    "origin": "VORSORGE",
+    "notifyHour": 8,
+    "location": null,
+    "nextDueAt": "2026-08-24T06:00:00Z",
+    "lastSatisfiedAt": "2026-07-25T06:31:00Z",
+    "snoozedUntil": "2026-08-24T06:00:00Z",
+    "lastSkippedAt": null,
+    "skipCount": 0,
+    "enabled": true,
+    "createdAt": "2026-01-05T10:12:00Z",
+    "updatedAt": "2026-08-16T05:02:00Z"
+  },
+
+  "reminderSkipped": {
+    "id": "rem_skipped_0003",
+    "label": "Hautkrebs-Screening",
+    "measurementType": null,
+    "intervalDays": 365,
+    "rrule": null,
+    "anchorDate": null,
+    "endsOn": null,
+    "origin": "VORSORGE",
+    "notifyHour": 10,
+    "location": "Hautarztpraxis Mitte",
+    "nextDueAt": "2027-08-15T08:00:00Z",
+    "lastSatisfiedAt": "2025-08-11T08:04:00Z",
+    "snoozedUntil": null,
+    "lastSkippedAt": "2026-08-15T11:20:00Z",
+    "skipCount": 3,
+    "enabled": true,
+    "createdAt": "2024-08-01T09:00:00Z",
+    "updatedAt": "2026-08-15T11:20:00Z"
+  },
+
+  "legacyReminderWithoutLedgerFields": {
+    "id": "rem_legacy_0004",
+    "label": "Augenarzt",
+    "measurementType": null,
+    "intervalDays": 730,
+    "rrule": null,
+    "anchorDate": null,
+    "endsOn": null,
+    "origin": "COACH",
+    "notifyHour": 9,
+    "location": null,
+    "nextDueAt": "2027-03-02T08:00:00Z",
+    "lastSatisfiedAt": "2025-03-02T08:00:00Z",
+    "enabled": true,
+    "createdAt": "2025-03-02T08:00:00Z",
+    "updatedAt": "2025-03-02T08:00:00Z"
+  },
+
+  "skipAppliedEnvelope": {
+    "data": {
+      "skipped": true,
+      "reminder": {
+        "id": "rem_skipped_0003",
+        "label": "Hautkrebs-Screening",
+        "measurementType": null,
+        "intervalDays": 365,
+        "rrule": null,
+        "anchorDate": null,
+        "endsOn": null,
+        "origin": "VORSORGE",
+        "notifyHour": 10,
+        "location": "Hautarztpraxis Mitte",
+        "nextDueAt": "2027-08-15T08:00:00Z",
+        "lastSatisfiedAt": "2025-08-11T08:04:00Z",
+        "snoozedUntil": null,
+        "lastSkippedAt": "2026-08-15T11:20:00Z",
+        "skipCount": 3,
+        "enabled": true,
+        "createdAt": "2024-08-01T09:00:00Z",
+        "updatedAt": "2026-08-15T11:20:00Z"
+      }
+    },
+    "error": null,
+    "meta": { "requestId": "req_skip_applied" }
+  },
+
+  "skipNoOpEnvelope": {
+    "data": {
+      "skipped": false,
+      "reminder": {
+        "id": "rem_skipped_0003",
+        "label": "Hautkrebs-Screening",
+        "measurementType": null,
+        "intervalDays": 365,
+        "rrule": null,
+        "anchorDate": null,
+        "endsOn": null,
+        "origin": "VORSORGE",
+        "notifyHour": 10,
+        "location": "Hautarztpraxis Mitte",
+        "nextDueAt": "2027-08-15T08:00:00Z",
+        "lastSatisfiedAt": "2025-08-11T08:04:00Z",
+        "snoozedUntil": null,
+        "lastSkippedAt": "2026-08-15T11:20:00Z",
+        "skipCount": 3,
+        "enabled": true,
+        "createdAt": "2024-08-01T09:00:00Z",
+        "updatedAt": "2026-08-15T11:20:00Z"
+      }
+    },
+    "error": null,
+    "meta": { "requestId": "req_skip_noop" }
+  },
+
+  "snoozeRequestBody": { "until": "2026-08-24" },
+
+  "snoozeAppliedEnvelope": {
+    "data": {
+      "reminder": {
+        "id": "rem_snoozed_0002",
+        "label": "Blutdruck messen",
+        "measurementType": "BLOOD_PRESSURE_SYS",
+        "intervalDays": 30,
+        "rrule": null,
+        "anchorDate": null,
+        "endsOn": null,
+        "origin": "VORSORGE",
+        "notifyHour": 8,
+        "location": null,
+        "nextDueAt": "2026-08-24T06:00:00Z",
+        "lastSatisfiedAt": "2026-07-25T06:31:00Z",
+        "snoozedUntil": "2026-08-24T06:00:00Z",
+        "lastSkippedAt": null,
+        "skipCount": 0,
+        "enabled": true,
+        "createdAt": "2026-01-05T10:12:00Z",
+        "updatedAt": "2026-08-16T05:02:00Z"
+      }
+    },
+    "error": null,
+    "meta": { "requestId": "req_snooze_applied" }
+  },
+
+  "historyFirstPage": {
+    "data": {
+      "events": [
+        {
+          "id": "evt_0003",
+          "kind": "SKIPPED",
+          "occurredAt": "2026-08-15T11:20:00Z",
+          "onTime": false,
+          "source": "skip",
+          "createdAt": "2026-08-15T11:20:00Z"
+        },
+        {
+          "id": "evt_0002",
+          "kind": "SATISFIED",
+          "occurredAt": "2025-08-11T08:04:00Z",
+          "onTime": true,
+          "source": "manual",
+          "createdAt": "2025-08-11T08:04:00Z"
+        },
+        {
+          "id": "evt_0001",
+          "kind": "SATISFIED",
+          "occurredAt": "2024-08-20T07:41:00Z",
+          "onTime": false,
+          "source": "encounter",
+          "createdAt": "2024-08-20T07:41:00Z"
+        }
+      ],
+      "meta": { "total": 3, "limit": 50, "offset": 0 }
+    },
+    "error": null,
+    "meta": { "requestId": "req_history_page_1" }
+  },
+
+  "historyEmptyLedger": {
+    "data": {
+      "events": [],
+      "meta": { "total": 0, "limit": 50, "offset": 0 }
+    },
+    "error": null,
+    "meta": { "requestId": "req_history_empty" }
+  }
+}
