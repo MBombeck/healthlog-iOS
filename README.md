@@ -40,13 +40,10 @@ Every reading you log on iOS lands in the same Postgres your web UI reads. The i
 
 ## Getting the app
 
-There are three ways in, and they carry the same code:
+There are two ways in, and they carry the same code:
 
 1. **Build from source** — this repository, instructions below. Free, no account needed beyond what Apple requires for device installs.
 2. **TestFlight** — the newest build, always free: [testflight.apple.com/join/bucuTBpa](https://testflight.apple.com/join/bucuTBpa).
-3. **App Store** — the stable release, for a very small price.
-
-About that price: it exists solely to recoup Apple's yearly developer fee — this project is not trying to make money. The newest version is always on TestFlight for free anyway. And if the App Store price is a problem for you, that's completely fine — open an [issue](https://github.com/MBombeck/healthlog-iOS/issues) or reach out via [healthlog.dev](https://healthlog.dev/) and you'll get a TestFlight invite.
 
 ## Try it in two minutes
 
@@ -67,7 +64,7 @@ About that price: it exists solely to recoup Apple's yearly developer fee — th
 - **Doctor-report export.** A FHIR-flavoured PDF bundle for your physician, based on the LOINC mappings reviewed in the server's clinician surface.
 - **Standalone mode.** No server yet? The app can run purely on-device and sync to your own instance later.
 
-German is the primary language; English is fully supported. The [CHANGELOG](CHANGELOG.md) tracks releases.
+English is the primary language; German is fully supported. The [CHANGELOG](CHANGELOG.md) tracks releases.
 
 ## What syncs from HealthKit
 
@@ -183,7 +180,7 @@ If you find a **security issue**, please disclose responsibly via the [server pr
 
 ## License
 
-HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) — the same license as the [server project](https://github.com/MBombeck/HealthLog). It is free to use, build, and modify for noncommercial purposes; commercial use requires a separate agreement. (The paid App Store listing is the copyright holder distributing his own work — the license restricts what *others* may do with the source, not that.)
+HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) — the same license as the [server project](https://github.com/MBombeck/HealthLog). It is free to use, build, and modify for noncommercial purposes; commercial use requires a separate agreement.
 
 ---
 
