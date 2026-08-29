@@ -13,7 +13,9 @@ import SwiftUI
 ///      never squeezed by a trailing sibling (operator b227: "Überschrift gehört
 ///      über den Wert, nicht daneben");
 ///   2. one row pairing the muted top-signal text with the trailing health-score
-///      ring lockup (a null score paints an honest provisional face); the ring is
+///      ring lockup — rendered ONLY when the digest carries a score
+///      (25-02 / E-2026-08-29 #2: zero available inputs remove the ring
+///      entirely; the former en-dash provisional face is gone); the ring is
 ///      a door into Insights;
 ///   3. an optional muted freshness note when `sleepPending`;
 ///   4. the bounded 0–3 "worth a look" rail of priority cards, or — when the day
@@ -219,17 +221,38 @@ struct TodayHeroCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(alignment: .center, spacing: HLSpace.lg) {
-                if let signal = digest.topSignal, !signal.headline.isEmpty {
-                    Text(verbatim: topSignalText(signal))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            // 25-02 (E-2026-08-29 #2) — the row exists only when it has
+            // something to carry: the signal text, the ring, or both. With
+            // zero available inputs (no score) and no signal there is no
+            // half-empty band reserving space.
+            if digest.topSignal?.headline.isEmpty == false || Self.availableScore(digest) != nil {
+                HStack(alignment: .center, spacing: HLSpace.lg) {
+                    if let signal = digest.topSignal, !signal.headline.isEmpty {
+                        Text(verbatim: topSignalText(signal))
+                            .font(.hlSubhead)
+                            .foregroundStyle(HLText.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: HLSpace.sm)
+                    if let score = Self.availableScore(digest) {
+                        ringLockup(score: score)
+                    }
                 }
-                Spacer(minLength: HLSpace.sm)
-                ringLockup
             }
         }
+    }
+
+    /// **25-02 (E-2026-08-29 #2) — the availability gate.** The score itself
+    /// is SERVER-computed — `Math.round(mean(eligible pillars))` over the
+    /// composition the health-score-config route resolves — and iOS never
+    /// recomputes or reweights. What the client owns is availability: a
+    /// digest without a score means zero available inputs, and the ring
+    /// disappears from the dashboard entirely — no empty state, no
+    /// explainer, no provisional face. Any present score renders unchanged,
+    /// however narrow its backing subset: a one-input score is that input's
+    /// score, by decision.
+    static func availableScore(_ digest: DailyDigest) -> DailyDigest.Score? {
+        digest.score
     }
 
     /// **Wave 2 / 2.3.** The score ring now renders with the EXACT Insights
@@ -239,42 +262,36 @@ struct TodayHeroCard: View {
     /// **Fully monochrome** — the band-derived cap dot is gone (operator b227:
     /// "keine Farbe"); the band still reaches VoiceOver via `ringAccessibilityLabel`,
     /// so no meaning was ever carried by colour alone (HIG color.md).
-    private var ringLockup: some View {
+    ///
+    /// **25-02 (E-2026-08-29 #3) — the painted „Eigene Auswahl" mark is
+    /// GONE.** It overloaded the tile visually (operator decision). The mark
+    /// was `accessibilityHidden` here from the day it shipped, so nothing
+    /// spoken was removed: the provenance statement still rides the ring's
+    /// accessibility label (see `ringAccessibilityLabel`), and the full
+    /// explanation keeps living on the detail surfaces.
+    private func ringLockup(score: DailyDigest.Score) -> some View {
         let appearance = InsightsTileStyle.prismUniform.appearance(signal: nil)
+        let fraction = max(0, min(1, score.value / 100))
         return Button(action: onRingTap) {
             VStack(spacing: HLSpace.sm) {
                 HLScoreRing(
-                    fraction: ringFraction,
-                    value: ringValue,
+                    fraction: fraction,
+                    value: String(Int(score.value.rounded())),
                     signal: appearance.ringSignal,
                     fillColor: appearance.ringFill,
                     trackColor: appearance.ringTrack,
                     centreValueColor: appearance.ringValueColor,
                     centreLabelColor: appearance.ringLabelColor,
-                    accessibilityLabel: ringAccessibilityLabel
+                    accessibilityLabel: ringAccessibilityLabel(score: score)
                 )
                 .frame(width: Self.ringDiameter, height: Self.ringDiameter)
-                .insightsRingEffect(appearance.ringEffect, fraction: ringFraction, isHero: true)
+                .insightsRingEffect(appearance.ringEffect, fraction: fraction, isHero: true)
                 .modifier(WellnessRingShadow(active: appearance.ringShadowActive))
 
                 Text(verbatim: TodayHeroCopy.scoreLabel)
                     .font(.hlSubhead.weight(.medium))
                     .foregroundStyle(appearance.labelColor)
                     .multilineTextAlignment(.center)
-                // v1.35.0 (GH #83) — the hero shows the number and a one-word
-                // label, so it is the surface that owes the answer to "made of
-                // what?". Server-resolved provenance mark (R2, Herkunft): two
-                // words under the label, no explanation and no instruction. The
-                // sentence about what a chosen composition means for comparing
-                // scores lives on the detail surface, where there is room.
-                if digest.score?.runsOnChosenComposition == true {
-                    Text(verbatim: HealthScorePresentation.chosenCompositionMark)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .accessibilityHidden(true)
-                }
             }
         }
         .buttonStyle(.plain)
@@ -340,29 +357,21 @@ struct TodayHeroCard: View {
 
     // MARK: Derivations (render-only)
 
-    private var ringFraction: Double {
-        guard let score = digest.score else { return 0 }
-        return max(0, min(1, score.value / 100))
-    }
-
-    /// The centre number, or an honest em-dash provisional face when null.
-    private var ringValue: String {
-        guard let score = digest.score else { return "–" }
-        return String(Int(score.value.rounded()))
-    }
-
     // Wave 2 / 2.3 — `ringSignal` (band → green/yellow/red cap dot) was DELETED.
     // The hero ring is fully monochrome now, matching the Insights rings; the
     // band survives for VoiceOver only, via `ringAccessibilityLabel`.
+    //
+    // 25-02 (E-2026-08-29 #2) — the nil-score branches (`ringFraction` 0,
+    // `ringValue` en-dash, the "provisional" VoiceOver face) were DELETED with
+    // the provisional face itself: the ring renders only through
+    // `availableScore`, so every derivation now takes the score it renders.
 
-    private var ringAccessibilityLabel: String {
-        guard let score = digest.score else {
-            return "\(TodayHeroCopy.scoreLabel): \(TodayHeroCopy.provisionalA11y)"
-        }
+    /// v1.35.0 — the provenance statement is spoken, not painted: one element,
+    /// one statement, read in context with the number it qualifies. 25-02 made
+    /// this the ONLY carrier (the painted mark is gone), so this label is now
+    /// the accessibility function the caption used to duplicate.
+    private func ringAccessibilityLabel(score: DailyDigest.Score) -> String {
         let base = "\(TodayHeroCopy.scoreLabel) \(Int(score.value.rounded())) of 100"
-        // v1.35.0 — the painted provenance mark is `accessibilityHidden`, so it
-        // rides here instead: one element, one statement, read in context with
-        // the number it qualifies rather than as a loose noun phrase after it.
         guard score.runsOnChosenComposition else { return base }
         return "\(base). \(HealthScorePresentation.chosenCompositionA11y)"
     }

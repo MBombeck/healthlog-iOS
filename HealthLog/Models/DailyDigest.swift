@@ -28,8 +28,9 @@ public struct DailyDigest: Codable, Sendable, Equatable {
     public let phase: String
     /// Honest-degradation flag: sleep tracked but last night not yet recorded.
     public let sleepPending: Bool
-    /// Health score + band + week-over-week delta; `nil` when none (the ring
-    /// then paints its honest provisional face, never a zero).
+    /// Health score + band + week-over-week delta; `nil` when none — zero
+    /// available inputs. The hero then renders NO ring at all (25-02,
+    /// E-2026-08-29 #2: no provisional face, no explainer), never a zero.
     public let score: Score?
     /// The clinical-priority top signal, lifted from the cached briefing.
     public let topSignal: TopSignal?

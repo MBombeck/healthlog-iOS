@@ -9,10 +9,16 @@ import Observation
 /// flag is per-install: it does not survive a reinstall and does not sync across
 /// devices, so a returning user could be dropped back into the setup wizard on a
 /// fresh device even though they had already completed it elsewhere. This store
-/// reconciles the local signal against the server-authoritative
-/// `onboardingTourCompleted` flag (`GET /api/auth/me`), and stamps the server on
-/// finish (`POST /api/onboarding/tour`). Progress now survives reinstall, syncs
-/// across devices, and is shared with the web onboarding tour.
+/// reconciles the local signal against the server-owned setup state off
+/// `GET /api/auth/me`, and stamps the server on finish
+/// (`POST /api/onboarding/tour`). Progress now survives reinstall, syncs
+/// across devices, and is shared with the web.
+///
+/// **25-03 (GH #1) — what "completed" is derived from.** The tour marker
+/// alone answered wrongly for accounts set up in the web UI (the web setup
+/// wizard writes `onboardingCompletedAt`, not the tour marker), so the
+/// classification now derives completion from what exists on the account —
+/// see ``classifySetupCompletion(_:)``.
 ///
 /// **Phase 08 Wave 1 — what changed, and why.** Two properties collapsed three
 /// different worlds into one. `refresh()` answered a network failure with the
@@ -167,11 +173,45 @@ public final class OnboardingTourStore {
     /// failure than the line in a log the previous `catch` did not even write.
     private func resolveCompletion() async -> ServerCompletion {
         do {
-            guard let completed = try await repo.fetchCompleted() else { return .endpointAbsent }
-            return completed ? .completed : .incomplete
+            return try await Self.classifySetupCompletion(repo.fetchSetupState())
         } catch {
             return .unavailable
         }
+    }
+
+    /// **25-03 (GH #1) — completeness derived from what exists on the
+    /// account, with the marker as a fast path and never the sole source.**
+    ///
+    /// The tour marker is stamped by this app's wizard and by the web's
+    /// coachmark tour — but not by the web *setup wizard*, so a profile
+    /// created in the web UI carried a `false` marker over a fully-set-up
+    /// account, and rule 1 of the resolver ("a server answer wins outright")
+    /// then correctly routed that wrong answer into the full flow. The
+    /// public reply on issue #1 promised the check would be derived from
+    /// what actually exists on the account; this is that derivation, and it
+    /// rides the same `/me` response the lookup always fetched — no second
+    /// request, no second failure mode.
+    ///
+    /// Three rules, in order:
+    ///
+    /// 1. **A true marker completes.** Unchanged fast path.
+    /// 2. **Account evidence completes.** The web wizard's own completion
+    ///    record (`onboardingCompletedAt`) or profile substance the setup
+    ///    flow would otherwise ask for again. Evidence only ever *widens*
+    ///    toward `completed`: it cannot demote a marker-true account and it
+    ///    cannot turn a non-answer into an answer — a thrown lookup never
+    ///    reaches this function.
+    /// 3. **`incomplete` requires the row to say so and show nothing.** The
+    ///    request succeeded, the marker field is present and `false`, and no
+    ///    evidence stands against it — the one state that is genuinely a new
+    ///    account. A row with no marker field and no evidence stays
+    ///    `endpointAbsent` (pre-v1.18.6), where the same-account cache keeps
+    ///    its established standing.
+    nonisolated static func classifySetupCompletion(_ row: AuthMeOnboarding) -> ServerCompletion {
+        if row.onboardingTourCompleted == true { return .completed }
+        if row.hasSetupCompletionRecord || row.hasProfileSubstance { return .completed }
+        if row.onboardingTourCompleted == false { return .incomplete }
+        return .endpointAbsent
     }
 
     /// Record one settled answer: persist what the server said, re-read the

@@ -152,6 +152,16 @@ struct MedicationsScreen: View {
                                 }
                             )
                         }
+
+                        // 25-02 (E-2026-08-29 #1) — the global injection-site
+                        // deny-list door, moved here from Einstellungen →
+                        // Datenschutz und Sicherheit. It governs exactly the
+                        // intake pickers of THIS tab's injection meds, so its
+                        // management lives with them — and only for a person
+                        // it can do anything for (at least one injection med).
+                        if Self.showsInjectionSitesDoor(medications: store.medications) {
+                            injectionSitesCard
+                        }
                     }
 
                     // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
@@ -432,6 +442,34 @@ struct MedicationsScreen: View {
             return
         }
         Task { await store.markIntakeQuickUndoable(intakeId: intakeId, status: status) }
+    }
+
+    // MARK: - Injection sites (25-02, E-2026-08-29 #1)
+
+    /// The user-level global deny-list editor's door, moved out of
+    /// Einstellungen → Datenschutz und Sicherheit. The list it edits governs
+    /// exactly this tab's injection intake pickers (deny always wins, server
+    /// v1.8.5), so its management lives with the medications — same card
+    /// shape, same catalogue keys, same destination screen as before the move.
+    private var injectionSitesCard: some View {
+        HLSettingsCard(
+            icon: "circle.grid.cross",
+            title: "Injection sites"
+        ) {
+            HLSettingsActionRow(title: "Manage sites", presents: .push) {
+                SettingsInjectionSitesScreen()
+            }
+            .accessibilityIdentifier("medications.injectionSitesRow")
+        }
+    }
+
+    /// The door renders only for a person the deny-list can do anything for:
+    /// somebody with at least one injection medication (active or archived —
+    /// an archived pen can be unarchived, and its site exclusions should be
+    /// editable before that). Zero injection meds → no door, no explainer —
+    /// the same calm rule the score tile follows.
+    static func showsInjectionSitesDoor(medications: [Medication]) -> Bool {
+        medications.contains { $0.isInjection }
     }
 }
 

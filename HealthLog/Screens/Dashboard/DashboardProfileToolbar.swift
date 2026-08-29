@@ -17,11 +17,12 @@ import SwiftUI
 /// destination (no toolbar item is emitted, removing the duplicate-
 /// avatar artefact the operator screenshot caught).
 extension View {
-    /// **v0.5.4.1.** Attach the profile-editor presentation to the host
-    /// `NavigationStack`. The caller's view layer renders the avatar wherever
-    /// it likes (inline header, list row, etc.); this modifier just owns the
-    /// typed-binding-driven presentation. SET-6: presents `EditProfileSheet`
-    /// as a sheet (modal edit transaction) rather than a navigation push.
+    /// **v0.5.4.1 → 25-02.** Attach the avatar's account presentation to the
+    /// host `NavigationStack`. The caller's view layer renders the avatar
+    /// wherever it likes (inline header, list row, etc.); this modifier just
+    /// owns the typed-binding-driven presentation. 25-02 (E-2026-08-29 #4):
+    /// the sheet presents Konto (`SettingsAccountScreen`); the profile editor
+    /// stays one hop inside it, as under Einstellungen.
     func dashboardProfileDestination(isPresented: Binding<Bool>) -> some View {
         modifier(DashboardProfileDestinationModifier(isPresented: isPresented))
     }
@@ -41,22 +42,41 @@ private struct DashboardProfileDestinationModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // v0.11 IA — the Home avatar deep-links straight to the profile
-            // EDITOR (`EditProfileScreen`). The operator reads the top-right
-            // avatar as "this is me — tap to edit my profile", so the
-            // intermediate Settings→Account hub (which only forwarded to the
-            // same editor via a card row) is one hop too many. The editor takes
-            // no parameters — it resolves `SettingsStore` + `AvatarStore` from
-            // the environment, both already in scope at the Dashboard
-            // NavigationStack. Sign-out and delete-account moved onto
-            // `SettingsAccountScreen`, so the avatar shortcut no longer needs
-            // to surface them.
-            //
-            // SET-6 (AUDIT-QOL-UX §5) — present as a sheet (modal edit
-            // transaction) via `EditProfileSheet`, matching every other edit
-            // surface; was a `navigationDestination` push.
+            // 25-02 (E-2026-08-29 #4) — the avatar opens KONTO, the account
+            // area exactly as it appears under Einstellungen → Konto. v0.11 IA
+            // had deep-linked the avatar straight to the profile editor; the
+            // operator retargeted it: the avatar stands for the account, and
+            // the editor stays reachable inside Konto (its Profil card, the
+            // same one hop it is under Einstellungen). The presentation stays
+            // this ONE sheet — never a push — so the Phase-06 census does not
+            // move; only the sheet's content changed.
             .sheet(isPresented: $isPresented) {
-                EditProfileSheet()
+                DashboardAccountSheet()
             }
+    }
+}
+
+/// **25-02 (E-2026-08-29 #4) — the avatar sheet's content: Konto.**
+///
+/// `SettingsAccountScreen` in its own `NavigationStack`, so the account cards
+/// can push (Security, Sessions) and present (Edit Profile, Reset, Delete)
+/// exactly as they do under Einstellungen → Konto — one surface, two doors.
+/// Same `.form` sheet height the profile editor used, and the same leading
+/// Done idiom as `EditProfileSheet`, so the retarget changes the destination,
+/// not the presentation grammar.
+private struct DashboardAccountSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SettingsAccountScreen()
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(String(localized: "Done")) { dismiss() }
+                            .accessibilityIdentifier("dashboard.accountSheet.done")
+                    }
+                }
+        }
+        .hlSheetPresentation(.form)
     }
 }

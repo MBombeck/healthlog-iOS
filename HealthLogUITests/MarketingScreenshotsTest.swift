@@ -28,36 +28,9 @@ final class MarketingScreenshotsTest: XCTestCase {
     }
 
     func test_capture_marketing_hero_screenshots() {
-        let app = XCUIApplication()
-        // W-HERMETIC-E2E (v0152) — network-free hermetic boot with deterministic
-        // English locale for the marketing captures. Fixture data (greeting +
-        // tiles) renders the hero surfaces without the live demo tenant.
-        let greeting = app.launchHermeticAndWaitForDashboard(
-            extraArguments: [
-                "-AppleLanguages", "(en)",
-                "-AppleLocale", "en_US"
-            ],
-            timeout: 120
-        )
-        // Belt-and-braces — the ack fixture + flag already keep the gate down,
-        // but dismiss it if it somehow surfaces on a reused sim.
-        dismissDisclaimerAck(app: app)
-        XCTAssertTrue(
-            greeting.waitForExistence(timeout: 120),
-            "Dashboard greeting did not appear under hermetic boot"
-        )
+        let app = bootMarketingApp()
 
-        // --- 01 Dashboard (health-score ring + tiles, above the fold) ---
-        // Dismiss the "Connect Apple Health" banner first — the demo tenant has
-        // no local HealthKit grant, so it always shows; "Not now" removes it for
-        // a calmer hero shot (and prevents a later stray tap on its Connect CTA
-        // from raising the modal system auth sheet).
-        dismissDisclaimerAck(app: app)
-        dismissAIConsentSheet(app: app)
-        let bannerDismiss = app.buttons["healthkitConnectBanner.dismissButton"]
-        if bannerDismiss.waitForExistence(timeout: 6), bannerDismiss.isHittable {
-            bannerDismiss.tap()
-        }
+        // --- 01 Dashboard (metric tiles, above the fold) ---
         // Let the loading skeleton resolve + the sync footer settle before the
         // hero capture (the first paint shows "Preparing your data…").
         settle(12)
@@ -118,8 +91,143 @@ final class MarketingScreenshotsTest: XCTestCase {
         settle(5)
         capture(name: "08-medications")
 
-        // --- 09 Coach (conversation / ask-coach surface) ---
+        // --- 09 Unified sharing (Phase 18's one sharing surface) ---
+        // Reached the way a user reaches it: More tab → header share glyph
+        // (`more.toolbar.share`). The 18-03 fixtures serve a real `share.leaves`
+        // vocabulary, so the what/period/form cards render populated. Captured
+        // BEFORE the coach shot because that one mutates AI-consent state.
+        captureUnifiedSharing(app: app)
+
+        // --- 10 Coach (conversation / ask-coach surface) ---
         captureCoach(app: app)
+    }
+
+    /// Navigates More → share glyph and captures the unified sharing screen.
+    private func captureUnifiedSharing(app: XCUIApplication) {
+        dismissSystemHealthSheet()
+        let moreTab = app.buttons["More"]
+        guard moreTab.waitForExistence(timeout: 10) else {
+            logSkip("More tab not reachable — unified sharing not captured")
+            return
+        }
+        moreTab.tap()
+        settle(2)
+        let shareGlyph = app.buttons["more.toolbar.share"]
+        guard shareGlyph.waitForExistence(timeout: 10), shareGlyph.isHittable else {
+            logSkip("More header share glyph not reachable — unified sharing not captured")
+            return
+        }
+        shareGlyph.tap()
+        // The produce CTA is the last always-rendered card — once it exists the
+        // screen is fully hydrated.
+        let produce = app.descendants(matching: .any)["sharing.unified.produce"]
+        if produce.waitForExistence(timeout: 15) {
+            // "0 of 4 selected" + its nothing-selected hint is the honest empty
+            // default, but a hero shot should show the surface doing its job —
+            // select the whole fixture vocabulary so the card reads "4 of 4".
+            let selectAll = app.buttons["Select everything"]
+            if selectAll.waitForExistence(timeout: 4), selectAll.isHittable {
+                selectAll.tap()
+                settle(2)
+            }
+            settle(3)
+            capture(name: "09-sharing-unified")
+        } else {
+            logSkip("Unified sharing screen did not hydrate — not captured")
+        }
+    }
+
+    // MARK: - Boot
+
+    /// W-HERMETIC-E2E (v0152) — network-free hermetic boot with deterministic
+    /// English locale for the marketing captures. Fixture data (greeting +
+    /// tiles) renders the hero surfaces without the live demo tenant.
+    ///
+    /// D-12-12-B — the "Connect Apple Health" banner cannot be dismissed by
+    /// identifier: `.accessibilityElement(children: .combine)` merges the
+    /// banner's two buttons into one node, so the old
+    /// `healthkitConnectBanner.dismissButton` tap silently no-oped and the
+    /// hero shot carried the banner. Instead of tapping, keep the banner from
+    /// mounting at all: `hl.healthkit.requestedAt.hermetic-user` in the
+    /// ARGUMENT domain (which the hermetic seed's `clearPersisted` cannot
+    /// remove — same seam as `-hl.settings.cycleTracking.optIn`, see CU-05)
+    /// makes `HKReadinessStore.isConnected` true, and
+    /// `shouldShowDashboardBanner` refuses on `isConnected` before anything
+    /// else. `workoutReadMigrated` must ride along: with `requestedAt` set the
+    /// W-B182 returning-user migration would otherwise raise the REAL system
+    /// HealthKit sheet on launch.
+    ///
+    /// `-uitest-phase8 insightsAccessibility` serves the derived wellness batch
+    /// (08-11's four ring scores) so the Insights overview renders a populated
+    /// score grid; every other route falls through to the default hermetic
+    /// table unchanged.
+    ///
+    /// `-uitest-marketing` (second pass) — the marketing-only fixture overlay
+    /// (`MarketingFixtures`): three synthetic medications + today's dose rows
+    /// so the compliance ring and the Meds list render populated, and an
+    /// empty greeting salutation so the hero shot reads a bare "Hi" instead
+    /// of "Hermetic Tester". No other test passes the flag, so the shared
+    /// hermetic world (which the Phase-8 accessibility audit pins) is
+    /// untouched.
+    ///
+    /// `-uitest-marketing-avatar <path>` (third pass) — hands the overlay the
+    /// absolute path of `marketing-avatar.png` (a bundled resource of THIS
+    /// test target: a synthetic, AI-generated portrait — no real person), so
+    /// the overlay's `/api/user/avatar/…` route can serve real PNG bytes and
+    /// the hero shot's header avatar renders a photo instead of the bare "?"
+    /// monogram. The app process reads the runner-bundle path directly — the
+    /// simulator shares the host filesystem, the same seam `capture(name:)`
+    /// uses to write `/tmp/marketing-shots/`. The greeting stays the bare
+    /// "Hi": it reads the summary's (empty) salutation, an independent path
+    /// from the avatar.
+    ///
+    /// Marketing shots ship in DARK mode (operator spec, second pass): the
+    /// app is dark-first — `SettingsStore` defaults to `.dark` and re-asserts
+    /// dark once per install (v0.14.7) — so the captures let the app be what
+    /// it is and set no appearance override at all.
+    private func bootMarketingApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        var extraArguments = [
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+            "-uitest-phase8", "insightsAccessibility",
+            "-uitest-marketing",
+            "-hl.healthkit.requestedAt.hermetic-user", "true",
+            "-hl.healthkit.workoutReadMigrated.hermetic-user", "true"
+        ]
+        // Third pass — the synthetic portrait for the header avatar. Soft by
+        // design: a missing resource logs, the overlay answers 404, and the
+        // avatar honestly falls back to the initials monogram.
+        if let avatarPath = Bundle(for: Self.self).path(forResource: "marketing-avatar", ofType: "png") {
+            extraArguments += ["-uitest-marketing-avatar", avatarPath]
+        } else {
+            logSkip("marketing-avatar.png not bundled — hero avatar falls back to the monogram")
+        }
+        let greeting = app.launchHermeticAndWaitForDashboard(
+            extraArguments: extraArguments,
+            timeout: 120
+        )
+        // Belt-and-braces — the ack fixture + flag already keep the gate down,
+        // but dismiss it if it somehow surfaces on a reused sim.
+        dismissDisclaimerAck(app: app)
+        XCTAssertTrue(
+            greeting.waitForExistence(timeout: 120),
+            "Dashboard greeting did not appear under hermetic boot"
+        )
+        dismissDisclaimerAck(app: app)
+        dismissAIConsentSheet(app: app)
+        // D-12-12-B — verify the launch-argument suppression actually held.
+        // The banner is ONE merged accessibility node whose identifier is
+        // `…connectButton-…dismissButton`-shaped, so match on the shared prefix
+        // (the same robust query 12-12's audit precondition uses). Soft by
+        // design: a loud attachment, never an abort of the capture run.
+        let bannerNode = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier CONTAINS 'healthkitConnectBanner'"))
+            .firstMatch
+        if bannerNode.waitForExistence(timeout: 4) {
+            logSkip("HealthKit connect banner is STILL PRESENT — argument-domain suppression failed; hero shots carry the banner")
+        }
+        return app
     }
 
     // MARK: - Surface helpers
@@ -159,7 +267,7 @@ final class MarketingScreenshotsTest: XCTestCase {
         if coachButton.waitForExistence(timeout: 4), coachButton.isHittable {
             coachButton.tap()
             settle(4)
-            capture(name: "09-coach")
+            capture(name: "10-coach")
             return
         }
         openDeepLink("healthlog://coach")
@@ -170,7 +278,7 @@ final class MarketingScreenshotsTest: XCTestCase {
             .matching(NSPredicate(format: "identifier BEGINSWITH 'AskCoach'"))
             .firstMatch
         if coachSurface.waitForExistence(timeout: 5) {
-            capture(name: "09-coach")
+            capture(name: "10-coach")
         } else {
             logSkip("Coach surface not reachable (AI likely unconfigured on demo tenant)")
         }

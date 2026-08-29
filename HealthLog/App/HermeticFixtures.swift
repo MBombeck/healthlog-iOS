@@ -16,6 +16,17 @@
             method: String,
             query: [URLQueryItem] = []
         ) -> (status: Int, body: Data) {
+            // 12-12 second pass — the marketing-capture overlay outranks
+            // everything, and exists only while `-uitest-marketing` is on the
+            // command line (only `MarketingScreenshotsTest` passes it). It
+            // answers a handful of paths (medications, today-intakes, the
+            // dashboard summary) and returns `nil` for everything else, so
+            // the scenario + default tables below are reached unchanged.
+            if HermeticUITestSupport.isMarketingOverlayActive,
+               let marketing = MarketingFixtures.response(forPath: path, method: method)
+            {
+                return marketing
+            }
             // Phase 08 Wave 0 — the scenario-keyed answers come first and only
             // exist while `-uitest-phase8 <scenario>` is on the command line.
             // Outside a Phase-8 UI test this returns `nil` on every path and the
@@ -142,7 +153,17 @@
         /// Heuristic empty body: plural / list-shaped routes decode an empty
         /// array; singular routes decode an empty object. Both are valid empty
         /// states for the corresponding decoders.
+        ///
+        /// One named exception, because "valid" is the whole promise of this
+        /// helper: `/api/analytics?slice=summaries` decodes
+        /// `MeasurementAvailabilityDTO`, whose `summaries` key is REQUIRED — the
+        /// bare `{}` default was a decoder trap, and every hermetic boot's
+        /// Insights strip wore 22-01's "Sections could not be loaded" line for a
+        /// read that never genuinely failed. `{"summaries":{}}` is the honest
+        /// empty answer a measurement-less account gets: availability resolves,
+        /// and a resolved-empty read says nothing (statement nil).
         private static func emptyArrayOrObject(forPath path: String) -> String {
+            if path.hasPrefix("/api/analytics") { return #"{"summaries":{}}"# }
             let listSuffixes = ["all", "cycles", "calendar", "day-logs", "cards", "episodes", "achievements", "passkeys", "devices"]
             if listSuffixes.contains(where: { path.hasSuffix($0) }) { return "[]" }
             return "{}"
@@ -289,46 +310,55 @@
         /// steps tile with a day-cumulative, plus a sleep tile. The German tile
         /// labels resolve from `MetricKind` localization in-app; the values here
         /// are the load-bearing assertions for `WalkthroughDashboardTest`.
-        private static let dashboardSummaryJSON = """
-        {
-          "greeting": { "salutation": "Hermetic Tester", "date": "2026-06-16T08:00:00.000Z" },
-          "compliance": { "scheduledToday": 2, "takenToday": 1 },
-          "highlightInsight": null,
-          "metrics": [
+        ///
+        /// The salutation is a parameter (12-12 second pass) so the marketing
+        /// overlay can serve the SAME summary with an empty one —
+        /// `DashboardHeader` then renders its bare "Hi" fallback — without
+        /// duplicating the metric table this default is asserted against.
+        private static let dashboardSummaryJSON = dashboardSummaryJSON(salutation: "Hermetic Tester")
+
+        static func dashboardSummaryJSON(salutation: String) -> String {
+            """
             {
-              "id": "weight", "kind": "weight", "title": "Gewicht",
-              "latestValue": 72.4, "secondaryValue": null, "unit": "kg",
-              "trend": "down", "sparkline": [73.1, 72.9, 72.6, 72.5, 72.4],
-              "updatedAt": "2026-06-16T07:00:00.000Z"
-            },
-            {
-              "id": "bloodPressure", "kind": "bloodPressure", "title": "Blutdruck",
-              "latestValue": 122, "secondaryValue": 78, "unit": "mmHg",
-              "trend": "flat", "sparkline": [120, 124, 121, 123, 122],
-              "updatedAt": "2026-06-16T07:00:00.000Z"
-            },
-            {
-              "id": "pulse", "kind": "pulse", "title": "Puls",
-              "latestValue": 64, "secondaryValue": null, "unit": "bpm",
-              "trend": "flat", "sparkline": [66, 65, 64, 63, 64],
-              "updatedAt": "2026-06-16T07:00:00.000Z"
-            },
-            {
-              "id": "steps", "kind": "steps", "title": "Schritte",
-              "latestValue": 8421, "secondaryValue": null, "unit": "steps",
-              "trend": "up", "sparkline": [6200, 7100, 8000, 8421],
-              "updatedAt": "2026-06-16T07:00:00.000Z"
-            },
-            {
-              "id": "sleep", "kind": "sleep", "title": "Schlaf",
-              "latestValue": 7.2, "secondaryValue": null, "unit": "h",
-              "trend": "flat", "sparkline": [6.8, 7.0, 7.4, 7.2],
-              "updatedAt": "2026-06-16T07:00:00.000Z"
+              "greeting": { "salutation": "\(salutation)", "date": "2026-06-16T08:00:00.000Z" },
+              "compliance": { "scheduledToday": 2, "takenToday": 1 },
+              "highlightInsight": null,
+              "metrics": [
+                {
+                  "id": "weight", "kind": "weight", "title": "Gewicht",
+                  "latestValue": 72.4, "secondaryValue": null, "unit": "kg",
+                  "trend": "down", "sparkline": [73.1, 72.9, 72.6, 72.5, 72.4],
+                  "updatedAt": "2026-06-16T07:00:00.000Z"
+                },
+                {
+                  "id": "bloodPressure", "kind": "bloodPressure", "title": "Blutdruck",
+                  "latestValue": 122, "secondaryValue": 78, "unit": "mmHg",
+                  "trend": "flat", "sparkline": [120, 124, 121, 123, 122],
+                  "updatedAt": "2026-06-16T07:00:00.000Z"
+                },
+                {
+                  "id": "pulse", "kind": "pulse", "title": "Puls",
+                  "latestValue": 64, "secondaryValue": null, "unit": "bpm",
+                  "trend": "flat", "sparkline": [66, 65, 64, 63, 64],
+                  "updatedAt": "2026-06-16T07:00:00.000Z"
+                },
+                {
+                  "id": "steps", "kind": "steps", "title": "Schritte",
+                  "latestValue": 8421, "secondaryValue": null, "unit": "steps",
+                  "trend": "up", "sparkline": [6200, 7100, 8000, 8421],
+                  "updatedAt": "2026-06-16T07:00:00.000Z"
+                },
+                {
+                  "id": "sleep", "kind": "sleep", "title": "Schlaf",
+                  "latestValue": 7.2, "secondaryValue": null, "unit": "h",
+                  "trend": "flat", "sparkline": [6.8, 7.0, 7.4, 7.2],
+                  "updatedAt": "2026-06-16T07:00:00.000Z"
+                }
+              ],
+              "lastUpdated": "2026-06-16T08:00:00.000Z"
             }
-          ],
-          "lastUpdated": "2026-06-16T08:00:00.000Z"
+            """
         }
-        """
 
         /// `/api/measurements` — a small deterministic set so the per-metric
         /// detail surfaces + sparklines hydrate without network. Empty-valid for

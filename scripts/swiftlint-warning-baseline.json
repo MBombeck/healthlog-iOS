@@ -237,7 +237,7 @@
     },
     {
       "file": "HealthLog/Screens/AboutMe/AboutMeScreen.swift",
-      "line": 269,
+      "line": 278,
       "character": 17,
       "rule_id": "hl_no_handmade_chevron",
       "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
@@ -445,7 +445,7 @@
     },
     {
       "file": "HealthLog/Screens/Dashboard/HealthScoreTile.swift",
-      "line": 374,
+      "line": 362,
       "character": 17,
       "rule_id": "hl_no_system_buttonstyle",
       "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
@@ -1117,7 +1117,7 @@
     },
     {
       "file": "HealthLog/Screens/Settings/Sub/SettingsInjectionSitesScreen.swift",
-      "line": 62,
+      "line": 64,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",

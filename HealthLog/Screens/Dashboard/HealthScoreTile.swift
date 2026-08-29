@@ -136,29 +136,17 @@ struct HealthScoreLoaded: View {
         .accessibilityLabel(accessibilityLabel)
     }
 
-    /// **The caption line, plus the provenance mark when the composition was
-    /// chosen (v1.35.0 / GH #83).**
-    ///
-    /// A 82 out of five self-chosen pillars is not the same statement as a 82
-    /// out of eight, and this tile shows the number with nothing else to say so.
-    /// The mark is Herkunft (R2) and nothing more — three words beside the
-    /// caption, no explanation, no instruction. Server-resolved: it appears
-    /// only when the server said `configured: true`.
+    /// **The caption line (25-02 / E-2026-08-29 #3 — the painted provenance
+    /// mark is GONE).** v1.35.0 had painted „Eigene Auswahl" beside the
+    /// caption when the composition was chosen; the operator judged it visual
+    /// overload on the tile. The statement itself was never lost: it still
+    /// rides the tile's accessibility label (`chosenCompositionA11y`) and the
+    /// detail sheet keeps the full explanation.
     private var captionRow: some View {
         HStack(spacing: HLSpace.xs) {
             Text(String(localized: "Health Score"))
                 .font(.hlCaption)
                 .foregroundStyle(HLText.secondary)
-            if score.runsOnChosenComposition {
-                Text(verbatim: "·")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
-                Text(verbatim: HealthScorePresentation.chosenCompositionMark)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .lineLimit(1)
-            }
         }
     }
 

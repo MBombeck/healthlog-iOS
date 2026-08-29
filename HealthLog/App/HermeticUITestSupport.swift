@@ -85,6 +85,27 @@
 
         static let phase8Argument = "-uitest-phase8"
 
+        /// **README screenshot refresh (12-12 second pass).** Marketing-only
+        /// fixture overlay for `MarketingScreenshotsTest` — and nothing else.
+        ///
+        /// The shared hermetic table deliberately serves an EMPTY medication
+        /// world (`/api/medications` → `[]`): the Phase-8 accessibility audit
+        /// pins the dashboard states that world produces, and the walkthrough
+        /// tests assert against it. The marketing captures, however, need the
+        /// compliance card and the medications list to show the product doing
+        /// its job. This argument routes a handful of paths through
+        /// ``MarketingFixtures`` — synthetic medications in the public
+        /// mirror's own register, an empty greeting salutation — while every
+        /// other route falls through to the shared table unchanged. No test
+        /// besides `MarketingScreenshotsTest` passes it, so the shared
+        /// fixture world every assertion depends on stays byte-identical.
+        static let marketingOverlayArgument = "-uitest-marketing"
+
+        /// `true` only during a `MarketingScreenshotsTest` capture run.
+        static var isMarketingOverlayActive: Bool {
+            ProcessInfo.processInfo.arguments.contains(marketingOverlayArgument)
+        }
+
         /// **13-04 — the web-handoff outcome, without a browser.**
         ///
         /// `ASWebAuthenticationSession` presents a system sheet out of process.
@@ -285,6 +306,16 @@
         private static func purgePermissionPromptingResidue() {
             UserDefaults.standard.removeObject(forKey: "hl.settings.cycleTracking.optIn")
             HKReadinessStore.clearPersisted(for: seededUserID)
+            // **25-01.** The update-notice card is armed from the install
+            // sentinel, and a reused simulator's container carries one from
+            // every earlier run — so without this line the FIRST hermetic run
+            // on a new build would meet an armed card on the very Dashboard
+            // whose audit subject 12-12 made reproducible, and the pinned
+            // finding set would move. A hermetic boot is deterministic about
+            // the device; the seed records the `disarmed` decision outright
+            // (it runs inside the prologue's override step, BEFORE
+            // `recordLaunch` — which then honours it as first-decision-wins).
+            HealthKitUpdateNotice.disarm()
         }
 
         /// **H3 auth-journey (audit-v0162).** Seed the UNAUTHENTICATED auth-journey
@@ -349,11 +380,24 @@
             )
             let fallbackURL = URL(string: HermeticUITestSupport.seededBaseURL) ?? URL(fileURLWithPath: "/")
             let url = request.url ?? fallbackURL
+            // 12-12 third pass — the marketing overlay's avatar route answers
+            // PNG bytes, so the header must say so. Consulted ONLY while
+            // `-uitest-marketing` is on the command line (only
+            // `MarketingScreenshotsTest` passes it); every other run keeps the
+            // JSON literal below, byte-identical to before.
+            let contentType: String = {
+                if HermeticUITestSupport.isMarketingOverlayActive,
+                   let override = MarketingFixtures.contentType(forPath: path)
+                {
+                    return override
+                }
+                return "application/json"
+            }()
             guard let response = HTTPURLResponse(
                 url: url,
                 statusCode: status,
                 httpVersion: "HTTP/1.1",
-                headerFields: ["Content-Type": "application/json"]
+                headerFields: ["Content-Type": contentType]
             ) else {
                 client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
                 return

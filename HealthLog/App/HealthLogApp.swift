@@ -75,6 +75,14 @@ struct HealthLogApp: App {
             resolveEnvironment: { AppEnvironment.resolve(keychain: $0) }
         )
         let env = prologue.environment
+        // 25-01 (decision E-2026-08-28) — the update-notice arming decision,
+        // taken exactly once per install from the prologue's own ledger.
+        // `.freshInstall` disarms the card forever (a fresh install runs
+        // onboarding and must never see it, even when onboarding is skipped);
+        // the two pre-existing outcomes arm it. Recorded here, in the same
+        // init that ran the guard, so a fresh install's very first launch
+        // writes its disarm before any UI exists.
+        HealthKitUpdateNotice.recordLaunch(outcome: prologue.freshInstall)
 
         #if canImport(AuthenticationServices) && canImport(UIKit)
             let passkey: PasskeyServiceProtocol = PasskeyService()
@@ -404,6 +412,12 @@ struct HealthLogApp: App {
                 // flag so walkthrough tests exercise a true first login on a
                 // reused simulator.
                 UserDefaults.standard.removeObject(forKey: FirstLoginSyncBanner.completedDefaultsKey)
+                // 25-01 — a reused simulator's container carries an install
+                // sentinel from earlier runs, which would arm the update-
+                // notice card on this build's first onboarding walkthrough.
+                // The walkthroughs exercise a true first launch, and a true
+                // first launch never sees the card.
+                HealthKitUpdateNotice.disarm()
             }
             if let idx = args.firstIndex(of: "-uitest-baseURL"),
                idx + 1 < args.count

@@ -36,6 +36,8 @@ import SwiftUI
 struct AboutMeScreen: View {
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(SyncModeStore.self) private var syncMode
+    /// 25-02 (E-2026-08-29 #1) — backs the relocated glucose-targets card.
+    @Environment(DiabetesStore.self) private var diabetes
     /// v1.26.1 — read the app-wide dashboard state so the latest weight can be
     /// shown read-only WITHOUT a second fetch. Populated when the Home tab has
     /// resolved its metric states; absent (→ no weight row) otherwise.
@@ -45,6 +47,9 @@ struct AboutMeScreen: View {
     /// read-only Körperdaten route to the ONE existing edit surface instead of
     /// duplicating any field UI here.
     @State private var showEditProfile = false
+
+    /// 25-02 — in-flight latch for the diabetes toggle's optimistic PATCH.
+    @State private var diabetesInFlight = false
 
     /// The re-parented static self-medical-history entry points the hub groups,
     /// in render order (Allergien → Familienanamnese). Reuses the canonical
@@ -77,6 +82,7 @@ struct AboutMeScreen: View {
             bodyDataCard
             historyCard
             anamnesisCard
+            glucoseTargetsCard
             insuranceCard
         }
         .navigationTitle("aboutMe.title")
@@ -95,6 +101,9 @@ struct AboutMeScreen: View {
             if !syncMode.isStandalone, settingsStore.profile == nil {
                 await settingsStore.load()
             }
+            // 25-02 — the relocated diabetes flag, TTL-guarded by the store
+            // (the same call the old Datenschutz-und-Sicherheit host made).
+            await diabetes.refresh()
         }
     }
 
@@ -317,6 +326,45 @@ struct AboutMeScreen: View {
                 SettingsAnamnesisScreen()
             }
             .accessibilityIdentifier("aboutMe.row.anamnesis")
+        }
+    }
+
+    // MARK: - Glukose-Zielwerte (25-02, E-2026-08-29 #1)
+
+    /// **The glucose-targets card, moved here from Einstellungen →
+    /// Datenschutz und Sicherheit**, where it had no business. „Ich habe
+    /// Diabetes" is a static self-medical fact — this hub's exact subject,
+    /// beside anamnesis, allergies and family history — and its one effect is
+    /// which glucose reference bands the SERVER resolves (the tighter ADA
+    /// goals when on; v1.18.6). iOS only surfaces the switch; the bands are
+    /// applied server-side, never recomputed here. Same catalogue keys, same
+    /// `DiabetesStore`, same optimistic-write semantics as before the move.
+    private var glucoseTargetsCard: some View {
+        let enabled = diabetes.hasDiabetes ?? false
+        return HLSettingsCard(
+            icon: "drop.fill",
+            title: "settings.diabetes.title"
+        ) {
+            HLSettingsToggleRow(
+                title: "settings.diabetes.toggle_label",
+                description: "settings.diabetes.toggle_caption",
+                isOn: Binding(
+                    get: { enabled },
+                    set: { newValue in onDiabetesToggle(newValue, current: enabled) }
+                ),
+                isBusy: diabetesInFlight,
+                isEnabled: !diabetesInFlight && diabetes.hasDiabetes != nil,
+                accessibilityID: "aboutMe.diabetesToggle"
+            )
+        }
+    }
+
+    private func onDiabetesToggle(_ newValue: Bool, current: Bool) {
+        guard newValue != current else { return }
+        Task {
+            diabetesInFlight = true
+            defer { diabetesInFlight = false }
+            await diabetes.setHasDiabetes(newValue)
         }
     }
 

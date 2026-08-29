@@ -301,10 +301,11 @@ struct RootView: View {
         await featureFlags.refresh()
     }
 
-    /// #32 — reconcile the server-owned onboarding-tour / setup-completion flag
-    /// (`onboardingTourCompleted` off `/api/auth/me`) on the authentication tick.
-    /// Server-authoritative: a `true` from another device wins over a stale local
-    /// cache, so a reinstalled / second-device user is not re-dropped into setup.
+    /// #32 — reconcile the server-owned setup-completion state (the tour
+    /// marker plus the account's own evidence, off `/api/auth/me` — 25-03) on
+    /// the authentication tick. Server-authoritative: a completed answer from
+    /// another device or the web wins over a stale local cache, so a
+    /// reinstalled / second-device user is not re-dropped into setup.
     /// 08-08 — owner-bound: this account's answer, cached under this account.
     private func refreshOnboardingTourIfReady() async {
         guard case .authenticated = authStore.phase,

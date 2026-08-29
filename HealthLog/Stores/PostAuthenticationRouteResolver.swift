@@ -100,10 +100,19 @@ public struct PostAuthenticationRouteInput: Sendable, Hashable {
     }
 
     /// What the server said about setup completion on this authentication tick.
+    ///
+    /// 25-03 (GH #1) — "what the server said" is derived from the whole `/me`
+    /// row by ``OnboardingTourStore/classifySetupCompletion(_:)``: the tour
+    /// marker is a fast path, and the account's own evidence (the web
+    /// wizard's completion record, profile substance) completes too. The
+    /// derivation changes which answer arrives here; it changes nothing about
+    /// what each answer means to the route.
     public enum ServerCompletion: String, Sendable, Hashable, CaseIterable {
-        /// The server answered, and setup is complete.
+        /// The server answered, and setup is complete — by marker or by what
+        /// actually exists on the account.
         case completed
-        /// The server answered, and setup is not complete.
+        /// The server answered, and setup is not complete: the marker is
+        /// present and `false`, and the row shows no account evidence either.
         case incomplete
         /// The server answered, but this deployment does not carry the field
         /// (pre-v1.18.6). Not an error, and not an answer either.

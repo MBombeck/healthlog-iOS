@@ -396,6 +396,38 @@ public final class HKReadinessStore {
         #endif
     }
 
+    /// **25-02 (E-2026-08-29 #5) — die Sheet-Status-Frage.** Ob Apples
+    /// Authorization-Sheet für die gegebenen Identifier-Teilmengen der
+    /// Default-Sets BEANTWORTET ist —
+    /// `HKHealthStore.getRequestStatusForAuthorization(toShare:read:)` hinter
+    /// dem Service-Seam. Das ist die eine Frage, die iOS auch für READ-Typen
+    /// beantwortet: beantwortet-oder-offen, nie den Grant (den verrät iOS nur
+    /// für Write-Typen; erteilt wie verweigert zählt hier als beantwortet).
+    /// `nil`-Identifier heißen „die volle Default-Menge"; abgefragt werden
+    /// damit immer TEILmengen der ausgelieferten Default-Sets, kein
+    /// Typmengen-Pin kann sich hier bewegen. `nil` als Antwort heißt „die
+    /// Plattform kann es nicht sagen" (Nicht-HK-Build, Seam ohne die API) —
+    /// Aufrufer fallen dann auf ihre State-Regel zurück.
+    public func authorizationSheetAnswered(
+        shareIdentifiers: Set<String>? = nil,
+        readIdentifiers: Set<String>? = nil
+    ) async -> Bool? {
+        #if canImport(HealthKit)
+            guard let service = healthKit as? any HealthKitServiceProtocol else { return nil }
+            let share = service.defaultWriteTypes()
+                .filter { shareIdentifiers?.contains($0.identifier) ?? true }
+            let read = service.defaultReadTypes()
+                .filter { readIdentifiers?.contains($0.identifier) ?? true }
+            switch await service.authorizationRequestStatus(toShare: share, read: read) {
+            case .unnecessary: return true
+            case .shouldRequest: return false
+            default: return nil
+            }
+        #else
+            return nil
+        #endif
+    }
+
     /// Öffnet die Health-App. **Nicht mehr und nicht weniger.**
     ///
     /// **H1 — was hier vorher behauptet wurde und nicht stimmt (R7).** Der alte

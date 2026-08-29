@@ -4,12 +4,63 @@
 > per-version reports under `.planning/v05*-marathon/` and
 > `.planning/v056-marathon/`. This file resumes from v0.6.2.
 
-## Unreleased
+## 1.0.0 — 2026-08-29 (The App Store release)
 
-### Added
+The first version headed for the App Store. Between 0.13 and here the app
+shipped continuously to TestFlight (0.14 through 0.19) without written release
+notes; this entry summarizes what accumulated, and what is new in 1.0.0
+itself.
+
+### Highlights since 0.13
+
+- **GLP-1 medications, treated seriously.** Drug-level curves computed from
+  your actual doses, titration schedules, weekly cadences, and injection-site
+  tracking with a per-site deny list that the injection pickers respect.
+- **Weekly and cyclic medication schedules**, alongside the existing daily and
+  as-needed plans, with adherence that understands them.
+- **Apple Health sync grew** to include ECG recordings and mood (State of
+  Mind), on top of the established measurement, workout and sleep types.
+- **A Health Score** on the dashboard: your server computes per-pillar scores
+  and a composite; the app shows it with rings and honest availability.
+- **Insights redesigned** around interactive charts and score rings.
+- **Onboarding rebuilt**: a calm front door, a clear server choice, Apple
+  Health and notifications asked for in context, and a setup flow that only
+  runs when your account actually needs it.
+- **Faster first paint** and steadier loading throughout; skeletons resolve
+  into content instead of stranding.
+- Live Activities, widgets, App Intents, Spotlight and the Apple Watch app
+  matured throughout; standalone (no-server) mode remained complete.
+
+### Added in 1.0.0
+
 - **Sign in to your own server the way the web does (#65).** On a self-hosted instance, the sign-in screen now offers "Sign in via your server", which opens your instance's own login page in a secure in-app browser window. Your passkeys and password manager work there exactly as they do on the web, because the browser is on your server's real address — something the in-app form can't do. Your password stays reachable via a fallback link, and the managed and demo servers keep the familiar in-app form unchanged. The web option only appears when your server is new enough to support it (v1.32.11+); an older or offline server quietly keeps the in-app form rather than opening a page that can't work.
 
-### Fixed
+- **A one-time "Connect Apple Health" card after updating.** An existing
+  installation that never finished connecting Apple Health now gets one
+  dismissible card under the greeting after the update — Connect raises
+  Apple's full permission sheet (ECG and mood included), and the card clears
+  itself the moment the sheet is answered. Installations that already sync
+  see a one-time note about the newly supported types instead. Fresh installs
+  never see either; onboarding remains their route.
+
+### Changed in 1.0.0
+
+- **Settings tell the truth about where things live.** Glucose target ranges
+  moved to About me (they are a fact about you, not a privacy setting), and
+  injection sites moved to the Medications tab — shown only when you actually
+  have an injectable medication. Privacy & Security keeps the biometric app
+  lock, and says exactly that.
+- **The Health Score works with whatever you track.** It now computes from
+  the pillars you actually have data for — down to a single one — and the
+  tile simply stays hidden until there is anything to score.
+- **A calmer dashboard hero** (the redundant selection caption is gone), and
+  tapping your avatar now opens your account.
+
+### Fixed in 1.0.0
+- **Web-created accounts are recognized as fully set up.** Signing in on iOS
+  with an account whose profile was completed on the web no longer walks you
+  through the whole setup flow again (#1, first community report — thank
+  you).
 - **Workout heart-rate history keeps retrying instead of being silently abandoned.** A later workout page without samples, an authorization-ambiguous HealthKit result, a partial batch response, or a rejected entry can no longer be mistaken for completed delivery. The retry state survives relaunches and account changes without leaking work across accounts.
 - **ECG uploads only advance after a real accepted server outcome.** Inserted, updated and duplicate results are handled explicitly; malformed, rejected and transport-failed uploads stay retryable, including work scheduled through the background-processing path.
 - **Sharing metadata remains compatible and fails closed.** The app accepts both the current object-valued and legacy string-valued capability formats, preserves valid groups when one additive child is malformed, and clears shared-record state safely if access is revoked without retrying a write as the owner.

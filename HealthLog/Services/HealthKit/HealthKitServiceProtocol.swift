@@ -45,6 +45,19 @@ import Foundation
         /// again immediately, without waiting for the next cold-start.
         func resetAuthDisabledTypes() async
 
+        /// **25-02 (E-2026-08-29 #5)** —
+        /// `HKHealthStore.getRequestStatusForAuthorization(toShare:read:)`
+        /// behind the seam: whether presenting the request sheet is still
+        /// necessary for the given sets. The ONE status API that accepts READ
+        /// types: it answers answered-vs-open for the whole set (grant and
+        /// deny both count as answered) and never the grant itself, which iOS
+        /// reveals for write types only. Defaulted in the extension below so
+        /// existing test doubles compile unchanged and fail closed.
+        func authorizationRequestStatus(
+            toShare: Set<HKSampleType>,
+            read: Set<HKObjectType>
+        ) async -> HKAuthorizationRequestStatus
+
         // MARK: Default type-sets (instance accessors)
 
         /// Default HK Read-Types covered by the service. Instance-level
@@ -63,6 +76,18 @@ import Foundation
         func writeMeasurement(_ measurement: Measurement) async throws
         func writeMoodEntry(_ entry: MoodEntry) async throws
         func startBackgroundDeliveries() async throws
+    }
+
+    public extension HealthKitServiceProtocol {
+        /// Fail-closed default for seams that cannot ask the system (test
+        /// doubles, hermetic worlds): `.unknown`. Callers fall back to their
+        /// state rule and never suppress a surface on an unanswered question.
+        func authorizationRequestStatus(
+            toShare _: Set<HKSampleType>,
+            read _: Set<HKObjectType>
+        ) async -> HKAuthorizationRequestStatus {
+            .unknown
+        }
     }
 
 #endif

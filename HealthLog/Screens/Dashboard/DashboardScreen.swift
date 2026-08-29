@@ -149,6 +149,15 @@ struct DashboardScreen: View {
                         parallax: parallaxModel
                     )
                     HealthKitConnectBanner()
+                    // 25-01 (E-2026-08-28) — the one-time update notice for
+                    // existing installs. Its own rule, NOT the banner's: the
+                    // banner refuses on `isConnected` first (K10, pinned by
+                    // 12-12), which is exactly the latch that left an updated,
+                    // never-connected device with no affordance at all. Armed
+                    // once per install from the launch prologue's update
+                    // evidence; dismissed once by its ✕; gone by itself after
+                    // a successful connect.
+                    HealthKitUpdateNoticeCard()
                     // v0.5.6 HOME-COMPLIANCE-SHEET — operator brief
                     // (2026-05-22): the standalone "Anstehende
                     // Einnahmen" card is consolidated into a bottom-sheet

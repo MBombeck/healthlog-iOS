@@ -496,9 +496,13 @@ enum HubRow: String, CaseIterable, Identifiable {
         case .healthScore: "Which pillars count"
         case .modules: "Which features are on"
         // v0.8.0 W7 N5 — was "Sicherheit · Audit", which both leaked raw
-        // German and collided with the old root Security section. The
-        // screen is now the canonical privacy/security home.
-        case .advanced: "Biometric lock, clinical mappings"
+        // German and collided with the old root Security section.
+        // 25-02 (E-2026-08-29 #1) — glucose targets and injection sites moved
+        // to their subject homes (Über mich / Medications), and the old
+        // subtitle's "clinical mappings" had been stale since 08-06 removed
+        // the LOINC sign-off. What the screen holds now is exactly one thing,
+        // and the subtitle says exactly that.
+        case .advanced: "Biometric app lock"
         // R7 — deliberately does NOT promise a licence card: the screen has
         // the app card, the two links and the update note, and nothing else.
         case .about: "Version, privacy policy, docs"

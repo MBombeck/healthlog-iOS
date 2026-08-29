@@ -67,9 +67,10 @@ enum TodayHeroCopy {
         local("daily.today.allClear")
     }
 
-    static var provisionalA11y: String {
-        local("daily.today.provisional")
-    }
+    // 25-02 (E-2026-08-29 #2) — `provisionalA11y` was DELETED together with
+    // the ring's null-score provisional face: with zero available inputs the
+    // ring no longer renders at all, so there is no face left to speak. Its
+    // `daily.today.provisional` catalog entry was retired with it.
 
     static var errorTitle: String {
         local("daily.today.error")

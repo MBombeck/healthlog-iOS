@@ -4786,6 +4786,24 @@
         }
       }
     },
+    "Biometric app lock": {
+      "comment": "Settings hub — subtitle of the Privacy & Security row (25-02: the biometric lock is the screen's whole content)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometrische App-Sperre"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometric app lock"
+          }
+        }
+      }
+    },
     "Biometric lock": {
       "comment": "PB3 — SettingsAdvancedScreen Security toggle",
       "extractionState": "manual",
@@ -4800,23 +4818,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Biometric lock"
-          }
-        }
-      }
-    },
-    "Biometric lock, clinical mappings": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Biometrische Sperre, klinische Zuordnungen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Biometric lock, clinical mappings"
           }
         }
       }
@@ -12937,6 +12938,24 @@
         }
       }
     },
+    "HealthLog has no access to your Apple Health data on this device. Connect it so your values arrive automatically.": {
+      "comment": "25-01 update-notice card (decision E-2026-08-28)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HealthLog hat auf diesem Gerät keinen Zugriff auf deine Apple-Health-Daten. Verbinde es, damit deine Werte automatisch eintreffen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HealthLog has no access to your Apple Health data on this device. Connect it so your values arrive automatically."
+          }
+        }
+      }
+    },
     "HealthLog is locked": {
       "extractionState": "manual",
       "localizations": {
@@ -18120,6 +18139,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "New share link"
+          }
+        }
+      }
+    },
+    "New: ECG and mood can sync": {
+      "comment": "25-01 update-notice card (decision E-2026-08-28)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu: EKG und Stimmung können synchronisiert werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New: ECG and mood can sync"
           }
         }
       }
@@ -28417,6 +28454,24 @@
         }
       }
     },
+    "This update can also sync ECGs and mood from Apple Health. Allow access to turn both on.": {
+      "comment": "25-01 update-notice card (decision E-2026-08-28)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Update kann zusätzlich EKGs und Stimmung aus Apple Health synchronisieren. Erlaube den Zugriff, um beides zu aktivieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This update can also sync ECGs and mood from Apple Health. Allow access to turn both on."
+          }
+        }
+      }
+    },
     "This was changed somewhere else while you were editing. Reopen the screen and make your change again.": {
       "comment": "Error — CU-20 guarded write gave up after repeated 409 conflicts",
       "extractionState": "manual",
@@ -32707,24 +32762,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Your saved report selection returned no data, so the server bundle is empty."
-          }
-        }
-      }
-    },
-    "Your selection": {
-      "comment": "Health Score — provenance mark shown where the number stands alone; the composition was chosen by the person",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eigene Auswahl"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your selection"
           }
         }
       }
@@ -44275,24 +44312,6 @@
         }
       }
     },
-    "daily.today.provisional": {
-      "comment": "TodayHero — VoiceOver word for the ring's provisional (null-score) face",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "vorläufig, noch kein Wert"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "provisional, no score yet"
-          }
-        }
-      }
-    },
     "daily.today.retry": {
       "comment": "TodayHero — retry button on the error card",
       "extractionState": "manual",
@@ -45038,18 +45057,18 @@
       }
     },
     "dashboard.toolbar.profile.accessibilityLabel": {
-      "comment": "v0.5.4-NF-1 — Dashboard top-right profile-avatar accessibility label.",
+      "comment": "Dashboard top-right avatar accessibility label — since 25-02 (E-2026-08-29 #4) the tap opens Konto, and the label says so.",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Profil öffnen"
+            "value": "Konto öffnen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open profile"
+            "value": "Open account"
           }
         }
       }

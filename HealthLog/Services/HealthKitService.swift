@@ -198,6 +198,22 @@ import Foundation
             try await store.requestAuthorization(toShare: write, read: read)
         }
 
+        /// **25-02 (E-2026-08-29 #5)** — the sheet-status question behind the
+        /// update-notice card's detection rule. Continuation over the callback
+        /// API (available since iOS 12). The completion's error case surfaces
+        /// as `.unknown`, which callers treat as "cannot answer" and fall back
+        /// to the state rule — never a suppression.
+        public func authorizationRequestStatus(
+            toShare: Set<HKSampleType>,
+            read: Set<HKObjectType>
+        ) async -> HKAuthorizationRequestStatus {
+            await withCheckedContinuation { continuation in
+                store.getRequestStatusForAuthorization(toShare: toShare, read: read) { status, _ in
+                    continuation.resume(returning: status)
+                }
+            }
+        }
+
         // MARK: - Default Type-Sets, instance accessors
 
         //

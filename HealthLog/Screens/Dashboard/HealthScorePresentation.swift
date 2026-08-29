@@ -70,21 +70,17 @@ enum HealthScorePresentation {
 
     // MARK: - Chosen composition (v1.35.0 / GH #83)
 
-    /// **The provenance mark shown wherever the number stands on its own.**
-    ///
-    /// Not an instruction and not a warning — the answer to "where did this
-    /// number's make-up come from?", in the fewest words a tile can carry
-    /// (R2, Herkunft/Urheberschaft). The sentence about what that *means* for
-    /// comparing scores lives in ``chosenCompositionExplanation``, on the
-    /// surfaces that have room for it.
-    static var chosenCompositionMark: String {
-        String(localized: "Your selection", comment: "Health Score — the composition was chosen by the person")
-    }
+    // 25-02 (E-2026-08-29 #3) — the painted provenance mark („Eigene
+    // Auswahl" / "Your selection") was DELETED, definition site and catalog
+    // key together: the operator judged it visual overload on the score
+    // tile. The statement survives in its two other carriers — the spoken
+    // sentence below and the explanation on the detail surfaces.
 
-    /// The spoken form of ``chosenCompositionMark`` — appended to a surface's
-    /// accessibility label so the spoken tile carries the same statement the
-    /// seen one does. A full sentence, because VoiceOver reads it in a run with
-    /// the score and a bare noun phrase would blur into it.
+    /// The spoken provenance — appended to a score surface's accessibility
+    /// label so the spoken tile says where the number's make-up came from.
+    /// A full sentence, because VoiceOver reads it in a run with the score
+    /// and a bare noun phrase would blur into it. Since 25-02 this is the
+    /// ONLY tile-level carrier of the statement (the painted mark is gone).
     static var chosenCompositionA11y: String {
         String(
             localized: "The pillars behind this score were chosen by you.",

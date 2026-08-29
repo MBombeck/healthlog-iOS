@@ -1,29 +1,82 @@
 import Foundation
 
-/// Thin projection of the `GET /api/auth/me` payload — only the onboarding
-/// tour-completion flag (`onboardingTourCompleted`, server v1.18.6). Decoupled
-/// from `UserProfile` so an unrelated `/me` schema change can't break the read,
-/// mirroring `AuthMeAvatar` / `AuthMeDisclaimer` / `AuthMeModules`.
+/// Thin projection of the `GET /api/auth/me` payload — the setup-completion
+/// evidence and nothing else. Decoupled from `UserProfile` so an unrelated
+/// `/me` schema change can't break the read, mirroring `AuthMeAvatar` /
+/// `AuthMeDisclaimer` / `AuthMeModules`.
 ///
-/// **Decode-tolerant:** a server that omits the key (prod ≤ v1.18.5) yields
-/// `nil` — treated downstream as "tour not yet completed", so the resume gate
-/// degrades to the current local-flag behaviour without crashing.
+/// **25-03 (GH #1) — three evidence classes, not one flag.** The tour marker
+/// (`onboardingTourCompleted`) is stamped by `POST /api/onboarding/tour`:
+/// this app's setup wizard on finish, and the web's coachmark tour — but
+/// **not** the web setup wizard, whose own completion is a different column
+/// (`onboardingCompletedAt`, set on its step 4). A profile created in the
+/// web UI therefore carries a `false` tour marker over a fully-set-up
+/// account, which is exactly the first community report. The same `/me` row
+/// already serves the wizard's record and the account substance itself
+/// (`heightCm`, `dateOfBirth`, `gender`), so this projection reads all
+/// three; the classification into the four-state routing vocabulary stays in
+/// `OnboardingTourStore` (target boundary — see the repository docblock).
+///
+/// **Decode-tolerant in every direction:** a server that omits the marker
+/// (prod ≤ v1.18.5) yields `nil`; absent or `null` evidence keys read
+/// `false` — evidence can only ever be *found*, never invented from a hole
+/// in the payload.
 public struct AuthMeOnboarding: Decodable, Sendable, Equatable {
-    /// Server-owned coarse completion flag. `nil` when the server omits the
-    /// field (older builds); `false`/`true` when present.
+    /// Server-owned coarse tour-completion flag. `nil` when the server omits
+    /// the field (older builds); `false`/`true` when present.
     public let onboardingTourCompleted: Bool?
 
-    public init(onboardingTourCompleted: Bool?) {
+    /// The web setup wizard's own completion record — `onboardingCompletedAt`
+    /// non-null. Presence only: the timestamp's value carries no routing
+    /// meaning, so none is decoded.
+    public let hasSetupCompletionRecord: Bool
+
+    /// Account substance the setup flow's baseline-profile step would create:
+    /// any of `dateOfBirth` / `heightCm` non-null, or a non-empty `gender`.
+    /// The server folds `""` to `null` for `gender` on write; the decode
+    /// refuses the empty string anyway rather than relying on that.
+    public let hasProfileSubstance: Bool
+
+    public init(
+        onboardingTourCompleted: Bool?,
+        hasSetupCompletionRecord: Bool = false,
+        hasProfileSubstance: Bool = false
+    ) {
         self.onboardingTourCompleted = onboardingTourCompleted
+        self.hasSetupCompletionRecord = hasSetupCompletionRecord
+        self.hasProfileSubstance = hasProfileSubstance
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         onboardingTourCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingTourCompleted)
+        hasSetupCompletionRecord = Self.presentAndNotNull(container, .onboardingCompletedAt)
+        // `decode` (not `decodeIfPresent`) so an absent key, a `null`, and a
+        // non-string representation all collapse to `nil` through one `try?`.
+        let gender = try? container.decode(String.self, forKey: .gender)
+        hasProfileSubstance = Self.presentAndNotNull(container, .dateOfBirth)
+            || Self.presentAndNotNull(container, .heightCm)
+            || gender?.isEmpty == false
+    }
+
+    /// Presence without a type commitment: the key exists and its value is
+    /// not `null`. Deliberately does not decode the value — `dateOfBirth` is
+    /// a date string and `heightCm` a number on today's wire, and a future
+    /// representation change must degrade to "no evidence", never to a throw.
+    private static func presentAndNotNull(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        _ key: CodingKeys
+    ) -> Bool {
+        guard container.contains(key) else { return false }
+        return (try? container.decodeNil(forKey: key)) == false
     }
 
     private enum CodingKeys: String, CodingKey {
         case onboardingTourCompleted
+        case onboardingCompletedAt
+        case dateOfBirth
+        case gender
+        case heightCm
     }
 }
 
@@ -146,25 +199,27 @@ public actor OnboardingTourRepository {
         self.api = api
     }
 
-    /// Read the current server-owned completion flag from `GET /api/auth/me`.
+    /// Read the current server-owned setup-completion evidence from
+    /// `GET /api/auth/me` — the tour marker, the web wizard's own completion
+    /// record, and whether the account carries profile substance
+    /// (25-03, GH #1).
     ///
-    /// Three outcomes, and **two of them are not answers**: `nil` means the
-    /// deployment carries no such field (prod ≤ v1.18.5), and a thrown error
-    /// means the lookup never resolved at all. Neither is a `false`, and
-    /// collapsing them into one is how a timeout became "this user has not
+    /// A thrown error means the lookup never resolved at all — not a `false`,
+    /// and collapsing the two is how a timeout became "this user has not
     /// finished setup" and replayed a wizard they had finished on another
-    /// device.
+    /// device (or on the web).
     ///
     /// The classification into the four-state Wave-1 vocabulary lives in
-    /// ``OnboardingTourStore/resolveCompletion()`` rather than here, and that is
-    /// a target boundary rather than a preference: this file also compiles into
-    /// the `HealthLogWidgets` app extension, whose source allowlist deliberately
-    /// carries `Repositories/` without `Stores/`. A repository that named a
-    /// Stores-layer type would drag the whole app layer across that boundary —
-    /// the failure the allowlist exists to make loud.
-    public func fetchCompleted() async throws -> Bool? {
+    /// ``OnboardingTourStore/classifySetupCompletion(_:)`` rather than here,
+    /// and that is a target boundary rather than a preference: this file also
+    /// compiles into the `HealthLogWidgets` app extension, whose source
+    /// allowlist deliberately carries `Repositories/` without `Stores/`. A
+    /// repository that named a Stores-layer type would drag the whole app
+    /// layer across that boundary — the failure the allowlist exists to make
+    /// loud.
+    public func fetchSetupState() async throws -> AuthMeOnboarding {
         let req: APIRequest<AuthMeOnboarding> = .get("/api/auth/me")
-        return try await api.send(req).onboardingTourCompleted
+        return try await api.send(req)
     }
 
     /// Stamp the coarse completion flag. Idempotent server-side. `outcome`
