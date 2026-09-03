@@ -11,10 +11,18 @@ public protocol KeychainStoring: Sendable {
 }
 
 public struct KeychainStore: KeychainStoring, Sendable {
+    /// The one `kSecAttrService` every HealthLog process uses. `kSecAttrService`
+    /// is part of the generic-password primary key, so it must NOT be derived
+    /// from `Bundle.main.bundleIdentifier`: the widget extension runs as
+    /// `dev.healthlog.app.widgets` and would otherwise read an empty keychain
+    /// (no bearer, no server URL, no outbox cipher key) — every interactive
+    /// widget intent then aborts silently.
+    public static let appService = "dev.healthlog.app"
+
     public let service: String
     public let accessGroup: String?
 
-    public init(service: String = Bundle.main.bundleIdentifier ?? "dev.healthlog.app", accessGroup: String? = nil) {
+    public init(service: String = KeychainStore.appService, accessGroup: String? = nil) {
         self.service = service
         self.accessGroup = accessGroup
     }
@@ -111,6 +119,13 @@ public enum KeychainKey {
     /// retaining the host itself as readable product or configuration data.
     public static let serverURLExplicitHostFingerprint = "auth.serverURL.explicitHostFingerprint"
     public static let userID = "auth.userID"
+    /// Build 273 (sync audit A2) — the user-id the last credential wipe signed
+    /// out. Written by `AuthService.invalidateAndWipeSessionCredentials()`
+    /// BEFORE `userID` is removed, read only by the outbox owner provider: a
+    /// write that hits a terminal 401 is enqueued after the wipe and would
+    /// otherwise be stamped ownerless and quarantined forever. Cleared on
+    /// account deletion and server switch alongside the outbox itself.
+    public static let lastSessionUserID = "auth.lastSessionUserID"
     /// Best-available identity label captured at login (`displayName` →
     /// `username` → email-local-part). Persisted alongside `userID` so the
     /// cold-launch `bootstrap()` can seed a named `User` — otherwise the

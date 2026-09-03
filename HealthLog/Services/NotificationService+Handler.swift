@@ -143,7 +143,10 @@ import Foundation
             let userInfo = response.notification.request.content.userInfo
             let wrapped = RemoteNotificationUserInfo(userInfo)
             let actionID = response.actionIdentifier
-            let payload = APNsPayload.parse(userInfo: wrapped.raw)
+            let payload = Self.resolvedPayload(
+                userInfo: wrapped.raw,
+                deliveredAt: response.notification.date
+            )
             // eventType/actionID are fixed routing constants (enum-grade), no user data.
             // swiftlint:disable:next hllog_public_privacy_interpolation
             HLLog.notifications.info(
@@ -406,7 +409,9 @@ import Foundation
                 hideMedicationName: LockScreenPrivacy.hideMedicationName()
             )
             do {
-                try await UNUserNotificationCenter.current().add(req)
+                // Build 273 — through the shared gate (Focus filter + pending
+                // budget), like every other locally scheduled reminder.
+                try await addLocalNotification(req)
                 HLLog.notifications.info("med.snooze.15m: re-scheduled medicationId=\(payload?.medicationId ?? "nil", privacy: .private)")
             } catch {
                 HLLog.notifications.error(
@@ -513,6 +518,38 @@ import Foundation
         /// `med.snooze.15m` regardless of whether the banner originated
         /// from the server cron, the local fallback, or the smart-reminder
         /// wrapper.
+        /// Parse a banner's userInfo into the action payload, resolving
+        /// `scheduledFor` for Spezi-built medication banners.
+        ///
+        /// SpeziScheduler materialises its `UNNotificationRequest`s at reconcile
+        /// time and the `SchedulerNotificationsConstraint` hook only sees task +
+        /// content, never the trigger — so the `scheduledFor` stamped there
+        /// (`HealthLogStandard.notificationContent(for:content:)`) is the BUILD
+        /// instant, not the fire instant. Acting on it would post "taken" against
+        /// yesterday's reconcile time and miss today's slot. Those banners carry
+        /// `speziScheduled: true`; for them the delivery date IS the slot (Spezi
+        /// fires at the occurrence start), so we substitute it. Server pushes
+        /// carry the real slot and are left untouched.
+        nonisolated static func resolvedPayload(
+            userInfo: [AnyHashable: Any],
+            deliveredAt: Date
+        ) -> APNsPayload? {
+            guard let parsed = APNsPayload.parse(userInfo: userInfo) else { return nil }
+            guard userInfo["speziScheduled"] as? Bool == true else { return parsed }
+            return APNsPayload(
+                title: parsed.title,
+                body: parsed.body,
+                eventType: parsed.eventType,
+                metricType: parsed.metricType,
+                deepLink: parsed.deepLink,
+                isContentAvailable: parsed.isContentAvailable,
+                medicationId: parsed.medicationId,
+                scheduleId: parsed.scheduleId,
+                scheduledFor: deliveredAt,
+                reminderId: parsed.reminderId
+            )
+        }
+
         static func medicationUserInfo(
             medicationId: String,
             scheduleId: String?,

@@ -122,6 +122,29 @@ import Foundation
         /// the existing operator-debug surface in one release.
         static let lastRegistrationDefaultsKey = "dev.healthlog.app.notif.lastRegistration.v1"
 
+        /// The instance that owns the `UNUserNotificationCenter` delegate slot.
+        ///
+        /// `AppContainer.init` (from `HealthLogApp.init`) constructs this service
+        /// BEFORE UIKit runs `application(_:willFinishLaunchingWithOptions:)`.
+        /// Spezi's `SpeziAppDelegate` then installs its own
+        /// `SpeziNotificationCenterDelegate` there whenever a configured module
+        /// conforms to `NotificationHandler` — `SchedulerNotifications` does — and
+        /// silently takes the slot away from us. `HealthLogSpeziDelegate` calls
+        /// ``reinstallNotificationCenterDelegate()`` right after `super` returns
+        /// to hand it back; without that every banner action is a no-op.
+        private(set) nonisolated(unsafe) weak static var installedDelegate: NotificationService?
+
+        /// Re-install the app's `NotificationService` as the notification-center
+        /// delegate. Returns `false` when no service has been constructed yet
+        /// (the `init` above installs itself in that case, so the later of the
+        /// two always wins for the app).
+        @discardableResult
+        nonisolated static func reinstallNotificationCenterDelegate() -> Bool {
+            guard let installed = installedDelegate else { return false }
+            UNUserNotificationCenter.current().delegate = installed
+            return true
+        }
+
         init(
             api: APIClientProtocol,
             environment: AppEnvironment,
@@ -140,6 +163,7 @@ import Foundation
             self.defaults = defaults
             super.init()
             UNUserNotificationCenter.current().delegate = self
+            Self.installedDelegate = self
             registerCategories()
             lastRegistrationSnapshot = Self.loadLastRegistration(from: defaults)
         }

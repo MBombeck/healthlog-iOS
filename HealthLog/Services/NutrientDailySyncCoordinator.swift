@@ -86,6 +86,27 @@ public actor NutrientDailySyncCoordinator {
     /// window is ambiguous between "no data" and "read authorization denied",
     /// so it leaves the one-shot armed.
     static let backfillDoneKeyPrefix = "hl.healthkit.nutrientBackfillCompleted."
+    /// Build 273 (A12) — see `sweepWindowStart`.
+    static let lastSweepEndKeyPrefix = "hl.healthkit.nutrientLastSweepEndUTC."
+    static let maxCatchUpDays = 30
+
+    /// The sweep's `from`: never narrower than the lookback, and — once a sweep
+    /// has completed — never later than one day before that sweep's end,
+    /// bounded at ``maxCatchUpDays``. A 1-day incremental lookback otherwise
+    /// lost every day of a dormancy longer than a day.
+    nonisolated static func sweepWindowStart(
+        now: Date,
+        lookbackDays: Int,
+        lastCompletedSweepEnd: Date?,
+        calendar: Calendar
+    ) -> Date {
+        let lookbackFrom = calendar.date(byAdding: .day, value: -lookbackDays, to: now) ?? now
+        guard let lastCompletedSweepEnd else { return lookbackFrom }
+        let overlap = calendar.date(byAdding: .day, value: -1, to: lastCompletedSweepEnd) ?? lastCompletedSweepEnd
+        let bound = calendar.date(byAdding: .day, value: -maxCatchUpDays, to: now) ?? now
+        return min(lookbackFrom, max(overlap, bound))
+    }
+
     /// First-enable backfill window (days). Server contract: 30.
     static let backfillLookbackDays = 30
     /// Steady-state lookback. `1` day back → the day-anchor rounds `from` to
@@ -136,7 +157,14 @@ public actor NutrientDailySyncCoordinator {
         let lookback = firstEnable ? Self.backfillLookbackDays : Self.incrementalLookbackDays
 
         let now = clock()
-        let from = calendar.date(byAdding: .day, value: -lookback, to: now) ?? now
+        let lastSweepKey = Self.lastSweepEndKeyPrefix
+            + HealthKitBackfillWindowStore.partitionToken(for: userID)
+        let from = Self.sweepWindowStart(
+            now: now,
+            lookbackDays: lookback,
+            lastCompletedSweepEnd: defaults.object(forKey: lastSweepKey) as? Date,
+            calendar: calendar
+        )
 
         // Collect one entry per (nutrient, day-with-data). A per-type HK query
         // failure is logged + skipped and does not block the other types.
@@ -209,6 +237,7 @@ public actor NutrientDailySyncCoordinator {
         // disabled or failed first sweep re-arms on the next enable).
         if !stoppedForModuleDisabled, summary.failedBatches == 0 {
             markBackfillDone(key: backfillKey)
+            defaults.set(now, forKey: lastSweepKey)
         }
         return summary
     }

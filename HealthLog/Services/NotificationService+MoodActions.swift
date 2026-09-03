@@ -50,7 +50,9 @@ import Foundation
         func handleMoodSnooze(payload: APNsPayload?) async {
             let req = Self.buildMoodSnoozeRequest(payload: payload)
             do {
-                try await UNUserNotificationCenter.current().add(req)
+                // Build 273 — through the shared gate (Focus filter + pending
+                // budget), like the original evening nudge.
+                try await addLocalNotification(req)
                 // Locally generated random snooze id ("mood-snooze-<UUID>"); the UUID
                 // portion is sanitizer-redacted by HLLogger anyway — no user data.
                 // swiftlint:disable:next hllog_public_privacy_interpolation
@@ -75,13 +77,11 @@ import Foundation
             content.body = payload?.body ?? String(localized: "Log your mood quickly.")
             content.sound = .default
             content.categoryIdentifier = Self.categoryMood
-            // Snoozed mood-reminder inherits the same time-sensitive
-            // priority as the original server-driven push (the APNs payload
-            // delivers `apns-priority: 10` + `interruption-level: time-
-            // sensitive`). Without re-setting it here the local re-fire
-            // would silently demote to `.active` and the user's 1h-later
-            // banner would never break through Focus.
-            content.interruptionLevel = .timeSensitive
+            // Build 273 — the evening mood nudge is a ROUTINE `.active`
+            // reminder by design (App-Review rationale in `+MoodReminder`);
+            // a snooze must not escalate it past the level the original
+            // respected, or it breaks through a Focus the original did not.
+            content.interruptionLevel = .active
             var userInfo: [String: Any] = [:]
             if let eventType = payload?.eventType {
                 userInfo["eventType"] = eventType

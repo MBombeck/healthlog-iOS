@@ -133,8 +133,10 @@ import Testing
 
         actor RecordingSyncing: HealthKitDailyStatsSyncing {
             private(set) var calls: [Int] = []
-            func triggerDailyStatsSync(lookbackDays: Int) async {
+            @discardableResult
+            func triggerDailyStatsSync(lookbackDays: Int) async -> Bool {
                 calls.append(lookbackDays)
+                return true
             }
         }
 

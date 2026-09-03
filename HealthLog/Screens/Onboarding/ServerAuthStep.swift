@@ -147,7 +147,8 @@ struct ServerAuthStep: View {
         AuthStepFormVisibility(
             prefersWebHandoff: server?.prefersWebHandoff ?? false,
             availability: webLoginAvailability,
-            latched: emailSectionLatched || authStore.passwordFallbackRevealed
+            latched: emailSectionLatched || authStore.passwordFallbackRevealed,
+            passkeySupported: passkeySupportedForHost
         )
     }
 
@@ -198,15 +199,15 @@ struct ServerAuthStep: View {
                     if showsWebHandoff {
                         webHandoffSection
                             .padding(.horizontal, HLSpace.xl)
-                    } else if !oidcStatus.hidesPasswordAffordances {
-                        // audit 02 · H-1 — passkey sign-in is DISCOVERABLE on every
-                        // host now, not just the SPKI-pinned default (it used to be
-                        // hidden for every self-hosted instance — i.e. practically
-                        // every real user). The default host runs the real ceremony
-                        // (unchanged working path); a self-hosted host — where iOS
-                        // can't assert a platform credential (rpId outside the app's
-                        // associated domains) — keeps the CTA visible but honestly
-                        // captioned and routes the tap to the working email path.
+                    } else if !oidcStatus.hidesPasswordAffordances, formVisibility.showsPasskeyCTA {
+                        // Build 272 — the passkey CTA is offered only where the
+                        // ceremony can run (`passkeySupportedForHost`). The
+                        // audit-02 H-1 "visible but honestly captioned" variant
+                        // shipped a primary button whose tap only re-revealed the
+                        // already open password form, with a caption naming a
+                        // "default HealthLog server" the distributed build does not
+                        // have. Where passkeys cannot run, the password form is the
+                        // primary door and stands alone.
                         passkeyPrimaryCTA
                             .padding(.horizontal, HLSpace.xl)
 

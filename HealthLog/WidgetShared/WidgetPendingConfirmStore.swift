@@ -114,6 +114,16 @@ public struct WidgetPendingConfirmStore: Sendable {
         read(now: now)?.medicationId == medicationId
     }
 
+    /// Build 273 (sync audit A17) — slot-bound arm check. The widget's
+    /// next-dose slot can roll over inside the confirm window; a second tap
+    /// that arrives for a DIFFERENT slot of the same medication must not
+    /// commit the intake the first tap armed.
+    public func armed(for medicationId: String, scheduledFor: Date, now: Date = .now) -> Bool {
+        guard let pending = read(now: now) else { return false }
+        return pending.medicationId == medicationId
+            && abs(pending.scheduledAt.timeIntervalSince(scheduledFor)) < 1
+    }
+
     /// Remove the marker (SECOND-tap commit, or an explicit reset). Best
     /// effort — a missing file is success. Never throws.
     public func clear() {

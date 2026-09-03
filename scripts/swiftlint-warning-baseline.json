@@ -13,10 +13,10 @@
     },
     {
       "file": "HealthLog/Cache/SWRCoordinator.swift",
-      "line": 753,
+      "line": 703,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 753",
+      "reason": "File should contain 600 lines or less: currently contains 703",
       "severity": "warning"
     },
     {
@@ -213,7 +213,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 271,
+      "line": 276,
       "character": 17,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -221,7 +221,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 319,
+      "line": 323,
       "character": 13,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 16",
@@ -229,7 +229,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 319,
+      "line": 323,
       "character": 13,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 75 lines",
@@ -1005,10 +1005,10 @@
     },
     {
       "file": "HealthLog/Screens/Onboarding/ServerAuthStep.swift",
-      "line": 815,
+      "line": 816,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 815",
+      "reason": "File should contain 600 lines or less: currently contains 816",
       "severity": "warning"
     },
     {
@@ -1208,15 +1208,15 @@
       "line": 24,
       "character": 8,
       "rule_id": "type_body_length",
-      "reason": "Actor body should span 350 lines or less excluding comments and whitespace: currently spans 478 lines",
+      "reason": "Actor body should span 350 lines or less excluding comments and whitespace: currently spans 479 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Services/AuthService.swift",
-      "line": 997,
+      "line": 999,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 997",
+      "reason": "File should contain 600 lines or less: currently contains 999",
       "severity": "warning"
     },
     {
@@ -1285,7 +1285,7 @@
     },
     {
       "file": "HealthLog/Services/HealthKit/HealthSampleConsumption.swift",
-      "line": 144,
+      "line": 161,
       "character": 9,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 64 lines",
@@ -1309,10 +1309,10 @@
     },
     {
       "file": "HealthLog/Services/HealthKitHRBucketSyncCoordinator.swift",
-      "line": 86,
+      "line": 117,
       "character": 16,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 78 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 76 lines",
       "severity": "warning"
     },
     {
@@ -1365,7 +1365,7 @@
     },
     {
       "file": "HealthLog/Services/NotificationService+Handler.swift",
-      "line": 165,
+      "line": 168,
       "character": 9,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 14",
@@ -1381,10 +1381,10 @@
     },
     {
       "file": "HealthLog/Services/NutrientDailySyncCoordinator.swift",
-      "line": 119,
+      "line": 140,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 65 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 73 lines",
       "severity": "warning"
     },
     {
@@ -1456,7 +1456,7 @@
       "line": 108,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 89 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 91 lines",
       "severity": "warning"
     },
     {
@@ -1464,15 +1464,15 @@
       "line": 246,
       "character": 5,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 69 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 70 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Stores/AppContainer+Logout.swift",
-      "line": 649,
+      "line": 652,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 649",
+      "reason": "File should contain 600 lines or less: currently contains 652",
       "severity": "warning"
     },
     {
@@ -1696,15 +1696,15 @@
       "line": 17,
       "character": 14,
       "rule_id": "type_body_length",
-      "reason": "Class body should span 350 lines or less excluding comments and whitespace: currently spans 410 lines",
+      "reason": "Class body should span 350 lines or less excluding comments and whitespace: currently spans 414 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Stores/SettingsStore.swift",
-      "line": 707,
+      "line": 716,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 707",
+      "reason": "File should contain 600 lines or less: currently contains 716",
       "severity": "warning"
     },
     {
@@ -1717,7 +1717,7 @@
     },
     {
       "file": "HealthLogTests/Compliance/AppReviewConfigurationTests.swift",
-      "line": 222,
+      "line": 223,
       "character": 5,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 73 lines",

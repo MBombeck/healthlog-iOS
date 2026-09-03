@@ -578,6 +578,18 @@ public actor OutboxQueue {
     /// * **Cancellation-proof.** The task is detached and non-throwing, so a
     ///   cancelled first caller cannot cancel the open every other caller is
     ///   waiting on — the handle survives its first user.
+    /// Build 273 (A15) — whether a live (not dead-lettered) row already waits
+    /// under `idempotencyKey`. One additive lookup; the HealthKit stats
+    /// coordinator asks before it re-enqueues a re-planned chunk.
+    public func hasLiveOperation(idempotencyKey: String) async -> Bool {
+        do {
+            return try await resolvedStore().snapshot()
+                .contains { $0.idempotencyKey == idempotencyKey && !$0.deadLettered }
+        } catch {
+            return false
+        }
+    }
+
     private func resolvedStore() async -> OutboxStore {
         if let openedStore { return openedStore }
         if let openInFlight { return await openInFlight.value }
@@ -596,8 +608,20 @@ public actor OutboxQueue {
     /// enqueue time — e.g. a queued write the moment a 401 logout fires) is a
     /// valid stamp: replay treats it as current-user-owned only while still
     /// `nil`, and a real user-id is re-stamped on the next same-user enqueue.
-    public static let defaultOwnerProvider: @Sendable () -> String? = {
-        KeychainStore().getString(forKey: KeychainKey.userID)
+    public static let defaultOwnerProvider: @Sendable () -> String? = ownerProvider(keychain: KeychainStore())
+
+    /// Build 273 (sync audit A2) — the live signed-in user, or, while no user
+    /// is signed in, the user the last credential wipe signed out
+    /// (`KeychainKey.lastSessionUserID`). The only enqueue that can happen
+    /// while signed out is the one whose request *caused* the sign-out (a
+    /// terminal 401 wipes the id before the repository's catch enqueues), and
+    /// that write belongs to the user who was signed in when it was made.
+    public static func ownerProvider(keychain: KeychainStoring) -> @Sendable () -> String? {
+        let keychain = keychain
+        return {
+            keychain.getString(forKey: KeychainKey.userID)
+                ?? keychain.getString(forKey: KeychainKey.lastSessionUserID)
+        }
     }
 
     /// Live Keychain read for the access-token generation paired with

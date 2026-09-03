@@ -61,6 +61,8 @@ final class WatchSessionCoordinator: NSObject {
     /// still delivering the freshest state. Set while a coalesced push is
     /// pending; cleared when it fires.
     private var pushCoalesced = false
+    /// Build 273 (B3) — remembers the outcome per watch action id.
+    private let replayGuard = WatchActionReplayGuard()
 
     /// The last snapshot the coordinator *attempted* to push, recorded before
     /// the session-activation guard so it reflects the intent even when the WC
@@ -134,6 +136,13 @@ final class WatchSessionCoordinator: NSObject {
     }
 
     private func handle(_ action: WatchAction) async {
+        // Build 273 (B3) — at-least-once transport: a redelivered action is
+        // answered with the outcome it already got, never handled twice.
+        if let prior = replayGuard.priorOutcome(for: action.id) {
+            log.info("watch action redelivered — answered from memory")
+            sendAck(WatchAck(id: action.id, outcome: prior))
+            return
+        }
         let outcome: WatchAckOutcome = switch action.kind {
         case let .markIntake(intakeId, status, _):
             await onMarkIntake?(intakeId, status) ?? .failed
@@ -145,6 +154,7 @@ final class WatchSessionCoordinator: NSObject {
         // WW/F2 — ack the watch so it shows honest state (saved / will-sync /
         // couldn't-save) instead of a blind optimistic check. Durable so it
         // survives an unreachable watch.
+        replayGuard.remember(action.id, outcome: outcome)
         sendAck(WatchAck(id: action.id, outcome: outcome))
     }
 

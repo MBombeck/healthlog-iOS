@@ -143,9 +143,13 @@ public extension HLError {
     /// `.unauthorized` instead lets the write survive: the replay carries the
     /// same persisted idempotency key, and even on a genuine `.tokenExpired`
     /// logout the row survives (that logout has `clearsOutbox == false`), so it
-    /// replays automatically once the user re-authenticates. The 401 means the
-    /// write never reached the server *authenticated*, and the idempotency key
-    /// makes a later successful replay safe against double-write.
+    /// replays once the SAME user re-authenticates — the row is stamped with
+    /// the user who was signed in when the write was made (Build 273 / A2:
+    /// `OutboxQueue.ownerProvider` falls back to `KeychainKey.lastSessionUserID`,
+    /// because the terminal-401 wipe removes `userID` before this enqueue runs);
+    /// under any other account it is retained, never transmitted. The 401 means
+    /// the write never reached the server *authenticated*, and the idempotency
+    /// key makes a later successful replay safe against double-write.
     ///
     /// **Why NOT `.decoding` / non-401 4xx / `.canceled` / `.assistantDisabled`
     /// / `.unknown`:** these are ambiguous or permanent. A 403/404/409/422 says

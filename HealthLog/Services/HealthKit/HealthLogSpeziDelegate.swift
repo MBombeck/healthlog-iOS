@@ -392,6 +392,17 @@
         ) -> Bool {
             // Super initializes Spezi + loads modules.
             let result = super.application(application, willFinishLaunchingWithOptions: launchOptions)
+            // Spezi's `setupNotificationDelegate()` (inside `super`) installs a
+            // `SpeziNotificationCenterDelegate` because `SchedulerNotifications`
+            // conforms to `NotificationHandler`. That delegate fans actions out to
+            // modules whose `handleNotificationAction` is an empty default, so
+            // every banner action would be a silent no-op. Hand the slot back to
+            // the app's `NotificationService`, which was constructed by
+            // `AppContainer.init` before this callback. Spezi-built medication
+            // banners already carry our category + userInfo (see
+            // `HealthLogStandard.notificationContent(for:content:)`), so
+            // `NotificationService` presents and handles them like any other.
+            NotificationService.reinstallNotificationCenterDelegate()
             // v0.14.x Q — register Home-Screen Quick Actions + handle a
             // cold-launch-from-shortcut. UIKit delivers the chosen shortcut in
             // `launchOptions` on a cold launch (and then suppresses the
@@ -459,7 +470,10 @@
         /// is still authoritative for HP5 MOOD_REMINDER + silent-sync
         /// delivery during the v0.5.5 coexist window. Spezi's own
         /// `notificationHandler` chain is intentionally bypassed here —
-        /// no Spezi module currently registers as a handler.
+        /// `SchedulerNotifications` registers as a handler only to answer
+        /// `willPresent` for its own requests, which `NotificationService`
+        /// covers (Build 272: the app re-takes the notification-center
+        /// delegate slot right after `super` in `willFinishLaunching`).
         override func application(
             _ application: UIApplication,
             didReceiveRemoteNotification userInfo: [AnyHashable: Any]

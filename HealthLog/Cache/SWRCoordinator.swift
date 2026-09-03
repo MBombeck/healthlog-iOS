@@ -93,7 +93,7 @@ public actor SWRCoordinator {
     /// land its stale payload back into the cache AFTER the purge.
     /// Cancellation alone is insufficient: an already-resumed continuation
     /// would still run its `cache.write` before observing cancellation.
-    private var sessionEpoch: Int = 0
+    private(set) var sessionEpoch: Int = 0
 
     /// **W-PERF-SWR C2 — non-blocking write-through.** Handles for the
     /// fire-and-forget cache persists kicked by `fetchAndWriteThrough`. The
@@ -109,7 +109,16 @@ public actor SWRCoordinator {
     /// boundary doesn't race a late write landing a previous-user row, and
     /// (2) tests can deterministically drain them via `drainPendingWrites()`
     /// to assert the read-after-write contract without timing flakiness.
-    private var pendingWrites: [UUID: Task<Void, Never>] = [:]
+    var pendingWrites: [UUID: Task<Void, Never>] = [:]
+
+    /// Build 273 (A9) — per-key write generation. `writeThrough` and
+    /// `invalidate(_:)` bump it; a revalidation captures it before its fetch and
+    /// persists to disk only if nothing newer was written for that key in the
+    /// meantime. The session epoch guarded logout; nothing guarded a foreground
+    /// GET that landed after an optimistic "Taken" write-through and persisted
+    /// the pre-POST list — the next offline cold launch then showed the dose
+    /// as open with an enabled button.
+    var writeGenerations: [String: Int] = [:]
 
     /// Re-entrancy guard for single-flight. Holds the set of key-hashes whose
     /// `revalidateSingleFlight` is currently executing **on the present task's
@@ -481,95 +490,32 @@ public actor SWRCoordinator {
         }
     }
 
-    /// Fetch a fresh value and write it through the cache (best-effort — a
-    /// cache-write failure is logged, not propagated, so the caller still
-    /// receives the fresh value). Single shared site for both the
-    /// single-flight winner and the re-entrant short-circuit (W25).
-    ///
-    /// **v0.13 WS Item 2 — epoch guard.** This is an actor-isolated instance
-    /// method (was `static`) so that after `fetch()` resumes it can compare
-    /// the captured `epoch` against the live `sessionEpoch`. If an
-    /// `invalidateAll()` ran during the fetch (user logout / switch-server),
-    /// the fresh payload belongs to the OLD session and must NOT repopulate
-    /// the just-purged cache — we skip the write but still return the value
-    /// to the in-flight observer (which is finishing its own stream; a
-    /// post-purge re-observe under the new session re-fetches cleanly).
-    private func fetchAndWriteThrough<T: Codable & Sendable>(
-        _ key: CacheKey,
-        cache: SWRCache,
-        epoch: Int,
-        fetch: @escaping @Sendable () async throws -> T
-    ) async throws -> T {
-        let fresh = try await fetch()
-        // Re-check on the actor AFTER the fetch — `sessionEpoch` reads here are
-        // serialized with `invalidateAll()`'s bump, so a purge that landed
-        // mid-fetch is observed before we write.
-        guard epoch == sessionEpoch else {
-            // Cache keys are enum-shaped canonical paths (no user data) — operator-grade.
-            // swiftlint:disable:next hllog_public_privacy_interpolation
-            HLLog.cache.notice(
-                "SWR write-through dropped post-invalidate for \(key.canonicalString, privacy: .public) (stale session)"
-            )
-            return fresh
-        }
-        // W-PERF-SWR C2 — encode on the actor (cheap, keeps `fresh` off the
-        // detached closure's Sendable surface), then persist on a detached
-        // low-priority task so the on-screen repaint isn't blocked by the
-        // SwiftData `save()` flush. Errors are logged inside the task, never
-        // awaited. The fresh value is already in the in-memory store via this
-        // return; the detached write only backfills cold-read correctness.
-        do {
-            let payload = try JSONEncoder.hlDefault.encode(fresh)
-            schedulePersist(key, payload: payload, cache: cache, epoch: epoch)
-        } catch {
-            // Cache keys are enum-shaped canonical paths (no user data) — operator-grade.
-            // swiftlint:disable:next hllog_public_privacy_interpolation
-            HLLog.cache.warning("Cache encode failed for \(key.canonicalString, privacy: .public)")
-        }
-        return fresh
-    }
+    // Fetch a fresh value and write it through the cache (best-effort — a
+    // cache-write failure is logged, not propagated, so the caller still
+    // receives the fresh value). Single shared site for both the
+    // single-flight winner and the re-entrant short-circuit (W25).
+    //
+    // **v0.13 WS Item 2 — epoch guard.** This is an actor-isolated instance
+    // method (was `static`) so that after `fetch()` resumes it can compare
+    // the captured `epoch` against the live `sessionEpoch`. If an
+    // `invalidateAll()` ran during the fetch (user logout / switch-server),
+    // the fresh payload belongs to the OLD session and must NOT repopulate
+    // the just-purged cache — we skip the write but still return the value
+    // to the in-flight observer (which is finishing its own stream; a
+    // post-purge re-observe under the new session re-fetches cleanly).
 
-    /// W-PERF-SWR C2 — fire-and-forget persist of an already-encoded payload.
-    /// Re-checks the session epoch on the actor before writing (a logout between
-    /// scheduling and execution drops the stale write) and logs — never
-    /// propagates — a write failure. Registered in `pendingWrites` so
-    /// `invalidateAll()` can cancel + drain it (and tests can await it).
-    private func schedulePersist(
-        _ key: CacheKey,
-        payload: Data,
-        cache: SWRCache,
-        epoch: Int
-    ) {
-        let id = UUID()
-        let task = Task(priority: .utility) { [weak self] in
-            // Re-check the epoch on the actor — a purge could have landed after
-            // the synchronous encode but before this detached task ran.
-            guard let self else { return }
-            guard await epochIsCurrent(epoch) else {
-                await finishPendingWrite(id)
-                return
-            }
-            do {
-                try await cache.write(key, payload: payload)
-            } catch {
-                // Cache keys are enum-shaped canonical paths (no user data) — operator-grade.
-                // swiftlint:disable:next hllog_public_privacy_interpolation
-                HLLog.cache.warning("Cache write failed for \(key.canonicalString, privacy: .public)")
-            }
-            await finishPendingWrite(id)
-        }
-        pendingWrites[id] = task
-    }
+    // W-PERF-SWR C2 — fire-and-forget persist of an already-encoded payload.
+    // Re-checks the session epoch on the actor before writing (a logout between
+    // scheduling and execution drops the stale write) and logs — never
+    // propagates — a write failure. Registered in `pendingWrites` so
+    // `invalidateAll()` can cancel + drain it (and tests can await it).
 
-    /// Actor-isolated epoch check — used by the detached persist task to confirm
-    /// no `invalidateAll()` fenced the session after the write was scheduled.
-    private func epochIsCurrent(_ epoch: Int) -> Bool {
-        epoch == sessionEpoch
-    }
+    // Actor-isolated epoch check — used by the detached persist task to confirm
+    // no `invalidateAll()` fenced the session after the write was scheduled.
 
     /// Remove a settled persist handle. Called once the detached write finishes
     /// (success, drop, or failure) so `pendingWrites` doesn't accumulate.
-    private func finishPendingWrite(_ id: UUID) {
+    func finishPendingWrite(_ id: UUID) {
         pendingWrites[id] = nil
     }
 
@@ -603,6 +549,7 @@ public actor SWRCoordinator {
     /// Write-through helper — used by optimistic-write paths and by the
     /// cache-invalidator on mutation.
     public func writeThrough(_ key: CacheKey, value: some Codable & Sendable) async {
+        bumpWriteGeneration(key)
         do {
             let payload = try JSONEncoder.hlDefault.encode(value)
             try await cache().write(key, payload: payload)
@@ -676,6 +623,9 @@ public actor SWRCoordinator {
 
     /// Drop one or more keys from the cache.
     public func invalidate(_ keys: [CacheKey]) async {
+        for key in keys {
+            bumpWriteGeneration(key)
+        }
         do {
             try await cache().invalidate(keys)
         } catch {

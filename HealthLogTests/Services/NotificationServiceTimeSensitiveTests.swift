@@ -21,8 +21,10 @@ import Testing
     ///    `content.interruptionLevel = .timeSensitive` so the snoozed
     ///    banner inherits the original priority. The regression hazard
     ///    is "snoozing = priority lost".
-    /// 3. Mood-snooze re-build — `buildMoodSnoozeRequest` must set
-    ///    `content.interruptionLevel = .timeSensitive` for symmetry with
+    /// 3. Mood-snooze re-build — `buildMoodSnoozeRequest` keeps the routine
+    ///    `.active` level (Build 273): the evening nudge is `.active` on
+    ///    purpose, so a snooze must not escalate it. Historically pinned as
+    ///    `.timeSensitive` "for symmetry with
     ///    the server-driven mood reminder push.
     /// 4. Spezi medication banner — the `notificationContent(for:content:)`
     ///    rewrite path in `HealthLogStandard` is covered by an integration
@@ -203,9 +205,15 @@ import Testing
             #expect(urgent.contains(.sound))
         }
 
-        // MARK: - Mood snooze re-build keeps time-sensitive
+        // MARK: - Mood snooze re-build keeps the ROUTINE level (Build 273)
 
-        @Test("Mood snooze re-build content is time-sensitive so snoozed banner breaks through Focus")
+        //
+        // The evening mood nudge is deliberately `.active` (see
+        // `+MoodReminder.swift`, App-Review rationale); a snooze must not
+        // escalate it to `.timeSensitive` and break through a Focus the
+        // original respected.
+
+        @Test("Mood snooze re-build stays a routine .active reminder")
         func moodSnoozeRebuildIsTimeSensitive() {
             let payload = APNsPayload(
                 title: "Wie geht's dir gerade?",
@@ -215,13 +223,13 @@ import Testing
                 deepLink: nil
             )
             let req = NotificationService.buildMoodSnoozeRequest(payload: payload)
-            #expect(req.content.interruptionLevel == .timeSensitive)
+            #expect(req.content.interruptionLevel == .active)
         }
 
-        @Test("Mood snooze re-build keeps time-sensitive even when payload is nil")
+        @Test("Mood snooze re-build stays .active even when payload is nil")
         func moodSnoozeRebuildWithNilPayloadStaysTimeSensitive() {
             let req = NotificationService.buildMoodSnoozeRequest(payload: nil)
-            #expect(req.content.interruptionLevel == .timeSensitive)
+            #expect(req.content.interruptionLevel == .active)
         }
 
         // MARK: - Medication snooze re-build keeps time-sensitive

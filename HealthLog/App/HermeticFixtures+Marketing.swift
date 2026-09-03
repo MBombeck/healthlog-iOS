@@ -105,7 +105,9 @@
         /// instead of the tracking-off em-dash. `lastTakenAt` is stamped with
         /// this morning's taken slot (computed, like the intake rows) so the
         /// card's "Last intake" line agrees with the compliance bar beside it
-        /// instead of showing an em-dash next to 100%.
+        /// instead of showing an em-dash next to 100%. `todayEventCount` mirrors
+        /// the taken 08:00 rows so `MedicationWindowStatus.reduce` does not read
+        /// a taken morning dose as "very overdue" on a late-morning capture.
         private static var medicationsJSON: String {
             let takenAt = ISO8601DateFormatter().string(from: morningSlot(hour: 8).addingTimeInterval(300))
             return """
@@ -113,14 +115,14 @@
               { "id": "\(lisinoprilID)", "name": "Lisinopril", "dose": "10 mg",
                 "active": true, "notificationsEnabled": true, "deliveryForm": "ORAL",
                 "stockDosesRemaining": 28, "runwayDays": 28,
-                "createdAt": "2026-03-02T08:00:00.000Z", "lastTakenAt": "\(takenAt)",
+                "createdAt": "2026-03-02T08:00:00.000Z", "lastTakenAt": "\(takenAt)", "todayEventCount": 1,
                 "schedules": [
                   { "windowStart": "08:00", "timesOfDay": ["08:00"], "scheduleType": "SCHEDULED" }
                 ] },
               { "id": "\(naproxenID)", "name": "Naproxen", "dose": "250 mg",
                 "active": true, "notificationsEnabled": true, "deliveryForm": "ORAL",
                 "stockDosesRemaining": 42, "runwayDays": 21,
-                "createdAt": "2026-05-11T08:00:00.000Z", "lastTakenAt": "\(takenAt)",
+                "createdAt": "2026-05-11T08:00:00.000Z", "lastTakenAt": "\(takenAt)", "todayEventCount": 1,
                 "schedules": [
                   { "windowStart": "08:00", "timesOfDay": ["08:00", "20:00"], "scheduleType": "SCHEDULED" }
                 ] },

@@ -496,17 +496,15 @@
 
                 // Shape the userInfo dict to the canonical
                 // `medicationUserInfo(...)` contract. The `scheduledFor`
-                // we attach here is `.now` — the actual occurrence
-                // start-date lives in the request identifier
-                // (`edu.stanford.spezi.scheduler.notification.event.<task-
-                // id>.<startInterval>`) but `UNMutableNotification-
-                // Content` does not expose the trigger date to the
-                // constraint hook. `.now` is a safe approximation
-                // because the action handler reads `scheduledFor` as
-                // the "scheduled dose-time" for the server mark-intake
-                // POST and the server bulk-intake endpoint snaps to the
-                // nearest matching dose-time anyway. If S0's research
-                // surfaces a sharper seam we tighten this later.
+                // we attach here is only a placeholder: this hook runs when
+                // Spezi BUILDS the request (every reconcile), sees task +
+                // content but never the trigger, and the occurrence start
+                // lives only in the request identifier. The action handler
+                // therefore ignores this value for `speziScheduled` banners
+                // and resolves `scheduledFor` from the delivery date
+                // (`NotificationService.resolvedPayload(userInfo:deliveredAt:)`)
+                // — Spezi fires at the occurrence start, so the delivery
+                // instant is the slot.
                 let scheduledFor = Date()
                 if let medicationId {
                     var userInfo = NotificationService.medicationUserInfo(

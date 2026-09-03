@@ -58,6 +58,11 @@ public final class NotificationsStore {
     private let repo: NotificationsRepository
     private let swr: SWRCoordinator?
 
+    /// Build 272 — announced right after the local hour mirror is written, so
+    /// the composition root can re-arm the iOS-local evening reminder at the
+    /// new hour immediately. Wired in `AppContainer+Wiring`.
+    public var onMoodReminderHourChanged: ((Int) -> Void)?
+
     public init(repo: NotificationsRepository, swr: SWRCoordinator? = nil) {
         self.repo = repo
         self.swr = swr
@@ -195,6 +200,9 @@ public final class NotificationsStore {
     /// load-bearing path); the error surfaces for a toast.
     public func setMoodReminderHour(_ hour: Int) async {
         MoodReminderPrefStore.setHour(hour)
+        // Build 272 — the local mirror is the load-bearing path for the iOS
+        // repeating trigger, so re-arm right away (not on the next foreground).
+        onMoodReminderHourChanged?(hour)
         do {
             try await repo.setMoodReminderHour(hour)
             error = nil

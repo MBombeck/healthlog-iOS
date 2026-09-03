@@ -92,9 +92,26 @@
             idempotencyKey: String,
             requiringCurrentOwner ownerUserID: String
         ) async throws
+
+        /// Build 273 (A15) — whether a live (non-dead-lettered) row already waits
+        /// under this idempotency key. A deterministically failing stats chunk is
+        /// re-planned on every foreground; without this check it was enqueued
+        /// again each time under the same key.
+        func hasPendingHealthKitRetry(idempotencyKey: String) async -> Bool
+    }
+
+    extension HealthSyncBatchRetryEnqueuing {
+        func hasPendingHealthKitRetry(idempotencyKey _: String) async -> Bool {
+            false
+        }
     }
 
     extension OutboxQueue: HealthSyncBatchRetryEnqueuing {
+        /// A15 — a live row under this key already waits in the outbox.
+        func hasPendingHealthKitRetry(idempotencyKey: String) async -> Bool {
+            await hasLiveOperation(idempotencyKey: idempotencyKey)
+        }
+
         /// Routes to the Wave-1 importer overload, which refuses the enqueue
         /// outright when `ownerUserID` no longer owns the live session.
         func enqueueHealthKitRetry(

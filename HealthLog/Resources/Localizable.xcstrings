@@ -220,6 +220,22 @@
         }
       }
     },
+    "%@ today": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ heute"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ today"
+          }
+        }
+      }
+    },
     "%@ trend": {
       "localizations": {
         "de": {
@@ -1403,22 +1419,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld yr below your age"
-          }
-        }
-      }
-    },
-    "%lld% today": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld% heute"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld% today"
           }
         }
       }
@@ -37931,6 +37931,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Server feature"
+          }
+        }
+      }
+    },
+    "coach.aiGeneratedNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KI-generiert. Antworten können falsch sein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI-generated. Answers can be wrong."
           }
         }
       }

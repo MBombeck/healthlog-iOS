@@ -62,7 +62,8 @@ struct MarkNextDoseFromWidgetIntent: AppIntent {
         let store = Self.pendingStoreOverride ?? WidgetPendingConfirmStore()
         let scheduledFor = Date(timeIntervalSince1970: scheduledForEpoch)
 
-        if store.armed(for: medicationId) {
+        // Build 273 (A17) — the confirm is bound to the slot the first tap armed.
+        if store.armed(for: medicationId, scheduledFor: scheduledFor) {
             // SECOND tap — the button was armed: record the intake, then clear.
             store.clear()
             await commit(scheduledFor: scheduledFor)

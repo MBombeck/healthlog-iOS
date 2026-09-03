@@ -340,6 +340,9 @@ public extension AppContainer {
         //    leakage is covered: the next sign-in mints a fresh key on
         //    first enqueue, with no leftover rows under the old key.
         if reason.clearsOutbox {
+            // Build 273 (A2) — the signed-out-user memo exists only to attribute
+            // outbox rows; it goes wherever the rows go.
+            try? keychain.remove(forKey: KeychainKey.lastSessionUserID)
             // W-PHI-HARDENING precedent — the outbox AES-GCM key wipe is a hard
             // cross-user/cross-server invariant (a surviving key lets the next
             // sign-in decrypt leftover ciphertext rows). Surface a failure

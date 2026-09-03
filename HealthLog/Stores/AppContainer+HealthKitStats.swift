@@ -281,6 +281,13 @@ extension AppContainer {
     /// so subsequent sweeps return the incremental window. Called by the sweep
     /// hook **after** `triggerDailyStatsSync` returns (v0.7.1 M-3), so a failed
     /// or interrupted first sweep re-arms on the next launch. Idempotent.
+    /// Build 273 (A8) — the one-shot is burnt only for a full (non-incremental)
+    /// pass whose sweep completed. Burning it after an incomplete sweep left
+    /// every later sweep at 7 days and the historical day-rows never arrived.
+    nonisolated static func shouldBurnDailyStatsAllTimeBackfill(incrementalOnly: Bool, completed: Bool) -> Bool {
+        !incrementalOnly && completed
+    }
+
     nonisolated static func markDailyStatsAllTimeBackfillCompleted(
         keychain: KeychainStoring,
         defaults: UserDefaults = .standard

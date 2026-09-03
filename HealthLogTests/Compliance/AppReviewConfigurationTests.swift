@@ -168,7 +168,8 @@ struct AppReviewConfigurationTests {
         let categories = Set(entries.compactMap { $0["NSPrivacyCollectedDataType"] as? String })
         #expect(categories == [
             "NSPrivacyCollectedDataTypeName",
-            "NSPrivacyCollectedDataTypeHealthFitness",
+            "NSPrivacyCollectedDataTypeHealth",
+            "NSPrivacyCollectedDataTypeFitness",
             "NSPrivacyCollectedDataTypeUserID",
             "NSPrivacyCollectedDataTypeEmailAddress",
             "NSPrivacyCollectedDataTypeOtherUserContent",

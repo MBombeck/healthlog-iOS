@@ -15,7 +15,11 @@ public protocol HealthKitDailyStatsSyncing: AnyObject, Sendable {
     /// Per-Type-Fehlern (best-effort vs hard-fail). Fire-and-forget — der
     /// Caller (`BackgroundSyncCoordinator`, `AppContainer`-Bootstrap) braucht
     /// keine Summary-Counter, die landen im Log.
-    func triggerDailyStatsSync(lookbackDays: Int) async
+    /// Build 273 (A8) — reports whether the sweep COMPLETED (every row either
+    /// landed or is durably queued). The orchestrator burns the all-time
+    /// backfill one-shot only on `true`.
+    @discardableResult
+    func triggerDailyStatsSync(lookbackDays: Int) async -> Bool
 
     /// v0.6.2.x bug-c10-ios-direct — read today's cumulative step total
     /// straight from HealthKit, bypassing the server-snapshot path. The
@@ -89,7 +93,7 @@ public extension HealthKitDailyStatsSyncing {
         /// The durable-retry seam. `nil` in contexts with no queue (tests,
         /// pre-composition): a chunk that needs a retry and has nowhere to write
         /// it leaves the sweep incomplete rather than claiming ground.
-        private let retry: (any HealthSyncBatchRetryEnqueuing)?
+        let retry: (any HealthSyncBatchRetryEnqueuing)?
         private let featureFlags: FeatureFlagsServicing
         private let calendar: Calendar
         private let clock: @Sendable () -> Date
@@ -115,7 +119,8 @@ public extension HealthKitDailyStatsSyncing {
             calendar: Calendar = .current,
             clock: @escaping @Sendable () -> Date = { Date() },
             admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)? = nil,
-            retry: (any HealthSyncBatchRetryEnqueuing)? = nil
+            retry: (any HealthSyncBatchRetryEnqueuing)? = nil,
+            defaultsProvider: @escaping @Sendable () -> UserDefaults = { .standard }
         ) {
             self.statisticsService = statisticsService
             cacheState = .resolved(cache)
@@ -125,6 +130,7 @@ public extension HealthKitDailyStatsSyncing {
             self.calendar = calendar
             self.clock = clock
             self.admission = admission
+            self.defaultsProvider = defaultsProvider
         }
 
         /// Production init — defers the daily-stats cache open until the first
@@ -139,7 +145,8 @@ public extension HealthKitDailyStatsSyncing {
             calendar: Calendar = .current,
             clock: @escaping @Sendable () -> Date = { Date() },
             admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)? = nil,
-            retry: (any HealthSyncBatchRetryEnqueuing)? = nil
+            retry: (any HealthSyncBatchRetryEnqueuing)? = nil,
+            defaultsProvider: @escaping @Sendable () -> UserDefaults = { .standard }
         ) {
             self.statisticsService = statisticsService
             cacheState = .pending(cacheTask)
@@ -149,11 +156,14 @@ public extension HealthKitDailyStatsSyncing {
             self.calendar = calendar
             self.clock = clock
             self.admission = admission
+            self.defaultsProvider = defaultsProvider
         }
 
         /// Single-flight resolve of the deferred cache. First call awaits the
         /// open; later calls return the memoised reference. Mirrors
         /// `SWRCoordinator.cache()`.
+        let defaultsProvider: @Sendable () -> UserDefaults
+
         private func cache() async -> HealthKitDailyStatsCache {
             switch cacheState {
             case let .resolved(cache):
@@ -194,9 +204,17 @@ public extension HealthKitDailyStatsSyncing {
             }
 
             let now = clock()
-            let from = calendar.date(byAdding: .day, value: -lookbackDays, to: now) ?? now
+            let from = Self.sweepWindowStart(
+                now: now,
+                lookbackDays: lookbackDays,
+                lastCompletedSweepEnd: lastCompletedSweepEnd(ownerID: lease.ownerID),
+                calendar: calendar
+            )
             let rowsByType = await statisticsService.dailyRowsForAllDefaults(from: from, to: now)
             let summary = await process(rowsByType.values.flatMap(\.self), requiring: lease)
+            if summary.isComplete {
+                recordCompletedSweep(ownerID: lease.ownerID, endingAt: now)
+            }
             await reportQuarantinedLegacyRows()
             return summary
         }
@@ -375,43 +393,14 @@ public extension HealthKitDailyStatsSyncing {
             )
         }
 
-        /// Schreibt einen nicht akzeptierten Chunk als owner-gebundene
-        /// Outbox-Row unter einem **abgeleiteten** Idempotency-Key: ein Prozess,
-        /// der vor dem Cache-Write stirbt, baut denselben Key neu auf und der
-        /// Server dedupliziert, statt eine zweite Zeile zu schreiben.
-        ///
-        /// Identisch zur Regel, die `HealthSampleConsumption` fuer den
-        /// Per-Sample-Pfad faehrt — inklusive der stabilen Identitaet aus den
-        /// sortierten `externalId`s der Zeilen selbst.
-        private func persistRetry(
-            _ entries: [HealthKitBatchEntryDTO],
-            requiring lease: HealthSyncAuthenticatedLease
-        ) async -> Bool {
-            guard let retry else { return false }
-            guard let envelope = HealthSyncRetryEnvelope(
-                ownerID: lease.ownerID,
-                source: lease.source,
-                stableIdentity: HealthSampleConsumption.stableIdentity(of: entries)
-            ) else {
-                return false
-            }
-            do {
-                try lease.requireCurrent()
-                try await retry.enqueueHealthKitRetry(
-                    entries,
-                    idempotencyKey: envelope.idempotencyKey,
-                    requiringCurrentOwner: lease.ownerID
-                )
-                try lease.requireCurrent()
-                return true
-            } catch {
-                // No value, no identifier, no owner — only the fact that the
-                // durable write did not happen, which is what keeps the sweep
-                // incomplete.
-                HLLog.healthKit.error("HK-STATS durable retry write failed — sweep stays incomplete")
-                return false
-            }
-        }
+        // Schreibt einen nicht akzeptierten Chunk als owner-gebundene
+        // Outbox-Row unter einem **abgeleiteten** Idempotency-Key: ein Prozess,
+        // der vor dem Cache-Write stirbt, baut denselben Key neu auf und der
+        // Server dedupliziert, statt eine zweite Zeile zu schreiben.
+        //
+        // Identisch zur Regel, die `HealthSampleConsumption` fuer den
+        // Per-Sample-Pfad faehrt — inklusive der stabilen Identitaet aus den
+        // sortierten `externalId`s der Zeilen selbst.
     }
 
     /// Summary-Counters fuer einen Sync-Run. Tests asserten gegen die Felder.
@@ -521,7 +510,8 @@ public extension HealthKitDailyStatsSyncing {
     }
 
     extension HealthKitStatisticsSyncCoordinator: HealthKitDailyStatsSyncing {
-        public func triggerDailyStatsSync(lookbackDays: Int) async {
+        @discardableResult
+        public func triggerDailyStatsSync(lookbackDays: Int) async -> Bool {
             let summary = await sync(lookbackDays: lookbackDays)
             let posted = summary.posted
             let reposted = summary.reposted
@@ -540,6 +530,7 @@ public extension HealthKitDailyStatsSyncing {
                     complete=\(complete, privacy: .public)
                     """
                 )
+            return complete
         }
 
         /// **v0.12 W8-4** — Sweep der HK-Daily-Stats-Cache-Rows aelter als

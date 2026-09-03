@@ -90,7 +90,7 @@ struct OutboxCrossUserBindingTests {
 
     // MARK: - The leak: A's row must NOT replay under B
 
-    @Test("Row enqueued under user A is dead-lettered (never POSTed) when user B is current")
+    @Test("Row enqueued under user A is retained (never POSTed) when user B is current")
     func foreignOwnedRowDeadLettered() async throws {
         let api = makeAPI()
         // Enqueue under user A: the queue stamps its owner from the provider.
@@ -113,13 +113,18 @@ struct OutboxCrossUserBindingTests {
         let replay = makeReplay(api: api, outbox: outbox, currentUser: { "user-B" })
         await replay.runOnce()
 
-        // The leak is closed: the server was NEVER hit for A's row under B,
-        // and the foreign row is removed (dead-lettered), not stuck forever.
+        // The leak is closed: the server was NEVER hit for A's row under B.
+        // Build 273 — and the row is RETAINED for A rather than deleted: the
+        // .userInitiated/.tokenExpired logouts keep the outbox precisely so A's
+        // queued health writes still exist when A signs back in. Deleting them
+        // on B's sign-in destroyed the data the retention was for.
         #expect(attempts.current == 0, "A's row must never POST under B's token")
-        #expect(await outbox.snapshot.isEmpty, "foreign-owned row must be dead-lettered")
+        let retained = await outbox.snapshot
+        #expect(retained.count == 1, "foreign-owned row is retained for its owner")
+        #expect(retained.first?.ownerUserID == "user-A")
     }
 
-    @Test("Foreign-owned workout replay is dead-lettered before acceptance dispatch")
+    @Test("Foreign-owned workout replay is stopped before acceptance dispatch and retained")
     func foreignOwnedWorkoutRowDeadLettered() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { "user-A" })
@@ -157,7 +162,9 @@ struct OutboxCrossUserBindingTests {
         await replay.runOnce()
 
         #expect(attempts.current == 0, "owner mismatch must stop workout replay before the wire")
-        #expect(await outbox.snapshot.isEmpty, "foreign workout row keeps the established dead-letter behavior")
+        let retainedWorkout = await outbox.snapshot
+        #expect(retainedWorkout.count == 1, "foreign workout row is retained for its owner (Build 273)")
+        #expect(retainedWorkout.first?.ownerUserID == "user-A")
     }
 
     // MARK: - No regression: same-user offline replay still works

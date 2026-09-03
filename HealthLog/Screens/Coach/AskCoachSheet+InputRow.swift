@@ -56,8 +56,23 @@ import SwiftUI
                 }
             }
             .padding(.horizontal, HLSpace.lg)
-            .padding(.vertical, HLSpace.sm)
+            .padding(.top, HLSpace.sm)
+            .padding(.bottom, HLSpace.xxs)
             .background(rowBackground)
+            // Build 273 — a persistent, visible statement under the composer
+            // that the answers are generated, fallible and not medical advice
+            // (App Review 1.2 / 5.1.1); the first-launch disclaimer alone is a
+            // screen the reviewer may never reopen.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Text("coach.aiGeneratedNote")
+                    .font(.hlCaption2)
+                    .foregroundStyle(HLText.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, HLSpace.lg)
+                    .padding(.bottom, HLSpace.xs)
+                    .accessibilityIdentifier("coach.aiGeneratedNote")
+            }
             .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: canSend)
             .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: dictation.isRecording)
             // Stop a live session if the coach starts responding (the field is

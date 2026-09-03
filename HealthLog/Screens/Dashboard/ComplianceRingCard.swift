@@ -101,7 +101,7 @@ struct ComplianceRingCard: View {
                         Text(String(localized: "Medication compliance"))
                             .font(.hlCaption).foregroundStyle(HLText.secondary)
                         Text(snapshot.hasSchedule
-                            ? String(localized: "\(Int(snapshot.ratio * 100))% today")
+                            ? String(localized: "\(Self.percentLabel(snapshot.ratio)) today")
                             : String(localized: "Nothing scheduled today"))
                             .font(.hlTitle2)
                             .foregroundStyle(snapshot.hasSchedule ? HLText.primary : HLText.tertiary)
@@ -177,6 +177,19 @@ struct ComplianceRingCard: View {
             medications: medicationsStore.medications,
             now: .now
         )
+    }
+
+    /// Build 273 — the percentage as a finished *argument*, never a literal
+    /// `%` inside the localizable string.
+    ///
+    /// `"\(pct)% today"` produced the key `%lld% today`, and to Foundation the
+    /// stray percent is not a literal: `% to` parses as a second specifier
+    /// (space flag, `t` length, `o` conversion). German's `%lld% heute` parsed
+    /// as `%lld` plus `% he` — a different signature, so the translation was
+    /// dropped and German users read "66% today" on the dashboard.
+    /// `CatalogFormatSignatureTests` pins the class.
+    nonisolated static func percentLabel(_ ratio: Double) -> String {
+        HLNumberFormat.percent(Int(ratio * 100))
     }
 
     /// Last-14 daily-compliance-rate as percentages (0-100) sorted ascending

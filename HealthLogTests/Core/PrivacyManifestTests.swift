@@ -48,7 +48,8 @@
             let typeIDs = Set(types.compactMap { $0["NSPrivacyCollectedDataType"] as? String })
 
             let required: Set = [
-                "NSPrivacyCollectedDataTypeHealthFitness",
+                "NSPrivacyCollectedDataTypeHealth",
+                "NSPrivacyCollectedDataTypeFitness",
                 "NSPrivacyCollectedDataTypeUserID",
                 "NSPrivacyCollectedDataTypeEmailAddress",
                 "NSPrivacyCollectedDataTypeOtherUserContent",
@@ -77,16 +78,34 @@
             }
         }
 
-        @Test("Email + UserID list AccountManagement purpose (Apple recommendation)")
-        func authPurposeAttachedToCredentialedTypes() throws {
+        /// Build 273 — every purpose must be one Apple's manifest vocabulary
+        /// defines. `PurposeAccountManagement` is an App Store Connect label
+        /// answer, not a manifest purpose; a manifest carrying it declares no
+        /// valid purpose for that type. The credentialed types use
+        /// `AppFunctionality` here and "Account Management" on the ASC form.
+        @Test("Every purpose is a valid manifest purpose; credentialed types use AppFunctionality")
+        func purposesAreValidManifestVocabulary() throws {
             let plist = try loadManifest()
             let types = (plist["NSPrivacyCollectedDataTypes"] as? [[String: Any]]) ?? []
+            let valid: Set = [
+                "NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising",
+                "NSPrivacyCollectedDataTypePurposeDeveloperAdvertising",
+                "NSPrivacyCollectedDataTypePurposeAnalytics",
+                "NSPrivacyCollectedDataTypePurposeProductPersonalization",
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+                "NSPrivacyCollectedDataTypePurposeOther"
+            ]
+            for entry in types {
+                let id = entry["NSPrivacyCollectedDataType"] as? String ?? "?"
+                let purposes = Set((entry["NSPrivacyCollectedDataTypePurposes"] as? [String]) ?? [])
+                #expect(purposes.subtracting(valid).isEmpty, "\(id): unknown purpose \(purposes.subtracting(valid))")
+            }
             for credentialType in ["NSPrivacyCollectedDataTypeEmailAddress", "NSPrivacyCollectedDataTypeUserID"] {
                 let entry = types.first { $0["NSPrivacyCollectedDataType"] as? String == credentialType }
                 let purposes = (entry?["NSPrivacyCollectedDataTypePurposes"] as? [String]) ?? []
                 #expect(
-                    purposes.contains("NSPrivacyCollectedDataTypePurposeAccountManagement"),
-                    "\(credentialType) muss AccountManagement-Purpose tragen"
+                    purposes.contains("NSPrivacyCollectedDataTypePurposeAppFunctionality"),
+                    "\(credentialType) must carry AppFunctionality"
                 )
             }
         }

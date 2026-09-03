@@ -59,7 +59,38 @@ public protocol HealthKitHRBucketSyncing: AnyObject, Sendable {
             defaultsProvider()
         }
 
-        static let lastBucketDefaultsKeyPrefix = "hl.healthkit.hrBucketLastBucketUTC."
+        static let lastBucketDefaultsKeyPrefix = HRBucketCutoverStore.lastBucketDefaultsKeyPrefix
+
+        /// Build 273 (A6) — how far a catch-up from the persisted cursor may
+        /// reach back. Bounds the HealthKit query and the upload after a long
+        /// dormancy; the server dedups on `externalId`, so the overlap is free.
+        static let maxCatchUpSeconds: TimeInterval = 30 * 24 * 3600
+
+        /// The window's start. With a cursor: one bucket before it (a late
+        /// correction overwrites the newest uploaded bucket), never further back
+        /// than ``maxCatchUpSeconds`` — and NOT floored at `now - lookbackHours`,
+        /// which left every hour between the cursor and that floor in neither
+        /// shape on the server after a dormancy longer than the lookback
+        /// (`heartRateBuckets` is not an incremental partition, and the raw path
+        /// drops HR once in bucket mode). Without a cursor: the lookback, as on
+        /// the first run. The cutover is always a floor.
+        nonisolated static func windowStart(
+            cutover: Date,
+            now: Date,
+            lookbackHours: Int,
+            lastUploadedBucket: Date?
+        ) -> Date {
+            let start: Date
+            if let lastUploadedBucket {
+                let reincluded = lastUploadedBucket.addingTimeInterval(-HealthKitHRBucketRow.bucketSeconds)
+                let bound = HealthKitHRBucketRow.flooredToUTCTenMinutes(now.addingTimeInterval(-maxCatchUpSeconds))
+                start = max(reincluded, bound)
+            } else {
+                let lookbackStart = now.addingTimeInterval(-Double(lookbackHours) * 3600)
+                start = HealthKitHRBucketRow.flooredToUTCTenMinutes(lookbackStart)
+            }
+            return max(start, cutover)
+        }
 
         public init(
             service: HealthKitHRBucketService,
@@ -109,17 +140,13 @@ public protocol HealthKitHRBucketSyncing: AnyObject, Sendable {
             // the in-progress bucket.
             let currentBucketStart = HealthKitHRBucketRow.flooredToUTCTenMinutes(now)
 
-            // Window start: max(cutover, now - lookbackHours, lastUploadedBucket).
-            let lookbackStart = now.addingTimeInterval(-Double(lookbackHours) * 3600)
-            let lastUploaded = persistedLastBucket(userID: userID)
-            var windowStart = max(cutover, HealthKitHRBucketRow.flooredToUTCTenMinutes(lookbackStart))
-            if let lastUploaded {
-                // Re-include the most recent uploaded bucket so a late correction
-                // overwrites it; start one bucket before it.
-                let reincluded = lastUploaded.addingTimeInterval(-HealthKitHRBucketRow.bucketSeconds)
-                windowStart = max(windowStart, reincluded)
-            }
-            windowStart = max(windowStart, cutover)
+            // Window start — see `windowStart(cutover:now:lookbackHours:lastUploadedBucket:)`.
+            let windowStart = Self.windowStart(
+                cutover: cutover,
+                now: now,
+                lookbackHours: lookbackHours,
+                lastUploadedBucket: persistedLastBucket(userID: userID)
+            )
 
             guard currentBucketStart > windowStart else {
                 // No closed bucket on-or-after the cutover yet (e.g. cutover is in
@@ -205,7 +232,7 @@ public protocol HealthKitHRBucketSyncing: AnyObject, Sendable {
         }
 
         static func lastBucketKey(for userID: String?) -> String {
-            lastBucketDefaultsKeyPrefix + HealthKitBackfillWindowStore.partitionToken(for: userID)
+            HRBucketCutoverStore.lastBucketKey(for: userID)
         }
     }
 

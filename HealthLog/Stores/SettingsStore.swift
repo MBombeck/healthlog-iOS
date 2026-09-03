@@ -36,6 +36,12 @@ public final class SettingsStore {
     /// reads. `@Sendable` so it can hand the value off to an actor.
     public var onProfileTimeZoneChange: (@Sendable (TimeZone) -> Void)?
 
+    /// Build 272 — announced after `updateMoodReminderEnabled` settles (the
+    /// value the profile now carries), so the composition root can re-arm or
+    /// cancel the iOS-local evening reminder immediately instead of on the next
+    /// foreground pass. Wired in `AppContainer+Wiring`.
+    public var onMoodReminderEnabledChanged: ((Bool) -> Void)?
+
     /// The server-profile IANA timezone resolved to a `TimeZone`, or `.current`
     /// when the profile carries no (valid) zone.
     public var resolvedProfileTimeZone: TimeZone {
@@ -485,6 +491,9 @@ public final class SettingsStore {
             // Server rejected — revert to the pre-toggle value so the UI
             // doesn't lie about the persisted state.
             profile = previous
+        }
+        if let settled = profile?.moodReminderEnabled {
+            onMoodReminderEnabledChanged?(settled)
         }
         return ok
     }

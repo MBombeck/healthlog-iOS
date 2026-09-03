@@ -146,15 +146,34 @@ public enum LowStockRunwayPrefStore {
                 now: now,
                 calendar: calendar
             )
+            // Build 272 — a HealthLog Focus filter must HOLD the routine nudge
+            // back, not delete it. Removing the pending request and then handing
+            // the rebuilt one to the Focus-gated `addLocalNotification` (which
+            // refuses to add under Focus) deleted the repeating trigger for every
+            // future day on any reconcile that ran during a Focus. Under Focus we
+            // leave whatever is pending untouched; the next reconcile outside
+            // the Focus applies the hour.
+            let focusSuppressed = FocusFilterSuppression.shouldSuppress(request: request)
+            switch Self.moodReminderReconcileDecision(
+                enabled: true, authorized: true, focusSuppressed: focusSuppressed
+            ) {
+            case .cancel:
+                center.removePendingNotificationRequests(
+                    withIdentifiers: [Self.moodReminderLocalIdentifier]
+                )
+                return
+            case .keepPending:
+                HLLog.notifications.info("mood-reminder-local left as pending under Focus filter")
+                return
+            case .rearm:
+                break
+            }
             do {
                 // Replace any existing pending request (same id) so a changed
                 // hour re-arms cleanly.
                 center.removePendingNotificationRequests(
                     withIdentifiers: [Self.moodReminderLocalIdentifier]
                 )
-                // W-FOCUS-FILTER — the evening mood nudge is a routine `.active`
-                // reminder, so a HealthLog Focus filter holds it back. The daily
-                // 22:00 server cron re-offers it the next day; nothing is lost.
                 try await addLocalNotification(request, center: center)
                 // Reminder hour (Int) — operator-grade.
                 // swiftlint:disable:next hllog_public_privacy_interpolation
@@ -166,6 +185,28 @@ public enum LowStockRunwayPrefStore {
                     "mood-reminder-local scheduling failed err=\(LogSanitizer.redact(String(describing: error)), privacy: .public)"
                 )
             }
+        }
+
+        /// What `reconcileMoodReminder` does with the pending repeating request.
+        enum MoodReminderReconcileDecision: Equatable {
+            /// Remove the pending request (opted out or not authorized).
+            case cancel
+            /// Leave the pending request exactly as it is (Focus filter active).
+            case keepPending
+            /// Replace the pending request with a freshly built one.
+            case rearm
+        }
+
+        /// Pure decision behind `reconcileMoodReminder`: disabled or unauthorized
+        /// always cancels; an active Focus filter keeps whatever is pending;
+        /// otherwise re-arm in place.
+        nonisolated static func moodReminderReconcileDecision(
+            enabled: Bool,
+            authorized: Bool,
+            focusSuppressed: Bool
+        ) -> MoodReminderReconcileDecision {
+            guard enabled, authorized else { return .cancel }
+            return focusSuppressed ? .keepPending : .rearm
         }
 
         /// Pure builder for the local mood-reminder request — exposed at

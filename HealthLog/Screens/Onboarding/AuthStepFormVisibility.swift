@@ -32,10 +32,22 @@ struct AuthStepFormVisibility: Equatable, Sendable {
     /// Has the password form been opened — by the fallback link, by the
     /// self-hosted passkey CTA, or by a dead-ended web leg?
     let latched: Bool
+    /// Build 272 — whether the native passkey ceremony can run against this
+    /// host (`AppEnvironment.supportsPasskeys`). The distributed build carries
+    /// no relying-party host, so this is `false` for every server a user
+    /// enters; the CTA used to stay visible anyway and only re-revealed the
+    /// password form on tap — a primary button that does nothing.
+    var passkeySupported: Bool = false
 
     /// The browser CTA replaces the native passkey CTA and the divider.
     var showsWebHandoffCTA: Bool {
         prefersWebHandoff && availability == .available
+    }
+
+    /// The native passkey CTA (plus its "or" divider): only where the
+    /// ceremony can run, and never beside a live web-handoff CTA.
+    var showsPasskeyCTA: Bool {
+        !showsWebHandoffCTA && passkeySupported
     }
 
     /// The password form. Under a live handoff CTA it is the fallback and

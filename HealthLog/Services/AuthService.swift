@@ -446,6 +446,7 @@ public actor AuthService {
         // so account deletion is self-sufficient. The client-side BYO path
         // transmits health data off-device, so its consent record must not
         // survive the deleted account.
+        keys.append(KeychainKey.lastSessionUserID) // Build 273 (A2) — goes with the outbox
         for provider in BYOProviderID.allCases {
             keys.append(AIConsentStore.byoKeyPrefix + provider.rawValue)
             keys.append(BYOKeyStore.keyPrefix + provider.rawValue)
@@ -873,6 +874,7 @@ extension AuthService {
     /// intentionally ignores it, matching its previous fail-closed behavior.
     func invalidateAndWipeSessionCredentials() throws -> String? {
         let previousUserID = keychain.getString(forKey: KeychainKey.userID)
+        if let previousUserID { try? keychain.setString(previousUserID, forKey: KeychainKey.lastSessionUserID) } // A2
         credentialPersistenceGeneration &+= 1
         let requiredKeys = [
             KeychainKey.authToken,

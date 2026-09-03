@@ -174,7 +174,9 @@ extension NotificationsScreen {
 
     func initializeStore() async {
         if store == nil, let api = container?.api {
-            store = NotificationsStore(repo: NotificationsRepository(api: api), swr: container?.swr)
+            let created = NotificationsStore(repo: NotificationsRepository(api: api), swr: container?.swr)
+            container?.wireMoodReminderHourChanges(on: created)
+            store = created
         }
         // v0.14.2 FW7 — ntfy + Telegram channel settings store. Server-first,
         // built off the same pinned `APIClient`.

@@ -17,7 +17,11 @@ import XCTest
 /// proven path that lands on a populated tenant.
 @MainActor
 final class MarketingScreenshotsTest: XCTestCase {
-    private let outputDir = "/tmp/marketing-shots"
+    /// `TEST_RUNNER_HL_MARKETING_LANG=de` (forwarded by xcodebuild) switches the
+    /// capture language; the output directory carries the language so an
+    /// English and a German run never overwrite each other.
+    private static let language = ProcessInfo.processInfo.environment["HL_MARKETING_LANG"] ?? "en"
+    private let outputDir = "/tmp/marketing-shots-\(MarketingScreenshotsTest.language)-\(ProcessInfo.processInfo.environment["HL_MARKETING_TAG"] ?? "sim")"
 
     override func setUpWithError() throws {
         continueAfterFailure = true
@@ -105,7 +109,8 @@ final class MarketingScreenshotsTest: XCTestCase {
     /// Navigates More → share glyph and captures the unified sharing screen.
     private func captureUnifiedSharing(app: XCUIApplication) {
         dismissSystemHealthSheet()
-        let moreTab = app.buttons["More"]
+        // Tab label is localized (More / Mehr); match either so the German capture run reaches the share screen too.
+        let moreTab = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "More", "Mehr")).firstMatch
         guard moreTab.waitForExistence(timeout: 10) else {
             logSkip("More tab not reachable — unified sharing not captured")
             return
@@ -125,7 +130,9 @@ final class MarketingScreenshotsTest: XCTestCase {
             // "0 of 4 selected" + its nothing-selected hint is the honest empty
             // default, but a hero shot should show the surface doing its job —
             // select the whole fixture vocabulary so the card reads "4 of 4".
-            let selectAll = app.buttons["Select everything"]
+            // Identifier, not the localized label — the German run matched
+            // nothing and captured "0 of 4 selected" as the hero shot.
+            let selectAll = app.descendants(matching: .any)["sharing.unified.selectAll"]
             if selectAll.waitForExistence(timeout: 4), selectAll.isHittable {
                 selectAll.tap()
                 settle(2)
@@ -188,8 +195,8 @@ final class MarketingScreenshotsTest: XCTestCase {
     private func bootMarketingApp() -> XCUIApplication {
         let app = XCUIApplication()
         var extraArguments = [
-            "-AppleLanguages", "(en)",
-            "-AppleLocale", "en_US",
+            "-AppleLanguages", "(\(Self.language))",
+            "-AppleLocale", Self.language == "de" ? "de_DE" : "en_US",
             "-uitest-phase8", "insightsAccessibility",
             "-uitest-marketing",
             "-hl.healthkit.requestedAt.hermetic-user", "true",

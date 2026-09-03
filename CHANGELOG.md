@@ -4,6 +4,57 @@
 > per-version reports under `.planning/v05*-marathon/` and
 > `.planning/v056-marathon/`. This file resumes from v0.6.2.
 
+## 1.0.0 (273) — 2026-09-02
+
+The submission candidate. Build 272's reminder fixes plus everything the
+pre-submission audit found in sync, storage and localization — no new
+features, and nothing deferred to a later version.
+
+- **German is German again on the dashboard.** The medication-compliance
+  line read "66% today" in an otherwise German app. A stray percent sign in
+  the source string made the system drop the translation; the percentage is
+  now a formatted value, and German gets its proper narrow space ("66 %").
+- **A write interrupted by an expired session is no longer stranded.** It
+  kept its owner, replays after the next sign-in, and stops counting as
+  permanently pending.
+- **Another account's queued writes survive a sign-in.** They were deleted;
+  now they wait for the account that made them.
+- **Heart-rate history catches up after a break.** More than two days
+  without opening the app left a permanent gap, and signing back in on the
+  same day could mix two resolutions. Both windows now continue from the
+  last thing actually written.
+- **Day totals and nutrients catch up the same way**, and the one-time
+  full-history backfill is only marked done when the sweep finished.
+- **A dose you just logged stays logged.** A refresh that was already in
+  flight could write the older list back to disk, so the next offline start
+  showed the dose as open again.
+- **Widget confirmation binds to the dose it was armed for**, not just the
+  medication, and repeated watch actions are answered once instead of
+  recorded twice.
+- **Snoozed reminders honour Focus and priority** like every other reminder.
+- Privacy manifest, development language and an in-chat note that assistant
+  answers are AI-generated and not medical advice.
+
+## 1.0.0 (272) — 2026-09-01
+
+Build 272 replaces the review candidate 271 before submission. No new
+features; five reminder defects found in the pre-submission audit are fixed:
+
+- **Notification actions work again.** The scheduling framework installed its
+  own notification-center delegate after the app had installed hers, so
+  "Taken", "Skipped", snooze, the mood actions and "Done" on preventive-care
+  reminders silently did nothing. The app takes the delegate back after launch.
+- **"Taken" from a locally scheduled banner records the right dose.** Those
+  banners carried the time they were scheduled, not the time they fired.
+- **Widget taps reach your server.** The Home Screen widgets read a different
+  keychain service than the app and could not find the session.
+- **The evening mood reminder follows its switch and its hour immediately**,
+  not on the next app launch.
+- **A Focus filter holds the mood reminder back instead of deleting it.**
+- **No dead "Sign in with Passkey" button.** On servers where the passkey
+  ceremony cannot run (every self-hosted instance in this build) the sign-in
+  step now shows the email and password form alone.
+
 ## 1.0.0 — 2026-08-29 (The App Store release)
 
 The first version headed for the App Store. Between 0.13 and here the app

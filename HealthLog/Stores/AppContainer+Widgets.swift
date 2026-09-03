@@ -149,5 +149,30 @@ extension AppContainer {
                 )
             }
         }
+        // Build 272 — the toggle itself re-arms/cancels immediately. Until now
+        // only the next foreground pass did, so "off" at 21:50 still fired at
+        // 22:00 and "on" armed nothing until the app was reopened.
+        settingsStore.onMoodReminderEnabledChanged = { [weak notifications] enabled in
+            guard let notifications else { return }
+            Task {
+                await notifications.reconcileMoodReminder(
+                    enabled: enabled,
+                    hour: MoodReminderPrefStore.hour()
+                )
+            }
+        }
+    }
+
+    /// Build 272 — re-arm the iOS-local evening reminder the moment the user
+    /// picks a new hour on the Notifications screen (the store is screen-owned,
+    /// so it is wired at construction, not in the composition root).
+    func wireMoodReminderHourChanges(on store: NotificationsStore) {
+        store.onMoodReminderHourChanged = { [weak self] hour in
+            guard let self else { return }
+            let enabled = settingsStore.profile?.moodReminderEnabled ?? false
+            Task {
+                await self.notifications.reconcileMoodReminder(enabled: enabled, hour: hour)
+            }
+        }
     }
 }

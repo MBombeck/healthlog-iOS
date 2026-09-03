@@ -267,11 +267,15 @@ public actor OutboxReplayService {
             // KEEP the outbox + cipher key), so when User B signs in the replay
             // loop would otherwise POST A's health data under B's token. Skip +
             // dead-letter any row whose owner doesn't match the current user.
+            // Build 273 (sync audit A11) — RETAIN, never delete. The row is
+            // another user's health write; it replays when that user signs in
+            // again and is invisible to everyone else meanwhile. Deleting it
+            // here (the pre-273 behaviour, logged as "dead-lettered") destroyed
+            // User A's queued writes the moment User B signed in.
             if let owner = op.ownerUserID, owner != currentUser {
-                HLLog.outbox.error(
-                    "Op \(op.kind.rawValue, privacy: .public) owner-mismatch — dead-lettered (foreign user)"
+                HLLog.outbox.warning(
+                    "Op \(op.kind.rawValue, privacy: .public) owner-mismatch — retained for its owner, not transmitted"
                 )
-                try? await outbox.remove(id: op.id)
                 continue
             }
 

@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: dev.healthlog
   deploymentTarget:
     iOS: "18.0"
-  developmentLanguage: de
+  developmentLanguage: en
   groupSortPosition: top
   generateEmptyDirectories: true
   # 03-03 release preflight pins the exact installed archive toolchain rather
@@ -48,7 +48,7 @@ settings:
     #
     # The procedure and the receipt it must produce live in
     # .planning/active/apple-review-reliability/CANDIDATE-FREEZE.md.
-    CURRENT_PROJECT_VERSION: "271"
+    CURRENT_PROJECT_VERSION: "273"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -735,7 +735,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
         TARGETED_DEVICE_FAMILY: "1"
-        SKIP_INSTALL: NO
+        SKIP_INSTALL: YES
         # The extension reuses the app's plattform-free Core source set;
         # it links no Spezi / HealthKit, so no extra frameworks beyond
         # WidgetKit + SwiftUI (+ AppIntents/ActivityKit which the SDK

@@ -162,12 +162,14 @@ extension AppContainer {
                     let lookback = context.budget.incrementalOnly
                         ? 1
                         : dailyStatsLookbackForNextSweep(keychain: keychain)
-                    await sync.triggerDailyStatsSync(lookbackDays: lookback)
+                    let completed = await sync.triggerDailyStatsSync(lookbackDays: lookback)
                     // v0.7.1 M-3 — burn the one-shot flag ONLY after the sync
-                    // returns. Burning it first left "Schritte alle Daten" empty
-                    // with the backfill marked done whenever a wake was killed
-                    // mid-flight, and it never retried.
-                    if !context.budget.incrementalOnly {
+                    // returns; Build 273 (A8) — and only if it COMPLETED. A
+                    // held or killed sweep returned Void before, and the flag
+                    // was burnt anyway.
+                    if shouldBurnDailyStatsAllTimeBackfill(
+                        incrementalOnly: context.budget.incrementalOnly, completed: completed
+                    ) {
                         markDailyStatsAllTimeBackfillCompleted(keychain: keychain)
                     }
                     return .ran(.dailyStatistics)

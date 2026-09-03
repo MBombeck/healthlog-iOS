@@ -46,6 +46,18 @@ enum HRBucketCutoverStore {
         defaultsKeyPrefix + HealthKitBackfillWindowStore.partitionToken(for: userId)
     }
 
+    /// Build 273 (A7) — the HR-bucket upload cursor (start of the newest
+    /// 10-minute bucket the coordinator uploaded), per user. Lives here so the
+    /// cutover can consult it when it re-arms: logout clears the cutover, and
+    /// re-arming at the *next* UTC midnight on a day that already carries
+    /// bucket rows would send the rest of that day raw — the raw + bucket mix
+    /// the cutover exists to prevent.
+    static let lastBucketDefaultsKeyPrefix = "hl.healthkit.hrBucketLastBucketUTC."
+
+    static func lastBucketKey(for userId: String?) -> String {
+        lastBucketDefaultsKeyPrefix + HealthKitBackfillWindowStore.partitionToken(for: userId)
+    }
+
     /// Reads the persisted cutover boundary, arming it on first access.
     ///
     /// If no cutover has been persisted yet for this user, this sets it to the
@@ -69,7 +81,14 @@ enum HRBucketCutoverStore {
         if let stored {
             return stored
         }
-        let armed = nextUTCMidnight(after: now)
+        // A7 — a persisted upload cursor means this account is already in
+        // bucket mode on the cursor's UTC day; continue there instead of
+        // starting a fresh raw day.
+        let armed: Date = if let cursor = defaults.object(forKey: lastBucketKey(for: userId)) as? Date {
+            utcCalendar.startOfDay(for: cursor)
+        } else {
+            nextUTCMidnight(after: now)
+        }
         defaults.set(armed, forKey: key)
         return armed
     }
