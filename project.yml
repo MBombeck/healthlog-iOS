@@ -48,7 +48,7 @@ settings:
     #
     # The procedure and the receipt it must produce live in
     # .planning/active/apple-review-reliability/CANDIDATE-FREEZE.md.
-    CURRENT_PROJECT_VERSION: "273"
+    CURRENT_PROJECT_VERSION: "274"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES

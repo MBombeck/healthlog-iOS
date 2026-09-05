@@ -101,7 +101,16 @@ extension AppContainer {
         // ersten Frame. Das `outbox.open`-Intervall bleibt genau hier, weil
         // `Repositories/` plattform-frei nach `HealthLogCore` kompiliert und
         // `HLPerfSignpost` dort bewusst nicht existiert.
-        let outbox = OutboxQueue.deferred { HLPerfSignpost.measure(.outboxOpen, outboxFactory.open) }
+        // Build 274 (public #4) — this is the app-process outbox the HealthKit
+        // observer wake writes through (`HealthSampleConsumption.persistRetry`),
+        // and the store lives in the shared app-group container. Build 271 was
+        // killed by RunningBoard (`0xdead10cc`) for holding that SQLite lock
+        // across a suspension, so every persist here takes a UIApplication
+        // background-task assertion first.
+        let outbox = OutboxQueue.deferred(
+            { HLPerfSignpost.measure(.outboxOpen, outboxFactory.open) },
+            backgroundLease: UIKitBackgroundExecutionLease()
+        )
         let reachability = Reachability()
         // SWR cache: defer the SwiftData container open to a detached
         // task so the launch tick doesn't pay for it. The Outbox open

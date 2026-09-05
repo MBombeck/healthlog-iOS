@@ -144,14 +144,16 @@ struct OperatorDecisions2502Tests {
         )
     }
 
-    /// The injection-site deny-list lives with the medications it governs —
-    /// the Medications tab — and leaves Datenschutz und Sicherheit entirely.
-    @Test("the injection sites live with the medications")
-    func injectionSitesLiveWithMedications() throws {
-        let meds = try Self.lineStrippedSource(Self.medsPath)
+    /// The injection-site deny-list leaves Datenschutz und Sicherheit entirely.
+    /// #105 — the half of this decision that named the *new* host has moved on:
+    /// the door now sits in Über mich (pinned by `InjectionSitesPlacementTests`),
+    /// because the deny-list describes the user's body, not one medication.
+    @Test("the injection sites leave Datenschutz und Sicherheit")
+    func injectionSitesLeaveDatenschutz() throws {
+        let aboutMe = try Self.lineStrippedSource(Self.aboutMePath)
         let advanced = try Self.lineStrippedSource(Self.advancedPath)
         #expect(
-            meds.contains("SettingsInjectionSitesScreen(") && !advanced.contains("SettingsInjectionSitesScreen"),
+            aboutMe.contains("SettingsInjectionSitesScreen(") && !advanced.contains("SettingsInjectionSitesScreen"),
             "EXPECTED_RED: 25-02 the injection sites still sit under Datenschutz und Sicherheit"
         )
     }
@@ -323,21 +325,6 @@ struct OperatorDecisions2502Tests {
         #expect(TodayHeroCard.availableScore(Self.digest(score: typical)) == typical)
     }
 
-    /// The injection-sites door renders only for a person the deny-list can
-    /// do anything for — at least one injection medication, active or
-    /// archived; a GLP-1 counts as injectable by class (W47).
-    @Test("the injection door needs an injection medication")
-    @MainActor
-    func theInjectionDoorNeedsAnInjectionMedication() {
-        #expect(!MedicationsScreen.showsInjectionSitesDoor(medications: []))
-        let oral = Medication(id: "m1", name: "Lisinopril", dose: "5 mg", schedule: MedicationSchedule(times: []), deliveryForm: "ORAL")
-        #expect(!MedicationsScreen.showsInjectionSitesDoor(medications: [oral]))
-        let pen = Medication(id: "m2", name: "Insulin", dose: "10 IE", schedule: MedicationSchedule(times: []), deliveryForm: "INJECTION")
-        #expect(MedicationsScreen.showsInjectionSitesDoor(medications: [oral, pen]))
-        let glp1 = Medication(id: "m3", name: "Trulicity", dose: "5 mg", treatmentClass: "GLP1", schedule: MedicationSchedule(times: []))
-        #expect(MedicationsScreen.showsInjectionSitesDoor(medications: [glp1]))
-    }
-
     /// The avatar's presentation stays exactly ONE sheet — the retarget
     /// changed the destination, never the presentation grammar (a push would
     /// be a new navigation-destination in the Phase-06 census).
@@ -371,7 +358,6 @@ struct OperatorDecisions2502Tests {
     static let kontoPath = "HealthLog/Screens/Settings/Sub/SettingsAccountScreen.swift"
     static let aboutMePath = "HealthLog/Screens/AboutMe/AboutMeScreen.swift"
     static let advancedPath = "HealthLog/Screens/Settings/Sub/SettingsAdvancedScreen.swift"
-    static let medsPath = "HealthLog/Screens/Medications/MedicationsScreen.swift"
     static let cardPath = "HealthLog/Components/HealthKitUpdateNoticeCard.swift"
     static let noticePath = "HealthLog/App/HealthKitUpdateNotice.swift"
 

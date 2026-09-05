@@ -466,6 +466,10 @@ public actor OutboxQueue {
     /// provider is injected. Persistent and recovery queues never enable it.
     private let allowsUnauthenticatedTestLease: Bool
 
+    /// Build 274 (public #4) — every write to the shared-container store runs
+    /// under this lease; see `BackgroundExecutionLeasing`.
+    private let backgroundLease: any BackgroundExecutionLeasing
+
     /// Default initializer — persistent SQLite store under
     /// `Library/Application Support/HealthLog/Outbox/outbox.sqlite`. Throws when
     /// the on-disk container cannot be opened (corruption, permissions). Callers
@@ -477,10 +481,13 @@ public actor OutboxQueue {
     ///     `ModelConfiguration(isStoredInMemoryOnly: true)` — meant for tests.
     ///   - currentOwnerProvider: resolves the signed-in `KeychainKey.userID`
     ///     for the v0.13 WS owner stamp. Defaults to a live Keychain read.
+    ///   - backgroundLease: Build 274 (public #4) — the background-execution
+    ///     lease every persist runs under. Defaults to the unconditional one.
     public init(
         inMemory: Bool = false,
         currentOwnerProvider: @escaping @Sendable () -> String? = OutboxQueue.defaultOwnerProvider,
-        currentAuthTokenProvider: (@Sendable () -> String?)? = nil
+        currentAuthTokenProvider: (@Sendable () -> String?)? = nil,
+        backgroundLease: any BackgroundExecutionLeasing = UnconditionalBackgroundExecutionLease()
     ) throws {
         let container = try inMemory
             ? OutboxStore.makeInMemory()
@@ -490,6 +497,7 @@ public actor OutboxQueue {
         self.currentOwnerProvider = currentOwnerProvider
         self.currentAuthTokenProvider = currentAuthTokenProvider ?? OutboxQueue.defaultAuthTokenProvider
         allowsUnauthenticatedTestLease = inMemory && currentAuthTokenProvider == nil
+        self.backgroundLease = backgroundLease
     }
 
     /// **Phase 09 / plan 09-05 — the deferred production entry point.**
@@ -501,22 +509,30 @@ public actor OutboxQueue {
     /// `open` is expected to be the G-9 recovery ladder
     /// (``recoverOrDegradeStore()``), so it does not throw: a corrupted offline
     /// store is bad, and failing every outbox write over it is worse.
+    ///
+    /// Build 274 (public #4) — `backgroundLease` is the assertion every persist
+    /// runs under; the production factory passes the UIKit one.
     public static func deferred(
         _ open: @escaping @Sendable () -> StoreHandle,
         currentOwnerProvider: @escaping @Sendable () -> String? = OutboxQueue.defaultOwnerProvider,
-        currentAuthTokenProvider: @escaping @Sendable () -> String? = OutboxQueue.defaultAuthTokenProvider
+        currentAuthTokenProvider: @escaping @Sendable () -> String? = OutboxQueue.defaultAuthTokenProvider,
+        backgroundLease: any BackgroundExecutionLeasing = UnconditionalBackgroundExecutionLease()
     ) -> OutboxQueue {
         OutboxQueue(
             deferredOpen: open,
             currentOwnerProvider: currentOwnerProvider,
-            currentAuthTokenProvider: currentAuthTokenProvider
+            currentAuthTokenProvider: currentAuthTokenProvider,
+            backgroundLease: backgroundLease
         )
     }
 
+    /// Build 274 (public #4) — takes the background-execution lease without a
+    /// default so the deferred production path always states which one it uses.
     private init(
         deferredOpen: @escaping @Sendable () -> StoreHandle,
         currentOwnerProvider: @escaping @Sendable () -> String?,
-        currentAuthTokenProvider: @escaping @Sendable () -> String?
+        currentAuthTokenProvider: @escaping @Sendable () -> String?,
+        backgroundLease: any BackgroundExecutionLeasing
     ) {
         openStore = deferredOpen
         openedStore = nil
@@ -524,6 +540,7 @@ public actor OutboxQueue {
         self.currentAuthTokenProvider = currentAuthTokenProvider
         // This is the production path; it must never infer a test bypass.
         allowsUnauthenticatedTestLease = false
+        self.backgroundLease = backgroundLease
     }
 
     /// Container-injection entry point. Lets a test bind multiple `OutboxQueue`
@@ -533,10 +550,15 @@ public actor OutboxQueue {
     /// (audit M2) to wrap a recovered container without a throwing init.
     /// Production callers should otherwise use `init(inMemory:)` or
     /// `makeWithRecovery()`.
+    ///
+    /// Build 274 (public #4) — carries the same defaulted `backgroundLease`
+    /// seam as the other initializers, so the stored lease is stated by every
+    /// construction path rather than inferred.
     public init(
         testContainer: ModelContainer,
         currentOwnerProvider: @escaping @Sendable () -> String? = OutboxQueue.defaultOwnerProvider,
-        currentAuthTokenProvider: @escaping @Sendable () -> String? = OutboxQueue.defaultAuthTokenProvider
+        currentAuthTokenProvider: @escaping @Sendable () -> String? = OutboxQueue.defaultAuthTokenProvider,
+        backgroundLease: any BackgroundExecutionLeasing = UnconditionalBackgroundExecutionLease()
     ) {
         openStore = { StoreHandle(container: testContainer) }
         openedStore = OutboxStore(modelContainer: testContainer)
@@ -545,6 +567,7 @@ public actor OutboxQueue {
         // This initializer is also a production recovery path, so it must
         // never infer a test bypass merely from an in-memory ModelContainer.
         allowsUnauthenticatedTestLease = false
+        self.backgroundLease = backgroundLease
     }
 
     /// Whether the persistent store has actually been opened yet. The launch
@@ -635,6 +658,13 @@ public actor OutboxQueue {
     /// **without destroying un-synced writes on a merely-transient failure** —
     /// exactly once, on first use. The ladder itself lives in
     /// `OutboxQueue+WriteAhead.swift` (file_length discipline).
+    ///
+    /// Build 274 (public #4) — this factory serves the App-Intent stack in BOTH
+    /// processes (`IntentDependencies`), and the widget extension may not touch
+    /// `UIApplication`, so it keeps the unconditional lease. The queue that
+    /// carries the HealthKit observer wake — the one build 271 died on — is the
+    /// app-process queue built in `AppContainer.makeCoreInfra`, and that one is
+    /// handed a `UIKitBackgroundExecutionLease`.
     public static func makeWithRecovery() -> OutboxQueue {
         deferred { recoverOrDegradeStore() }
     }
@@ -766,6 +796,11 @@ public actor OutboxQueue {
         }
     }
 
+    /// Build 274 (public #4) — the single write chokepoint into the app-group
+    /// store. The save runs inside a background-execution lease; when the system
+    /// grants no time the row is NOT written and the call throws, which every
+    /// caller already treats as "not persisted" (the health-sync path holds its
+    /// page and re-collects on the next wake).
     private func persist(_ op: Operation, ownerUserID: String?) async throws {
         // Phase 07 — the forward-compatibility sentinel is a *read* shape. It
         // must never reach disk, or a later build would replay a row whose real
@@ -773,16 +808,27 @@ public actor OutboxQueue {
         guard op.kind != .unrecognized else {
             throw HLError.unknown("refusing to persist the unrecognized-kind sentinel")
         }
-        try await resolvedStore().enqueue(
-            id: op.id,
-            kindRaw: op.kind.rawValue,
-            payload: op.payload,
-            idempotencyKey: op.idempotencyKey,
-            createdAt: op.createdAt,
-            attempts: op.attempts,
-            ownerUserID: ownerUserID,
-            clientEntityId: op.clientEntityId
-        )
+        let store = await resolvedStore()
+        let id = op.id, kindRaw = op.kind.rawValue, payload = op.payload
+        let idempotencyKey = op.idempotencyKey, createdAt = op.createdAt, attempts = op.attempts
+        let clientEntityId = op.clientEntityId
+        // Build 274 (public #4) — the store lives in the app-group container;
+        // a SQLite lock held across a suspension is a RunningBoard kill.
+        let persisted: Void? = try await backgroundLease.withLease(named: "outbox.persist") {
+            try await store.enqueue(
+                id: id,
+                kindRaw: kindRaw,
+                payload: payload,
+                idempotencyKey: idempotencyKey,
+                createdAt: createdAt,
+                attempts: attempts,
+                ownerUserID: ownerUserID,
+                clientEntityId: clientEntityId
+            )
+        }
+        guard persisted != nil else {
+            throw HLError.unknown("outbox write held: no background execution time granted")
+        }
         await broadcast()
     }
 

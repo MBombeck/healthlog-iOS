@@ -10,8 +10,14 @@ import Foundation
 
     // MARK: - UNUserNotificationCenterDelegate
 
+    /// Build 274 (public #3) — the conformance is `@preconcurrency` so the two
+    /// MAIN-ACTOR isolated witnesses may take the delegate's non-Sendable
+    /// `UNNotification` / `UNNotificationResponse` arguments. Without it Swift 6
+    /// rejects the isolated witnesses ("cannot be sent from caller of protocol
+    /// requirement"), and the only other way to compile is `nonisolated` — which
+    /// is exactly the crash this build fixes.
     @MainActor
-    extension NotificationService: UNUserNotificationCenterDelegate {
+    extension NotificationService: @preconcurrency UNUserNotificationCenterDelegate {
         /// **v0.7.0 W-SEC-M-2 — defensive allowlist for `medicationId`
         /// arriving via APNs userInfo.**
         ///
@@ -38,7 +44,15 @@ import Foundation
             return regex.firstMatch(in: candidate, options: [], range: range) == nil ? nil : candidate
         }
 
-        nonisolated func userNotificationCenter(
+        /// Build 274 (public #3) — both delegate witnesses are MAIN-ACTOR
+        /// isolated (the extension is `@MainActor`; do not add `nonisolated`).
+        /// The compiler-synthesised ObjC thunk runs an async witness in a Task and
+        /// calls UIKit's completion handler from the executor that Task ends on.
+        /// `nonisolated` ended it on a worker thread, and iOS 26 asserts the main
+        /// thread inside that completion: every reminder tap crashed (four
+        /// TestFlight reports on 273). `NotificationDelegateMainThreadCompletionTests`
+        /// pins both the runtime path and the source.
+        func userNotificationCenter(
             _: UNUserNotificationCenter,
             willPresent notification: UNNotification
         ) async -> UNNotificationPresentationOptions {
@@ -70,7 +84,7 @@ import Foundation
             // mood entry already exists for today, suppress the banner. (In the
             // background iOS delivers it directly — the accepted H2 tradeoff:
             // reliability over the rare, harmless already-logged double-nudge.)
-            if payload?.eventType == Self.categoryMood, await moodAlreadyLoggedToday() {
+            if payload?.eventType == Self.categoryMood, moodAlreadyLoggedToday() {
                 return []
             }
             // v1.18.4 (#23/#30) — elevate an urgent illness red-flag "seek care"
@@ -136,7 +150,7 @@ import Foundation
             return [.banner, .list, .sound]
         }
 
-        nonisolated func userNotificationCenter(
+        func userNotificationCenter(
             _: UNUserNotificationCenter,
             didReceive response: UNNotificationResponse
         ) async {

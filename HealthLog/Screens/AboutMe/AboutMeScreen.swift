@@ -42,6 +42,8 @@ struct AboutMeScreen: View {
     /// shown read-only WITHOUT a second fetch. Populated when the Home tab has
     /// resolved its metric states; absent (→ no weight row) otherwise.
     @Environment(DashboardStore.self) private var dashboardStore
+    /// #105 — gates the injection-sites door (see `showsInjectionSites`).
+    @Environment(MedicationsStore.self) private var medications
 
     /// Presents the canonical profile editor (`EditProfileSheet`) so the
     /// read-only Körperdaten route to the ONE existing edit surface instead of
@@ -80,6 +82,9 @@ struct AboutMeScreen: View {
         HLSettingsPage(title: "aboutMe.title") {
             profileCard
             bodyDataCard
+            if Self.showsInjectionSites(medications: medications.medications) {
+                injectionSitesCard
+            }
             historyCard
             anamnesisCard
             glucoseTargetsCard
@@ -223,6 +228,33 @@ struct AboutMeScreen: View {
             showEditProfile = true
         }
         .accessibilityIdentifier("aboutMe.body.editInProfile")
+    }
+
+    // MARK: - Injection sites (#105)
+
+    /// **#105** — the global injection-site deny-list is a statement about the
+    /// user's own body and a standing preference, not a property of one
+    /// medication: it lives with the Körperdaten. Same catalogue keys and the
+    /// same destination as the door that closed the Medications tab (25-02)
+    /// and, before that, sat under Datenschutz und Sicherheit. The per-
+    /// medication preference stays in the medication's own sheet
+    /// (`InjectionSiteTrackingSection`); the site picker after logging an
+    /// injection links here as well.
+    private var injectionSitesCard: some View {
+        HLSettingsCard(icon: "circle.grid.cross", title: "Injection sites") {
+            HLSettingsActionRow(title: "Manage sites", presents: .push) {
+                SettingsInjectionSitesScreen()
+            }
+            .accessibilityIdentifier("aboutMe.injectionSitesRow")
+        }
+    }
+
+    /// The door renders only for a person the deny-list can do anything for:
+    /// somebody with at least one injection medication (active or archived —
+    /// an archived pen can be unarchived, and its site exclusions should be
+    /// editable before that). Zero injection meds → no door, no explainer.
+    static func showsInjectionSites(medications: [Medication]) -> Bool {
+        medications.contains { $0.isInjection }
     }
 
     // MARK: - Static medical history (re-parented modules)

@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Medikamente → Injection sites (25-02 / E-2026-08-29 #1 — the door moved
-/// out of Einstellungen → Datenschutz und Sicherheit onto the Medications
-/// tab, whose intake pickers this list governs). Edits the user-level
+/// Über mich → Injection sites (#105 — the door moved out of the Medications
+/// tab, where 25-02 / E-2026-08-29 #1 had put it, and before that out of
+/// Einstellungen → Datenschutz und Sicherheit; the intake site picker links
+/// here too). Edits the user-level
 /// **global deny-list** (server v1.8.5 `/api/auth/me/injection-site-prefs`).
 ///
 /// A site toggled OFF here is never offered on any medication's intake picker

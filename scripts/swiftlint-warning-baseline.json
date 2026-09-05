@@ -237,7 +237,7 @@
     },
     {
       "file": "HealthLog/Screens/AboutMe/AboutMeScreen.swift",
-      "line": 278,
+      "line": 310,
       "character": 17,
       "rule_id": "hl_no_handmade_chevron",
       "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
@@ -1117,7 +1117,7 @@
     },
     {
       "file": "HealthLog/Screens/Settings/Sub/SettingsInjectionSitesScreen.swift",
-      "line": 64,
+      "line": 65,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -1365,7 +1365,7 @@
     },
     {
       "file": "HealthLog/Services/NotificationService+Handler.swift",
-      "line": 168,
+      "line": 182,
       "character": 9,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 14",
@@ -1448,7 +1448,7 @@
       "line": 39,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 72 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 75 lines",
       "severity": "warning"
     },
     {

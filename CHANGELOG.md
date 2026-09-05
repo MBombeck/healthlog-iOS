@@ -4,6 +4,27 @@
 > per-version reports under `.planning/v05*-marathon/` and
 > `.planning/v056-marathon/`. This file resumes from v0.6.2.
 
+## 1.0.0 (274) — 2026-09-05
+
+The submission candidate, rebuilt after the first TestFlight crash reports on
+273. Three crash classes and one misplaced setting; no new features.
+
+- **Launches on iOS 18 again.** Build 273 aborted at launch on every iOS 18
+  device: a HealthKit constant that only exists from iOS 26 was linked as a
+  hard requirement. The medication-form mapping now compares plain strings,
+  and a new check refuses any candidate that links such a symbol strongly.
+- **Opening the app from a medication reminder no longer crashes** on iOS 26
+  and later. The notification delegate answered the system from a background
+  thread; it now answers on the main thread, where iOS 26 requires it.
+- **No more background kills while queuing a retry.** A HealthKit wake that
+  wrote to the offline queue while the app was being suspended was
+  terminated for holding the database lock. The write now runs under a
+  background-time assertion and is held back when the system grants none.
+- **Injection sites moved to About me.** The list of body sites you never
+  want offered is about you, not about one medication, so its door left the
+  bottom of the Medications tab for the body-data section in About me. The
+  site picker shown when you log an injection links to it directly.
+
 ## 1.0.0 (273) — 2026-09-02
 
 The submission candidate. Build 272's reminder fixes plus everything the

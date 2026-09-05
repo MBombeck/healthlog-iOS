@@ -174,14 +174,28 @@ import Foundation
         }
 
         /// Map the HK dosage form onto the server `deliveryForm` enum.
+        ///
+        /// Build 274 (public #2) — compares the RAW string. The typed constants
+        /// (`.capsule` …) are un-annotated `extern NSString *const` globals in
+        /// the iOS 26.5 SDK; pattern-matching them emitted STRONG dyld references
+        /// and build 273 aborted at launch on every iOS 18 device. Nothing in the
+        /// app binary may name those symbols — `AppleHealthMedicationFormLinkageTests`
+        /// pins the strings, `scripts/verify-no-strong-ios26-symbols.sh` the binary.
         @available(iOS 26.0, *)
         private static func deliveryForm(from form: HKMedicationGeneralForm) -> String? {
-            switch form {
-            case .injection:
+            deliveryForm(fromRawForm: form.rawValue)
+        }
+
+        /// Build 274 (public #2) — the raw-string mapping. Internal so the
+        /// linkage test can drive it on any OS; the strings are the SDK's own
+        /// (pinned by the same suite).
+        static func deliveryForm(fromRawForm raw: String) -> String? {
+            switch raw {
+            case "injection":
                 "INJECTION"
-            case .tablet, .capsule, .liquid, .drops, .powder:
+            case "tablet", "capsule", "liquid", "drops", "powder":
                 "ORAL"
-            case .unknown:
+            case "unknown":
                 nil
             default:
                 "OTHER"
