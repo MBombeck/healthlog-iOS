@@ -58,44 +58,111 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
     struct UIKitBackgroundExecutionLease: BackgroundExecutionLeasing {
         /// Build 274 (public #4) — bridges the expiration handler (fires once,
         /// on the main thread, at an unknown moment) to the body's task, which
-        /// is created only after the lease exists.
-        private final class Expiry: @unchecked Sendable {
+        /// is created only after the lease exists, and owns the one-shot latch
+        /// that decides WHO ends the assertion.
+        ///
+        /// Internal rather than private so `BackgroundExecutionLeaseExpiryTests`
+        /// can pin the bridge directly: the production lease needs a real
+        /// `UIApplication` and is therefore unreachable from a unit test, but
+        /// this is the part with the races worth pinning.
+        ///
+        /// One lock, three fields, no re-entrancy: every mutation happens under
+        /// `lock.withLock`, and the cancel closure is invoked OUTSIDE the lock so
+        /// a cancellation handler can never deadlock against the expiry.
+        final class Expiry: @unchecked Sendable {
             private let lock = NSLock()
             private var cancel: (@Sendable () -> Void)?
             private var expired = false
+            private var ended = false
 
             /// Build 274 (public #4) — attaches the body's cancellation; fires
             /// it immediately when expiry already happened before the task ran.
+            /// The closure is not retained after an expiry, so the cancel fires
+            /// exactly once no matter which side arrives first.
             func attach(_ cancel: @escaping @Sendable () -> Void) {
                 let fireNow: Bool = lock.withLock {
+                    if expired { return true }
                     self.cancel = cancel
-                    return expired
+                    return false
                 }
                 if fireNow { cancel() }
             }
 
             /// Build 274 (public #4) — records the expiry and cancels the body
-            /// if it is already running.
+            /// if it is already running. A second expiry is a no-op: the handler
+            /// is documented to fire once, and firing a stale cancel would tear
+            /// down whatever task inherited the reference.
             func expire() {
                 let cancel: (@Sendable () -> Void)? = lock.withLock {
+                    guard !expired else { return nil }
                     expired = true
-                    return self.cancel
+                    let pending = self.cancel
+                    self.cancel = nil
+                    return pending
                 }
                 cancel?()
             }
+
+            /// Build 274 (public #4) — the one-shot end latch. `true` for the
+            /// first caller only; that caller — the expiration handler or the
+            /// tail path, whichever gets there first — owns the single
+            /// `endBackgroundTask`. A second end would release an assertion this
+            /// lease no longer holds.
+            func markEnded() -> Bool {
+                lock.withLock {
+                    guard !ended else { return false }
+                    ended = true
+                    return true
+                }
+            }
+        }
+
+        /// Build 274 (public #4) — the assertion identifier is only known AFTER
+        /// `beginBackgroundTask` returns, yet the expiration handler passed into
+        /// that same call has to end it. The box closes the cycle. It is
+        /// main-actor isolated (hence `Sendable`) because both writers — the
+        /// `MainActor.run` that begins the assertion and the handler, which UIKit
+        /// documents as firing on the main thread — are on the main actor, and
+        /// the write happens synchronously before the handler can ever run.
+        @MainActor
+        private final class AssertionIdentifier {
+            var value: UIBackgroundTaskIdentifier = .invalid
         }
 
         /// Build 274 (public #4) — takes the assertion first, runs the body only
-        /// when the system granted time, and ends the assertion on every exit.
+        /// when the system granted time, and ends the assertion EXACTLY once, on
+        /// whichever path reaches the latch first.
+        ///
+        /// The end used to sit only on the tail path, after `await work.value`.
+        /// That is the one arrangement iOS kills for: cancelling the body's task
+        /// is advisory, and `OutboxStore.enqueue` — a SwiftData save — never
+        /// checks cancellation, so a write straddling the expiry held the
+        /// assertion well past its expiration handler. Ending inside the handler
+        /// (on the main actor, where UIKit fires it) hands the assertion back at
+        /// the moment the system asks for it; the tail then sees the latch taken
+        /// and skips its own end.
+        ///
+        /// The body's result is still returned as-is. A write that completed
+        /// after the expiry is a real write, and reporting it as refused would
+        /// make the caller re-enqueue a row that is already on disk.
         func withLease<T: Sendable>(
             named name: String,
             _ body: @escaping @Sendable () async throws -> T
         ) async throws -> T? {
             let expiry = Expiry()
-            let identifier = await MainActor.run {
-                UIApplication.shared.beginBackgroundTask(withName: name) {
-                    expiry.expire()
+            let identifier = await MainActor.run { () -> UIBackgroundTaskIdentifier in
+                let assertion = AssertionIdentifier()
+                assertion.value = UIApplication.shared.beginBackgroundTask(withName: name) {
+                    // UIKit fires this on the main thread, and `assertion.value`
+                    // was written synchronously before this closure could run.
+                    MainActor.assumeIsolated {
+                        expiry.expire()
+                        let identifier = assertion.value
+                        guard identifier != .invalid, expiry.markEnded() else { return }
+                        UIApplication.shared.endBackgroundTask(identifier)
+                    }
                 }
+                return assertion.value
             }
             guard identifier != .invalid else {
                 // No time granted: the write must not start. The name is a fixed
@@ -112,7 +179,9 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
             } catch {
                 outcome = .failure(error)
             }
-            await MainActor.run { UIApplication.shared.endBackgroundTask(identifier) }
+            if expiry.markEnded() {
+                await MainActor.run { UIApplication.shared.endBackgroundTask(identifier) }
+            }
             return try outcome.get()
         }
     }

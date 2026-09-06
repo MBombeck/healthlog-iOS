@@ -584,7 +584,9 @@ public actor APIClient: APIClientProtocol {
         var urlRequest = try buildURLRequest(request)
         var attempt = 0
         let maxRetries = request.maxRetries
-        var attemptedRefresh = false
+        // #5 — this request's auth-recovery budget: at most one refresh AND at
+        // most one retry against a session that rotated underneath it.
+        var budget = UnauthorizedBudget()
         var attemptedSharingReconcile = false
         // #96 — interactive auth legs ride the fail-fast session (no
         // wait-for-connectivity, short timeout). W-COACH-SSE — the coach SSE
@@ -623,15 +625,18 @@ public actor APIClient: APIClientProtocol {
                     if Self.preserves401Body(path: request.path) {
                         return (data, http)
                     }
-                    if await shouldRetryAfterUnauthorized(
+                    // #5 — `urlRequest` still carries the bearer THIS attempt was
+                    // sent with, which is what makes the rotation check possible
+                    // here; the helper rebuilds it when it says "retry".
+                    guard try await retryAfterUnauthorized(
                         request: request,
-                        attemptedRefresh: &attemptedRefresh
-                    ) {
-                        urlRequest = try buildURLRequest(request)
-                        attempt = 0
-                        continue
+                        urlRequest: &urlRequest,
+                        budget: &budget
+                    ) else {
+                        throw HLError.unauthorized
                     }
-                    throw HLError.unauthorized
+                    attempt = 0
+                    continue
                 }
 
                 // 14-06 — gated on the only two status codes that can consume the
@@ -729,6 +734,64 @@ public actor APIClient: APIClientProtocol {
         let request: APIRequest<User> = .get("/api/auth/me")
         let user = try? await send(request)
         await sharingRecoveryHandler.invoke(SharingRecoveryEvent(reason: reason, reconciledUser: user))
+    }
+
+    /// #5 — what one request may still spend on recovering from a 401: one
+    /// refresh (the pre-existing budget) and one retry against a session that
+    /// rotated while the request was on the wire. Both are one-shot, so the
+    /// pathological case — a server that answers 401 to every bearer — costs at
+    /// most three requests and then surfaces as `.unauthorized`.
+    private struct UnauthorizedBudget {
+        var attemptedRefresh = false
+        var retriedAfterRotation = false
+    }
+
+    /// #5 — resolves a 401 into "re-send" or "give up", and rebuilds
+    /// `urlRequest` when it says re-send.
+    ///
+    /// The defect: at the 24 h access-token boundary every in-flight request
+    /// 401s at once, the `RefreshCoordinator` folds them onto ONE rotation
+    /// (A → B) and they replay with B. A straggler still on the wire with A
+    /// arrives afterwards, gets `401 revoked`, finds no in-flight refresh and
+    /// rotates a SECOND time (B → C) — revoking B under the replays that had
+    /// just been repaired. Their 401 for B was spent on a refresh they had
+    /// already used, so `onUnauthorized` fired and the user was thrown out.
+    /// Every morning, without the server ever rejecting a refresh.
+    ///
+    /// The rule now: a 401 whose bearer is no longer the one in the Keychain is
+    /// **not** an auth verdict on this session — it answers a credential that
+    /// has since been replaced. Re-send once with the current bearer, without
+    /// spending the refresh. Only a 401 for the CURRENT bearer reaches the
+    /// refresh bridge, and only that can still log the user out.
+    ///
+    /// Scope: auth-exempt paths (login et al. — no session to supersede) and
+    /// lease-pinned requests (`allowsAuthenticationRecovery == false`, whose
+    /// Authorization header is deliberately NOT the Keychain's) are excluded,
+    /// exactly as they already are from the refresh bridge.
+    private func retryAfterUnauthorized(
+        request: APIRequest<some Any>,
+        urlRequest: inout URLRequest,
+        budget: inout UnauthorizedBudget
+    ) async throws -> Bool {
+        let currentBearer = keychain.getString(forKey: KeychainKey.authToken).map { "Bearer \($0)" }
+        if !budget.retriedAfterRotation,
+           request.allowsAuthenticationRecovery,
+           !Self.isAuthExempt(path: request.path),
+           urlRequest.value(forHTTPHeaderField: "Authorization") != currentBearer
+        {
+            budget.retriedAfterRotation = true
+            HLLog.api.info("401 with a superseded bearer — retrying with the rotated session")
+            urlRequest = try buildURLRequest(request)
+            return true
+        }
+        guard await shouldRetryAfterUnauthorized(
+            request: request,
+            attemptedRefresh: &budget.attemptedRefresh
+        ) else {
+            return false
+        }
+        urlRequest = try buildURLRequest(request)
+        return true
     }
 
     private func shouldRetryAfterUnauthorized(

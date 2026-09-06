@@ -58,10 +58,18 @@
 
         /// Holds a mock `/api/auth/me` response in flight so a test can replace
         /// the authenticated account before the original owner's probe resumes.
+        ///
+        /// #5 — the gate opens ONCE and then stays open. Replacing the session
+        /// mid-flight is exactly the "superseded bearer" case, so the client now
+        /// re-sends the probe once with the bearer the Keychain actually holds;
+        /// a gate that only ever admitted one request parked that retry on a
+        /// URLProtocol thread forever. The tests' subject is unchanged: the
+        /// stale probe still must not touch the replacement session.
         private final class SuspendedProbe: @unchecked Sendable {
             private let lock = NSLock()
             private let releaseSemaphore = DispatchSemaphore(value: 0)
             private var _started = false
+            private var _released = false
 
             var started: Bool {
                 lock.withLock { _started }
@@ -69,10 +77,12 @@
 
             func waitForRelease() {
                 lock.withLock { _started = true }
+                guard !lock.withLock({ _released }) else { return }
                 releaseSemaphore.wait()
             }
 
             func release() {
+                lock.withLock { _released = true }
                 releaseSemaphore.signal()
             }
         }

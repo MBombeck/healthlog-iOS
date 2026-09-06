@@ -109,6 +109,13 @@ struct AboutMeScreen: View {
             // 25-02 — the relocated diabetes flag, TTL-guarded by the store
             // (the same call the old Datenschutz-und-Sicherheit host made).
             await diabetes.refresh()
+            // #105 — the injection-sites door is gated on `medications.medications`,
+            // but this screen never loaded that store: only the Dashboard, the
+            // Medications screen and the foreground pass populate it. Cold launch
+            // → Mehr → Über mich therefore hid the door from exactly the users it
+            // exists for. Same one-shot guard the Insights and Medications
+            // screens use — an already-populated store is not re-fetched.
+            if medications.medications.isEmpty { await medications.load() }
         }
     }
 

@@ -25,6 +25,32 @@ public actor OutboxQueue {
         case staleOwner
     }
 
+    /// Build 274 (public #4) — a refused background-execution lease, as its own
+    /// error type rather than a `HLError.unknown` string.
+    ///
+    /// The refusal used to be indistinguishable from a decode failure, a full
+    /// disk or a schema error, and more than twenty call sites throw straight
+    /// from `enqueue`. Five of them swallow the throw with a log
+    /// (`IllnessRepository`, `AllergiesRepository`, `LabsRepository`,
+    /// `NutrientReadRepository`, `CustomMetricsRepository`), which for this one
+    /// error means something different from every other: **a caller that drops
+    /// the operation here is dropping a background write** — the row was never
+    /// persisted and nothing will retry it, because the retry row is the thing
+    /// that was refused. A caller that cannot hold its cursor until the next
+    /// wake should catch this case specifically and say so.
+    public enum WriteRefusal: Error, Sendable, Equatable, CustomStringConvertible {
+        /// The system granted no background execution time, so the write never
+        /// started. Nothing was persisted and nothing was broadcast.
+        case noBackgroundExecutionTime
+
+        public var description: String {
+            switch self {
+            case .noBackgroundExecutionTime:
+                "outbox write held: no background execution time granted"
+            }
+        }
+    }
+
     /// Ephemeral authenticated-session lease for account-bound writes. The
     /// bearer is deliberately never persisted or logged; equality against the
     /// live Keychain value is the session-generation check. A token rotation,
@@ -797,10 +823,11 @@ public actor OutboxQueue {
     }
 
     /// Build 274 (public #4) — the single write chokepoint into the app-group
-    /// store. The save runs inside a background-execution lease; when the system
-    /// grants no time the row is NOT written and the call throws, which every
-    /// caller already treats as "not persisted" (the health-sync path holds its
-    /// page and re-collects on the next wake).
+    /// store. Both the container open and the save run inside a
+    /// background-execution lease; when the system grants no time the row is NOT
+    /// written and the call throws ``WriteRefusal/noBackgroundExecutionTime``,
+    /// which every caller already treats as "not persisted" (the health-sync
+    /// path holds its page and re-collects on the next wake).
     private func persist(_ op: Operation, ownerUserID: String?) async throws {
         // Phase 07 — the forward-compatibility sentinel is a *read* shape. It
         // must never reach disk, or a later build would replay a row whose real
@@ -808,14 +835,19 @@ public actor OutboxQueue {
         guard op.kind != .unrecognized else {
             throw HLError.unknown("refusing to persist the unrecognized-kind sentinel")
         }
-        let store = await resolvedStore()
         let id = op.id, kindRaw = op.kind.rawValue, payload = op.payload
         let idempotencyKey = op.idempotencyKey, createdAt = op.createdAt, attempts = op.attempts
         let clientEntityId = op.clientEntityId
         // Build 274 (public #4) — the store lives in the app-group container;
         // a SQLite lock held across a suspension is a RunningBoard kill.
+        //
+        // `resolvedStore()` is resolved INSIDE the lease, not before it. On the
+        // first write of a background wake that call is the SwiftData container
+        // open in the app-group container — WAL replay, journal, possibly a
+        // migration — which is the heaviest file-lock on this whole path and was
+        // the one part of it running with no assertion at all.
         let persisted: Void? = try await backgroundLease.withLease(named: "outbox.persist") {
-            try await store.enqueue(
+            try await self.resolvedStore().enqueue(
                 id: id,
                 kindRaw: kindRaw,
                 payload: payload,
@@ -827,7 +859,7 @@ public actor OutboxQueue {
             )
         }
         guard persisted != nil else {
-            throw HLError.unknown("outbox write held: no background execution time granted")
+            throw WriteRefusal.noBackgroundExecutionTime
         }
         await broadcast()
     }

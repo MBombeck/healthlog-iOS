@@ -26,12 +26,17 @@ strong_matches() {
     grep -E 'from HealthKit' | grep -v ' weak ' | grep -E "$PATTERN" || true
 }
 
+# A failing self-test means the CHECKER is broken, not that a binary is bad, so
+# every self-test failure exits 2 (TOOLFAIL). Exit 1 is reserved for a real
+# finding in a real binary; a broken checker that exited 1 would read to the
+# release gate as "this candidate links an iOS-26 symbol strongly" and send
+# someone hunting a defect that is not in the app.
 if [[ "${1:-}" == "--self-test" ]]; then
     strong='                 (undefined) external _HKMedicationGeneralFormCapsule (from HealthKit)'
     weak='                 (undefined) weak external _OBJC_CLASS_$_HKMedicationDoseEvent (from HealthKit)'
-    [[ -n "$(printf '%s\n' "$strong" | strong_matches)" ]] || finding "self-test: the strong fixture was not detected"
-    [[ -z "$(printf '%s\n' "$weak" | strong_matches)" ]] || finding "self-test: the weak fixture was flagged"
-    [[ -z "$(printf '%s\n' '(undefined) external _HKQuantityTypeIdentifierHeartRate (from HealthKit)' | strong_matches)" ]] || finding "self-test: an iOS-8 symbol was flagged"
+    [[ -n "$(printf '%s\n' "$strong" | strong_matches)" ]] || toolfail "self-test: the strong fixture was not detected"
+    [[ -z "$(printf '%s\n' "$weak" | strong_matches)" ]] || toolfail "self-test: the weak fixture was flagged"
+    [[ -z "$(printf '%s\n' '(undefined) external _HKQuantityTypeIdentifierHeartRate (from HealthKit)' | strong_matches)" ]] || toolfail "self-test: an iOS-8 symbol was flagged"
     printf 'verify-no-strong-ios26-symbols: self-test PASS\n'
     exit 0
 fi

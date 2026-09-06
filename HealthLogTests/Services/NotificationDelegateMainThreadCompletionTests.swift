@@ -158,6 +158,11 @@ import Testing
 
         /// The structural pin: neither delegate method may opt out of the main
         /// actor again, on any simulator OS — including one that does not assert.
+        /// Build 274 (public #3) — the extension line is pinned too. The witnesses
+        /// inherit their isolation from `@MainActor extension NotificationService:
+        /// @preconcurrency UNUserNotificationCenterDelegate`; dropping that one
+        /// `@MainActor` puts both methods back on a worker thread without any of
+        /// them gaining a `nonisolated` keyword for the loop below to catch.
         @Test("neither delegate method is declared nonisolated")
         func delegateMethodsAreMainActorIsolated() throws {
             let file = URL(fileURLWithPath: #filePath)
@@ -176,6 +181,15 @@ import Testing
                     Comment(rawValue: declaration.trimmingCharacters(in: .whitespaces))
                 )
             }
+            // `@MainActor` on the line directly above the conformance, with any
+            // indentation and any trailing whitespace on either line.
+            let isolatedExtension = try NSRegularExpression(
+                pattern: #"(?m)^[ \t]*@MainActor[ \t]*\r?\n[ \t]*extension[ \t]+NotificationService[ \t]*:[ \t]*@preconcurrency[ \t]+UNUserNotificationCenterDelegate\b"#
+            )
+            #expect(
+                isolatedExtension.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)) != nil,
+                "the delegate conformance must stay `@MainActor` — the witnesses inherit their isolation from it"
+            )
         }
     }
 #endif

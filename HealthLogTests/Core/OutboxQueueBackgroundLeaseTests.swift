@@ -55,7 +55,10 @@ struct OutboxQueueBackgroundLeaseTests {
     func refusedLeasePersistsNothingAndThrows() async throws {
         let lease = RecordingLease(grants: false)
         let queue = try OutboxQueue(inMemory: true, backgroundLease: lease)
-        await #expect(throws: (any Error).self) {
+        // Build 274 (public #4) — the refusal is its own error type, not a
+        // `HLError.unknown` string: a caller that wants to tell "no background
+        // time" apart from a real write failure must be able to.
+        await #expect(throws: OutboxQueue.WriteRefusal.noBackgroundExecutionTime) {
             try await queue.enqueue(.init(kind: .createMeasurement, payload: Data("x".utf8)))
         }
         #expect(lease.bodiesRun == 0)

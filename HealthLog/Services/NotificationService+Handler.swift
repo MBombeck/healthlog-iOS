@@ -16,6 +16,17 @@ import Foundation
     /// rejects the isolated witnesses ("cannot be sent from caller of protocol
     /// requirement"), and the only other way to compile is `nonisolated` — which
     /// is exactly the crash this build fixes.
+    ///
+    /// The exemption is scoped to the two witnesses that exist here today —
+    /// `willPresent` and `didReceive`, both `async` and both main-actor isolated.
+    /// `@preconcurrency` silences the Sendable check for the WHOLE conformance,
+    /// so a third delegate method added to this extension would inherit the
+    /// exemption without anyone re-deciding it. Any new delegate method here must
+    /// be `async` and main-actor too: a synchronous or `nonisolated` witness puts
+    /// UIKit's completion handler back on a worker thread, which is the iOS-26
+    /// assertion that crashed build 273.
+    /// `NotificationDelegateMainThreadCompletionTests` pins the count and the
+    /// isolation of both this line and the witnesses.
     @MainActor
     extension NotificationService: @preconcurrency UNUserNotificationCenterDelegate {
         /// **v0.7.0 W-SEC-M-2 — defensive allowlist for `medicationId`

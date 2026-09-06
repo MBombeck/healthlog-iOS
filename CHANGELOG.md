@@ -4,6 +4,19 @@
 > per-version reports under `.planning/v05*-marathon/` and
 > `.planning/v056-marathon/`. This file resumes from v0.6.2.
 
+## 1.0.1 (275) — 2026-09-06
+
+- **No more daily forced sign-in.** When the 24-hour access token expired
+  while many requests were in flight, two token rotations raced each other
+  and the app treated the second rejection as a dead session. A request that
+  was sent with an already-replaced token now retries with the current one,
+  and a refresh that just succeeded is not repeated for a few seconds.
+- **Background writes hand their time back promptly.** The background-time
+  assertion around offline-queue writes is now released the moment iOS asks
+  for it, and the queue's database is opened inside that assertion too.
+- **About me loads your medications itself**, so the injection-sites card
+  is shown on a cold start as well.
+
 ## 1.0.0 (274) — 2026-09-05
 
 The submission candidate, rebuilt after the first TestFlight crash reports on
@@ -12,7 +25,8 @@ The submission candidate, rebuilt after the first TestFlight crash reports on
 - **Launches on iOS 18 again.** Build 273 aborted at launch on every iOS 18
   device: a HealthKit constant that only exists from iOS 26 was linked as a
   hard requirement. The medication-form mapping now compares plain strings,
-  and a new check refuses any candidate that links such a symbol strongly.
+  and a new check, run on the sealed archive before delivery, refuses a binary
+  that links such a symbol strongly.
 - **Opening the app from a medication reminder no longer crashes** on iOS 26
   and later. The notification delegate answered the system from a background
   thread; it now answers on the main thread, where iOS 26 requires it.
