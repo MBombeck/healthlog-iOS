@@ -113,8 +113,13 @@ jobs:
       - name: Test — unit (iOS Simulator)
         run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -enableCodeCoverage YES -only-testing:HealthLogTests
 
+      # The UI gate may retry once: iOS raises its own "Passwort sichern?"
+      # sheet after a fixture login on a freshly installed app, and the three
+      # classes dismiss it, but the timing occasionally beats them
+      # (CANDIDATE-FREEZE.md §2R). The release producer keeps its single-shot
+      # gate; CI reports a genuine failure only when both iterations fail.
       - name: Test — release UI gate (iOS Simulator)
-        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -only-testing:HealthLogUITests/AuthJourneyUITest -only-testing:HealthLogUITests/LoginBounceUITests -only-testing:HealthLogUITests/WebLoginJourneyUITest
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -retry-tests-on-failure -test-iterations 2 -only-testing:HealthLogUITests/AuthJourneyUITest -only-testing:HealthLogUITests/LoginBounceUITests -only-testing:HealthLogUITests/WebLoginJourneyUITest
 
       - name: Free the gate caches
         if: always()
