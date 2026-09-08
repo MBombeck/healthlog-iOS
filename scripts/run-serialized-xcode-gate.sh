@@ -108,11 +108,18 @@ while ! mkdir -- "$gate_lock_dir" 2>/dev/null; do
         sleep 0.1
         continue
     fi
-    gate_ownerless_since=""
-
     gate_owner="$(cat "$gate_lock_owner" 2>/dev/null || true)"
-    [[ "$gate_owner" =~ ^[1-9][0-9]*$ ]] ||
-        _gate_fail "lock has an invalid owner record; refusing ambiguous cleanup: $gate_lock_dir"
+    if [[ ! "$gate_owner" =~ ^[1-9][0-9]*$ ]]; then
+        # Same window as above, one step later: the record file exists but its
+        # PID has not been written yet (a reader can see the empty file).
+        [[ -n "$gate_ownerless_since" ]] || gate_ownerless_since="$SECONDS"
+        if ((SECONDS - gate_ownerless_since >= 5)); then
+            _gate_fail "lock has an invalid owner record; refusing ambiguous cleanup: $gate_lock_dir"
+        fi
+        sleep 0.1
+        continue
+    fi
+    gate_ownerless_since=""
 
     if ! kill -0 "$gate_owner" 2>/dev/null; then
         gate_confirmed_owner="$(cat "$gate_lock_owner" 2>/dev/null || true)"
