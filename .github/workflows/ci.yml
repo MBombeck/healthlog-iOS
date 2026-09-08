@@ -24,6 +24,10 @@ concurrency:
 jobs:
   build-test:
     runs-on: [self-hosted, macOS, healthlog-mini]
+    env:
+      # Two runners (dev + public mirror) share one machine lock; a run may
+      # legitimately wait for the other's test step or for a release freeze.
+      HEALTHLOG_XCODE_GATE_WAIT_SECONDS: "7200"
     # C1 (audit v0.16.2): a cold build that compiles mlx-swift's C++/Metal
     # core does not fit 25 min without a warm DerivedData cache; give the
     # cold-cache path headroom. 2026-09-08: the suite is 8,600 tests now — a
@@ -98,13 +102,19 @@ jobs:
       # gate resolves the destination itself — a booted iPhone simulator, else
       # the first available one.
       - name: Build (iOS Simulator)
-        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- build -skipMacroValidation
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- build -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=-
 
-      # German locale like the local release gates (the suite asserts the
-      # German copy); ad-hoc "Sign to Run Locally" signing so the keychain
-      # entitlements exist for the 177 keychain-backed tests.
-      - name: Test (iOS Simulator)
-        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -testLanguage de -testRegion DE -skipMacroValidation -enableCodeCoverage YES
+      # The same two test gates the release producer runs (ship-to-testflight
+      # "unit" and "ui"): the whole unit target, and the three release UI
+      # classes — not the entire UI target, whose remaining classes are
+      # exploratory and not a gate. German locale like the local gates (the
+      # suite asserts the German copy); ad-hoc signing so the keychain
+      # entitlements exist for the keychain-backed tests.
+      - name: Test — unit (iOS Simulator)
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -enableCodeCoverage YES -only-testing:HealthLogTests
+
+      - name: Test — release UI gate (iOS Simulator)
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -only-testing:HealthLogUITests/AuthJourneyUITest -only-testing:HealthLogUITests/LoginBounceUITests -only-testing:HealthLogUITests/WebLoginJourneyUITest
 
       - name: Free the gate caches
         if: always()
