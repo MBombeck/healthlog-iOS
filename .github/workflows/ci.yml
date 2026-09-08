@@ -90,32 +90,25 @@ jobs:
 
       # `-skipMacroValidation` since v0.5.5 — SpeziHealthKit 1.4.2 pulls in
       # the `ThreadLocal` macro which fails xcodebuild's default
-      # macro-fingerprint trust check on a fresh CI runner. Same flag as
+      # macro-fingerprint trust check on a fresh runner. Same flag as
       # the private release pipeline to keep CI vs release-build parity.
+      # Both Xcode steps run through the serialized gate: one Xcode job per
+      # machine, the same lock as the release producer, derived data at
+      # /tmp/dd-hl-ci-<run id> (shared by build and test, freed below). The
+      # gate resolves the destination itself — a booted iPhone simulator, else
+      # the first available one.
       - name: Build (iOS Simulator)
-        run: |
-          xcodebuild build \
-            -project HealthLog.xcodeproj \
-            -scheme HealthLog \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
-            -skipMacroValidation
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- build -skipMacroValidation
 
+      # German locale like the local release gates (the suite asserts the
+      # German copy); ad-hoc "Sign to Run Locally" signing so the keychain
+      # entitlements exist for the 177 keychain-backed tests.
       - name: Test (iOS Simulator)
-        run: |
-          # 2026-09-08: the suite is written against the German simulator the
-          # local release gates run on (badge titles, picker copy, range
-          # labels), and 177 tests touch the real keychain, which needs the
-          # ad-hoc "Sign to Run Locally" entitlements that CODE_SIGNING_ALLOWED=NO
-          # stripped (errSecMissingEntitlement -34018). Same language, same
-          # signing as the producer.
-          xcodebuild test \
-            -project HealthLog.xcodeproj \
-            -scheme HealthLog \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
-            -testLanguage de \
-            -testRegion DE \
-            -skipMacroValidation \
-            -enableCodeCoverage YES
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -testLanguage de -testRegion DE -skipMacroValidation -enableCodeCoverage YES
+
+      - name: Free the gate caches
+        if: always()
+        run: rm -rf "/tmp/dd-hl-ci-${{ github.run_id }}" /tmp/xcresult-hl-ci-${{ github.run_id }}*.xcresult
 
       # W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — when SnapshotTesting fails, it
       # writes the recorded references and the failure diffs alongside the
