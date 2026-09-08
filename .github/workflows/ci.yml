@@ -59,10 +59,29 @@ jobs:
             deriveddata-${{ runner.os }}-
 
       - name: Install Tooling
+        # swiftformat and swiftlint are pinned to the versions the local
+        # release gates run (`swiftformat --version` 0.62.1, `swiftlint version`
+        # 0.65.0). `brew install` follows the newest release, and 0.63.0 added
+        # rules that turned this lint red on 2026-09-05 without a source change.
+        # Bump both here and locally together.
         run: |
-          brew install xcodegen swiftlint swiftformat
+          brew install xcodegen
+          mkdir -p "$HOME/hl-tools"
+          curl -sSL -o /tmp/swiftformat.zip https://github.com/nicklockwood/SwiftFormat/releases/download/0.62.1/swiftformat.zip
+          unzip -q -o /tmp/swiftformat.zip -d "$HOME/hl-tools"
+          curl -sSL -o /tmp/swiftlint.zip https://github.com/realm/SwiftLint/releases/download/0.65.0/portable_swiftlint.zip
+          unzip -q -o /tmp/swiftlint.zip -d "$HOME/hl-tools"
+          chmod +x "$HOME/hl-tools/swiftformat" "$HOME/hl-tools/swiftlint"
+          echo "$HOME/hl-tools" >> "$GITHUB_PATH"
+          "$HOME/hl-tools/swiftformat" --version
+          "$HOME/hl-tools/swiftlint" version
 
       - name: Verify pinned server contract
+        # The pinned-contract evidence lives in `.planning/`, which the public
+        # mirror (MBombeck/healthlog-iOS) deliberately does not carry. Run the
+        # check wherever the evidence is present; skip it — visibly — where it
+        # is not, instead of failing every public run before lint and tests.
+        if: hashFiles('.planning/active/apple-review-reliability/ROUTE-MATRIX.md') != ''
         run: |
           bash scripts/verify-server-contract-fixtures.sh
           bash scripts/verify-server-contract-fixtures.sh --self-test
