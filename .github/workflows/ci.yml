@@ -14,8 +14,11 @@ jobs:
     runs-on: macos-26
     # C1 (audit v0.16.2): a cold build that compiles mlx-swift's C++/Metal
     # core does not fit 25 min without a warm DerivedData cache; give the
-    # cold-cache path headroom.
-    timeout-minutes: 60
+    # cold-cache path headroom. 2026-09-08: the suite is 8,600 tests now — a
+    # cold run measured 15 min build + 44 min tests and was cancelled at the
+    # 60-minute limit with 7,790 tests green; 120 leaves room for the SPM
+    # core build after the tests.
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
