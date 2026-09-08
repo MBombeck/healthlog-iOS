@@ -63191,6 +63191,24 @@
         }
       }
     },
+    "measurements.delete.confirm.title": {
+      "comment": "Destructive confirmation title on the measurement list and the chrono feed (was a raw German literal until 1.0.1)",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete measurement?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messung löschen?"
+          }
+        }
+      }
+    },
     "measurements.list.dateRange.clear": {
       "comment": "Measurement list — clears both date-range bounds.",
       "extractionState": "manual",

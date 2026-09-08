@@ -334,7 +334,7 @@ struct MeasurementListScreen: View {
             .hlSheetPresentation(.form)
         }
         .hlConfirmDestructive(
-            Text("Messung löschen?"),
+            Text("measurements.delete.confirm.title"),
             isPresented: Binding(get: { deleteConfirmTarget != nil }, set: { if !$0 { deleteConfirmTarget = nil } }),
             // v0.11 W26 — the delete is now reversible via the Rückgängig
             // toast, so the old "cannot be undone" warning is dropped.

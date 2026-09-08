@@ -71,7 +71,7 @@ struct MeasurementsChronoFeed: View {
             .hlSheetPresentation(.form)
         }
         .hlConfirmDestructive(
-            Text("Messung löschen?"),
+            Text("measurements.delete.confirm.title"),
             isPresented: Binding(
                 get: { deleteConfirmTarget != nil },
                 set: { if !$0 { deleteConfirmTarget = nil } }
