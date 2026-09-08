@@ -57,7 +57,13 @@ struct CompleteHealthSyncCompositionTests {
         }
     }
 
-    @Test("the markdown inventory and the executable twin agree")
+    @Test(
+        "the markdown inventory and the executable twin agree",
+        .enabled(
+            if: RepoDocs.present(".planning/phases/07-healthkit-durability-and-complete-sync/07-TRIGGER-OWNERSHIP.md"),
+            "07-TRIGGER-OWNERSHIP.md is not part of this checkout"
+        )
+    )
     func markdownAndTableAgree() throws {
         let markdown = try Self.source(
             ".planning/phases/07-healthkit-durability-and-complete-sync/07-TRIGGER-OWNERSHIP.md"

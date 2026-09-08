@@ -93,9 +93,22 @@ trap _gate_release EXIT
 trap '_gate_release; exit 130' INT
 trap '_gate_release; exit 143' TERM
 
+gate_ownerless_since=""
 while ! mkdir -- "$gate_lock_dir" 2>/dev/null; do
     [[ -d "$gate_lock_dir" ]] || continue
-    [[ -f "$gate_lock_owner" ]] || _gate_fail "lock exists without an owner record; refusing ambiguous cleanup: $gate_lock_dir"
+    if [[ ! -f "$gate_lock_owner" ]]; then
+        # 2026-09-09 — a second gate user (the CI runners share this lock with
+        # the release producer) may have created the directory a moment ago and
+        # not yet written its owner record. Give it a few seconds before
+        # treating the lock as ambiguous; the refusal itself is unchanged.
+        [[ -n "$gate_ownerless_since" ]] || gate_ownerless_since="$SECONDS"
+        if ((SECONDS - gate_ownerless_since >= 5)); then
+            _gate_fail "lock exists without an owner record; refusing ambiguous cleanup: $gate_lock_dir"
+        fi
+        sleep 0.1
+        continue
+    fi
+    gate_ownerless_since=""
 
     gate_owner="$(cat "$gate_lock_owner" 2>/dev/null || true)"
     [[ "$gate_owner" =~ ^[1-9][0-9]*$ ]] ||

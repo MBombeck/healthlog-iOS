@@ -105,7 +105,10 @@ struct HLButtonRestrainedContractTests {
         }
     }
 
-    @Test("Der Amendment-Text R9/E2-A1 schreibt exakt die Zahlen, die das Designsystem rendert")
+    @Test(
+        "Der Amendment-Text R9/E2-A1 schreibt exakt die Zahlen, die das Designsystem rendert",
+        .enabled(if: RepoDocs.present(".planning/ux/STANDARD-ui.md"), "STANDARD-ui.md is not part of this checkout")
+    )
     func standardAmendmentMatchesTheDesignSystem() throws {
         let section = try Self.amendmentSection()
         let contract = HLButton.restrainedContract
@@ -155,7 +158,10 @@ struct HLButtonRestrainedContractTests {
         )
     }
 
-    @Test("Der Amendment-Text benennt den Träger, die Referenz-Instanz und den Vorfall")
+    @Test(
+        "Der Amendment-Text benennt den Träger, die Referenz-Instanz und den Vorfall",
+        .enabled(if: RepoDocs.present(".planning/ux/STANDARD-ui.md"), "STANDARD-ui.md is not part of this checkout")
+    )
     func standardAmendmentKeepsItsHistory() throws {
         let section = try Self.amendmentSection()
 

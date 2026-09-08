@@ -78,7 +78,10 @@
             #expect(!observed.isEmpty)
         }
 
-        @Test("PROJECT_GUIDE states the same count and no longer calls Spezi the receiver")
+        @Test(
+            "PROJECT_GUIDE states the same count and no longer calls Spezi the receiver",
+            .enabled(if: RepoDocs.present("PROJECT_GUIDE.md"), "PROJECT_GUIDE.md is not part of this checkout")
+        )
         func projectGuideMatchesTheRegistry() throws {
             let guide = try Self.source("PROJECT_GUIDE.md")
             #expect(guide.contains("\(HealthLogSampleTypeRegistry.expectedCount)"))

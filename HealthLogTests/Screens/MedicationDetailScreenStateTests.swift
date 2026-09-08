@@ -38,7 +38,7 @@ struct MedicationDetailScreenStateTests {
         let store = makeStore(name: "Trulicity 7.5 mg", treatmentClass: "GLP1")
         #expect(store.isGLP1Recognised == true)
         #expect(store.isUnknownGLP1Brand == false)
-        #expect(store.drug?.id == .tirzepatide)
+        #expect(store.drug?.id == .dulaglutide) // Trulicity in this tree
     }
 
     // MARK: - PK input pipeline
