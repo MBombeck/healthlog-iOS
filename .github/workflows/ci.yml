@@ -9,9 +9,21 @@ on:
   # pushing an empty commit. No inputs — same matrix as push/PR.
   workflow_dispatch:
 
+# 2026-09-08 — CI runs on the operator's Mac mini (self-hosted runner, label
+# `healthlog-mini`), not on GitHub's macOS runners: eight cloud runs of this
+# suite exhausted the account's Actions budget in one day, and the Mac mini
+# already carries the exact Xcode, simulators and tools the release producer
+# uses. One CI job at a time per branch on that machine; a newer push cancels
+# an older run. Every Xcode invocation below goes through
+# scripts/run-serialized-xcode-gate.sh, which takes the same machine lock as
+# the release producer, so CI can never race a freeze.
+concurrency:
+  group: healthlog-mini-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, healthlog-mini]
     # C1 (audit v0.16.2): a cold build that compiles mlx-swift's C++/Metal
     # core does not fit 25 min without a warm DerivedData cache; give the
     # cold-cache path headroom. 2026-09-08: the suite is 8,600 tests now — a
@@ -28,56 +40,22 @@ jobs:
       # `swift-tools-version:6.2` manifest, which SwiftPM 6.1 (Xcode 16.4)
       # hard-errors on, so package resolution was structurally impossible.
       # 26.6 matches the exact release/archive `xcodeVersion` pin in project.yml.
-      - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: "26.6"
-
-      # W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — cache key now folds in
-      # `project.yml` alongside `Package.swift` so a dep / scheme change
-      # busts the cache, while routine source edits hit the warm cache.
-      # Path adds `~/Library/Caches/org.swift.swiftpm/` for SPM's
-      # resolved-package cache (the per-repo `.build` already lives in
-      # the workspace).
-      - name: Cache SwiftPM
-        uses: actions/cache@v4
-        with:
-          path: |
-            .build
-            ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'project.yml') }}
-          restore-keys: |
-            spm-${{ runner.os }}-
-
-      # W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — DerivedData cache. xcodebuild
-      # writes module / build intermediates here; reusing them across
-      # runs cuts cold-build time roughly in half on the macos-15 runner.
-      # Same key shape as the SPM cache so dep changes bust both at once.
-      - name: Cache DerivedData
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('Package.swift', 'project.yml') }}
-          restore-keys: |
-            deriveddata-${{ runner.os }}-
-
-      - name: Install Tooling
-        # swiftformat and swiftlint are pinned to the versions the local
-        # release gates run (`swiftformat --version` 0.62.1, `swiftlint version`
-        # 0.65.0). `brew install` follows the newest release, and 0.63.0 added
-        # rules that turned this lint red on 2026-09-05 without a source change.
-        # Bump both here and locally together.
+      - name: Verify Xcode
+        # The runner uses the selected Xcode of the machine; project.yml pins
+        # the same version for the release producer. A different Xcode here
+        # means the machine moved on without the project — fail before building.
         run: |
-          brew install xcodegen
-          mkdir -p "$HOME/hl-tools"
-          curl -sSL -o /tmp/swiftformat.zip https://github.com/nicklockwood/SwiftFormat/releases/download/0.62.1/swiftformat.zip
-          unzip -q -o /tmp/swiftformat.zip -d "$HOME/hl-tools"
-          curl -sSL -o /tmp/swiftlint.zip https://github.com/realm/SwiftLint/releases/download/0.65.0/portable_swiftlint.zip
-          unzip -q -o /tmp/swiftlint.zip -d "$HOME/hl-tools"
-          chmod +x "$HOME/hl-tools/swiftformat" "$HOME/hl-tools/swiftlint"
-          echo "$HOME/hl-tools" >> "$GITHUB_PATH"
-          "$HOME/hl-tools/swiftformat" --version
-          "$HOME/hl-tools/swiftlint" version
+          expected="Xcode 26.6"
+          actual="$(xcodebuild -version | head -1)"
+          [[ "$actual" == "$expected" ]] || { echo "expected $expected, found $actual" >&2; exit 1; }
+
+      - name: Verify Tooling
+        # The Mac mini carries the tools the release gates run; pin their
+        # versions here so a silent brew upgrade cannot change what CI checks.
+        run: |
+          xcodegen --version
+          [[ "$(swiftformat --version)" == "0.62.1" ]] || { echo "swiftformat must be 0.62.1, is $(swiftformat --version)" >&2; exit 1; }
+          [[ "$(swiftlint version)" == "0.65.0" ]] || { echo "swiftlint must be 0.65.0, is $(swiftlint version)" >&2; exit 1; }
 
       - name: Verify pinned server contract
         # The pinned-contract evidence lives in `.planning/`, which the public
