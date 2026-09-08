@@ -676,6 +676,7 @@ public final class AppContainer {
         let integrations = Self.makeIntegrationStores(
             passkeyRepo: passkeyRepo,
             sessionsRepo: sessionsRepo,
+            accountSecurityRepo: accountSecurityRepo,
             mfaEnrollmentRepo: mfaEnrollmentRepo,
             withingsRepo: withingsRepo,
             whoopRepo: whoopRepo,

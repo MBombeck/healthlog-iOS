@@ -23,17 +23,39 @@ public final class SessionsStore {
     /// NOT a device count (see `SessionsRepository.revokeOthers`).
     public private(set) var lastRevokedOthersCount: Int?
 
-    private let repo: SessionsRepository
+    /// v1.38.11 — whether the running server spares THIS device when "sign out
+    /// everywhere" is used (``SignOutEverywhereElse``). Drives which of the two
+    /// consequence texts the screen shows; `false` is the conservative verdict
+    /// (the old copy, which warns that this device may be signed out too), so an
+    /// unknown or unreachable server never produces a promise the server does
+    /// not keep. Resolved on every ``load()``.
+    public private(set) var sparesThisDevice: Bool = false
 
-    public init(repo: SessionsRepository) {
+    private let repo: SessionsRepository
+    private let serverVersion: @Sendable () async throws -> ServerVersionInfo
+
+    /// v1.38.11 — `serverVersion` reads the running build's `/api/version`
+    /// payload so the screen can pick honest copy. Injected rather than taken
+    /// off `SessionsRepository`: the probe already exists on
+    /// `AccountSecurityRepository` (the 2FA gate uses it), and the sessions
+    /// repository has no business growing a second one.
+    public init(
+        repo: SessionsRepository,
+        serverVersion: @escaping @Sendable () async throws -> ServerVersionInfo
+    ) {
         self.repo = repo
+        self.serverVersion = serverVersion
     }
 
-    /// (Re)loads the active sessions.
+    /// (Re)loads the active sessions — and, alongside them, the server verdict
+    /// that decides the "sign out everywhere" wording. The two run concurrently
+    /// on purpose: the list is the security surface and must not queue behind a
+    /// probe that only picks between two texts.
     public func load() async {
         isLoading = true
         error = nil
         defer { isLoading = false }
+        async let verdict = resolvedSparesThisDevice()
         do {
             sessions = try await repo.list()
         } catch let err as HLError {
@@ -41,6 +63,17 @@ public final class SessionsStore {
         } catch {
             self.error = .unknown(String(describing: error))
         }
+        sparesThisDevice = await verdict
+    }
+
+    /// v1.38.11 — best-effort version read. A miss is deliberately silent and
+    /// answers `false`: the verdict only picks between two truthful texts, so
+    /// surfacing it as an error would put a red alert in front of a user whose
+    /// session list loaded perfectly well. `nonisolated` so `load()` can run it
+    /// alongside the list rather than in front of it.
+    private nonisolated func resolvedSparesThisDevice() async -> Bool {
+        guard let version = try? await serverVersion() else { return false }
+        return SignOutEverywhereElse.sparesThisDevice(on: version)
     }
 
     /// Revokes a single session, then re-loads so the list reflects server
@@ -61,9 +94,10 @@ public final class SessionsStore {
         }
     }
 
-    /// Revokes every other session. See `SessionsRepository.revokeOthers` for
-    /// why this also revokes the *caller's* refresh token on a native client —
-    /// the screen's confirmation copy is written around that reality.
+    /// Revokes every other session. See `SessionsRepository.revokeOthers`: below
+    /// server v1.38.11 this also revokes the *caller's* refresh token, from
+    /// v1.38.11 it does not. ``sparesThisDevice`` carries that distinction to
+    /// the screen, whose confirmation copy is written around it.
     public func revokeOthers() async {
         guard !isRevokingOthers else { return }
         isRevokingOthers = true
@@ -92,6 +126,9 @@ public final class SessionsStore {
         revokingID = nil
         isRevokingOthers = false
         lastRevokedOthersCount = nil
+        // v1.38.11 — the next account may sit on a different server, so the
+        // copy verdict must not outlive the sign-out that produced it.
+        sparesThisDevice = false
         error = nil
     }
 }

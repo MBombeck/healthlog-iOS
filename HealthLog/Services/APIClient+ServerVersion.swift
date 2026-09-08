@@ -91,6 +91,24 @@ public enum WebHandoffLogin {
     }
 }
 
+public enum SignOutEverywhereElse {
+    /// v1.38.11 — the server version from which `DELETE /api/auth/me/sessions`
+    /// spares the calling device (Bearer) and revokes the OTHER devices'
+    /// refresh AND access tokens in one transaction. Below it the same call
+    /// also revokes this phone's refresh token, and the copy must keep saying
+    /// so — a self-hosted instance on an older build has not changed at all.
+    public static let minimumServerVersion = "1.38.11"
+
+    /// v1.38.11 — whether "sign out everywhere" leaves THIS device signed in on
+    /// the given server build. `isAtLeast` fails closed on an unreadable running
+    /// version, which here means the harsher, honest wording stays: a warning
+    /// that costs an unnecessary re-login is recoverable, a promise the server
+    /// does not keep is not.
+    public static func sparesThisDevice(on server: ServerVersionInfo) -> Bool {
+        server.isAtLeast(minimumServerVersion)
+    }
+}
+
 public enum MedicationSlotMaterialization {
     /// audit-v0162 M-7 — the server version from which `GET /api/medications
     /// /intake?scope=today` (and `/api/dashboard/summary`) **materialise every

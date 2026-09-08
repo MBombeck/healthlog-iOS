@@ -57,24 +57,37 @@ public actor SessionsRepository {
         try await api.sendVoid(req)
     }
 
-    /// "Sign out everywhere else."
+    /// v1.38.11 — "Sign out everywhere else", and from that server build it
+    /// finally is `-else` for an iOS caller too.
     ///
-    /// **This is not `-else` when the caller is iOS.** The server implementation
-    /// (`destroyOtherSessions`, `src/lib/auth/session.ts:291-309`) deletes every
-    /// `Session` row except `currentSessionId` — but then revokes **every**
-    /// unrevoked `RefreshToken` for the user unconditionally, with no
-    /// caller-exclusion. For a browser caller that is the intended semantic
-    /// (keep this tab, drop all native apps). For an iOS caller it also revokes
-    /// *this phone's* refresh token: the current access token keeps working
-    /// until it expires, and the next refresh then fails and signs the user out
-    /// locally.
+    /// **Below v1.38.11 this is not `-else` when the caller is iOS.** The old
+    /// server implementation (`destroyOtherSessions`,
+    /// `src/lib/auth/session.ts:291-309`) deletes every `Session` row except
+    /// `currentSessionId` — but then revokes **every** unrevoked `RefreshToken`
+    /// for the user unconditionally, with no caller-exclusion. For a browser
+    /// caller that is the intended semantic (keep this tab, drop all native
+    /// apps). For an iOS caller it also revokes *this phone's* refresh token:
+    /// the current access token keeps working until it expires, and the next
+    /// refresh then fails and signs the user out locally.
     ///
-    /// We surface the action anyway — it is the only lever that cuts off a lost
-    /// phone, since a native session is a `RefreshToken` and never appears in
-    /// the `Session` list — but the confirmation copy tells the truth
-    /// (`sessions.signOutAll.*`) instead of promising "except this device".
-    /// Making it genuinely caller-preserving needs a server change; see the
-    /// commit message and the parity report.
+    /// **From v1.38.11 the route spares the calling device.** For a Bearer
+    /// caller it now excludes the caller's own credential and revokes the OTHER
+    /// devices' refresh tokens *and* their paired access tokens in one
+    /// transaction — so the lost phone loses its access token immediately
+    /// instead of at expiry, and this phone stays signed in. Self-hosted
+    /// instances below 1.38.11 keep the old behaviour, so the difference is not
+    /// something the client may assume away.
+    ///
+    /// The wire call is identical on both sides of that line; only what the UI
+    /// may promise changes. ``SignOutEverywhereElse`` is the version gate,
+    /// `SessionsStore.sparesThisDevice` carries the verdict, and `SessionsScreen`
+    /// picks between the `sessions.signOutAll.*` (old) and
+    /// `sessions.signOutAll.else.*` (spared) copy with it. An unreadable server
+    /// version keeps the older, harsher wording.
+    ///
+    /// We surface the action on every server — it is the only lever that cuts
+    /// off a lost phone, since a native session is a `RefreshToken` and never
+    /// appears in the `Session` list.
     ///
     /// - Returns: the number of **`Session` rows** deleted. Revoked refresh
     ///   tokens are not counted, so this is not a device count.

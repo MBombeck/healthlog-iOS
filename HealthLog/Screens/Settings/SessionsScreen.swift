@@ -6,6 +6,14 @@ import SwiftUI
 /// stamp and the current-session marker; swipe to revoke one; a footer action
 /// to sign out everywhere.
 ///
+/// **v1.38.11 — the consequence copy follows the server.** "Sign out
+/// everywhere" used to take this device with it (the server revoked every
+/// refresh token, the caller's included); from server v1.38.11 a Bearer caller
+/// is spared. The action, its titles and its confirm button are unchanged —
+/// only the three texts that describe the consequence swap, keyed on
+/// `store.sparesThisDevice` (``SignOutEverywhereElse``). An unknown or
+/// unreachable server keeps the older, harsher wording.
+///
 /// **Honest empty state.** A native sign-in creates no `Session` row (see
 /// `SessionEntry`), so an account that has only ever used the iOS app sees an
 /// empty list. Rather than paint a bare "nothing here" — which reads as a bug —
@@ -58,9 +66,15 @@ struct SessionsScreen: View {
         .hlConfirmDestructive(
             Text("sessions.signOutAll.confirmTitle"),
             isPresented: $showSignOutAllConfirm,
-            // Deliberately NOT "except this device" — on iOS the server also
-            // revokes this device's refresh token. See SessionsRepository.
-            message: Text("sessions.signOutAll.confirmBody"),
+            // v1.38.11 — the consequence differs by server build: from
+            // v1.38.11 the calling device is spared, below it the same call
+            // also drops this phone's refresh token. Never promise "except
+            // this device" on a server that does not honour it.
+            message: Text(
+                store.sparesThisDevice
+                    ? "sessions.signOutAll.else.confirmBody"
+                    : "sessions.signOutAll.confirmBody"
+            ),
             confirm: Text(String(localized: "sessions.signOutAll.confirmAction")),
             cancel: Text(String(localized: "Cancel")),
             action: {
@@ -76,7 +90,11 @@ struct SessionsScreen: View {
         ) {
             Button(String(localized: "OK")) { store.clearRevokedOthersConfirmation() }
         } message: {
-            Text("sessions.signOutAll.doneBody")
+            Text(
+                store.sparesThisDevice
+                    ? "sessions.signOutAll.else.doneBody"
+                    : "sessions.signOutAll.doneBody"
+            )
         }
         .alert(
             "Error",
@@ -194,8 +212,12 @@ struct SessionsScreen: View {
             .accessibilityIdentifier("sessions.signOutAllButton")
         } footer: {
             // R12 — Fußnoten-Tinte in Listen-Gerüsten ist `HLText.secondary`.
-            Text("sessions.signOutAll.footer")
-                .foregroundStyle(HLText.secondary)
+            Text(
+                store.sparesThisDevice
+                    ? "sessions.signOutAll.else.footer"
+                    : "sessions.signOutAll.footer"
+            )
+            .foregroundStyle(HLText.secondary)
         }
     }
 

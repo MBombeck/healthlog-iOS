@@ -80277,6 +80277,60 @@
         }
       }
     },
+    "sessions.signOutAll.else.confirmBody": {
+      "comment": "Sessions screen — confirm dialog body on servers from v1.38.11, where the route spares the calling device. The pre-1.38.11 wording stays in sessions.signOutAll.confirmBody.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Browser-Sitzungen werden beendet und alle anderen App-Anmeldungen widerrufen. Dieses Gerät bleibt angemeldet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every browser session ends and every other app sign-in is revoked. This device stays signed in."
+          }
+        }
+      }
+    },
+    "sessions.signOutAll.else.doneBody": {
+      "comment": "Sessions screen — success alert body on servers from v1.38.11, where the calling device keeps its sign-in.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andere Sitzungen wurden beendet und alle anderen App-Anmeldungen widerrufen. Dieses Gerät bleibt angemeldet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other sessions have ended and every other app sign-in has been revoked. This device stays signed in."
+          }
+        }
+      }
+    },
+    "sessions.signOutAll.else.footer": {
+      "comment": "Sessions screen — footer under the sign-out-everywhere button on servers from v1.38.11, where this device is spared.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meldet alle Browser-Sitzungen ab und widerruft die Anmeldung aller anderen Apps. Dieses Gerät bleibt angemeldet. Nutze das, wenn du ein Gerät verloren hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signs out every browser session and revokes every other app sign-in. This device stays signed in. Use this if you have lost a device."
+          }
+        }
+      }
+    },
     "sessions.signOutAll.footer": {
       "comment": "Sessions screen — footer under the sign-out-everywhere button. States the honest consequence: on iOS the server also revokes this device's refresh token.",
       "extractionState": "manual",

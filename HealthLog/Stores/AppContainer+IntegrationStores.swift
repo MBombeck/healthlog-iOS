@@ -39,6 +39,7 @@ extension AppContainer {
     static func makeIntegrationStores(
         passkeyRepo: PasskeyRepository,
         sessionsRepo: SessionsRepository,
+        accountSecurityRepo: AccountSecurityRepository,
         mfaEnrollmentRepo: MfaEnrollmentRepository,
         withingsRepo: WithingsRepository,
         whoopRepo: WhoopRepository,
@@ -56,7 +57,15 @@ extension AppContainer {
         let settingsStoreReference = settingsStore
         return IntegrationStoresBundle(
             passkeyManagement: PasskeyManagementStore(repo: passkeyRepo),
-            sessions: SessionsStore(repo: sessionsRepo),
+            // v1.38.11 — the sessions screen picks its "sign out everywhere"
+            // copy by server version, so the store needs a version read. It
+            // borrows `AccountSecurityRepository.serverVersion()` (the same
+            // `/api/version` probe the 2FA gate uses) rather than growing a
+            // second one on `SessionsRepository`.
+            sessions: SessionsStore(
+                repo: sessionsRepo,
+                serverVersion: { try await accountSecurityRepo.serverVersion() }
+            ),
             mfaEnrollmentGate: MfaEnrollmentGateStore(repo: mfaEnrollmentRepo),
             withings: WithingsIntegrationStore(repo: withingsRepo),
             // WHOOP connect runs in an in-app `ASWebAuthenticationSession` (B5

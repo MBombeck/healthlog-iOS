@@ -4,6 +4,14 @@
 > per-version reports under `.planning/v05*-marathon/` and
 > `.planning/v056-marathon/`. This file resumes from v0.6.2.
 
+## 1.0.2 — unreleased (on `feat/v0141` after build 275)
+
+- **"Sign out everywhere" keeps this device signed in** on servers from
+  1.38.11; the confirmation, the result text and the footer say so. Older
+  self-hosted servers keep the previous, equally honest wording.
+- **The measurement delete confirmation is in the catalogue**; English
+  users no longer read it in German.
+
 ## 1.0.1 (275) — 2026-09-06
 
 - **No more daily forced sign-in.** When the 24-hour access token expired

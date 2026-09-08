@@ -1477,10 +1477,10 @@
     },
     {
       "file": "HealthLog/Stores/AppContainer.swift",
-      "line": 807,
+      "line": 808,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 807",
+      "reason": "File should contain 600 lines or less: currently contains 808",
       "severity": "warning"
     },
     {
