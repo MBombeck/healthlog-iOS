@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Project policy: commits are authored by the maintainer's identity alone.
+# No assistant or tooling reference may appear in a commit message — no
+# Co-Authored-By trailer naming an assistant, no session link, no
+# "Generated with" line. Install once per clone:
+#   git config core.hooksPath scripts/git-hooks
+set -euo pipefail
+message_file="$1"
+if grep -qiE '^(Co-Authored-By:.*(claude|anthropic|openai|gpt|gemini|copilot|codex|fable)|Claude-Session:|.*Generated with (Claude|Codex|Copilot|ChatGPT))' "$message_file"; then
+    echo "ERROR: the commit message carries an assistant or tooling reference." >&2
+    echo "Project policy: commits are authored by the maintainer's git identity alone." >&2
+    echo "Remove the offending line(s) from the message and commit again." >&2
+    exit 1
+fi

@@ -74,6 +74,21 @@ jobs:
       - name: Verify CI release gate contract
         run: scripts/test-ci-workflow-contract.sh
 
+      # Project policy: no assistant or tooling reference in commit messages
+      # (the same rule the commit-msg hook under scripts/git-hooks enforces
+      # locally). Checked for every commit this push brought.
+      - name: Verify commit messages carry no tooling reference
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: |
+          git fetch --quiet --deepen=50 origin "${{ github.event.before }}" || true
+          bad=0
+          for sha in $(git rev-list "${{ github.event.before }}..${{ github.sha }}" 2>/dev/null); do
+            if git log -1 --format=%B "$sha" | grep -qiE '^(Co-Authored-By:.*(claude|anthropic|openai|gpt|gemini|copilot|codex|fable)|Claude-Session:|.*Generated with (Claude|Codex|Copilot|ChatGPT))'; then
+              echo "::error::commit $sha carries an assistant or tooling reference in its message"; bad=1
+            fi
+          done
+          exit $bad
+
       - name: Lint
         run: |
           swiftformat --lint .
