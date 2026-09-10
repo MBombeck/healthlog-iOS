@@ -105,6 +105,17 @@ public struct AIProviderConfig: Codable, Sendable, Equatable {
     /// Maps the wire provider field through `AIProvider.fromWire`. Falls back
     /// to `.unconfigured` for nil/empty/unknown — UI never sees a phantom
     /// value (M2-A3 §2.1 root-cause).
+    ///
+    /// **Audit B-9/B-10 note (2026-09-10).** B-10 recommends an `unknown` case
+    /// on ``AIProvider`` because "a new server provider fails the decode of the
+    /// provider settings as a whole". It does not: ``provider`` is a plain
+    /// `String?` and only reaches the enum here, through a FAILABLE lookup, so
+    /// an unknown name costs a label and nothing else. Adding the case would
+    /// make things worse, not better — `.unknown != .unconfigured` would send
+    /// ``aiConsentTarget`` down the `.provider` arm and consent would be asked
+    /// for, and recorded against, a provider this build cannot name. The
+    /// `.providerOpaque` receipt exists for exactly that situation and is the
+    /// arm an unrecognised provider must keep taking.
     public var resolvedProvider: AIProvider {
         AIProvider.fromWire(provider) ?? .unconfigured
     }

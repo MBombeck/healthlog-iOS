@@ -67,7 +67,7 @@ public final class InjectionSitePrefsStore {
             next.append(site)
         }
         // Keep canonical `allCases` order so the editor stays stable.
-        excluded = InjectionSite.allCases.filter { next.contains($0) }
+        excluded = InjectionSite.serverCases.filter { next.contains($0) }
         error = nil
         do {
             let confirmed = try await repo.update(excluded: excluded)

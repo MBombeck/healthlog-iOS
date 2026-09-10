@@ -53,7 +53,7 @@ public extension MedicationsRepository {
         let idempotencyKey = IdempotencyKey()
         // A site / dose override rides only on a TAKEN write; never on a skip
         // (the server would drop it anyway — keep the wire clean).
-        let site = skipped ? nil : injectionSite?.serverRawValue
+        let site = skipped ? nil : injectionSite.flatMap(\.serverRawValue)
         let trimmedDose = doseTaken?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedDose = skipped ? nil : (trimmedDose?.isEmpty == false ? trimmedDose : nil)
         let body = MedicationIdIntakeBody(

@@ -32,7 +32,7 @@ struct NutrientReadDTOTests {
         }
     }
 
-    @Test("Overview skips an unknown forward-compat nutrient code, keeps the rest")
+    @Test("Overview keeps an unknown forward-compat nutrient code as a row of its own")
     func overviewSkipsUnknownCode() throws {
         let json = #"""
         {"windowDays":14,"nutrients":[
@@ -42,8 +42,14 @@ struct NutrientReadDTOTests {
         ]}
         """#
         let dto = try Self.decoder.decode(NutrientOverviewDTO.self, from: Data(json.utf8))
-        #expect(dto.nutrients.count == 2, "unknown code dropped, valid rows survive")
-        #expect(dto.nutrients.map(\.nutrient) == [.vitaminC, .water])
+        // Audit B-4 — was "unknown code dropped": the row survived nowhere and
+        // the person simply had one nutrient fewer than the server holds. It is
+        // kept now, labelled by the raw code the server sent.
+        #expect(dto.nutrients.count == 3, "an unnameable code costs its label, not its row")
+        #expect(dto.nutrients.map(\.nutrient) == [.vitaminC, .unknown, .water])
+        let unknown = try #require(dto.nutrients.first { $0.nutrient == .unknown })
+        #expect(unknown.rawNutrient == "unobtainium")
+        #expect(unknown.latestAmount == 1, "the numbers are intact — only the label degrades")
     }
 
     @Test("Overview row tolerates missing numeric + string fields with defaults")

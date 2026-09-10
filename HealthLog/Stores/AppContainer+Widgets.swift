@@ -76,10 +76,21 @@ extension AppContainer {
         moodStore.onEntriesDidChange = { [weak moodStore] in
             previous?()
             guard let moodStore else { return }
-            let recent = moodStore.recents(limit: 1).first
+            // Audit B-4 — the widget answers "your latest mood" with ONE row,
+            // and a newer entry whose level this build cannot name has no
+            // number to put in that slot. It must not displace the person's
+            // real latest reading, so the glance takes the latest NAMEABLE one
+            // (``MoodEntry/latestNameable(_:)``, the same rule the watch obeys).
+            //
+            // Fix round 1 — over the WHOLE loaded window, not `recents(limit:
+            // 20)`. That cap was a bare constant: a person whose twenty newest
+            // entries all carried an unnameable level lost the glance entirely,
+            // silently and for no stated reason. `entries` is already in memory
+            // and the scan is linear over it.
+            let recent = MoodEntry.latestNameable(moodStore.entries)
             writer.refreshMood(
                 recentMood: recent.map {
-                    WidgetSnapshot.RecentMood(score: $0.score, loggedAt: $0.recordedAt)
+                    WidgetSnapshot.RecentMood(score: $0.score, loggedAt: $0.entry.recordedAt)
                 }
             )
         }
@@ -117,7 +128,10 @@ extension AppContainer {
         let previous = measurementsStore.onRecentDidChange
         measurementsStore.onRecentDidChange = { recent in
             previous?(recent)
-            let latest = recent.max { $0.recordedAt < $1.recordedAt }
+            // Audit B-4 — the newest NAMED reading: a row on the unknown
+            // sentinel must never displace the person's real latest value in
+            // the one slot the widget has for a number.
+            let latest = Measurement.latestNamedReading(in: recent)
             writer.refreshLatestMeasurement(
                 WidgetSnapshot.LatestMeasurement.make(from: latest, units: unitPreferences())
             )

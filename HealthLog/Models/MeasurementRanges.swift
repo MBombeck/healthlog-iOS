@@ -92,7 +92,11 @@ public enum MeasurementRanges {
              .walkingSteadinessEvent, .breathingDisturbanceEvent,
              // Build 7 / item 7.3 — mood has no manual MeasureSheet entry (it is
              // logged via its own State-of-Mind flow), so no typo guard applies.
-             .mood:
+             .mood,
+             // Audit B-4 — the audio-exposure EVENT is categorical (band `1…1`)
+             // and read-only, and `.unknown` is a type this build cannot name,
+             // so it has no bound anyone could state. Neither is enterable.
+             .audioExposureEvent, .unknown:
             nil
         }
     }

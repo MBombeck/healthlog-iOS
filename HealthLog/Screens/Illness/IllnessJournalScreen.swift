@@ -29,7 +29,15 @@ struct IllnessJournalScreen: View {
 
     var body: some View {
         Group {
-            if !isEnabled {
+            // **Audit A-7 —** when the server said WHY the module is off and the
+            // reason is not the person's own switch, the enable surface is
+            // replaced by that sentence: a CTA there invites a PATCH the server
+            // refuses. `disabled` (and no verdict at all) keeps today's opt-in.
+            if let reason = moduleOffReason {
+                FeatureDisabledCard(variant: .hero, reason: reason)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else if !isEnabled {
                 IllnessOptInScreen(onEnabled: {
                     isEnabled = true
                     Task { await reload() }
@@ -229,6 +237,19 @@ struct IllnessJournalScreen: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
         }
+    }
+
+    /// **Audit A-7 — the server's sentence when the module is off for a reason
+    /// that is not the viewer's own switch**, `nil` when the opt-in CTA still
+    /// applies (module on, `disabled`, or no verdict from the server at all).
+    ///
+    /// Only consulted while the surface is in an off state; an enabled module
+    /// resolves `.offerOptIn` anyway, so the guard is about the render, not
+    /// about correctness.
+    private var moduleOffReason: String? {
+        guard !isEnabled || store?.isDisabled == true else { return nil }
+        guard case let .explain(reason) = container?.moduleGate.optInPresentation(.illness) else { return nil }
+        return reason
     }
 
     private func onAppear() async {

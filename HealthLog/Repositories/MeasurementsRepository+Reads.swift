@@ -145,7 +145,12 @@ public extension MeasurementsRepository {
         let fetch: @Sendable () async throws -> [Measurement] = { [api] in
             var query: [(String, String)] = [("limit", String(limit)), ("type", typeKey)]
             if groupByDay { query.append(("groupBy", "day")) }
-            if let sourceEq { query.append(("sourceEq", sourceEq.wire.rawValue)) }
+            // Audit B-4 — `__UNKNOWN__` is not a server `MeasurementSource` and
+            // must never reach a query string; the route validates `sourceEq`
+            // against `measurementSourceEnum` and answers 400. The measurement
+            // list's source chip DOES reach here with `.unknown`, so the page is
+            // fetched unfiltered and narrowed on the way out instead.
+            if let sourceEq, sourceEq != .unknown { query.append(("sourceEq", sourceEq.wire.rawValue)) }
             let req: APIRequest<MeasurementListWireResponse> = .get(
                 "/api/measurements",
                 query: query
@@ -172,7 +177,11 @@ public extension MeasurementsRepository {
             let all = try await recent(limit: limit)
             return all.filter { $0.kind == kind && (sourceEq == nil || $0.source == sourceEq) }
         }
-        return rows.filter { $0.kind == kind }
+        // Audit B-4 — the source narrowing happens here too, not only inside
+        // `fetch`: for `.unknown` the server was never asked to narrow, and the
+        // page cached under the `:src:__UNKNOWN__` key is an ALL-source page
+        // that would otherwise be served back whole on the next cache hit.
+        return rows.filter { $0.kind == kind && (sourceEq == nil || $0.source == sourceEq) }
     }
 
     /// Unified data-state for one (kind, range) pair — the single source of
@@ -477,6 +486,12 @@ private extension MetricKind {
         // `/api/measurements/series` kind; `kindSupportsSeries` short-circuits
         // before this key is ever used, so the token is unused-but-auditable.
         case .mood: "mood"
+        // Audit B-4 — neither is a `/api/measurements/series` kind: the
+        // audio-exposure event is categorical, and `.unknown` has no name to
+        // send. `kindSupportsSeries` short-circuits before either key is used,
+        // so both stay unused-but-auditable like their predecessors.
+        case .audioExposureEvent: "audioExposureEvent"
+        case .unknown: "unknown"
         }
     }
 }

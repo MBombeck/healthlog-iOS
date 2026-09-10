@@ -22,6 +22,18 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
     case thighRight = "thigh_right"
     case armLeft = "arm_left"
     case armRight = "arm_right"
+    /// **Audit B-4 — decode-only sentinel for a site this build cannot name.**
+    ///
+    /// The server's `InjectionSite` enum is its own taxonomy and can grow. A
+    /// member added after this build used to be `compactMap`-ped out of
+    /// `Medication.allowedInjectionSites`, and that is not a cosmetic loss: an
+    /// allow-list that shrinks to EMPTY means "no restriction", so a medication
+    /// the server had restricted to one unnameable site offered the person all
+    /// eight. Kept as a member, the restriction survives and the picker offers
+    /// nothing — honest, where all eight was a fabricated permission.
+    ///
+    /// It has no ``serverRawValue``, so it can never be written back.
+    case unknown = "__unknown__"
 
     /// Localized human-readable label. Lives on the enum so picker UIs
     /// can render without a separate switch.
@@ -35,7 +47,15 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
         case .thighRight: String(localized: "med.injection.site.thigh_right")
         case .armLeft: String(localized: "med.injection.site.arm_left")
         case .armRight: String(localized: "med.injection.site.arm_right")
+        case .unknown: String(localized: "med.injection.site.unknown")
         }
+    }
+
+    /// Audit B-4 — every site the SERVER can actually name: `allCases` minus the
+    /// decode-only ``unknown`` sentinel. The picker, the rotation hint and the
+    /// effective-set computation all enumerate this.
+    static var serverCases: [InjectionSite] {
+        allCases.filter { $0 != .unknown }
     }
 
     /// Best-effort parser for the server's raw injection-site strings
@@ -51,7 +71,11 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
         if let server = fromServerRawValue(trimmed.uppercased()) {
             return server
         }
-        return InjectionSite(rawValue: trimmed.lowercased())
+        // Audit B-4 (fix round 1) — `.unknown` carries a raw value like every
+        // other case, so a wire string `__unknown__` resolved straight to the
+        // decode-only sentinel here. Every other tolerant entry point in this
+        // wave guards it; this one is now uniform with them.
+        return InjectionSite(rawValue: trimmed.lowercased()).flatMap { $0 == .unknown ? nil : $0 }
     }
 
     // MARK: - v1.8.5 server enum bridge (server-to-ios injection-site)
@@ -62,7 +86,12 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
     /// explicitly — so `abdomenLeftLower` ↔ `ABDOMEN_LEFT` and
     /// `abdomenLeftUpper` ↔ `ABDOMEN_UPPER_LEFT`. Upper-arm maps to the
     /// server's `UPPER_ARM_*`.
-    public var serverRawValue: String {
+    ///
+    /// **Audit B-4 — `nil` for ``unknown``, and that is the write gate.** Every
+    /// path that puts a site on the wire (the intake `POST`, the allowed-sites
+    /// `PATCH`, the global deny-list `PUT`) reads this property, so an optional
+    /// here is what makes the compiler refuse to invent a server enum member.
+    public var serverRawValue: String? {
         switch self {
         case .abdomenLeftLower: "ABDOMEN_LEFT"
         case .abdomenRightLower: "ABDOMEN_RIGHT"
@@ -72,7 +101,28 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
         case .thighRight: "THIGH_RIGHT"
         case .armLeft: "UPPER_ARM_LEFT"
         case .armRight: "UPPER_ARM_RIGHT"
+        case .unknown: nil
         }
+    }
+
+    /// **Audit B-4 — the tolerant allow-list parser.**
+    ///
+    /// ``parse(_:)`` answers `nil` for both "no site recorded" and "a site I
+    /// cannot name", which is right where the value is one optional site on an
+    /// intake row. It is wrong for `allowedInjectionSites`, where the two mean
+    /// opposite things: an absent entry relaxes the restriction, an unnameable
+    /// one tightens it. This keeps the entry as ``unknown`` and drops only what
+    /// was never a site at all (an empty or blank string).
+    static func parseAllowedEntry(_ raw: String) -> InjectionSite? {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        guard let named = parse(trimmed) else {
+            UnknownServerEnumLog.noteFirstSighting(
+                of: trimmed, vocabulary: "injection site", consequence: "kept as a restriction, never offered or sent"
+            )
+            return .unknown
+        }
+        return named
     }
 
     /// Inverse of ``serverRawValue`` — maps a v1.8.5 server enum string
@@ -105,9 +155,12 @@ public enum InjectionSiteEffectiveSet {
         allowed: [InjectionSite],
         globalExcluded: [InjectionSite]
     ) -> [InjectionSite] {
-        let base = allowed.isEmpty ? InjectionSite.allCases : allowed
+        // Audit B-4 — enumerate `serverCases`: the `.unknown` sentinel may sit in
+        // `allowed` (that is the restriction surviving), but it is never a site
+        // a person can be offered, so it cannot come out of here.
+        let base = allowed.isEmpty ? InjectionSite.serverCases : allowed
         let denied = Set(globalExcluded)
         let allowedSet = Set(base)
-        return InjectionSite.allCases.filter { allowedSet.contains($0) && !denied.contains($0) }
+        return InjectionSite.serverCases.filter { allowedSet.contains($0) && !denied.contains($0) }
     }
 }

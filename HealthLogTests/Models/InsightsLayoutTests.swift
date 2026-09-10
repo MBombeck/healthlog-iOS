@@ -244,17 +244,17 @@ struct InsightsLayoutTests {
         #expect(nutrientsTile?.order == 1)
     }
 
-    /// W28b/W28d — `audio-events` is the sole remaining pending slug: it is
-    /// accepted by the server enum (so a persisted layout round-trips) but
-    /// deliberately renders no pill — `audioExposureEvent` is a HealthKit
-    /// CATEGORY / event-marker type, not a continuous chartable series, so it
-    /// has no chartable `MetricKind` (see W28d report). `walking-steadiness`
-    /// now maps to `.walkingSteadiness` and is no longer pending.
-    @Test("audio-events is server-known but maps to no chartable MetricKind")
+    /// W28b/W28d left `audio-events` as the sole pending slug: server-known, so
+    /// a persisted layout round-tripped, but renderable by nothing because
+    /// `audioExposureEvent` had no `MetricKind`. Audit B-4 (2026-09-10) gave it
+    /// one — the same treatment its five sibling HealthKit category events got
+    /// in Build 3 / item 3.3 — so no slug is pending any more and every
+    /// server-known id resolves to something the app can draw.
+    @Test("every server-known slug now resolves to a MetricKind — audio-events last")
     func pendingSlugsHaveNoKind() {
         #expect(InsightsLayoutTileId.serverKnownIds.contains(InsightsLayoutTileId.audioEvents))
-        #expect(InsightsTabSlug.metricKind(forSlug: InsightsLayoutTileId.audioEvents) == nil)
-        // Conversely walking-steadiness now resolves to a real kind.
+        #expect(InsightsTabSlug.metricKind(forSlug: InsightsLayoutTileId.audioEvents) == .audioExposureEvent)
+        // ...alongside walking-steadiness, which W28d resolved before it.
         #expect(InsightsTabSlug.metricKind(forSlug: InsightsLayoutTileId.walkingSteadiness) == .walkingSteadiness)
     }
 

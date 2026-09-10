@@ -57,7 +57,8 @@ public actor InjectionSitePrefsRepository {
     @discardableResult
     public func update(excluded: [InjectionSite]) async throws -> [InjectionSite] {
         let body = InjectionSitePrefsDTO(
-            globalExcludedInjectionSites: excluded.map(\.serverRawValue)
+            // Audit B-4 — `compactMap`: the sentinel has no server spelling.
+            globalExcludedInjectionSites: excluded.compactMap(\.serverRawValue)
         )
         let req: APIRequest<InjectionSitePrefsDTO> = try .patch(
             "/api/auth/me/injection-site-prefs",

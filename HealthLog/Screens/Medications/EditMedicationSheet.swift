@@ -561,7 +561,7 @@ extension EditMedicationSheet {
             // (otherwise leave nil so the server keeps its value, RMW-safe).
             trackInjectionSites: deliveryForm == .injection ? trackInjectionSites : nil,
             allowedInjectionSites: deliveryForm == .injection && trackInjectionSites
-                ? allowedInjectionSites.map(\.serverRawValue).sorted()
+                ? allowedInjectionSites.compactMap(\.serverRawValue).sorted()
                 : nil,
             // A real boolean whenever the schedule was rebuilt, never nil: an
             // omitted key would leave a once-PRN medication PRN forever.

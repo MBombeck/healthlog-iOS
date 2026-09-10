@@ -243,7 +243,12 @@ enum MeasurementToFHIRObservation {
              .walkingSteadinessEvent, .breathingDisturbanceEvent,
              // Build 7 / item 7.3 — mood is a survey self-report, not a FHIR
              // vital sign (and is never exported as an Observation anyway).
-             .mood:
+             .mood,
+             // Audit B-4 — the audio-exposure event is a notification, and
+             // `.unknown` is a reading this build cannot name; neither is in the
+             // FHIR R4 base vital-signs profile, and neither is exported at all
+             // (`MetricFHIRMapper.mapping(for:)` returns `nil` for both).
+             .audioExposureEvent, .unknown:
             false
         }
     }

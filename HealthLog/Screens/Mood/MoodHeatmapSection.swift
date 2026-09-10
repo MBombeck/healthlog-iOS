@@ -399,7 +399,7 @@ struct MoodHeatmapSection: View {
         guard let date else { return Text(verbatim: "") }
         let dateStr = date.formatted(.dateTime.day().month())
         if let bucket {
-            return Text("\(dateStr): \(MoodCopy.scoreLabel(bucket))")
+            return Text("\(dateStr): \(MoodCopy.levelLabel(bucket))")
         }
         return Text("\(dateStr): no entry")
     }

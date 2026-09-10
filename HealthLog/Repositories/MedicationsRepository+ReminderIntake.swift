@@ -155,7 +155,7 @@ public extension MedicationsRepository {
         }
         let idempotencyKey = IdempotencyKey()
         // v1.8.5 — only a TAKEN entry carries a site.
-        let site = status == .taken ? injectionSite?.serverRawValue : nil
+        let site = status == .taken ? injectionSite.flatMap(\.serverRawValue) : nil
         // H6 — the actual-dose override is meaningful only on a taken entry
         // (the server drops it on a skip); trim empties to nil so an empty
         // field records under the configured dose, not a blank string.

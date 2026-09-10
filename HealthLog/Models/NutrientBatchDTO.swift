@@ -33,6 +33,12 @@ public enum NutrientCode: String, Codable, Sendable, CaseIterable, Equatable {
     case iodine
     case water
     case caffeine
+    /// Audit B-4 — decode-only sentinel for a catalogue code this build cannot
+    /// name. The server catalogue grows (this list matched it exactly at the
+    /// time of writing, which is a snapshot, not a guarantee); before the
+    /// sentinel an added code cost the row it named, silently, through the
+    /// lossy list wrapper. See `NutrientCode+Unknown.swift`.
+    case unknown = "__UNKNOWN__"
 }
 
 /// One nutrient day total for `POST /api/nutrients/batch` (server v1.28,

@@ -243,10 +243,20 @@ public final class MoodStore {
     /// original id is gone. Documented trade-off per the v0.5.5.1 undo
     /// brief.
     private func restoreDeletedEntry(_ entry: MoodEntry) async {
+        // **Audit B-4 — an entry whose level this build cannot name is not
+        // resurrected.** Undo re-CREATES the row (the original id is gone), and
+        // a create must carry a level. This build has none for the sentinel, and
+        // the one thing worse than a lost undo is an entry that comes back
+        // saying something the person never said. The row leaves the list.
+        guard let score = entry.score else {
+            removeEntry(id: entry.id)
+            HLLog.api.warning("Mood undo skipped: the entry's level is unknown to this build and cannot be re-created")
+            return
+        }
         removeEntry(id: entry.id)
         let insertIndex = entries.firstIndex { $0.recordedAt < entry.recordedAt } ?? entries.endIndex
         insertEntry(entry, at: insertIndex)
-        _ = await log(score: entry.score, tags: entry.tags, tagKeys: entry.tagKeys, note: entry.note)
+        _ = await log(score: score, tags: entry.tags, tagKeys: entry.tagKeys, note: entry.note)
         // `log` inserts the fresh server row; drop the snapshot copy so
         // the list doesn't carry a duplicate.
         removeEntry(id: entry.id)
@@ -259,9 +269,14 @@ public final class MoodStore {
     /// that only edits score/tags/note (e.g. the legacy edit sheet path) does
     /// not clobber the structured tag-links. Pass an explicit value to change
     /// them.
+    ///
+    /// **Audit B-4 — `score` is optional.** Annotating an entry whose level this
+    /// build cannot name (adding a note or tags to it) must leave the level
+    /// alone: `nil` omits `mood` from the partial-update PUT, so the server
+    /// keeps the value it holds instead of receiving a level the client made up.
     public func update(
         _ entry: MoodEntry,
-        score: Int,
+        score: Int?,
         tags: [String],
         tagKeys: [String]? = nil,
         ratedFactors: [RatedFactorInput]? = nil,
@@ -271,12 +286,16 @@ public final class MoodStore {
         let snapshot = entries
         let cleanTags = tags.filter { !$0.hasPrefix("note:") }
         let resolvedTagKeys = tagKeys ?? entry.tagKeys
+        // Audit B-4 — a `nil` score keeps the entry's existing level (including
+        // the `.unknown` sentinel) in the optimistic row, rather than inventing
+        // one for the split second before the server answers.
         let optimistic = MoodEntry(
             id: entry.id,
-            recordedAt: recordedAt,
-            score: score,
+            mood: score.map { ServerMoodLevel(score: $0) } ?? entry.mood,
             tags: cleanTags,
             tagKeys: resolvedTagKeys,
+            moodLoggedAt: recordedAt,
+            source: entry.source,
             note: note
         )
         if let i = entries.firstIndex(where: { $0.id == entry.id }) {

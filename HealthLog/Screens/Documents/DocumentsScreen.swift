@@ -39,6 +39,15 @@ struct DocumentsScreen: View {
                         }
                     }
                     .overlay(alignment: .bottom) { bulkBar }
+            } else if let reason = moduleOffReason {
+                // **Audit A-7 —** the module is off for a reason that is not the
+                // viewer's own switch (`not_granted` / `unavailable` / a state
+                // this build cannot name). The opt-in CTA there invites a PATCH
+                // the server refuses, so the server's own sentence takes its
+                // place and nothing offers a flip.
+                FeatureDisabledCard(variant: .hero, reason: reason)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
                 DocumentsOptInView { await enableAndReload() }
             }
@@ -61,6 +70,16 @@ struct DocumentsScreen: View {
     /// upload live over it — every one of them pointing at a module that is off.
     private var isModuleAvailable: Bool {
         isEnabled && store?.isDisabled != true
+    }
+
+    /// **Audit A-7 — the server's sentence when the module is off for a reason
+    /// that is not the viewer's own switch**, `nil` when the opt-in CTA still
+    /// applies (`disabled`, or no verdict from the server at all).
+    private var moduleOffReason: String? {
+        guard case let .explain(reason) = container?.moduleGate.optInPresentation(.inboundDocuments) else {
+            return nil
+        }
+        return reason
     }
 
     /// Everything that only makes sense against a live module. Search, filter,

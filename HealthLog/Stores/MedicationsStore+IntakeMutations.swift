@@ -163,7 +163,7 @@ public extension MedicationsStore {
             // method total: forward the legacy status only (the server strips
             // it → harmless no-op rather than a hard failure).
             patch = .init(status: status.rawValue)
-        case .missed: return rejectReadOnlyIntakeMutation()
+        case .missed, .unknown: return rejectReadOnlyIntakeMutation()
         }
         return await updateIntake(medicationId: medicationId, eventId: eventId, patch: patch)
     }

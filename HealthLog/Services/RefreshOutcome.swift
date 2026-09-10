@@ -67,10 +67,13 @@ public enum RefreshOutcome: Sendable, Equatable {
         // `.refusedWithReason` is likewise a domain verdict from a route that
         // is not this one: the promotion is opt-in per error code and no auth
         // code is on that list, so it can never mean "log the user out".
+        // Audit B-2 — `.idempotencyReplayInFlight` is a write-route conflict
+        // (the refresh leg carries no idempotency key), and it says "retry",
+        // which is the definition of transient.
         case .network, .offline, .rateLimited, .canceled, .decoding,
              .assistantDisabled, .moduleDisabled, .notPersisted,
              .writeConflictUnresolved, .serverNotConfigured, .refusedWithReason,
-             .unknown:
+             .idempotencyReplayInFlight, .unknown:
             return .transient
         }
     }

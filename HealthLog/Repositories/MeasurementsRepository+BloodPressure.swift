@@ -31,7 +31,14 @@ extension MeasurementsRepository {
         let fetch: @Sendable () async throws -> [Measurement] = { [api] in
             func page(_ typeKey: String) async throws -> MeasurementListWireResponse {
                 var query: [(String, String)] = [("limit", String(limit)), ("type", typeKey)]
-                if let sourceEq { query.append(("sourceEq", sourceEq.wire.rawValue)) }
+                // Audit B-4 — `__UNKNOWN__` is not a server `MeasurementSource`
+                // and the route validates `sourceEq` against
+                // `measurementSourceEnum`, so sending it is a 400. The source
+                // chip on a BP list reaches exactly this path, so the page is
+                // fetched unfiltered and narrowed below instead.
+                if let sourceEq, sourceEq != .unknown {
+                    query.append(("sourceEq", sourceEq.wire.rawValue))
+                }
                 let req: APIRequest<MeasurementListWireResponse> = .get(
                     "/api/measurements",
                     query: query
@@ -63,6 +70,11 @@ extension MeasurementsRepository {
             let all = try await recent(limit: limit)
             return all.filter { $0.kind == .bloodPressure && (sourceEq == nil || $0.source == sourceEq) }
         }
-        return rows.filter { $0.kind == .bloodPressure }
+        // Audit B-4 — when the server could not be asked to narrow the page, the
+        // narrowing happens here, on every path including the cached one. The
+        // page stored under the `:src:__UNKNOWN__` key is an ALL-source page,
+        // so filtering only inside `fetch` would serve every source back on the
+        // next cache hit.
+        return rows.filter { $0.kind == .bloodPressure && (sourceEq == nil || $0.source == sourceEq) }
     }
 }

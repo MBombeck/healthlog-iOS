@@ -45,7 +45,7 @@ struct WatchSnapshotBuilderTests {
         let snap = WatchSnapshot.make(
             medications: meds,
             derivedIntakes: intakes,
-            latestMood: nil,
+            recentMoods: [],
             signedIn: true,
             now: now,
             calendar: cal
@@ -74,7 +74,7 @@ struct WatchSnapshotBuilderTests {
         let snap = WatchSnapshot.make(
             medications: meds,
             derivedIntakes: intakes,
-            latestMood: nil,
+            recentMoods: [],
             signedIn: true,
             now: now,
             calendar: cal
@@ -105,7 +105,7 @@ struct WatchSnapshotBuilderTests {
         let todayMood = MoodEntry(id: "mood-1", recordedAt: now, score: 4)
         let snapToday = WatchSnapshot.make(
             medications: meds, derivedIntakes: intakes,
-            latestMood: todayMood, signedIn: true, now: now, calendar: cal
+            recentMoods: [todayMood], signedIn: true, now: now, calendar: cal
         )
         #expect(snapToday.recentMoodScore == 4)
 
@@ -113,9 +113,46 @@ struct WatchSnapshotBuilderTests {
         let oldMood = MoodEntry(id: "mood-0", recordedAt: yesterday, score: 2)
         let snapOld = WatchSnapshot.make(
             medications: meds, derivedIntakes: intakes,
-            latestMood: oldMood, signedIn: true, now: now, calendar: cal
+            recentMoods: [oldMood], signedIn: true, now: now, calendar: cal
         )
         #expect(snapOld.recentMoodScore == nil)
+    }
+
+    /// **Audit B-4 (fix round 1) — the watch and the widget answer the same
+    /// question, so they must answer it the same way.**
+    ///
+    /// The builder used to take the newest entry of the day and answer `nil`
+    /// when its level was unnameable, under a comment claiming "same one-slot
+    /// rule as the widget" — which skips forward to the latest NAMEABLE one. A
+    /// single unnameable entry therefore blanked a complication whose real
+    /// reading was an hour old and still on the mood screen.
+    @Test("Audit B-4: a newer unnameable entry does not blank the day's complication")
+    func moodReachesPastAnUnnameableNewest() {
+        let earlier = MoodEntry(id: "m1", recordedAt: now.addingTimeInterval(-3600), score: 4)
+        let unnameableNewest = MoodEntry(id: "m2", mood: .unknown, tags: [], moodLoggedAt: now)
+
+        let snap = WatchSnapshot.make(
+            medications: [], derivedIntakes: [],
+            recentMoods: [unnameableNewest, earlier], signedIn: true, now: now, calendar: cal
+        )
+        #expect(snap.recentMoodScore == 4, "the newest NAMEABLE reading of the day, as the widget does")
+
+        // A day whose only entry is unnameable still has nothing to show — the
+        // rule skips forward, it never fabricates a middle.
+        let blank = WatchSnapshot.make(
+            medications: [], derivedIntakes: [],
+            recentMoods: [unnameableNewest], signedIn: true, now: now, calendar: cal
+        )
+        #expect(blank.recentMoodScore == nil)
+
+        // And reaching PAST the sentinel stops at midnight: yesterday's
+        // nameable entry is not today's mood.
+        let yesterday = MoodEntry(id: "m0", recordedAt: now.addingTimeInterval(-86400), score: 2)
+        let stale = WatchSnapshot.make(
+            medications: [], derivedIntakes: [],
+            recentMoods: [unnameableNewest, yesterday], signedIn: true, now: now, calendar: cal
+        )
+        #expect(stale.recentMoodScore == nil)
     }
 
     @Test("moodCountToday carries the day's mood-entry count for the wrist subhead")
@@ -127,7 +164,7 @@ struct WatchSnapshotBuilderTests {
         // Phone passes the count it derived from the store; the builder echoes it.
         let snap = WatchSnapshot.make(
             medications: meds, derivedIntakes: intakes,
-            latestMood: today, moodCountToday: 3,
+            recentMoods: [today], moodCountToday: 3,
             signedIn: true, now: now, calendar: cal
         )
         #expect(snap.moodCountToday == 3)
@@ -139,13 +176,13 @@ struct WatchSnapshotBuilderTests {
     func moodCountTodayDefaultsAndClamps() {
         let snapDefault = WatchSnapshot.make(
             medications: [], derivedIntakes: [],
-            latestMood: nil, signedIn: true, now: now, calendar: cal
+            recentMoods: [], signedIn: true, now: now, calendar: cal
         )
         #expect(snapDefault.moodCountToday == 0)
 
         let snapNegative = WatchSnapshot.make(
             medications: [], derivedIntakes: [],
-            latestMood: nil, moodCountToday: -5,
+            recentMoods: [], moodCountToday: -5,
             signedIn: true, now: now, calendar: cal
         )
         #expect(snapNegative.moodCountToday == 0)
@@ -175,7 +212,7 @@ struct WatchSnapshotBuilderTests {
     func moodCountTodayRoundTrip() throws {
         let snap = WatchSnapshot.make(
             medications: [], derivedIntakes: [],
-            latestMood: MoodEntry(id: "m", recordedAt: now, score: 5),
+            recentMoods: [MoodEntry(id: "m", recordedAt: now, score: 5)],
             moodCountToday: 7, signedIn: true, now: now, calendar: cal
         )
         let encoder = JSONEncoder()
@@ -190,7 +227,7 @@ struct WatchSnapshotBuilderTests {
     func emptyUniverse() {
         let snap = WatchSnapshot.make(
             medications: [], derivedIntakes: [],
-            latestMood: nil, signedIn: false, now: now, calendar: cal
+            recentMoods: [], signedIn: false, now: now, calendar: cal
         )
         #expect(snap.doses.isEmpty)
         #expect(snap.scheduledCount == 0)

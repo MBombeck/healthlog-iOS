@@ -187,10 +187,23 @@ struct LabsScreen: View {
             // the operator-gated `FeatureDisabledCard` (which deliberately has no
             // "turn it on" affordance). Mirror the Documents / Illness opt-in:
             // an enable CTA that flips `labs` on via `ModuleGate` and reloads.
+            //
+            // **Audit A-7 —** unless the switch is not the person's. Under
+            // `not_granted` / `unavailable` / a state this build cannot name the
+            // module is off because somebody else decided so, and the CTA would
+            // invite a PATCH the server refuses. Then the server's own sentence
+            // takes its place, with no affordance.
             Section {
-                LabsOptInView { await enableAndReload() }
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
+                switch container?.moduleGate.optInPresentation(.labs) ?? .offerOptIn {
+                case let .explain(reason):
+                    FeatureDisabledCard(variant: .hero, reason: reason)
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                case .offerOptIn:
+                    LabsOptInView { await enableAndReload() }
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
             }
         } else {
             Section {

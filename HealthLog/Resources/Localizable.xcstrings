@@ -19,6 +19,24 @@
         }
       }
     },
+    "%1$@, %2$lld entries": {
+      "comment": "Audit B-4 — VoiceOver label for a measurement bucket that can state only how many readings it holds",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$lld Einträge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$lld entries"
+          }
+        }
+      }
+    },
     "%@": {
       "extractionState": "manual",
       "localizations": {
@@ -4327,6 +4345,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "At least three different areas of health have to remain, one of them physically measured. Several pillars can describe the same area and then count together as one."
+          }
+        }
+      }
+    },
+    "Audio alert": {
+      "comment": "Compact title — audio exposure event",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lautstärke-Hinweis"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio alert"
           }
         }
       }
@@ -16162,6 +16198,24 @@
         }
       }
     },
+    "Loud audio notification": {
+      "comment": "Metric title — Apple Health audio exposure event",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lautstärke-Benachrichtigung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loud audio notification"
+          }
+        }
+      }
+    },
     "Lousy": {
       "extractionState": "manual",
       "localizations": {
@@ -16275,6 +16329,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Low heart rate notification"
+          }
+        }
+      }
+    },
+    "MCP": {
+      "comment": "Acronym — data source (rows written through the MCP write surface). Identical in de/en.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP"
           }
         }
       }
@@ -16790,6 +16862,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Measurement reminders, check-ups"
+          }
+        }
+      }
+    },
+    "measurement.source.unknown": {
+      "comment": "Audit B-4 — measurement whose source value this app version does not know",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekannte Quelle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown source"
           }
         }
       }
@@ -18797,6 +18886,24 @@
         }
       }
     },
+    "No loud-audio notifications recorded": {
+      "comment": "Empty state — audio exposure event",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Lautstärke-Benachrichtigungen erfasst"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No loud-audio notifications recorded"
+          }
+        }
+      }
+    },
     "No matches": {
       "comment": "v0.5.5.1 — NoMatchesState headline on MeasurementListScreen when source-filter + search query produce zero rows.",
       "extractionState": "manual",
@@ -19738,6 +19845,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nothing learned yet"
+          }
+        }
+      }
+    },
+    "Nothing recorded": {
+      "comment": "Empty state — unknown metric",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts erfasst"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing recorded"
           }
         }
       }
@@ -28216,6 +28341,24 @@
         }
       }
     },
+    "This app version doesn't know this measurement yet": {
+      "comment": "Secondary hint — unknown metric explains itself",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese App-Version kennt diesen Messwert noch nicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This app version doesn't know this measurement yet"
+          }
+        }
+      }
+    },
     "This build configuration is missing the chat module. Please reinstall the app.": {
       "comment": "v0.5.7 G.3 — AskCoachSheet fallback shown when SpeziChat is not linkable in this build configuration.",
       "extractionState": "manual",
@@ -28264,6 +28407,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "This consent can be withdrawn at any time. Enabling shows a note about the data flow; your consent is only given by tapping “Accept”."
+          }
+        }
+      }
+    },
+    "This is still being processed. We'll retry automatically.": {
+      "comment": "HLError user-facing copy — audit B-2: the server is still finishing the first request that carried this idempotency key.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird noch verarbeitet. Wird automatisch erneut versucht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is still being processed. We'll retry automatically."
           }
         }
       }
@@ -44573,6 +44734,23 @@
         }
       }
     },
+    "dashboard.intakesSheet.status.unknown": {
+      "comment": "Audit B-5 — VoiceOver label for the trailing glyph when the stored intake status is one this build cannot name; the row stays visible and claims nothing.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status unbekannt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status unknown"
+          }
+        }
+      }
+    },
     "dashboard.intakesSheet.status.upcoming": {
       "comment": "v0.14.1 DOSE-SAFETY — VoiceOver label for the trailing empty-circle glyph when an intake is marked taken but its scheduled time is still in the future (a future dose cannot be taken yet, so it reads as upcoming).",
       "localizations": {
@@ -49062,6 +49240,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Discard changes?"
+          }
+        }
+      }
+    },
+    "glp1.sideEffect.kind.unknown": {
+      "comment": "Audit B-4 — side-effect entry this app version cannot map to a named symptom",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht zugeordnet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not identified"
           }
         }
       }
@@ -63175,6 +63370,23 @@
         }
       }
     },
+    "measurement.source.external": {
+      "comment": "#106 — measurement written through an ingest Bearer token (bridge / script)",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External"
+          }
+        }
+      }
+    },
     "measurements.bulkDelete.confirm.message": {
       "localizations": {
         "de": {
@@ -64644,6 +64856,23 @@
         }
       }
     },
+    "med.injection.site.unknown": {
+      "comment": "Audit B-4 — injection site whose server value this app version does not know",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekannte Stelle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown site"
+          }
+        }
+      }
+    },
     "med.injection.track.toggle": {
       "localizations": {
         "de": {
@@ -64776,6 +65005,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pen"
+          }
+        }
+      }
+    },
+    "med.inventory.container.unknown": {
+      "comment": "Audit B-4 — container type whose server value this app version does not know",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekannte Form"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown form"
           }
         }
       }
@@ -71661,6 +71907,74 @@
         }
       }
     },
+    "module.access.off.disabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast dieses Modul ausgeschaltet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You switched this module off."
+          }
+        }
+      }
+    },
+    "module.access.off.notGranted": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Freigabe, in der du dich befindest, deckt dieses Modul nicht ab."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The share you are viewing does not include this module."
+          }
+        }
+      }
+    },
+    "module.access.off.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Server nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not available on this server."
+          }
+        }
+      }
+    },
+    "module.access.off.unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus einem Grund, den diese App-Version nicht kennt, nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off for a reason this app version does not know."
+          }
+        }
+      }
+    },
     "monthly": {
       "localizations": {
         "de": {
@@ -71798,6 +72112,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "What your ratings show"
+          }
+        }
+      }
+    },
+    "mood.level.unknown": {
+      "comment": "Audit B-4 — mood entry whose level this app version does not know",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung unbekannt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mood unknown"
           }
         }
       }

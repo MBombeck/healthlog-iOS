@@ -251,9 +251,10 @@ public enum InsightsLayoutTileId {
     public static let vascularAge = "vascular-age"
     public static let environmentalAudio = "environmental-audio"
     public static let headphoneAudio = "headphone-audio"
-    /// v0.11 W28b — server-accepted but no iOS `MetricKind` yet
-    /// (`audioExposureEvent` is a supervised HK-registry addition for a later
-    /// wave). Round-trips in the layout; no strip pill until the kind lands.
+    /// v0.11 W28b — server-accepted, and since audit B-4 (2026-09-10) it has an
+    /// iOS `MetricKind` too (`audioExposureEvent`, the 77th server
+    /// `MeasurementType`), so the strip pill it round-tripped without is now
+    /// reachable when the account has rows.
     public static let audioEvents = "audio-events"
     public static let daylight = "daylight"
     public static let bloodGlucose = "blood-glucose"
@@ -450,6 +451,8 @@ public enum InsightsLayoutTileId {
         .vascularAge: vascularAge,
         .audioExposureEnvironment: environmentalAudio,
         .audioExposureHeadphone: headphoneAudio,
+        // Audit B-4 — the slug existed before the kind did.
+        .audioExposureEvent: audioEvents,
         .timeInDaylight: daylight,
         .glucose: bloodGlucose,
         .skinTemperature: skinTemperature,

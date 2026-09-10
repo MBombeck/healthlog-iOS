@@ -403,6 +403,10 @@ public enum DashboardWidgetId {
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
              .walkingSteadinessEvent, .breathingDisturbanceEvent: nil
+        // Audit B-4 — neither belongs on the dashboard grid: the audio-exposure
+        // event is a list/detail occurrence like its five siblings, and a kind
+        // this build cannot name has nothing to persist a layout slot under.
+        case .audioExposureEvent, .unknown: nil
         }
     }
     // swiftlint:enable cyclomatic_complexity

@@ -328,6 +328,11 @@ public final class IllnessStore {
 
     // MARK: - Private
 
+    /// Audit B-1 — the visible error is localized copy, not a Swift description.
+    /// `String(describing:)` printed the enum case (`notPersisted("…")`) onto a
+    /// user-facing surface; the sanitized description belongs in the log line,
+    /// where triage reads it. `HLError.userFacingText(for:)` resolves the
+    /// sentence the user is owed.
     private func applyError(_ error: Error) {
         if IllnessRepository.isIllnessDisabled(error) {
             isDisabled = true
@@ -342,6 +347,7 @@ public final class IllnessStore {
             return
         }
         lastErrorWasChronicNoResolve = IllnessRepository.isChronicNoResolve(error)
-        lastError = LogSanitizer.redact(String(describing: error))
+        HLLog.ui.error("Illness write failed: \(LogSanitizer.redact(String(describing: error)))")
+        lastError = HLError.userFacingText(for: error)
     }
 }

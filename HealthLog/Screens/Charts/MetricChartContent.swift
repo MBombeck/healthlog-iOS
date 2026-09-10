@@ -79,6 +79,12 @@ enum MetricChartContent {
         showsPoints: Bool = true,
         seriesLineWidth: CGFloat? = nil
     ) -> some ChartContent {
+        // Audit B-4 — a kind this build cannot name gets NO marks. An axis
+        // implies a unit and a scale we do not have; the row stays visible in
+        // the list, and that is the whole claim we can make about it. Emptied
+        // here rather than in its own arm so the switch keeps one arm per
+        // renderer (the body is already at its baselined complexity ceiling).
+        let plottable = kind.isUnknown ? [] : points
         switch kind {
         case .bloodPressure:
             BloodPressureMarks(
@@ -177,8 +183,11 @@ enum MetricChartContent {
              // Build 7 / item 7.3 — mood renders as a single-series scalar line
              // if a mood series ever reaches this surface (today the tile reads
              // the summary snapshot; there is no mood `/series` endpoint).
-             .mood:
-            SingleSeriesMarks(points: points, tint: emphasisTint ?? HLChartTints.series, lineWidth: seriesLineWidth)
+             // Audit B-4 — the audio-exposure event plots its constant `1` at
+             // the occurrence timestamp, exactly like its five siblings, and
+             // `.unknown` arrives here with `plottable` already emptied.
+             .mood, .audioExposureEvent, .unknown:
+            SingleSeriesMarks(points: plottable, tint: emphasisTint ?? HLChartTints.series, lineWidth: seriesLineWidth)
         }
     }
 

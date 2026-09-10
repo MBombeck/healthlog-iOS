@@ -4,10 +4,16 @@ import Foundation
 
 /// Server's authoritative cadence discriminator (v1.7.0 `scheduleType`).
 /// `SCHEDULED` (calendar/rolling/legacy), `PRN` (as-needed), `CYCLIC`
-/// (on/off-weeks). Forward-compatible: an unrecognised raw value collapses to
-/// `.scheduled` so the remaining field-presence dispatch still applies and a
-/// future server enum addition never breaks the decode. Required and
-/// non-nullable on the published output schema.
+/// (on/off-weeks). Required and non-nullable on the published output schema.
+///
+/// **Audit B-4 — forward-compatible, and no longer by claiming SCHEDULED.**
+/// The decode never threw, so no row was ever lost here; what it did instead
+/// was answer `.scheduled` for a tag nobody had read, and `.scheduled` is a
+/// statement ("this is a calendar/rolling/legacy cadence") rather than an
+/// absence. An unrecognised value lands on ``unknown`` now. The dispatch is
+/// unchanged — ``unknown`` falls through the same field-presence ladder
+/// `.scheduled` uses, so a readable `rrule` still projects and still reminds —
+/// but the type says which of the two situations it is in.
 public enum ScheduleType: String, Codable, Sendable, Hashable {
     /// Calendar / rolling / legacy cadences (rrule, rollingIntervalDays,
     /// daysOfWeek). The default when a server omits the tag.
@@ -21,13 +27,13 @@ public enum ScheduleType: String, Codable, Sendable, Hashable {
     /// phase anchor is the medication's `startsOn ?? createdAt`, not a
     /// per-schedule field.
     case cyclic = "CYCLIC"
+    /// Audit B-4 — decode-only sentinel for a cadence tag this build cannot
+    /// name. Dispatches exactly like ``scheduled`` (field presence decides) and
+    /// is never sent.
+    case unknown = "__UNKNOWN__"
 
-    /// Lenient decode — an unrecognised string collapses to `.scheduled` instead
-    /// of throwing, so the caller falls back to field-presence dispatch.
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = ScheduleType(rawValue: raw) ?? .scheduled
-    }
+    // The tolerant decode, the `serverCases` list and the encode refusal live in
+    // `MedicationEnums+Unknown.swift`, beside the container-type sentinel.
 }
 
 // MARK: - v1.5 Cadence model (R1 §3.1)

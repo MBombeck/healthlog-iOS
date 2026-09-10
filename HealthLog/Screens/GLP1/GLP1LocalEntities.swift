@@ -140,6 +140,20 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
     case appetiteLoss = "appetite_loss"
     case injectionSiteReaction = "injection_site_reaction"
     case headache
+    /// **Audit B-4 — sentinel for a server taxonomy entry this build cannot
+    /// map.** The server's side-effect taxonomy has 21 entries and grows; the
+    /// hydration path used to answer an unmapped one with `?? .nausea`, so a
+    /// row the person had logged as some other symptom read back, in a
+    /// medication logbook, as a specific reported SYMPTOM they never named.
+    /// This case reports the absence instead. It is never offered in the
+    /// picker and has no ``serverEntry``, so it can never be written.
+    case unknown = "__unknown__"
+
+    /// Audit B-4 — the kinds the picker may offer: `allCases` minus the
+    /// hydrate-only ``unknown`` sentinel.
+    public static var pickerCases: [SideEffectKind] {
+        allCases.filter { $0 != .unknown }
+    }
 
     /// v0.12 SP3 — maps the closed iOS picker kind onto the server's
     /// authoritative side-effect `entry` taxonomy
@@ -148,7 +162,11 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
     /// `headache` has no exact server entry — it rides under the nearest
     /// cognitive signal (`DIZZINESS`) so it still round-trips rather than
     /// being silently dropped; the free-text note preserves the literal label.
-    public var serverEntry: String {
+    ///
+    /// **Audit B-4 — `nil` for ``unknown``, and that is the write gate.** The
+    /// `POST` body is built from this property, so an optional here is what
+    /// makes the compiler refuse to invent a taxonomy entry.
+    public var serverEntry: String? {
         switch self {
         case .nausea: "NAUSEA"
         case .vomiting: "VOMITING"
@@ -158,13 +176,18 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
         case .appetiteLoss: "ANOREXIA"
         case .injectionSiteReaction: "INJECTION_REDNESS"
         case .headache: "DIZZINESS"
+        case .unknown: nil
         }
     }
 
     /// Inverse of `serverEntry` for hydrating server rows back into the iOS
-    /// picker model. Unknown / unmapped entries return `nil` so the row still
-    /// renders (the store keeps the raw + note) without crashing.
-    public static func from(serverEntry: String) -> SideEffectKind? {
+    /// picker model.
+    ///
+    /// **Audit B-4 — an unmapped entry resolves to ``unknown``, never to `nil`
+    /// and never to a named symptom.** The one caller coalesced the old `nil`
+    /// with `?? .nausea`; returning a non-optional sentinel removes the place
+    /// that coalescing could live.
+    public static func from(serverEntry: String) -> SideEffectKind {
         switch serverEntry {
         case "NAUSEA": .nausea
         case "VOMITING": .vomiting
@@ -175,8 +198,17 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
         case "INJECTION_REDNESS", "INJECTION_SWELLING", "INJECTION_BRUISING", "INJECTION_INDURATION":
             .injectionSiteReaction
         case "DIZZINESS": .headache
-        default: nil
+        default: unknownEntry(serverEntry)
         }
+    }
+
+    /// Audit B-4 — notes the first sighting of an unmapped taxonomy entry and
+    /// answers the sentinel. Split out so the `switch` above stays a table.
+    private static func unknownEntry(_ raw: String) -> SideEffectKind {
+        UnknownServerEnumLog.noteFirstSighting(
+            of: raw, vocabulary: "side-effect entry", consequence: "row kept, reported as no particular symptom"
+        )
+        return .unknown
     }
 }
 

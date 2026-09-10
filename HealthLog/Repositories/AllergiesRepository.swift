@@ -102,7 +102,7 @@ public actor AllergiesRepository {
             await invalidate([.allergies])
             return created
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .createAllergy, payload: OutboxQueue.Payloads.CreateAllergy(body: body),
                 key: key, clientEntityId: clientEntityId
             )
@@ -135,7 +135,7 @@ public actor AllergiesRepository {
             await invalidate([.allergies])
             return updated
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .updateAllergy, payload: OutboxQueue.Payloads.UpdateAllergy(id: id, patch: patch),
                 key: key, clientEntityId: id
             )
@@ -162,7 +162,7 @@ public actor AllergiesRepository {
             await invalidate([.allergies])
             return deleted
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .deleteAllergy, payload: OutboxQueue.Payloads.DeleteAllergy(id: id),
                 key: key, clientEntityId: id
             )
@@ -188,22 +188,32 @@ public actor AllergiesRepository {
 
     // MARK: - Outbox enqueue helper
 
-    /// Persist a retriable failed write to the encrypted outbox under its
-    /// idempotency key. A persistence failure is logged (sanitized) + swallowed;
-    /// the original `HLError` is the one re-thrown (mirrors `IllnessRepository`).
+    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
+    /// under its idempotency key. A failure here is **not** swallowed: the
+    /// network attempt already failed, so the write is on no server either, and
+    /// re-throwing the original retriable error would let the store keep showing
+    /// the entry as "queued, replays later" for something that is permanently
+    /// lost. Since build 274 that is a reachable state, not a theoretical one —
+    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
+    /// when iOS grants no background execution time. Throws
+    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
+    /// used since G-2) so the caller rolls its optimistic row back and surfaces
+    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
     private func enqueue(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey,
         clientEntityId: String? = nil
-    ) async {
+    ) async throws {
         do {
             let data = try encoder.encode(payload)
             try await outbox.enqueue(.init(
                 kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
             ))
         } catch {
-            HLLog.outbox.error("Allergy outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
+            let cause = LogSanitizer.redact(String(describing: error))
+            HLLog.outbox.error("Allergy outbox enqueue failed: \(cause)")
+            throw HLError.notPersisted(cause)
         }
     }
 }

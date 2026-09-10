@@ -7,6 +7,15 @@ public enum ServerMoodLevel: String, Codable, Sendable, CaseIterable {
     case okay = "OKAY" // score 3
     case good = "GUT" // score 4
     case great = "SUPER_GUT" // score 5
+    /// Audit B-4 — decode-only sentinel for a level this build cannot name.
+    ///
+    /// The server column is a free string documented as the five levels above,
+    /// and it has grown before. `MoodEntry.mood` is a plain `try c.decode` and
+    /// the history arrives as ONE array, so a sixth level threw mid-row and
+    /// took the whole page with it. See `ServerMoodLevel+Unknown.swift` for the
+    /// tolerant decode and the write refusal. `__UNKNOWN__` is not a server
+    /// `MoodLevel` and is never sent.
+    case unknown = "__UNKNOWN__"
 
     public init(score: Int) {
         switch max(1, min(5, score)) {
@@ -18,13 +27,21 @@ public enum ServerMoodLevel: String, Codable, Sendable, CaseIterable {
         }
     }
 
-    public var score: Int {
+    /// Audit B-4 — the 1…5 valence of a NAMED level, `nil` for ``unknown``.
+    ///
+    /// Optional on purpose. ``unknown`` is a BUCKET, not a level: two entries on
+    /// it may carry two different server levels, so every number derived across
+    /// it — a mean, a trend point, a widget glance — would be a number about
+    /// nothing. There is no honest middle to substitute, and `nil` is what makes
+    /// every caller say so.
+    public var score: Int? {
         switch self {
         case .lousy: 1
         case .bad: 2
         case .okay: 3
         case .good: 4
         case .great: 5
+        case .unknown: nil
         }
     }
 }
@@ -96,7 +113,11 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
     }
 
     /// Convenience-Properties für UI-Code, der das alte score-Schema kennt.
-    public var score: Int {
+    ///
+    /// Audit B-4 — optional since the mood level stopped being closed: `nil`
+    /// means "this build cannot name the server's level", which is not the same
+    /// statement as any number between 1 and 5.
+    public var score: Int? {
         mood.score
     }
 

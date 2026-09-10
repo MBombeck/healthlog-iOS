@@ -125,10 +125,15 @@ enum MeasurementListFilter {
         // scores since v1.27.6) could be searched for by name but never
         // filtered by chip, because a chip is only offered for a source in this
         // array. Placed after the device providers and before `.manual` so the
-        // row reads device-ingest → derived → hand-entered.
+        // row reads device-ingest → derived → hand-entered. `.external` (#106,
+        // rows an ingest Bearer token wrote) sits with the derived rows for the
+        // same reason: the operator did not hand-enter it on this device.
         let canonical: [MeasurementSource] = [
             .appleHealth, .withings, .whoop, .fitbit, .googleHealth,
-            .strava, .oura, .polar, .nightscout, .computed, .manual, .import_
+            .strava, .oura, .polar, .nightscout, .computed, .telegram, .mcp,
+            // Audit B-4 — last, next to the derived rows: it is the only chip
+            // whose members can change meaning between releases.
+            .external, .manual, .import_, .unknown
         ]
         var seen = Set<MeasurementSource>()
         var ordered: [MeasurementSource] = []
@@ -142,8 +147,9 @@ enum MeasurementListFilter {
 
     /// Lowercased search-aliases per source — the search-bar needle is
     /// compared against these so the user can type "apple", "withings",
-    /// "manuell" or "import" without picking a chip.
-    private static func sourceSearchLabel(_ source: MeasurementSource) -> String {
+    /// "manuell" or "import" without picking a chip. One arm per source, so
+    /// the complexity grows by one with every source the server adds.
+    private static func sourceSearchLabel(_ source: MeasurementSource) -> String { // swiftlint:disable:this cyclomatic_complexity
         switch source {
         case .appleHealth: "apple health"
         case .withings: "withings"
@@ -154,9 +160,13 @@ enum MeasurementListFilter {
         case .oura: "oura"
         case .polar: "polar"
         case .nightscout: "nightscout"
+        case .telegram: "telegram"
+        case .mcp: "mcp"
+        case .external: "external extern"
         case .manual: "manuell"
         case .computed: "computed berechnet"
         case .import_: "import"
+        case .unknown: "unknown unbekannt"
         }
     }
 }
@@ -200,8 +210,9 @@ struct SourceFilterChips: View {
 
     /// Compact source label (distinct from the long-form "Manuelle
     /// Eingabe" used in the per-row badge) so the chip-row stays narrow
-    /// enough to fit four entries on a 393pt iPhone width.
-    static func label(for source: MeasurementSource) -> String {
+    /// enough to fit four entries on a 393pt iPhone width. One arm per source,
+    /// so the complexity grows by one with every source the server adds.
+    static func label(for source: MeasurementSource) -> String { // swiftlint:disable:this cyclomatic_complexity
         switch source {
         case .appleHealth: String(localized: "Apple Health")
         case .withings: String(localized: "Withings")
@@ -212,9 +223,13 @@ struct SourceFilterChips: View {
         case .oura: String(localized: "Oura")
         case .polar: String(localized: "Polar")
         case .nightscout: String(localized: "Nightscout")
+        case .telegram: String(localized: "Telegram")
+        case .mcp: String(localized: "MCP")
+        case .external: String(localized: "measurement.source.external")
         case .manual: String(localized: "Manual")
         case .computed: String(localized: "measurement.source.computed")
         case .import_: String(localized: "Import")
+        case .unknown: String(localized: "measurement.source.unknown")
         }
     }
 

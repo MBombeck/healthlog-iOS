@@ -108,17 +108,58 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
     ///   isoliert decken.
     public actor HealthKitStatisticsService {
         private let store: HKHealthStore
-        private let calendar: Calendar
+        private let baseCalendar: Calendar
+        private let timeZoneProvider: (@Sendable () -> TimeZone)?
         private let clock: @Sendable () -> Date
 
+        /// - Parameter timeZoneProvider: **Audit B-7** — the live server-profile
+        ///   zone. The composition root points this at the same
+        ///   ``ProfileTimeZoneBox`` the medication / dashboard / measurement day
+        ///   keys read, so `dayKey` and `measuredAt` land on the day the server
+        ///   consolidates them into (`consolidation-tz.ts`). `nil` (tests,
+        ///   previews) leaves `calendar` in charge unchanged.
         public init(
             store: HKHealthStore = HKHealthStore(),
             calendar: Calendar = .current,
+            timeZoneProvider: (@Sendable () -> TimeZone)? = nil,
             clock: @escaping @Sendable () -> Date = { Date() }
         ) {
             self.store = store
-            self.calendar = calendar
+            baseCalendar = calendar
+            self.timeZoneProvider = timeZoneProvider
             self.clock = clock
+        }
+
+        /// **Audit B-7 — the one calendar every day boundary in this service is
+        /// cut on.** Reads the profile-zone provider on every access, so a
+        /// profile emission (or a device that travelled) is honoured without
+        /// rebuilding the actor.
+        var dayAnchorCalendar: Calendar {
+            Self.dayAnchorCalendar(base: baseCalendar, timeZone: timeZoneProvider?())
+        }
+
+        /// Audit B-7 — pure resolution rule behind ``dayAnchorCalendar``: the
+        /// profile zone replaces the base calendar's zone and nothing else; a
+        /// `nil` zone returns the base untouched.
+        ///
+        /// **Audit B-7 — what this calendar does NOT reach: the DST day.**
+        /// `HKStatisticsCollectionQuery` enumerates its `DateComponents(day: 1)`
+        /// interval in the DEVICE calendar, not in this one; only the anchor and
+        /// the row keying below are ours. On a day where the two zones observe a
+        /// DST transition at different instants — a travelling user, device zone
+        /// ≠ profile zone — a bucket start can therefore sit an hour off profile
+        /// midnight and fall on the neighbouring profile day. `dayKey` formats
+        /// each bucket's own start, so two buckets can then key the same day and
+        /// the later one wins; the total for that one day is the second bucket's
+        /// rather than their sum. Twice a year, on that one day, for a user who
+        /// is away from home across the switch — and the alternative is
+        /// re-implementing HealthKit's bucketing. Accepted, and named here so
+        /// the next reader recognises it as known rather than as a new bug.
+        nonisolated static func dayAnchorCalendar(base: Calendar, timeZone: TimeZone?) -> Calendar {
+            guard let timeZone else { return base }
+            var calendar = base
+            calendar.timeZone = timeZone
+            return calendar
         }
 
         /// Collect daily-sum rows fuer einen Type-Konfig zwischen `from` und
@@ -169,7 +210,7 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
                 hkUnit: unit,
                 anchor: anchor,
                 endExclusive: endExclusive,
-                calendar: calendar
+                calendar: dayAnchorCalendar
             )
         }
 
@@ -277,7 +318,7 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
                 hkUnit: hkUnit,
                 anchor: anchor,
                 endExclusive: endExclusive,
-                calendar: calendar
+                calendar: dayAnchorCalendar
             )
         }
 
@@ -326,11 +367,11 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
         }
 
         private func startOfDay(for date: Date) -> Date {
-            calendar.startOfDay(for: date)
+            dayAnchorCalendar.startOfDay(for: date)
         }
 
         private func nextDay(after date: Date) -> Date {
-            calendar.date(byAdding: .day, value: 1, to: date) ?? date
+            dayAnchorCalendar.date(byAdding: .day, value: 1, to: date) ?? date
         }
 
         /// Per-Identifier HK-Unit fuer die statistics-Sum-Query. Mirror der

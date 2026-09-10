@@ -194,11 +194,14 @@ enum MoodPatternDetector {
     // MARK: - 4. Tag → same-day mood (oracle L425-512, best + worst)
 
     private static func tagSameDay(entries: [MoodEntry]) -> [MoodPattern] {
-        let overall = Double(entries.map(\.score).reduce(0, +)) / Double(entries.count)
+        // Audit B-4 — nameable levels only; see `MoodEntry.scored(_:)`.
+        let scored = MoodEntry.scored(entries)
+        guard !scored.isEmpty else { return [] }
+        let overall = Double(scored.map(\.score).reduce(0, +)) / Double(scored.count)
         var buckets: [String: [Int]] = [:]
-        for entry in entries {
+        for (entry, score) in scored {
             for tag in entry.tags where !tag.hasPrefix("note:") {
-                buckets[tag, default: []].append(entry.score)
+                buckets[tag, default: []].append(score)
             }
         }
         var correlations: [TagCorrelation] = []
@@ -247,11 +250,12 @@ enum MoodPatternDetector {
     private static func notePresence(entries: [MoodEntry]) -> MoodPattern? {
         var withNote: [Int] = []
         var withoutNote: [Int] = []
-        for entry in entries {
+        // Audit B-4 — nameable levels only.
+        for (entry, score) in MoodEntry.scored(entries) {
             if let note = entry.note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                withNote.append(entry.score)
+                withNote.append(score)
             } else {
-                withoutNote.append(entry.score)
+                withoutNote.append(score)
             }
         }
         guard withNote.count >= 3, withoutNote.count >= 3 else { return nil }

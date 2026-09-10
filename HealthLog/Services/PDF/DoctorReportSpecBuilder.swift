@@ -150,6 +150,11 @@ public enum DoctorReportSpecBuilder {
         guard !grouped.isEmpty else { return nil }
 
         let rows: [DoctorReportSpec.VitalsSummary.Row] = MetricKind.allCases.compactMap { kind in
+            // Audit B-4 — `.unknown` is a bucket, not a kind: two rows on it may
+            // carry two different server types this build cannot name, so a
+            // mean/median/min/max across them is a figure about nothing. It has
+            // no business in the one export a clinician reads.
+            guard !kind.isUnknown else { return nil }
             guard let bucket = grouped[kind], !bucket.isEmpty else { return nil }
             let primaries = bucket.map(\.primaryValue)
             let mean = primaries.reduce(0, +) / Double(primaries.count)
@@ -199,6 +204,9 @@ public enum DoctorReportSpecBuilder {
         let grouped: [MetricKind: [Measurement]] = Dictionary(grouping: measurements, by: \.kind)
         guard !grouped.isEmpty else { return nil }
         let series: [DoctorReportSpec.ChartsBlock.Series] = MetricKind.allCases.compactMap { kind in
+            // Audit B-4 — same reason as the vitals summary: an axis implies a
+            // shared unit and scale the sentinel cannot promise.
+            guard !kind.isUnknown else { return nil }
             guard let bucket = grouped[kind], !bucket.isEmpty else { return nil }
             let sorted = bucket.sorted { $0.recordedAt < $1.recordedAt }
             let points = sorted.map { measurement -> DoctorReportSpec.ChartsBlock.Point in
@@ -303,12 +311,19 @@ public enum DoctorReportSpecBuilder {
     /// Sparkline samples (score over time) + the three most common tags
     /// in the window. Skips entirely when the window has no entries.
     static func makeMoodBlock(entries: [MoodEntry]) -> DoctorReportSpec.MoodBlock? {
+        // **Audit B-4 — the clinician's export plots scores and states an
+        // average.** An entry whose level this build cannot name has neither, so
+        // it is not a point on the sparkline and not a term in the mean. A
+        // window holding nothing but such entries has no mood block at all —
+        // which is the one honest thing to hand a doctor.
         guard !entries.isEmpty else { return nil }
-        let sorted = entries.sorted { $0.recordedAt < $1.recordedAt }
-        let sparkline = sorted.map { DoctorReportSpec.MoodBlock.Point(at: $0.recordedAt, score: $0.score) }
-        let avg = Double(sparkline.reduce(0) { $0 + $1.score }) / Double(sparkline.count)
-        let tagCounts: [String: Int] = sorted
-            .flatMap(\.tags)
+        let scored = MoodEntry.scored(entries).sorted { $0.entry.recordedAt < $1.entry.recordedAt }
+        guard !scored.isEmpty else { return nil }
+        let sparkline = scored.map { DoctorReportSpec.MoodBlock.Point(at: $0.entry.recordedAt, score: $0.score) }
+        let total: Int = sparkline.reduce(0) { $0 + $1.score }
+        let avg = Double(total) / Double(sparkline.count)
+        let tagCounts: [String: Int] = scored
+            .flatMap(\.entry.tags)
             .reduce(into: [String: Int]()) { counts, tag in
                 counts[tag, default: 0] += 1
             }

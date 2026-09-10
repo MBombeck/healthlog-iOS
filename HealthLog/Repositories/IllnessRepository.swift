@@ -192,7 +192,7 @@ public actor IllnessRepository {
             let req: APIRequest<IllnessEpisodeDTO> = try .post("/api/illness/episodes", body: body, idempotencyKey: key)
             return try await api.send(req)
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.createIllnessEpisode, payload: OutboxQueue.Payloads.CreateIllnessEpisode(body: body), key: key)
+            try await enqueue(.createIllnessEpisode, payload: OutboxQueue.Payloads.CreateIllnessEpisode(body: body), key: key)
             throw err
         }
     }
@@ -213,7 +213,7 @@ public actor IllnessRepository {
             let req: APIRequest<IllnessEpisodeDTO> = try .patch("/api/illness/episodes/\(id)", body: patch, idempotencyKey: key)
             return try await api.send(req)
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.updateIllnessEpisode, payload: OutboxQueue.Payloads.UpdateIllnessEpisode(id: id, patch: patch), key: key)
+            try await enqueue(.updateIllnessEpisode, payload: OutboxQueue.Payloads.UpdateIllnessEpisode(id: id, patch: patch), key: key)
             throw err
         }
     }
@@ -238,7 +238,7 @@ public actor IllnessRepository {
             let req: APIRequest<DeleteIllnessEpisodeResult> = .delete("/api/illness/episodes/\(id)", idempotencyKey: key)
             return try await api.send(req).deleted
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.deleteIllnessEpisode, payload: OutboxQueue.Payloads.DeleteIllnessEpisode(id: id), key: key)
+            try await enqueue(.deleteIllnessEpisode, payload: OutboxQueue.Payloads.DeleteIllnessEpisode(id: id), key: key)
             throw err
         }
     }
@@ -264,7 +264,7 @@ public actor IllnessRepository {
             )
             return try await api.send(req)
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.restoreIllnessEpisode, payload: OutboxQueue.Payloads.RestoreIllnessEpisode(id: id), key: key)
+            try await enqueue(.restoreIllnessEpisode, payload: OutboxQueue.Payloads.RestoreIllnessEpisode(id: id), key: key)
             throw err
         }
     }
@@ -289,7 +289,7 @@ public actor IllnessRepository {
             )
             return try await api.send(req)
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .resolveIllnessEpisode,
                 payload: OutboxQueue.Payloads.ResolveIllnessEpisode(id: id, resolvedAt: resolvedAt),
                 key: key
@@ -322,7 +322,7 @@ public actor IllnessRepository {
             )
             return try await api.send(req)
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .upsertIllnessDayLog,
                 payload: OutboxQueue.Payloads.UpsertIllnessDayLog(episodeId: episodeId, body: body),
                 key: key
@@ -341,19 +341,29 @@ public actor IllnessRepository {
 
     // MARK: - Outbox enqueue helper
 
-    /// Persist a retriable failed write to the encrypted outbox under its
-    /// idempotency key. A persistence failure is logged (sanitized) + swallowed;
-    /// the original `HLError` is the one re-thrown (mirrors `LabsRepository`).
+    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
+    /// under its idempotency key. A failure here is **not** swallowed: the
+    /// network attempt already failed, so the write is on no server either, and
+    /// re-throwing the original retriable error would let the store keep showing
+    /// the entry as "queued, replays later" for something that is permanently
+    /// lost. Since build 274 that is a reachable state, not a theoretical one —
+    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
+    /// when iOS grants no background execution time. Throws
+    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
+    /// used since G-2) so the caller rolls its optimistic row back and surfaces
+    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
     private func enqueue(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey
-    ) async {
+    ) async throws {
         do {
             let data = try encoder.encode(payload)
             try await outbox.enqueue(.init(kind: kind, payload: data, idempotencyKey: key.raw))
         } catch {
-            HLLog.outbox.error("Illness outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
+            let cause = LogSanitizer.redact(String(describing: error))
+            HLLog.outbox.error("Illness outbox enqueue failed: \(cause)")
+            throw HLError.notPersisted(cause)
         }
     }
 }

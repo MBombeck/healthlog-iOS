@@ -57,6 +57,20 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
     case inhaler = "INHALER"
     case bottle = "BOTTLE"
     case other = "OTHER"
+    /// **Audit B-4 — decode-only sentinel for a container form this build
+    /// cannot name.** `MedicationInventoryListDTO.items` has no lossy wrapper,
+    /// so an added server form did not cost its own row: it threw inside
+    /// `decodeIfPresent`, failed the WHOLE response as `HLError.decoding`, and
+    /// the supply screen showed an error where the person's containers were.
+    /// See `MedicationEnums+Unknown.swift`.
+    case unknown = "__UNKNOWN__"
+
+    /// Audit B-4 — every form the SERVER can actually send: `allCases` minus the
+    /// decode-only ``unknown`` sentinel. The register-container picker reads
+    /// this, so the sentinel is never offered as something to choose.
+    public static var serverCases: [MedicationContainerType] {
+        allCases.filter { $0 != .unknown }
+    }
 
     public var id: String {
         rawValue
@@ -71,6 +85,10 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
         case .inhaler: "lungs"
         case .bottle: "waterbottle"
         case .other: "shippingbox"
+        // Audit B-4 — the generic box, same as `.other`: a form this build
+        // cannot name is not known to be a pen, an ampoule or an inhaler, and
+        // an icon that guessed would be the only thing on the row that lied.
+        case .unknown: "shippingbox"
         }
     }
 
@@ -83,6 +101,7 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
         case .inhaler: String(localized: "med.inventory.container.inhaler")
         case .bottle: String(localized: "med.inventory.container.bottle")
         case .other: String(localized: "med.inventory.container.other")
+        case .unknown: String(localized: "med.inventory.container.unknown")
         }
     }
 
@@ -98,6 +117,11 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
         switch self {
         case .pen, .ampoule: true
         case .blister, .inhaler, .bottle, .other: false
+        // Audit B-4 — the conservative arm. The first-use clock shortens an
+        // expiry; claiming it for a form nobody has read would put a
+        // "discard by" date on a container the server never dated. The printed
+        // date alone is the weaker, true statement.
+        case .unknown: false
         }
     }
 
@@ -350,6 +374,9 @@ public struct MedicationInventoryItemDTO: Codable, Sendable, Hashable, Identifia
             unitsRemaining = unitsTotal
         }
 
+        // Audit B-4 — `decodeIfPresent` swallows a MISSING key, never a throw
+        // from the element decoder, so this line used to fail the whole list.
+        // The tolerant `init(from:)` is what makes it survive.
         containerType = try c.decodeIfPresent(MedicationContainerType.self, forKey: .containerType)
         // #52 — nullable on the wire; an absent key (pre-v1.31.0 server / stale
         // cache) and an explicit `null` both mean "no pen detail on this row".

@@ -135,7 +135,7 @@ public actor CustomMetricsRepository {
             await invalidate()
             return created
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .createCustomMetric,
                 payload: OutboxQueue.Payloads.CreateCustomMetric(body: body),
                 key: key
@@ -170,7 +170,7 @@ public actor CustomMetricsRepository {
             await invalidate()
             return updated
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .updateCustomMetric,
                 payload: OutboxQueue.Payloads.UpdateCustomMetric(id: id, patch: patch),
                 key: key, clientEntityId: id
@@ -200,7 +200,7 @@ public actor CustomMetricsRepository {
             _ = try await api.send(req)
             await invalidate()
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .deleteCustomMetric,
                 payload: OutboxQueue.Payloads.DeleteCustomMetric(id: id),
                 key: key, clientEntityId: id
@@ -233,7 +233,7 @@ public actor CustomMetricsRepository {
             await invalidate()
             return created
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .createCustomMetricEntry,
                 payload: OutboxQueue.Payloads.CreateCustomMetricEntry(metricID: metricID, body: body),
                 key: key, clientEntityId: metricID
@@ -273,7 +273,7 @@ public actor CustomMetricsRepository {
             await invalidate()
             return updated
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .updateCustomMetricEntry,
                 payload: OutboxQueue.Payloads.UpdateCustomMetricEntry(
                     metricID: metricID, entryID: entryID, patch: patch
@@ -311,7 +311,7 @@ public actor CustomMetricsRepository {
             _ = try await api.send(req)
             await invalidate()
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .deleteCustomMetricEntry,
                 payload: OutboxQueue.Payloads.DeleteCustomMetricEntry(metricID: metricID, entryID: entryID),
                 key: key, clientEntityId: entryID
@@ -340,25 +340,32 @@ public actor CustomMetricsRepository {
         await swr?.invalidate([.customMetrics])
     }
 
-    /// Persist a retriable failed write to the encrypted outbox under its
-    /// idempotency key. A persistence failure compounds the network failure, so
-    /// it is logged (sanitized) and swallowed — the original `HLError` is the one
-    /// re-thrown to the caller (mirrors `LabsRepository` / `MeasurementsRepository`).
+    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
+    /// under its idempotency key. A failure here is **not** swallowed: the
+    /// network attempt already failed, so the write is on no server either, and
+    /// re-throwing the original retriable error would let the store keep showing
+    /// the entry as "queued, replays later" for something that is permanently
+    /// lost. Since build 274 that is a reachable state, not a theoretical one —
+    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
+    /// when iOS grants no background execution time. Throws
+    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
+    /// used since G-2) so the caller rolls its optimistic row back and surfaces
+    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
     private func enqueue(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey,
         clientEntityId: String? = nil
-    ) async {
+    ) async throws {
         do {
             let data = try encoder.encode(payload)
             try await outbox.enqueue(.init(
                 kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
             ))
         } catch {
-            HLLog.outbox.error(
-                "Custom-metrics outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))"
-            )
+            let cause = LogSanitizer.redact(String(describing: error))
+            HLLog.outbox.error("Custom-metrics outbox enqueue failed: \(cause)")
+            throw HLError.notPersisted(cause)
         }
     }
 }

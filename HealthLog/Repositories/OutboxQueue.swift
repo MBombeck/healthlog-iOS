@@ -85,6 +85,12 @@ public actor OutboxQueue {
         /// repo). A non-`nil` value passed in (tests) is respected as-is.
         public var ownerUserID: String?
 
+        /// **Audit B-2 — the server already took this write.** Stamped before the
+        /// row is removed, so a failed removal cannot put the same operation back
+        /// on the wire; the drain finishes such a row locally. See
+        /// ``OutboxOperation/delivered``.
+        public var delivered: Bool
+
         /// **audit-v0162 H-4 — optimistic→server id remap key.** The entity id a
         /// PHI records/labs op concerns (a `create` stamps its `optimistic-<uuid>`,
         /// a dependent `update`/`delete` the id it targets). `OutboxReplayService`
@@ -101,6 +107,7 @@ public actor OutboxQueue {
             attempts: Int = 0,
             lastAttemptAt: Date? = nil,
             ownerUserID: String? = nil,
+            delivered: Bool = false,
             clientEntityId: String? = nil
         ) {
             self.id = id
@@ -111,6 +118,7 @@ public actor OutboxQueue {
             self.attempts = attempts
             self.lastAttemptAt = lastAttemptAt
             self.ownerUserID = ownerUserID
+            self.delivered = delivered
             self.clientEntityId = clientEntityId
         }
 
@@ -695,6 +703,29 @@ public actor OutboxQueue {
         deferred { recoverOrDegradeStore() }
     }
 
+    /// **Audit B-2 / B-11 — the two post-success store writes, as fault seams.**
+    /// A successful dispatch is followed by an entity remap and a row removal,
+    /// and the fix is about what happens when either of those LOCAL writes
+    /// fails — a state no stubbed HTTP response can produce. Test-only (the
+    /// established `useCipher` posture); production never injects and pays one
+    /// empty-set check per call.
+    enum InjectableFault: Sendable {
+        case entityRemap
+        case remove
+    }
+
+    private var injectedFaults: Set<InjectableFault> = []
+
+    /// Test-only: make the named store write throw on every call until cleared.
+    func injectFault(_ fault: InjectableFault) {
+        injectedFaults.insert(fault)
+    }
+
+    /// Test-only: let the injected store writes succeed again.
+    func clearFaults() {
+        injectedFaults.removeAll()
+    }
+
     /// Test-only: thread a deterministic / fault-injection cipher down to the
     /// backing `OutboxStore`. Production callers leave the default cipher in
     /// place. Used by the write-path durability tests to force `enqueue` to fail
@@ -873,8 +904,30 @@ public actor OutboxQueue {
     }
 
     public func remove(id: UUID) async throws {
+        if injectedFaults.contains(.remove) {
+            throw HLError.unknown("injected outbox remove fault")
+        }
         try await resolvedStore().delete(id: id)
         await broadcast()
+    }
+
+    /// **Audit B-2 — mark the row as taken by the server, before removing it.**
+    /// See ``OutboxOperation/delivered``: this is what makes a failed `remove`
+    /// harmless instead of a duplicate write on the next drain.
+    public func markDelivered(id: UUID) async throws {
+        try await resolvedStore().markDelivered(id: id)
+        await broadcast()
+    }
+
+    /// **Audit B-3 — dead-letter one named row (payload this build cannot read).**
+    /// Retains the write, drops it out of the replay snapshot, leaves it
+    /// recoverable via ``resubmitDeadLetter(id:)``. Returns `true` when a live
+    /// row matched.
+    @discardableResult
+    public func markDeadLetter(id: UUID, lastError: String? = nil, now: Date = .now) async throws -> Bool {
+        let marked = try await resolvedStore().markDeadLetter(id: id, lastError: lastError, now: now)
+        if marked { await broadcast() }
+        return marked
     }
 
     public func incrementAttempts(id: UUID, lastError: String? = nil) async throws {
@@ -893,6 +946,9 @@ public actor OutboxQueue {
     /// sibling row once the create lands. Returns the number of rows rewritten.
     @discardableResult
     public func applyEntityRemap(from optimisticId: String, to serverId: String) async throws -> Int {
+        if injectedFaults.contains(.entityRemap) {
+            throw HLError.unknown("injected outbox remap fault")
+        }
         let n = try await resolvedStore().applyEntityRemap(from: optimisticId, to: serverId)
         if n > 0 { await broadcast() }
         return n
@@ -970,6 +1026,7 @@ private extension OutboxQueue.Operation {
             attempts: snap.attempts,
             lastAttemptAt: snap.lastAttemptAt,
             ownerUserID: snap.ownerUserID,
+            delivered: snap.delivered,
             clientEntityId: snap.clientEntityId
         )
     }

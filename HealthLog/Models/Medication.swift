@@ -374,7 +374,11 @@ public struct MedicationScheduleDTO: Codable, Sendable, Hashable {
         try container.encodeIfPresent(reminderGraceMinutes, forKey: .reminderGraceMinutes)
         try container.encodeIfPresent(cyclicOnWeeks, forKey: .cyclicOnWeeks)
         try container.encodeIfPresent(cyclicOffWeeks, forKey: .cyclicOffWeeks)
-        try container.encodeIfPresent(scheduleType, forKey: .scheduleType)
+        // Audit B-4 — the sentinel is dropped here rather than refused: this
+        // encoder also writes the SWR cache blob, and a cached medication whose
+        // schedule carried an unnameable tag must not fail the cache write. The
+        // key simply goes missing, which is what it meant on the way in.
+        try container.encodeIfPresent(scheduleType == .unknown ? nil : scheduleType, forKey: .scheduleType)
         try container.encodeIfPresent(doseWindows, forKey: .doseWindows)
     }
 }
@@ -751,7 +755,7 @@ public extension MedicationWireDTO {
             liveActivityEnabled: liveActivityEnabled,
             criticalAlarmEnabled: criticalAlarmEnabled,
             trackInjectionSites: trackInjectionSites ?? false,
-            allowedInjectionSites: (allowedInjectionSites ?? []).compactMap(InjectionSite.parse),
+            allowedInjectionSites: (allowedInjectionSites ?? []).compactMap(InjectionSite.parseAllowedEntry),
             externalSource: externalSource,
             externalId: externalId,
             pausedAt: pausedAt,
@@ -899,13 +903,14 @@ public enum IntakeStatus: String, Codable, Sendable {
     case skipped
     case snoozed
     case missed
+    /// Audit B-5 — decode-only sentinel for a status this build cannot name
+    /// (`IntakeStatus+Unknown.swift`). Never taken, never sent, never counted.
+    case unknown = "__UNKNOWN__"
 }
 
-// The medication compliance payload types (`ComplianceDay`,
-// `MedicationCompliancePayload`, `ComplianceWindowResult`,
-// `DailyComplianceBucket`) live in `MedicationCompliance.swift` (extracted
-// v0.10 W-Meds-A2 to keep this file under the length budget + to host the
-// v1.7.0 SB-SCHED-2 `due`/`expectedCount` additions).
+// The medication compliance payload types (`ComplianceDay`, `MedicationCompliancePayload`,
+// `ComplianceWindowResult`, `DailyComplianceBucket`) live in `MedicationCompliance.swift`
+// (extracted v0.10 W-Meds-A2 for the length budget + the v1.7.0 SB-SCHED-2 `due` additions).
 
 // MARK: - T-5 GLP-1 fields
 
@@ -923,6 +928,5 @@ public enum IntakeStatus: String, Codable, Sendable {
 // new wire-fields into `MedicationWireDTO` + `Medication` here under
 // the same `// MARK: - T-5 GLP-1 fields` heading.
 //
-// Coordination with T-3: this marker sits **after** the T-3 archive
-// fields (when they land). Both T-3 and T-5 are APPEND-ONLY to this
-// model file.
+// Coordination with T-3: this marker sits **after** the T-3 archive fields
+// (when they land). Both T-3 and T-5 are APPEND-ONLY to this model file.

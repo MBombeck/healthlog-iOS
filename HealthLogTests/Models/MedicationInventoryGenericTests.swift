@@ -446,3 +446,34 @@ struct MedicationInventoryGenericTests {
         #expect(med.effectiveUnitsPerDose == 1.0)
     }
 }
+
+/// **Audit B-4 (fix round 1) — the supply editor's unnameable container form.**
+///
+/// Its own suite rather than a case in the file's main one: that struct already
+/// sits on the `type_body_length` baseline, and this rule belongs to the
+/// sentinel work, not to the C1 wire rename.
+@Suite("Audit B-4 — the supply editor names a form it cannot offer")
+struct MedicationSupplyEditorUnnameableTypeTests {
+    /// **The editor stops hiding the sentinel it can
+    /// finally name.**
+    ///
+    /// `MedicationContainerType.serverCases` — what the type picker enumerates —
+    /// excludes the decode-only sentinel, so a menu picker seeded with it had no
+    /// matching tag and rendered a BLANK current value. Correcting a container
+    /// whose form the server has since renamed was therefore the one screen that
+    /// showed the person nothing at all where a form belongs.
+    @Test("Audit B-4: an unnameable container form is stated in words, not offered as a menu")
+    func unnameableContainerTypeIsNamed() {
+        #expect(
+            MedicationSupplyEditorSheet.unnameableTypeLabel(for: .unknown)
+                == MedicationContainerType.unknown.localizedLabel,
+            "the correct-mode card must say 'Unbekannte Form' where the picker rendered a blank"
+        )
+        // A nameable form keeps its picker; so does a row that carries no form
+        // at all (a ≤v1.16.9 payload, `OTHER` server-side).
+        #expect(MedicationSupplyEditorSheet.unnameableTypeLabel(for: nil) == nil)
+        for type in MedicationContainerType.serverCases {
+            #expect(MedicationSupplyEditorSheet.unnameableTypeLabel(for: type) == nil)
+        }
+    }
+}

@@ -72,11 +72,16 @@ struct MiniCoachDataBinder {
     ) -> String {
         var lines: [String] = []
         let grouped = Dictionary(grouping: measurements, by: \.kind)
-        for kind in MetricKind.allCases {
+        // Audit B-4 — `selectableCases`, not `allCases`: the coach must not be
+        // handed a reading whose type this build cannot name.
+        for kind in MetricKind.selectableCases {
             guard let latest = grouped[kind]?.max(by: { $0.recordedAt < $1.recordedAt }) else { continue }
             lines.append(format(measurement: latest, language: language))
         }
-        if let latestMood = moods.max(by: { $0.recordedAt < $1.recordedAt }) {
+        // Audit B-4 — the line states a level out of five, so it reads the
+        // latest NAMEABLE entry; the coach is handed no mood line at all when
+        // this build can name none.
+        if let latestMood = MoodEntry.scored(moods).max(by: { $0.entry.recordedAt < $1.entry.recordedAt }) {
             let header = language == "en" ? "mood" : "Stimmung"
             lines.append("\(header): \(latestMood.score)/5")
         }
@@ -102,12 +107,15 @@ struct MiniCoachDataBinder {
             : "Zeitraum: letzte 7 Tage (\(window.count) Messungen, \(moodWindow.count) Stimmungseinträge)"
         var lines: [String] = [header]
         let grouped = Dictionary(grouping: window, by: \.kind)
-        for kind in MetricKind.allCases {
+        // Audit B-4 — `selectableCases`, not `allCases`: the coach must not be
+        // handed a reading whose type this build cannot name.
+        for kind in MetricKind.selectableCases {
             guard let group = grouped[kind], !group.isEmpty else { continue }
             lines.append(summarise(kind: kind, group: group, language: language))
         }
         if !moodWindow.isEmpty {
-            let scores = moodWindow.map(\.score)
+            // Audit B-4 — min / max / avg over nameable levels only.
+            let scores = MoodEntry.scored(moodWindow).map(\.score)
             if let minScore = scores.min(), let maxScore = scores.max() {
                 let avg = Double(scores.reduce(0, +)) / Double(scores.count)
                 let label = language == "en" ? "mood" : "Stimmung"
@@ -161,7 +169,9 @@ struct MiniCoachDataBinder {
         var lines: [String] = [header]
         let recentGrouped = Dictionary(grouping: recent, by: \.kind)
         let priorGrouped = Dictionary(grouping: prior, by: \.kind)
-        for kind in MetricKind.allCases {
+        // Audit B-4 — `selectableCases`, not `allCases`: the coach must not be
+        // handed a reading whose type this build cannot name.
+        for kind in MetricKind.selectableCases {
             let recentGroup = recentGrouped[kind] ?? []
             let priorGroup = priorGrouped[kind] ?? []
             guard !(recentGroup.isEmpty && priorGroup.isEmpty) else { continue }
@@ -292,6 +302,11 @@ struct MiniCoachDataBinder {
             case .breathingDisturbanceEvent: return "breathing disturbance event"
             // Build 7 / item 7.3 — mood (EN prompt vocabulary).
             case .mood: return "mood"
+            // Audit B-4 — the audio-exposure event joins the EN prompt
+            // vocabulary; `.unknown` names itself as unnamed, and never reaches
+            // a digest anyway (the loops walk `selectableCases`).
+            case .audioExposureEvent: return "loud audio notification"
+            case .unknown: return "unknown metric"
             }
         }
         return kind.displayName

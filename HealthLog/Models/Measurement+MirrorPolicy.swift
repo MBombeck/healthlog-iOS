@@ -20,13 +20,20 @@ public extension MeasurementSource {
     /// deliberately EXCLUDE `.manual` (already round-tripped at create-time),
     /// `.appleHealth` (originated in HealthKit — re-writing would duplicate /
     /// cross-source-contaminate), and `.whoop` / `.fitbit` / `.googleHealth` /
-    /// `.strava` / `.oura` / `.polar` / `.nightscout` (provider-owned read-only
-    /// wearable/CGM kinds we must never author into Apple Health).
+    /// `.strava` / `.oura` / `.polar` / `.nightscout` / `.external` /
+    /// `.telegram` / `.mcp` (provider-owned, ingest-token or server-written
+    /// rows — we must never author them into Apple Health). This is a closed
+    /// allowlist, not a denylist: a new source joins the `false` arm unless
+    /// someone decides otherwise, so nothing starts writing into Apple Health
+    /// by being added to the enum.
     var isServerMirrorEligible: Bool {
         switch self {
         case .withings, .import_: true
         case .manual, .appleHealth, .whoop, .fitbit, .googleHealth, .computed,
-             .strava, .oura, .polar, .nightscout: false
+             .strava, .oura, .polar, .nightscout, .external, .telegram, .mcp,
+             // Audit B-4 — the closed allowlist doing its job: a source this
+             // build cannot name never writes into Apple Health.
+             .unknown: false
         }
     }
 

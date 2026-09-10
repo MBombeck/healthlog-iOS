@@ -382,6 +382,8 @@ struct MoodScreen: View {
         if !trimmedNote.isEmpty || !annotateTags.isEmpty || !tagKeys.isEmpty || !factors.isEmpty {
             _ = await store.update(
                 entry,
+                // Audit B-4 — `nil` for an unnameable level: the annotation is
+                // saved and the level is left exactly as the server holds it.
                 score: entry.score,
                 tags: annotateTags,
                 tagKeys: tagKeys,
@@ -508,6 +510,16 @@ struct MoodScreen: View {
 /// Server-Enum-Reihenfolge. The labels mirror the operator's icon-pack
 /// filenames (Lausig / Schlecht / Ok / Gut / Super gut).
 enum MoodCopy {
+    /// **Audit B-4 — the label for a possibly-unnameable level.**
+    ///
+    /// `nil` is not a sixth point on the scale and gets no glyph from the pack:
+    /// it is the neutral "Mood unknown" chip, which is the whole visible shape
+    /// of the sentinel on this screen.
+    static func levelLabel(_ score: Int?) -> String {
+        guard let score else { return String(localized: "mood.level.unknown") }
+        return scoreLabel(score)
+    }
+
     static func scoreLabel(_ score: Int) -> String {
         switch max(1, min(5, score)) {
         case 1: String(localized: "Awful")
@@ -605,14 +617,25 @@ struct MoodEntryRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: HLSpace.md) {
-            Image(MoodCopy.iconName(for: entry.score))
-                .resizable()
-                .scaledToFit()
-                .frame(width: 32, height: 32)
-                .accessibilityHidden(true)
+            // Audit B-4 — no glyph from the five-icon pack for a level this
+            // build cannot name; a neutral mark, sized the same.
+            Group {
+                if let score = entry.score {
+                    Image(MoodCopy.iconName(for: score))
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: "questionmark.circle")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(HLText.tertiary)
+                }
+            }
+            .frame(width: 32, height: 32)
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 HStack(spacing: HLSpace.sm) {
-                    Text(MoodCopy.scoreLabel(entry.score))
+                    Text(MoodCopy.levelLabel(entry.score))
                         .font(.hlHeadline)
                         .foregroundStyle(HLText.primary)
                     Text(Self.relativeFormatter.localizedString(for: entry.recordedAt, relativeTo: .now))

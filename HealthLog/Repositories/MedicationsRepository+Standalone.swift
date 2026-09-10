@@ -62,7 +62,7 @@ extension MedicationsRepository {
     /// ignored (a skipped dose is not a "last taken").
     static func latestTakenByMedication(_ intakes: [LocalIntakeSnapshot]) -> [String: Date] {
         var latest: [String: Date] = [:]
-        for snap in intakes where (IntakeStatus(rawValue: snap.status) ?? .taken) == .taken {
+        for snap in intakes where IntakeStatus(stored: snap.status).countsAsTaken {
             if let existing = latest[snap.medicationId], existing >= snap.takenAt { continue }
             latest[snap.medicationId] = snap.takenAt
         }
@@ -187,7 +187,7 @@ extension MedicationsRepository {
 
         // Taken doses per day from the intake mirror.
         var takenByDay: [Date: Int] = [:]
-        for snap in intakeSnaps where (IntakeStatus(rawValue: snap.status) ?? .taken) == .taken {
+        for snap in intakeSnaps where IntakeStatus(stored: snap.status).countsAsTaken {
             let day = calendar.startOfDay(for: snap.takenAt)
             guard day >= windowStart, day <= start else { continue }
             takenByDay[day, default: 0] += 1
@@ -338,8 +338,11 @@ extension MedicationsRepository {
             ).count
         }
         let windowIntakes = intakes.filter { $0.takenAt >= periodStart && $0.takenAt <= now }
-        let taken = windowIntakes.filter { (IntakeStatus(rawValue: $0.status) ?? .taken) == .taken }.count
-        let skipped = windowIntakes.filter { IntakeStatus(rawValue: $0.status) == .skipped }.count
+        // Audit B-5 — a status this build cannot name counts in neither
+        // bucket: not taken, not skipped. `totalExpected` (the schedule) owns
+        // the denominator, so the row cannot inflate the rate from either end.
+        let taken = windowIntakes.filter { IntakeStatus(stored: $0.status).countsAsTaken }.count
+        let skipped = windowIntakes.filter { IntakeStatus(stored: $0.status) == .skipped }.count
         let rate = totalExpected == 0
             ? 100
             : min(100, Int((Double(taken) / Double(totalExpected) * 100).rounded()))

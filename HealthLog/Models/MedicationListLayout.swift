@@ -21,6 +21,18 @@ import Foundation
 /// legacy blob collapses onto the defaults field-by-field — a missing or
 /// unrecognised `view` falls back to ``cards``, a missing `order` to `[]`. So a
 /// GET can never fail and a future field defaults cleanly.
+///
+/// **Audit B-9 (2026-09-10) — "unknown `view` → keep the last local choice".**
+/// The finding reads the fallback as a silent no-op that loses the user's
+/// chosen presentation. There is no choice to lose: 08-05 and 08-13 removed the
+/// second presentation, the setter that could state one, and the field on the
+/// write body, so a person cannot express a presentation at all and the app
+/// never writes one. The recommendation would restore a preference this app
+/// deliberately does not have. What the finding is really about — a stored
+/// value not being trampled — already holds and is proven where it is felt:
+/// `MedicationsStoreLayoutTests.legacyLayoutSurvivesAnOrderWrite` loads a
+/// server payload carrying `"view": "table"`, drags a medication, and asserts
+/// the PUT carries no presentation key, so the server keeps its own value.
 public enum MedicationListView: String, Codable, Sendable, CaseIterable {
     case cards
 

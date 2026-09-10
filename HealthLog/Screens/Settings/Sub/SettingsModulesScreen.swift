@@ -16,6 +16,17 @@ import SwiftUI
 /// Server-first: the displayed value is ``ModuleGate.isEnabled(_:)`` (default-on
 /// when the server map is absent). A toggle snaps optimistically, then the PATCH
 /// confirms; a non-retriable failure reverts the row and surfaces the alert.
+///
+/// **Audit A-7 — this screen is where a module that is off says why.** The More
+/// tab keeps HIDING the rows of switched-off modules (a tab full of dead rows
+/// explaining themselves would be worse than a short one), so the explanation
+/// has to live somewhere a person can reach: here. Every offered module stays
+/// listed whatever its state, and a module the viewer cannot switch — the
+/// operator turned it off instance-wide, or the sharing grant they are inside
+/// does not cover it — shows the server's own sentence
+/// (``ModuleGate/offReason(_:)``) in place of its subtitle, with the switch
+/// visible but inert. Before A-7 that row offered a switch that would have
+/// moved nothing.
 struct SettingsModulesScreen: View {
     @Environment(\.appContainer) private var container
 
@@ -61,19 +72,68 @@ struct SettingsModulesScreen: View {
         // #30 — observe the gate map so the toggle reflects a 403-driven flip too.
         let gate = container?.moduleGate
         _ = gate?.modules
+        _ = gate?.moduleAccess // Audit A-7 — re-render when the reasons change too.
         let isOn = gate?.isEnabled(key) ?? true
         let busy = inFlight.contains(key)
+        // Audit A-7 (fix round 1) — one seam, and it resolves the state itself.
+        // This row is the one place a reason becomes a locked switch, so it must
+        // obey the same "the boolean wins on a disagreement" rule the reason
+        // sentence obeys; reading the raw map here bypassed it.
+        let row = SettingsModulesScreen.rowPresentation(gate: gate, key: key)
         return HLSettingsToggleRow(
             title: key.displayTitle,
-            description: key.displaySubtitle,
+            // Audit A-7 — a module the viewer cannot switch replaces its
+            // marketing subtitle with the reason it is off. `disabled` (the
+            // viewer's own switch) keeps the subtitle: the row is simply off.
+            description: row.reasonKey.map { LocalizedStringKey($0) } ?? key.displaySubtitle,
             isOn: Binding(
                 get: { isOn },
                 set: { newValue in toggle(key, to: newValue) }
             ),
             isBusy: busy,
-            isEnabled: !busy && gate != nil,
+            isEnabled: !busy && gate != nil && row.isSwitchOffered,
             accessibilityID: "settings.modules.toggle.\(key.rawValue)"
         )
+    }
+
+    /// **Audit A-7 (fix round 1) — the seam the screen and the tests share.**
+    ///
+    /// The resolution used to live at the call site, so a test could hand
+    /// ``rowPresentation(for:)`` a state it had reconciled itself and stay green
+    /// over a screen that read the RAW map. Both halves — which state a row
+    /// presents, and how it presents it — now sit behind one function, and the
+    /// suite asserts through it.
+    @MainActor
+    static func rowPresentation(gate: ModuleGate?, key: ModuleKey) -> RowPresentation {
+        rowPresentation(for: gate?.reconciledAccessState(key))
+    }
+
+    /// **Audit A-7 — how one switchboard row reads, given the server's verdict.**
+    ///
+    /// Pure and `nonisolated` so the rule can be asserted without a view: the
+    /// screen's whole A-7 behaviour is this function plus the two fields it
+    /// returns.
+    ///
+    /// - `nil` state (server < v1.38.15, or the key is not in the map) and
+    ///   `enabled` / `disabled` → exactly today's row: the module subtitle, an
+    ///   interactive switch.
+    /// - `not_granted` / `unavailable` / an unknown future state → the switch
+    ///   stays VISIBLE but disabled (a missing row is what A-7 is about), and
+    ///   the reason takes the subtitle's place.
+    nonisolated static func rowPresentation(for state: ModuleAccessState?) -> RowPresentation {
+        guard let state, !state.offersSwitch else {
+            return RowPresentation(reasonKey: nil, isSwitchOffered: true)
+        }
+        return RowPresentation(reasonKey: state.offReasonKey, isSwitchOffered: false)
+    }
+
+    /// Audit A-7 — the two things a module's access state changes about its row.
+    struct RowPresentation: Equatable, Sendable {
+        /// Catalogue key of the reason sentence, or `nil` to keep the module's
+        /// own subtitle.
+        let reasonKey: String?
+        /// Whether the switch stays interactive.
+        let isSwitchOffered: Bool
     }
 
     /// Build 2 / 2.6 — `medications` dropped from the copy. It is a real,

@@ -44,7 +44,7 @@ public extension MedicationDetailStore {
                 scheduledFor: original.scheduledFor,
                 injectionSite: original.injectionSite
             )
-        case .pending, .snoozed, .missed:
+        case .pending, .snoozed, .missed, .unknown:
             // The retro-mutate UI doesn't surface these directly. Keep the
             // method total so callers don't have to assert at call-site.
             original

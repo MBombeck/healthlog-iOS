@@ -10,6 +10,27 @@ import Foundation
 // `suppressesAggregateStats`, `isHighFrequencyVital`) plus the
 // `MetricKind` → server `MeasurementType` key table the kind-scoped read path
 // and the availability slice both consult.
+//
+// Audit B-4 added one row-level sibling to the same idea: which measurement a
+// single-value glance surface is allowed to show.
+
+public extension Measurement {
+    /// Audit B-4 — the newest reading whose type this build can name.
+    ///
+    /// Glance surfaces (the Home-screen widget, the watch complication) answer
+    /// "your latest measurement" with one row picked across every kind. A row
+    /// on ``MetricKind/unknown`` must not win that pick: it would displace the
+    /// person's real latest reading with a value whose unit, meaning and even
+    /// server type this build does not know — a headline about nothing, in the
+    /// one place there is room for exactly one number. The row still exists in
+    /// the list; it just does not get to be the headline.
+    ///
+    /// Ties are resolved the way `max(by:)` resolves them — the later element
+    /// wins — which is the pre-existing behaviour for equal timestamps.
+    static func latestNamedReading(in rows: [Measurement]) -> Measurement? {
+        rows.lazy.filter { !$0.kind.isUnknown }.max { $0.recordedAt < $1.recordedAt }
+    }
+}
 
 extension MetricKind {
     /// **V0.5.4-BF-3 cumulative-kind predicate.** `true` for the five HK
@@ -212,6 +233,10 @@ extension MetricKind {
         .highHeartRateEvent: "HIGH_HEART_RATE_EVENT",
         .lowHeartRateEvent: "LOW_HEART_RATE_EVENT",
         .walkingSteadinessEvent: "WALKING_STEADINESS_EVENT",
-        .breathingDisturbanceEvent: "BREATHING_DISTURBANCE_EVENT"
+        .breathingDisturbanceEvent: "BREATHING_DISTURBANCE_EVENT",
+        // Audit B-4 — the 77th server type, keyed like its five sibling events
+        // so the availability slice lights its has-data signal too. `.unknown`
+        // is deliberately absent: it is no server type and has no count.
+        .audioExposureEvent: "AUDIO_EXPOSURE_EVENT"
     ]
 }

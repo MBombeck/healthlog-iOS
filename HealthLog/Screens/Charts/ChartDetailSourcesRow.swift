@@ -89,9 +89,13 @@ private struct SourceRow: View {
         case .oura: "circle.circle.fill"
         case .polar: "heart.circle.fill"
         case .nightscout: "drop.fill"
+        case .telegram: "paperplane.fill"
+        case .mcp: "terminal.fill"
+        case .external: "antenna.radiowaves.left.and.right"
         case .manual: "pencil.tip.crop.circle"
         case .computed: "function"
         case .import_: "square.and.arrow.down.fill"
+        case .unknown: "questionmark.circle"
         case nil: "circle.grid.3x3.fill"
         }
     }
@@ -115,9 +119,13 @@ private struct SourceRow: View {
         case .oura: String(localized: "Oura")
         case .polar: String(localized: "Polar")
         case .nightscout: String(localized: "Nightscout")
+        case .telegram: String(localized: "Telegram")
+        case .mcp: String(localized: "MCP")
+        case .external: String(localized: "measurement.source.external")
         case .manual: String(localized: "chart.source.manual")
         case .computed: String(localized: "measurement.source.computed")
         case .import_: String(localized: "Import")
+        case .unknown: String(localized: "measurement.source.unknown")
         case nil: String(localized: "All sources")
         }
     }

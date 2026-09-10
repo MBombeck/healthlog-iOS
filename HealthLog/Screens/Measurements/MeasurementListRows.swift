@@ -75,8 +75,12 @@ struct MeasurementRow: View {
         case .oura: "Oura"
         case .polar: "Polar"
         case .nightscout: "Nightscout"
+        case .telegram: "Telegram"
+        case .mcp: "MCP"
+        case .external: String(localized: "measurement.source.external")
         case .computed: String(localized: "measurement.source.computed")
         case .import_: "Import"
+        case .unknown: String(localized: "measurement.source.unknown")
         }
     }
 
@@ -196,50 +200,70 @@ struct MeasurementSummaryRow: View {
                     HLDisclosureChevron(expanded: isExpanded)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                    Text(formatMean(stats.mean, secondaryMean: stats.secondaryMean))
-                        .font(.hlMetric(.title3))
-                        .foregroundStyle(HLText.primary)
-                        .monospacedDigit()
-                    Text(unitSuffix)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    Spacer()
+                    // Audit B-4 — a bucket of unknown rows has no mean to show
+                    // and no unit to show it in; the count moves into the
+                    // headline slot and carries the row on its own.
+                    if let mean = stats.mean {
+                        Text(formatMean(mean, secondaryMean: stats.secondaryMean))
+                            .font(.hlMetric(.title3))
+                            .foregroundStyle(HLText.primary)
+                            .monospacedDigit()
+                        Text(unitSuffix)
+                            .font(.hlSubhead)
+                            .foregroundStyle(HLText.secondary)
+                        Spacer()
+                    }
                     Text("\(items.count) entries")
                         .font(.hlFootnote)
                         .foregroundStyle(HLText.secondary)
                         .monospacedDigit()
+                    // ...and with no mean ahead of it the count needs the
+                    // trailing spacer the mean's branch would have supplied.
+                    if stats.mean == nil { Spacer() }
                 }
-                Text(rangeLine)
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
-                    .monospacedDigit()
+                if let rangeLine {
+                    Text(rangeLine)
+                        .font(.hlFootnote)
+                        .foregroundStyle(HLText.secondary)
+                        .monospacedDigit()
+                }
             }
             .padding(.vertical, HLSpace.xs)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            Text(
-                "\(period), Ø \(formatMean(stats.mean, secondaryMean: stats.secondaryMean)) \(unitSuffix), \(items.count) Einträge, Min \(format(stats.min)), Max \(format(stats.max))"
-            )
-        )
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(Text(isExpanded
                 ? String(localized: "Double-tap to hide the entries")
                 : String(localized: "Double-tap to show the entries")))
     }
 
-    private var rangeLine: String {
+    /// Audit B-4 — `nil` when the bucket has no band to state (unknown rows).
+    private var rangeLine: String? {
         // A360-5 C-1/C-2 — BP min/max legs convert + round per the active unit
         // (kPa → 1 decimal); scalar stats convert per family. mmHg / default
         // units are unchanged.
+        guard let min = stats.min, let max = stats.max else { return nil }
         if let secMin = stats.secondaryMin, let secMax = stats.secondaryMax {
-            let minPair = MetricValueFormatter.formatBloodPressure(systolic: stats.min, diastolic: secMin, units: units)
-            let maxPair = MetricValueFormatter.formatBloodPressure(systolic: stats.max, diastolic: secMax, units: units)
+            let minPair = MetricValueFormatter.formatBloodPressure(systolic: min, diastolic: secMin, units: units)
+            let maxPair = MetricValueFormatter.formatBloodPressure(systolic: max, diastolic: secMax, units: units)
             return "Min \(minPair) · Max \(maxPair) \(unitSuffix)"
         }
-        return "Min \(format(stats.min)) / Max \(format(stats.max)) \(unitSuffix)"
+        return "Min \(format(min)) / Max \(format(max)) \(unitSuffix)"
+    }
+
+    /// Audit B-4 — VoiceOver reads exactly what is on screen: for an unknown
+    /// bucket that is the period and the count, with no Ø / Min / Max spoken.
+    /// The aggregate branch is the pre-existing label, unchanged.
+    private var accessibilityLabel: Text {
+        guard let mean = stats.mean, let min = stats.min, let max = stats.max else {
+            return Text("\(period), \(items.count) entries")
+        }
+        return Text(
+            "\(period), Ø \(formatMean(mean, secondaryMean: stats.secondaryMean)) \(unitSuffix), \(items.count) Einträge, Min \(format(min)), Max \(format(max))"
+        )
     }
 
     private func formatMean(_ mean: Double, secondaryMean: Double?) -> String {

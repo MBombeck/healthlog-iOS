@@ -106,7 +106,8 @@ public actor OutboxReplayService {
     /// Back-off floor — an op whose `lastAttemptAt` is more recent than this is
     /// skipped this pass, so rapid replay triggers (foreground + reachability
     /// edges firing seconds apart) can't burn several attempts within minutes.
-    private let attemptBackoff: TimeInterval
+    /// `internal` for `isOnHoldThisPass` in the `+CoreDispatch` sibling.
+    let attemptBackoff: TimeInterval
 
     /// Injectable clock (age + back-off math). Defaults to wall time; tests pin it.
     private let clock: @Sendable () -> Date
@@ -126,6 +127,22 @@ public actor OutboxReplayService {
     /// drained-success beat. Wired to `SyncStateStore.noteDeadLettered` via
     /// ``attachDeadLetterSink(_:)`` (the store is built after this service).
     var onDeadLettered: (@Sendable (Int) async -> Void)?
+
+    /// **Audit B-3 — honest discard signal.** Invoked with the writes a pass
+    /// stopped carrying, each named by kind + machine reason. Wired to
+    /// `SyncStateStore.noteDiscarded` via ``attachDiscardSink(_:)``; `nil`
+    /// (tests / widget) buffers instead of losing the event.
+    var onDiscarded: (@Sendable ([OutboxDiscardNotice]) async -> Void)?
+
+    /// Audit B-3 — discards from a pass that ran before a sink was attached
+    /// (same race, same remedy, as ``deadLetteredBeforeSink``).
+    var discardedBeforeSink: [OutboxDiscardNotice] = []
+
+    /// **Audit B-2 — operations the server took during THIS process' lifetime.**
+    /// Belt to the persisted ``OutboxQueue/Operation/delivered`` brace: when even
+    /// the delivered stamp could not be written, this still stops the drain from
+    /// sending the same operation twice. `internal`, like `idRemap` above.
+    var deliveredIDs: Set<UUID> = []
 
     /// Phase 09 / plan 09-05 — rows dead-lettered by a pass that ran before any
     /// sink was attached. `internal`, like `measurementsRepo` above, so the
@@ -173,7 +190,8 @@ public actor OutboxReplayService {
         attemptBackoff: TimeInterval = 60,
         clock: @escaping @Sendable () -> Date = Date.init,
         serverHealthDegraded: (@Sendable () async -> Bool)? = nil,
-        onDeadLettered: (@Sendable (Int) async -> Void)? = nil
+        onDeadLettered: (@Sendable (Int) async -> Void)? = nil,
+        onDiscarded: (@Sendable ([OutboxDiscardNotice]) async -> Void)? = nil
     ) {
         self.outbox = outbox
         self.measurementsRepo = measurementsRepo
@@ -201,6 +219,7 @@ public actor OutboxReplayService {
         self.clock = clock
         self.serverHealthDegraded = serverHealthDegraded
         self.onDeadLettered = onDeadLettered
+        self.onDiscarded = onDiscarded
         // Single source of truth: `JSONDecoder.hlDefault`. Vorher hatte der
         // Replay-Service eine eigene Strategie (`.iso8601` ohne fractional +
         // `.convertFromSnakeCase`) — ein latenter Footgun (Outbox-Payload wird
@@ -279,13 +298,16 @@ public actor OutboxReplayService {
                 continue
             }
 
-            // Over budget → leave for the age-gated dead-letter sweep below
-            // (never delete here; the write stays recoverable).
-            if op.attempts >= maxAttempts { continue }
+            // Audit B-2 — the server already has this write; only the local
+            // delete is still owed. Ahead of the hold gate on purpose: a
+            // delivered row is not failing and must never age into the DLQ.
+            if isDelivered(op) {
+                await completeDelivery(op)
+                continue
+            }
 
-            // audit-v0162 H1 (Opt 3) — back-off: don't burn multiple attempts
-            // within minutes across rapid replay triggers.
-            if let last = op.lastAttemptAt, now.timeIntervalSince(last) < attemptBackoff { continue }
+            // Over budget, or attempted moments ago (see `isOnHoldThisPass`).
+            if isOnHoldThisPass(op, now: now) { continue }
 
             // audit-v0162 M2 — dependent-op guard: an earlier op for this entity
             // failed retriably this pass, so skip its dependents entirely.
@@ -294,11 +316,16 @@ public actor OutboxReplayService {
             do {
                 lastCreatedServerId = nil
                 try await dispatch(op)
-                await onReplaySuccess(op)
+                try await onReplaySuccess(op)
             } catch let err as HLError where err.shouldPersistToOutbox {
                 // audit-v0162 M2 — block dependents of this entity for the pass.
                 if let key = op.clientEntityId { blockedEntities.insert(key) }
                 await onRetriableFailure(op, err: err, degraded: degraded)
+            } catch let err as DecodingError {
+                // Audit B-3 — the payload we ourselves stored no longer decodes:
+                // this build's word against an older build's, not a server
+                // verdict, so the write is retained rather than deleted.
+                await onUndecodablePayload(op, error: err, now: now)
             } catch {
                 await onNonRetriable(op, error: error)
             }

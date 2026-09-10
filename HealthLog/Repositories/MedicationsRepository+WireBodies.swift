@@ -6,8 +6,27 @@ public extension IntakeStatus {
     }
 
     /// Status for mutation payloads; prevents read-only rows reaching network/outbox.
+    ///
+    /// **Audit B-5** — the sentinel is refused here too. `__UNKNOWN__` is not a
+    /// status any server or local column ever held; a client that sent it would
+    /// be inventing one, and a local mirror row written under it would be a
+    /// second unnameable status of our own making. Two of the four intake
+    /// write paths pass through here (`IntakeUpdate` to the API via
+    /// `record(intake:)`, `standaloneAddIntake` to the mirror via
+    /// `recordStandaloneIntake`); the other two are closed by their own
+    /// exhaustive checks — `markIntakeRetroactively` rejects `.missed` and
+    /// `.unknown` before building its patch, and `recordFromReminder` guards
+    /// `status == .taken || status == .skipped`. A fifth write path needs one
+    /// of those two shapes; nothing here is automatic for it.
     var writableRawValue: String {
         get throws {
+            guard self != .unknown else {
+                throw HLError.server(
+                    status: 422,
+                    code: "medications.intake.status_unknown",
+                    message: "An intake status this build cannot name is never written back."
+                )
+            }
             guard !isReadOnlyTerminal else {
                 throw HLError.server(
                     status: 422,

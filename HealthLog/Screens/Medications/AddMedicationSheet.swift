@@ -366,7 +366,7 @@ struct AddMedicationSheet: View {
             // v0.11 — only send injection-site fields for an INJECTION med.
             trackInjectionSites: deliveryForm == .injection ? trackInjectionSites : nil,
             allowedInjectionSites: deliveryForm == .injection && trackInjectionSites
-                ? allowedInjectionSites.map(\.serverRawValue).sorted()
+                ? allowedInjectionSites.compactMap(\.serverRawValue).sorted()
                 : nil,
             asNeeded: write.asNeeded
         )

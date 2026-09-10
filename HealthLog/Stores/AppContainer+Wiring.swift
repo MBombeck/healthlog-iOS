@@ -234,6 +234,11 @@ extension AppContainer {
             measurementsRepo: measurementsRepo,
             profileTimeZoneBox: profileTimeZoneBox
         )
+        // Audit B-8 — a device that crosses into another time zone re-arms its
+        // medication reminders instead of waiting for the next foreground load.
+        // Debounced on the resolved zone inside the store; the token is dropped
+        // deliberately, the observation lasts as long as the app does.
+        medicationsStore.startObservingSystemTimeZoneChanges()
         // audit-v0162 M-7 — WIRE the derived-intake synthesis gate. It shipped
         // as `= { true }` with a "until wired" note and was never connected, so
         // the client synthesised placeholders on EVERY server — including the
@@ -347,6 +352,11 @@ extension AppContainer {
             onDeadLettered: { count in
                 await syncState.noteDeadLettered(count)
             },
+            // Audit B-3 — the discard lane reaches the same honest footer as the
+            // dead-letter lane; without this it reached nothing at all.
+            onDiscarded: { notices in
+                await syncState.noteDiscarded(notices)
+            },
             ownerIsAlive: { [weak self] in self != nil }
         )
     }
@@ -384,10 +394,14 @@ extension AppContainer {
         outbox: OutboxQueue,
         firstFrame: FirstFrameSignal,
         onDeadLettered: @escaping @Sendable (Int) async -> Void,
+        onDiscarded: @escaping @Sendable ([OutboxDiscardNotice]) async -> Void,
         ownerIsAlive: @escaping @Sendable () -> Bool
     ) -> Task<Void, Never> {
         Task.detached {
             await replay.attachDeadLetterSink(onDeadLettered)
+            // Audit B-3 — attached in the same breath, before the first pass can
+            // run through this task, for the same reason the DLQ sink is.
+            await replay.attachDiscardSink(onDiscarded)
             guard !Task.isCancelled, ownerIsAlive() else { return }
 
             await firstFrame.wait()

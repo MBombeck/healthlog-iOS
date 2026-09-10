@@ -197,7 +197,11 @@ extension MoodInsights {
         guard !entries.isEmpty else { return .empty }
 
         let daily = makeDailyAverages(entries: entries, calendar: calendar)
-        let latest = entries.max(by: { $0.recordedAt < $1.recordedAt })?.score
+        // Audit B-4 — the latest NAMEABLE entry. A newer entry whose level this
+        // build cannot name must not displace the person's real latest mood in
+        // the one headline slot there is, and it has no score to put there.
+        let latest = MoodEntry.scored(entries)
+            .max(by: { $0.entry.recordedAt < $1.entry.recordedAt })?.score
         let mean = daily.isEmpty ? nil : daily.map(\.average).reduce(0, +) / Double(daily.count)
 
         let avg30 = windowedMean(daily, days: 30, now: now, calendar: calendar)
@@ -236,9 +240,11 @@ extension MoodInsights {
     /// Collapse entries to one mean-score-per-local-day, ascending. The spine.
     static func makeDailyAverages(entries: [MoodEntry], calendar: Calendar) -> [MoodDailyAverage] {
         var buckets: [Date: [Int]] = [:]
-        for entry in entries {
+        // Audit B-4 — `scored`: an entry whose level this build cannot name has
+        // no valence, so it enters no day mean. It is still on the list.
+        for (entry, score) in MoodEntry.scored(entries) {
             let day = calendar.startOfDay(for: entry.recordedAt)
-            buckets[day, default: []].append(entry.score)
+            buckets[day, default: []].append(score)
         }
         return buckets
             .map { day, scores in
@@ -327,11 +333,15 @@ extension MoodInsights {
     /// ≥ 3 occurrences AND |delta| ≥ 0.3, sorted by |delta| desc.
     static func makeTagDeltas(entries: [MoodEntry]) -> [MoodTagDelta] {
         guard !entries.isEmpty else { return [] }
-        let overall = Double(entries.map(\.score).reduce(0, +)) / Double(entries.count)
+        // Audit B-4 — the baseline and every tag bucket are built from the
+        // nameable levels only; a sentinel would otherwise shift a tag delta.
+        let scored = MoodEntry.scored(entries)
+        guard !scored.isEmpty else { return [] }
+        let overall = Double(scored.map(\.score).reduce(0, +)) / Double(scored.count)
         var buckets: [String: [Int]] = [:]
-        for entry in entries {
+        for (entry, score) in scored {
             for tag in entry.tags where !tag.hasPrefix("note:") {
-                buckets[tag, default: []].append(entry.score)
+                buckets[tag, default: []].append(score)
             }
         }
         return buckets

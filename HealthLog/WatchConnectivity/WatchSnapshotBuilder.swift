@@ -23,12 +23,15 @@ extension WatchSnapshot {
     ///   `synth:`-prefixed) so the watch echoes it back into
     ///   `WatchAction.markIntake` and the phone routes through
     ///   `MedicationsStore.markIntakeQuick` (the clamped quick-mark path).
-    /// - `recentMoodScore` is non-nil only when the latest mood was logged
-    ///   *today* (the watch's mood page shows "logged" vs. its prompt).
+    /// - `recentMoodScore` is non-nil only when the day carries a mood the
+    ///   build can name (the watch's mood page shows "logged" vs. its prompt).
+    ///   `recentMoods` is the loaded mood window, not one pre-picked entry:
+    ///   picking is this builder's job, and it is the one-slot rule the Home
+    ///   widget applies (``MoodEntry/latestNameable(_:)``).
     static func make(
         medications: [Medication],
         derivedIntakes: [MedicationIntake],
-        latestMood: MoodEntry?,
+        recentMoods: [MoodEntry],
         moodCountToday: Int = 0,
         signedIn: Bool,
         healthScore: WatchSnapshot.HealthScoreGlance? = nil,
@@ -61,11 +64,16 @@ extension WatchSnapshot {
         let scheduled = derivedIntakes.count
         let taken = derivedIntakes.filter { $0.status == .taken }.count
 
-        let recentMoodScore: Int? = {
-            guard let latestMood,
-                  calendar.isDate(latestMood.recordedAt, inSameDayAs: now) else { return nil }
-            return latestMood.score
-        }()
+        // Audit B-4 (fix round 1) — the same one-slot rule as the widget, which
+        // the old comment claimed and the old code did not obey: the latest
+        // entry OF TODAY whose level this build can name. Reading only the
+        // newest row let a single unnameable entry blank a complication whose
+        // real reading was an hour older and still on the mood screen. `nil`
+        // stays the honest "no mood logged today" — the rule reaches past the
+        // sentinel, it never reaches past midnight and never invents a middle.
+        let recentMoodScore: Int? = MoodEntry.latestNameable(
+            recentMoods.filter { calendar.isDate($0.recordedAt, inSameDayAs: now) }
+        )?.score
 
         return WatchSnapshot(
             doses: doses,
@@ -121,9 +129,17 @@ extension WatchSnapshot.LatestMeasurement {
 }
 
 extension WatchIntakeStatus {
-    /// Bridge to the app's `IntakeStatus` (rawValues are bit-identical).
+    /// Bridge to the app's `IntakeStatus`. Exhaustive on purpose (Audit B-5):
+    /// the former `IntakeStatus(rawValue:) ?? .taken` could not fire while the
+    /// two enums agreed, but the day a Watch status is added that the phone's
+    /// enum lacks, a coalesce to `.taken` would count a dose nobody took. The
+    /// compiler now asks for the arm instead.
     var intakeStatus: IntakeStatus {
-        IntakeStatus(rawValue: rawValue) ?? .taken
+        switch self {
+        case .taken: .taken
+        case .skipped: .skipped
+        case .snoozed: .snoozed
+        }
     }
 }
 

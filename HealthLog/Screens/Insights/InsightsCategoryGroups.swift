@@ -148,9 +148,12 @@ enum InsightsCategoryGroups {
         InsightsLayoutTileId.pulseWaveVelocity: .heart,
         InsightsLayoutTileId.vascularAge: .heart,
         InsightsLayoutTileId.cardioRecovery: .heart,
-        // hearing — `:233-235`. `audio-events` is omitted: no iOS `MetricKind`.
+        // hearing — `:233-235`. Audit B-4 — `audio-events` is no longer omitted:
+        // `audioExposureEvent` is an iOS `MetricKind` now, so the pill the web
+        // has always shown here is reachable.
         InsightsLayoutTileId.environmentalAudio: .hearing,
         InsightsLayoutTileId.headphoneAudio: .hearing,
+        InsightsLayoutTileId.audioEvents: .hearing,
         // environment — `:237`.
         InsightsLayoutTileId.daylight: .environment,
         // metabolic — `:239-240,249`. Skin + wrist temperature live here on the

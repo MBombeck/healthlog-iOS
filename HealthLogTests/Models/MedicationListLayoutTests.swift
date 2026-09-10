@@ -33,6 +33,26 @@ struct MedicationListLayoutTests {
         #expect(layout.order == ["m3", "m1", "m2"])
     }
 
+    /// Audit B-9 (2026-09-10) predicted that an unknown `view` value from the
+    /// server is a silent no-op that loses the user's choice. There is no
+    /// choice: one presentation exists, none is writable, and the field is
+    /// decode-only. A literal no build has ever written proves the fallback is
+    /// a fallback rather than a lookup table with one more entry — and proves
+    /// what actually matters, that neutralising it costs nothing else.
+    @Test("Audit B-9 — a view literal no build ever wrote costs the layout nothing")
+    func futureViewLiteralCostsNothing() throws {
+        let json = Data(#"{ "version": 1, "view": "FUTURE_VIEW", "order": ["m1", "m2"] }"#.utf8)
+        let layout = try decoder.decode(MedicationListLayout.self, from: json)
+        #expect(layout.view == .cards)
+        #expect(layout.order == ["m1", "m2"], "an unreadable presentation must not cost the saved order")
+        #expect(layout.version == 1)
+        // ...and it is not written back, so the server's own value survives.
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: JSONEncoder().encode(layout)) as? [String: Any]
+        )
+        #expect(object["view"] == nil)
+    }
+
     @Test("A legacy view literal is never encoded back")
     func legacyViewIsNotWrittenBack() throws {
         let json = Data(#"{ "version": 1, "view": "table", "order": ["m1"] }"#.utf8)

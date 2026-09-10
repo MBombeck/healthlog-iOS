@@ -68,12 +68,22 @@ struct NutrientListScreen: View {
         waterSection(store: store)
         Section(header: Text("nutrients.list.section.today")) {
             ForEach(store.rows) { row in
-                NavigationLink {
-                    NutrientDetailScreen(code: row.nutrient, store: store)
-                } label: {
+                // Audit B-4 — a code this build cannot name keeps its row and
+                // its amount, but has NO detail behind it: `/daily` is keyed on
+                // the catalogue code, and the sentinel is not one (the route
+                // validates the enum and answers 400). So the row renders flat,
+                // without a chevron promising a screen that cannot load.
+                if row.nutrient == .unknown {
                     NutrientOverviewRowView(row: row)
+                        .accessibilityIdentifier("nutrients.row.\(row.id)")
+                } else {
+                    NavigationLink {
+                        NutrientDetailScreen(code: row.nutrient, store: store)
+                    } label: {
+                        NutrientOverviewRowView(row: row)
+                    }
+                    .accessibilityIdentifier("nutrients.row.\(row.nutrient.rawValue)")
                 }
-                .accessibilityIdentifier("nutrients.row.\(row.nutrient.rawValue)")
             }
         }
         Section {} footer: {
@@ -161,7 +171,9 @@ private struct NutrientOverviewRowView: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(NutrientDisplay.name(for: row.nutrient))
+                // Audit B-4 — an unnameable code labels itself with the raw
+                // server string; see `NutrientDisplay.name(for:rawCode:)`.
+                Text(NutrientDisplay.name(for: row.nutrient, rawCode: row.rawNutrient))
                     .font(.hlBody)
                     .foregroundStyle(HLText.primary)
                 Text("nutrients.row.daysWithData \(row.daysWithData)")

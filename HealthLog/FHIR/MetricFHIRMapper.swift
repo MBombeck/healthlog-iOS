@@ -548,6 +548,12 @@ public enum MetricFHIRMapper {
         // Observation. `nil` omits it, the same doctrine as the wearable scores.
         case .mood:
             nil
+
+        // Audit B-4 — a fired notification has no quantity to code and an
+        // unnamed kind has no LOINC anyone could stand behind. The export omits
+        // both rather than inventing a code.
+        case .audioExposureEvent, .unknown:
+            nil
         }
     }
 
@@ -634,6 +640,10 @@ public enum MetricFHIRMapper {
         // `mapping(for:)` returns `nil` for mood, but the switch stays exhaustive).
         case .phq9Score, .gad7Score, .who5Score, .sciScore, .mood:
             .survey
+        // Audit B-4 — an environmental finding, and a neutral bucket for the
+        // unnamed kind. Both unused at runtime (`mapping(for:)` is `nil`).
+        case .audioExposureEvent, .unknown:
+            .activity
         }
     }
 

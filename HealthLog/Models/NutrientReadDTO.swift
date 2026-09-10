@@ -22,6 +22,13 @@ import Foundation
 /// nutrient WITH data (the server omits empty nutrients).
 public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable {
     public let nutrient: NutrientCode
+    /// **Audit B-4 — the raw server catalogue code, verbatim.**
+    ///
+    /// For a nameable code this is just ``nutrient``'s raw value. For a code
+    /// this build cannot name it is the ONLY thing that distinguishes the row:
+    /// ``NutrientCode/unknown`` is a bucket two different nutrients could share,
+    /// so the raw string is both the row's label fallback and its list identity.
+    public let rawNutrient: String
     /// Canonical wire unit for this nutrient (`mg` | `ug` | `ml`) — read from the
     /// wire, not the client catalog, so a server unit change never desyncs.
     public let unit: String
@@ -32,8 +39,11 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
     /// Count of distinct days inside the window carrying data (≥ 1).
     public let daysWithData: Int
 
-    public var id: NutrientCode {
-        nutrient
+    /// Audit B-4 — keyed on the RAW code, not the case: two rows carrying two
+    /// different unnameable codes are two rows, and a `ForEach` over the case
+    /// would have collapsed them onto one id.
+    public var id: String {
+        rawNutrient
     }
 
     public init(
@@ -41,9 +51,11 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
         unit: String,
         latestDay: String,
         latestAmount: Double,
-        daysWithData: Int
+        daysWithData: Int,
+        rawNutrient: String? = nil
     ) {
         self.nutrient = nutrient
+        self.rawNutrient = rawNutrient ?? nutrient.rawValue
         self.unit = unit
         self.latestDay = latestDay
         self.latestAmount = latestAmount
@@ -54,15 +66,35 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
         case nutrient, unit, latestDay, latestAmount, daysWithData
     }
 
+    /// **Audit B-4** — the raw code is decoded first and kept; the case is
+    /// resolved from it. A code this build cannot name lands on
+    /// ``NutrientCode/unknown`` and the row survives, labelled by its raw code,
+    /// instead of being dropped by the lossy list wrapper with nothing said.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        // `nutrient` is the only load-bearing field — an unknown/missing code
-        // throws so the enclosing lossy list drops just this row.
-        nutrient = try c.decode(NutrientCode.self, forKey: .nutrient)
+        let raw = try c.decode(String.self, forKey: .nutrient)
+        rawNutrient = raw
+        nutrient = NutrientCode(tolerant: raw)
         unit = try c.decodeIfPresent(String.self, forKey: .unit) ?? ""
         latestDay = try c.decodeIfPresent(String.self, forKey: .latestDay) ?? ""
         latestAmount = try c.decodeIfPresent(Double.self, forKey: .latestAmount) ?? 0
         daysWithData = try c.decodeIfPresent(Int.self, forKey: .daysWithData) ?? 0
+    }
+
+    /// **Audit B-4** — writes the RAW code back, never the case.
+    ///
+    /// This shape is re-encoded into the SWR cache, so a synthesized encode
+    /// would have hit ``NutrientCode``'s sentinel refusal and failed the cache
+    /// write for the whole page. Writing the raw string keeps the round-trip
+    /// honest instead: the cache stores what the server sent, and reading it
+    /// back resolves to ``NutrientCode/unknown`` again.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(rawNutrient, forKey: .nutrient)
+        try c.encode(unit, forKey: .unit)
+        try c.encode(latestDay, forKey: .latestDay)
+        try c.encode(latestAmount, forKey: .latestAmount)
+        try c.encode(daysWithData, forKey: .daysWithData)
     }
 }
 
@@ -177,6 +209,8 @@ public struct NutrientDayPointDTO: Codable, Sendable, Equatable, Identifiable {
 /// malformed reference nils rather than failing the whole decode.
 public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
     public let nutrient: NutrientCode
+    /// Audit B-4 — see ``NutrientOverviewRowDTO/rawNutrient``.
+    public let rawNutrient: String
     public let unit: String
     public let windowDays: Int
     public let days: [NutrientDayPointDTO]
@@ -187,9 +221,11 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         unit: String,
         windowDays: Int,
         days: [NutrientDayPointDTO],
-        reference: NutrientReferenceDTO?
+        reference: NutrientReferenceDTO?,
+        rawNutrient: String? = nil
     ) {
         self.nutrient = nutrient
+        self.rawNutrient = rawNutrient ?? nutrient.rawValue
         self.unit = unit
         self.windowDays = windowDays
         self.days = days
@@ -202,13 +238,28 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        nutrient = try c.decode(NutrientCode.self, forKey: .nutrient)
+        // Audit B-4 — no lossy wrapper exists on this shape at all, so an
+        // unnameable code used to fail the WHOLE series response.
+        let raw = try c.decode(String.self, forKey: .nutrient)
+        rawNutrient = raw
+        nutrient = NutrientCode(tolerant: raw)
         unit = try c.decodeIfPresent(String.self, forKey: .unit) ?? ""
         windowDays = try c.decodeIfPresent(Int.self, forKey: .windowDays) ?? 0
         days = try c.decodeIfPresent([NutrientDayPointDTO].self, forKey: .days) ?? []
         // A reference with an unknown kind/direction nils rather than throwing —
         // the surface simply hides the reference line, honest to "no reference".
         reference = (try? c.decodeIfPresent(NutrientReferenceDTO.self, forKey: .reference)).flatMap { $0 }
+    }
+
+    /// Audit B-4 — writes the RAW code back; see
+    /// ``NutrientOverviewRowDTO/encode(to:)``.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(rawNutrient, forKey: .nutrient)
+        try c.encode(unit, forKey: .unit)
+        try c.encode(windowDays, forKey: .windowDays)
+        try c.encode(days, forKey: .days)
+        try c.encodeIfPresent(reference, forKey: .reference)
     }
 
     /// The latest day carrying data (highest non-empty `day`), or `nil` when the

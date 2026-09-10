@@ -55,7 +55,12 @@ struct InsightsAuxMoodDetailScreen: View {
     private var heroStrip: some View {
         HLCard(style: .elevated) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                if let latest = moodStore.entries.max(by: { $0.recordedAt < $1.recordedAt }) {
+                // Audit B-4 — the hero shows one number out of five, so it reads
+                // the latest NAMEABLE entry; a level this build cannot name has
+                // no number and must not take the slot.
+                if let latest = MoodEntry.scored(moodStore.entries)
+                    .max(by: { $0.entry.recordedAt < $1.entry.recordedAt })
+                {
                     HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
                         Text("\(latest.score)")
                             .font(.hlMetric(.largeTitle))
@@ -66,7 +71,7 @@ struct InsightsAuxMoodDetailScreen: View {
                             .foregroundStyle(HLText.secondary)
                         Spacer()
                     }
-                    Text(latest.recordedAt, format: .dateTime.weekday(.wide).day().month().hour().minute())
+                    Text(latest.entry.recordedAt, format: .dateTime.weekday(.wide).day().month().hour().minute())
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
                 } else {
@@ -98,9 +103,10 @@ struct InsightsAuxMoodDetailScreen: View {
     }
 
     private var chartEntries: [MoodTrendChart.Entry] {
-        moodStore.entries
-            .sorted(by: { $0.recordedAt < $1.recordedAt })
-            .map { MoodTrendChart.Entry(date: $0.recordedAt, score: $0.score) }
+        // Audit B-4 — nameable levels only; see `MoodEntry.scored(_:)`.
+        MoodEntry.scored(moodStore.entries)
+            .sorted(by: { $0.entry.recordedAt < $1.entry.recordedAt })
+            .map { MoodTrendChart.Entry(date: $0.entry.recordedAt, score: $0.score) }
     }
 }
 
@@ -295,8 +301,12 @@ struct InsightsAuxMoodStabilityDetailScreen: View {
             guard let windowStart = calendar.date(byAdding: .day, value: -6, to: cursor),
                   let windowEnd = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
             let inWindow = sorted.filter { $0.recordedAt >= windowStart && $0.recordedAt < windowEnd }
-            if inWindow.count >= 2 {
-                let scores = inWindow.map { Double($0.score) }
+            // Audit B-4 — the spread is a max-minus-min over real levels, so the
+            // "at least two entries" gate counts the NAMEABLE ones. Two entries
+            // this build cannot name are not a spread of zero; they are no
+            // spread at all.
+            let scores = MoodEntry.scored(inWindow).map { Double($0.score) }
+            if scores.count >= 2 {
                 if let lo = scores.min(), let hi = scores.max() {
                     buckets.append(SpreadBucket(id: cursor, value: hi - lo))
                 }

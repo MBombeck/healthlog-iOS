@@ -87,9 +87,12 @@ struct MeasurementListWireResponseTolerantTests {
             MeasurementListWireResponse.self,
             from: Data(json.utf8)
         )
-        // Two known rows survive; the one genuinely-unknown enum case drops.
-        #expect(response.measurements.count == 2)
-        #expect(response.measurements.map(\.id).sorted() == ["row-known-1", "row-known-2"])
+        // Audit B-4 — all three rows survive. The two known ones decode as
+        // themselves, the genuinely-unknown one is carried on the `.unknown`
+        // sentinel instead of being discarded with nothing said.
+        #expect(response.measurements.count == 3)
+        #expect(response.measurements.map(\.id).sorted() == ["row-future", "row-known-1", "row-known-2"])
+        #expect(response.measurements.first { $0.id == "row-future" }?.type == .unknown)
         // meta still round-trips — the count reflects the wire's claim,
         // not what iOS rendered.
         #expect(response.meta?.total == 3)
@@ -209,11 +212,14 @@ struct MeasurementListWireResponseTolerantTests {
         #expect(MeasurementWireDTO.sleepHours(from: 432, unit: "furlongs") == 7.2)
     }
 
-    @Test("All-unknown page decodes to empty array, not a thrown error")
+    @Test("All-unknown page decodes whole, not to a thrown error and not to nothing")
     func allUnknownDecodesEmpty() throws {
-        // A window of types the client doesn't model shouldn't throw — the
-        // drill-down can render the empty-state legitimately. (Uses synthetic
-        // unknown types so the contract holds as new known types are added.)
+        // A window of types the client doesn't model shouldn't throw. Audit B-4
+        // sharpened what it should do instead: before, the drill-down rendered
+        // an empty state over three rows the server had actually sent, which
+        // reads as "you have no data" — a false statement. Now all three are
+        // carried on the `.unknown` sentinel and rendered generically. (Uses
+        // synthetic unknown types so the contract holds as known types grow.)
         let json = """
         {
           "measurements": [
@@ -228,7 +234,9 @@ struct MeasurementListWireResponseTolerantTests {
             MeasurementListWireResponse.self,
             from: Data(json.utf8)
         )
-        #expect(response.measurements.isEmpty)
+        #expect(response.measurements.count == 3)
+        #expect(response.measurements.allSatisfy { $0.type == .unknown })
+        #expect(response.measurements.map(\.id).sorted() == ["s1", "s2", "s3"])
         #expect(response.meta?.total == 3)
     }
 

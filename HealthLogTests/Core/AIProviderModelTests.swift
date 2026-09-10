@@ -78,6 +78,39 @@ struct AIProviderModelTests {
         #expect(config.resolvedProvider == .unconfigured)
     }
 
+    // MARK: - Audit B-10 (2026-09-10)
+
+    /// Audit B-10 read `AIProvider` as if it were decoded from the wire and
+    /// predicted that "a new server provider fails the decode of the provider
+    /// settings as a whole — the symptom would be an empty settings screen".
+    /// It cannot: the wire field is a plain `String?` on `AIProviderConfig`
+    /// (`provider: String?`) and reaches the enum only through the failable
+    /// `fromWire`, so an unknown provider costs a LABEL, never the response.
+    /// This test is the disproof, kept so a later refactor that decodes the
+    /// field as the enum has to fail here first.
+    @Test("Audit B-10 — an unknown server provider costs a label, never the settings decode")
+    func unknownProviderKeepsTheSettingsScreen() throws {
+        let json = """
+        {"provider":"MISTRAL","hasAnthropicKey":false,"hasOpenaiKey":false,"hasLocalKey":false,\
+        "aiAvailable":true,"managedBy":"server"}
+        """
+        let config = try JSONDecoder().decode(AIProviderConfig.self, from: Data(json.utf8))
+
+        // The whole payload survived — every field the screen renders is here.
+        #expect(config.provider == "MISTRAL")
+        #expect(config.aiAvailableResolved == true)
+        // The unknown name resolves to no iOS provider...
+        #expect(AIProvider.fromWire("MISTRAL") == nil)
+        #expect(config.resolvedProvider == .unconfigured)
+        // ...and the app says "someone is serving you, we just can't name them"
+        // rather than painting "Not configured" over a working route.
+        #expect(config.aiConsentTarget == .providerOpaque)
+        #expect(config.usesProviderOpaqueAIConsent)
+        #expect(config.isServerAIAvailable)
+        #expect(config.isFullyConfigured)
+        #expect(!config.isAIExplicitlyUnavailable)
+    }
+
     @Test("resolvedProvider falls back to .unconfigured for unknown wire values")
     func resolvedProviderUnknownValue() {
         // M2-A3 §2 root-cause: previously a missing field defaulted to

@@ -298,7 +298,10 @@ struct SourceFixedV1171MeasurementTypeTests {
         }
     }
 
-    @Test("a row with an unknown future type is dropped, not rejected (tolerant decode)")
+    /// Audit B-4 (2026-09-10) — "dropped" became "carried". The tolerant
+    /// decoder's job was never to discard a row; it was to stop one unreadable
+    /// row from costing the page. It now does that without costing the row.
+    @Test("a row with an unknown future type is carried, not dropped and not rejected")
     func unknownTypeTolerated() throws {
         let json = """
         {"measurements":[
@@ -309,8 +312,9 @@ struct SourceFixedV1171MeasurementTypeTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let resp = try decoder.decode(MeasurementListWireResponse.self, from: Data(json.utf8))
-        #expect(resp.measurements.count == 1, "tolerant decoder should keep the known row, drop the unknown")
-        #expect(resp.measurements.first?.type == .ansCharge)
+        #expect(resp.measurements.count == 2, "the page decodes whole — neither row is discarded")
+        #expect(resp.measurements.contains { $0.id == "a" && $0.type == .ansCharge })
+        #expect(resp.measurements.contains { $0.id == "b" && $0.type == .unknown })
     }
 
     @Test("each new kind has non-empty display metadata")

@@ -117,7 +117,7 @@ struct WatchComplicationGlanceTests {
         let snap = WatchSnapshot.make(
             medications: [],
             derivedIntakes: [],
-            latestMood: nil,
+            recentMoods: [],
             signedIn: true,
             healthScore: WatchSnapshot.HealthScoreGlance(score: 64, band: "yellow"),
             latestMeasurement: WatchSnapshot.LatestMeasurement.make(from: weight(70.1)),
@@ -134,7 +134,7 @@ struct WatchComplicationGlanceTests {
         let snap = WatchSnapshot.make(
             medications: [],
             derivedIntakes: [],
-            latestMood: nil,
+            recentMoods: [],
             signedIn: false,
             now: now,
             calendar: cal
@@ -150,7 +150,7 @@ struct WatchComplicationGlanceTests {
         let snap = WatchSnapshot.make(
             medications: [],
             derivedIntakes: [],
-            latestMood: nil,
+            recentMoods: [],
             signedIn: true,
             healthScore: WatchSnapshot.HealthScoreGlance(score: 77, band: "green"),
             latestMeasurement: WatchSnapshot.LatestMeasurement.make(from: weight(81.5)),

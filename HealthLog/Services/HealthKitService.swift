@@ -238,13 +238,19 @@ import Foundation
         /// if Spezi-migration pushes us back.
         public func writeMoodEntry(_ entry: MoodEntry) async throws {
             guard #available(iOS 18.0, *) else { return }
+            // **Audit B-4 — an entry whose level this build cannot name is never
+            // mirrored into Apple Health.** The mirror writes a VALENCE, and
+            // there is no valence for the sentinel; writing a middling one would
+            // put a mood the person never expressed into the system Health app,
+            // where other apps read it.
+            guard let score = entry.score else { return }
             let metadata: [String: Any] = [
                 HKMetadataKeyExternalUUID: entry.id,
                 HKMetadataKeyWasUserEntered: true
             ]
             // Score 1..5 → HKStateOfMind.Valence -1.0 ... 1.0 via the shared
             // mapping (let `valenceClassification` derive — never set manually).
-            let valence = MoodStateOfMindMapping.valence(forScore: entry.score)
+            let valence = MoodStateOfMindMapping.valence(forScore: score)
             // v0.10.0 W-Mood-B — `.dailyMood` (was `.momentaryEmotion`):
             // HealthLog mood is a check-in about how the user feels overall,
             // which is the semantic match + renders in Health's "Mood" track.

@@ -1112,6 +1112,16 @@ public actor APIClient: APIClientProtocol {
     /// `internal` — see `decodePayload`.
     func ensureSuccess(response: HTTPURLResponse, data: Data) throws {
         guard !(200 ... 299).contains(response.statusCode) else { return }
+        // Audit B-2 — the ONE response header the replay path needs, read here
+        // because here is where the status and the headers are still together;
+        // everything downstream sees only the thrown error. `409` +
+        // `X-Idempotent-Replay: false` is the server still processing the FIRST
+        // request under this key, i.e. "retry later" — never a rejection to bin
+        // the write over. Deliberately ahead of the envelope decode: this shape
+        // carries prose and no `errorCode`, so there is nothing to match on.
+        if response.statusCode == 409, Self.reportsIdempotentReplayInFlight(response) {
+            throw HLError.idempotencyReplayInFlight
+        }
         let envelope = try? decoder.decode(APIEnvelope<EmptyPayload>.self, from: data)
         // F-1 — surface the assistant-disabled envelope as a typed
         // error so the caller can mirror the operator state into
@@ -1174,6 +1184,20 @@ public actor APIClient: APIClientProtocol {
             code: envelope?.meta?.errorCode ?? envelope?.errorCode,
             message: msg
         )
+    }
+
+    /// Audit B-2 — the server's idempotency verdict header. `false` on a `409`
+    /// means a request with the same key is IN FLIGHT (retry later); `true` on a
+    /// `2xx` means the body is the first request's answer replayed, which the
+    /// success path already treats as delivery and needs no branch of its own.
+    static let idempotentReplayHeader = "X-Idempotent-Replay"
+
+    /// `true` when the response explicitly reports the key as NOT yet replayed.
+    /// A missing or unparsable header reads as `false`, so an unrelated `409`
+    /// keeps its established non-retriable handling.
+    nonisolated static func reportsIdempotentReplayInFlight(_ response: HTTPURLResponse) -> Bool {
+        guard let raw = response.value(forHTTPHeaderField: idempotentReplayHeader) else { return false }
+        return raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "false"
     }
 
     /// Parses `"assistant.disabled.<surface>"` into the corresponding

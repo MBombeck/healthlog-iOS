@@ -20,7 +20,7 @@ import PackageDescription
 
 let package = Package(
     name: "HealthLogCore",
-    platforms: [.iOS(.v17), .macOS(.v14)],
+    platforms: [.iOS(.v18), .macOS(.v15)],
     products: [
         .library(name: "HealthLogCore", targets: ["HealthLogCore"])
     ],

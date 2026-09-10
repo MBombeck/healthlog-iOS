@@ -19,10 +19,14 @@ struct InjectionSiteTrackingTests {
 
     @Test("server enum strings round-trip through serverRawValue")
     func serverEnumRoundTrip() {
-        for site in InjectionSite.allCases {
+        for site in InjectionSite.serverCases {
+            // Audit B-4 — `serverRawValue` is optional now: the sentinel has no
+            // server spelling, and every named site must still have one.
             let server = site.serverRawValue
-            #expect(InjectionSite.fromServerRawValue(server) == site)
+            #expect(server != nil, "\(site) must keep a server spelling")
+            #expect(InjectionSite.fromServerRawValue(server ?? "") == site)
         }
+        #expect(InjectionSite.unknown.serverRawValue == nil)
     }
 
     @Test("all eight server enum values parse to a distinct local case")
@@ -160,7 +164,7 @@ struct InjectionSiteTrackingTests {
         #expect(!effective.contains(.thighLeft))
         #expect(!effective.contains(.thighRight))
         // Order-stable (allCases order).
-        #expect(effective == InjectionSite.allCases.filter { $0 != .thighLeft && $0 != .thighRight })
+        #expect(effective == InjectionSite.serverCases.filter { $0 != .thighLeft && $0 != .thighRight })
     }
 
     @Test("deny always wins over a per-med preferred site")
@@ -189,7 +193,7 @@ struct InjectionSiteTrackingTests {
         // Encode the wire body the repo builds for a taken vs skipped write.
         let taken = MedicationsRepository.IntakeUpdate(
             intakeId: "e1", status: IntakeStatus.taken.rawValue, takenAt: .now,
-            injectionSite: InjectionSite.thighLeft.serverRawValue
+            injectionSite: InjectionSite.thighLeft.serverRawValue ?? ""
         )
         let takenJSON = try encodeToObject(taken)
         #expect(takenJSON["injectionSite"] as? String == "THIGH_LEFT")

@@ -384,7 +384,10 @@ public actor StandaloneAdoptUploadService {
         guard !rows.isEmpty else { return 0 }
         let entries: [BulkIntakeEntryDTO] = rows.compactMap { snap in
             guard let serverId = localToServerId[snap.medicationId] else { return nil }
-            let status = IntakeStatus(rawValue: snap.status) ?? .taken
+            // Audit B-5 — adopt-on-pair is a one-way door: whatever this
+            // uploads is what every later device reads. A status this build
+            // cannot name uploads as a bare slot, never as an administration.
+            let status = IntakeStatus(stored: snap.status)
             let skipped = status == .skipped
             // A taken dose carries `takenAt`; a skip omits it + sets skipped.
             // A pending/snoozed historical row backfills as a scheduled slot

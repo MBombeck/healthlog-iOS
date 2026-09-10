@@ -167,8 +167,10 @@ struct MoodHistoryScreen: View {
             }
             Picker("Mood", selection: moodBinding) {
                 Text("All moods").tag("")
-                ForEach(ServerMoodLevel.allCases, id: \.rawValue) { mood in
-                    Text(MoodCopy.scoreLabel(mood.score)).tag(mood.rawValue)
+                // Audit B-4 — `serverCases`: the sentinel is not a level a
+                // person can filter FOR, and the server would reject it.
+                ForEach(ServerMoodLevel.serverCases, id: \.rawValue) { mood in
+                    Text(MoodCopy.levelLabel(mood.score)).tag(mood.rawValue)
                 }
             }
             Picker("Source", selection: $draftFilter.source) {

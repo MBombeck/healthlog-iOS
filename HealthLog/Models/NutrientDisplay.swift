@@ -20,6 +20,17 @@ public enum NutrientDisplay {
         String(localized: String.LocalizationValue(nameKey(for: code)))
     }
 
+    /// **Audit B-4 — the display name for a row whose code may be unnameable.**
+    ///
+    /// There is no catalogue key for ``NutrientCode/unknown`` and there must not
+    /// be one: the sentinel is a bucket, and a shared "Unknown nutrient" label
+    /// across two different server codes says less than the codes themselves.
+    /// So the row is labelled by the RAW code the server sent — the most
+    /// specific true thing this build can say about it.
+    public static func name(for code: NutrientCode, rawCode: String) -> String {
+        code == .unknown ? rawCode : name(for: code)
+    }
+
     /// Human unit glyph for a wire unit string — `ug` renders as `µg`, `ml`/`mg`
     /// pass through, and any unknown unit renders verbatim (tolerant).
     public static func unitGlyph(_ wireUnit: String) -> String {

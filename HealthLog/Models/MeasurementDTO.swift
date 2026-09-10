@@ -342,6 +342,16 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     /// The breathing-disturbance EVENT, distinct from the
     /// `BREATHING_DISTURBANCES` count that already had a case.
     case breathingDisturbanceEvent = "BREATHING_DISTURBANCE_EVENT"
+
+    // MARK: - Audit B-4 — the arm for a type the server adds after this build
+
+    /// Audit B-4 — a `MeasurementType` this build does not know.
+    ///
+    /// The raw value is a token the server's SCREAMING_SNAKE vocabulary cannot
+    /// produce, so nothing on the wire ever decodes *into* it by name; only the
+    /// tolerant ``init(from:)`` puts a row here, and ``encode(to:)`` refuses to
+    /// put it back on the wire. See `MeasurementDTO+UnknownType.swift`.
+    case unknown = "__UNKNOWN__"
 }
 
 public extension ServerMeasurementType {
@@ -371,13 +381,13 @@ public extension ServerMeasurementType {
         case .totalBodyWater: .bodyWater
         case .boneMass: .boneMass
         case .walkingSteadiness: .walkingSteadiness
-        // AUDIO fix — `audioExposureEvent` is an HK category/event type with NO
-        // chartable `MetricKind` (`InsightsMetricTabStrip` documents it as
-        // deliberately unchartable). The prior `.sleep` arm was a sleeping lie:
-        // the day the server emits such a row it would land in the Schlaf list +
-        // chart. `nil` is the honest, forward-safe seam — `toDomain()` drops the
-        // row like the tolerant decoder drops an unknown type.
-        case .audioExposureEvent: nil
+        // Audit B-4 — the audio-exposure EVENT has its own kind. The `nil` seam
+        // that replaced the older `.sleep` lie was honest about the axis but
+        // still cost the row: `toDomain()` dropped every one of them, silently.
+        // Its five sibling category events all carry a kind (Build 3 / item
+        // 3.3), so this one does too — categorical, unitless, read-only, and on
+        // no numeric axis it does not belong on.
+        case .audioExposureEvent: .audioExposureEvent
         case .restingHeartRate: .restingHeartRate
         case .heartRateVariability: .hrv
         case .vo2Max: .vo2Max
@@ -447,104 +457,14 @@ public extension ServerMeasurementType {
         case .lowHeartRateEvent: .lowHeartRateEvent
         case .walkingSteadinessEvent: .walkingSteadinessEvent
         case .breathingDisturbanceEvent: .breathingDisturbanceEvent
+        // Audit B-4 — a type this build does not know keeps its row on the
+        // generic kind. `nil` stays reachable for a future server type that
+        // genuinely has no domain representation; nothing takes it today.
+        case .unknown: .unknown
         }
     }
 
     // swiftlint:enable cyclomatic_complexity
-}
-
-public enum ServerMeasurementSource: String, Codable, Sendable {
-    case manual = "MANUAL"
-    /// Server-Schema (`measurementSourceEnum`) verwendet `APPLE_HEALTH`. Früher
-    /// `HEALTHKIT` — diese Wire-Form rejected der Server seit v1.4.x mit 422.
-    case appleHealth = "APPLE_HEALTH"
-    case withings = "WITHINGS"
-    /// Server-owned read-only ingest (BYO-key OAuth, v1.11.5). Ohne diesen Case
-    /// droppt der tolerante List-Decoder jede WHOOP-Zeile still → Mess-Count
-    /// divergiert vom Server.
-    case whoop = "WHOOP"
-    /// Google-Health-/Fitbit-Provider (v1.12.0). Exakte Wire-Schreibweise —
-    /// Drift = stiller Decode-Drop (siehe `v1.12.0-server-to-ios-fitbit-source-heads-up`).
-    case fitbit = "FITBIT"
-    /// Google-Health-API-Provider (Server v1.27.0, Issue #401). Liest Fitbit/
-    /// Pixel-Watch-Daten über den Google-Account; läuft NEBEN dem klassischen
-    /// `FITBIT`-Provider. Server-owned read-only — der Server nimmt die Source
-    /// auf keinem Client-Write-Pfad an. Ohne diesen Case droppt der tolerante
-    /// List-Decoder jede GOOGLE_HEALTH-Zeile still → Mess-Count divergiert.
-    case googleHealth = "GOOGLE_HEALTH"
-    /// Server-derived rows (Read-Enum seit v1.10). Seit v1.27.6 tragen Screening-
-    /// Summenscores (PHQ-9 / GAD-7 / WHO-5) diese Source statt `MANUAL` (Migration
-    /// 0225). Server-owned read-only — kein Client-Write-Pfad. Ohne diesen Case
-    /// droppt der tolerante List-Decoder jede COMPUTED-Zeile still (gleiche
-    /// Failure-Mode wie GOOGLE_HEALTH, #40) → die Screening-Zeilen verschwinden.
-    case computed = "COMPUTED"
-    /// Strava-Provider (Server v1.28.11, iOS #46). Read-only Workout-/Aktivitäts-
-    /// Ingest — trägt auf Workout-Rows (`GET /api/sync/changes`, `GET
-    /// /api/workouts`) und mit-attribuierten Measurement-Rows. Server-owned, kein
-    /// Client-Write-Pfad (nicht in `WRITABLE_MEASUREMENT_SOURCES`). Ohne diesen
-    /// Case droppt der tolerante List-Decoder jede STRAVA-Zeile still (gleiche
-    /// Failure-Mode wie GOOGLE_HEALTH, #40).
-    case strava = "STRAVA"
-    /// Oura-Ring-Provider. Die App shippt bereits eine Oura-Integration
-    /// (`ouraIntegrationStore`). Server-owned read-only ingest (Recovery/Sleep/
-    /// HR). Kein Client-Write-Pfad. Exakte Wire-Schreibweise — Drift = stiller
-    /// Decode-Drop.
-    case oura = "OURA"
-    /// Polar-Provider. Die App shippt bereits eine Polar-Integration
-    /// (`polarIntegrationStore`). Server-owned read-only ingest (Cardio-Load/
-    /// ANS-Charge/HR). Kein Client-Write-Pfad.
-    case polar = "POLAR"
-    /// Nightscout-Provider. Die App shippt bereits eine Nightscout-Integration
-    /// (`nightscoutIntegrationStore`). Server-owned read-only ingest (CGM-Glukose).
-    /// Kein Client-Write-Pfad.
-    case nightscout = "NIGHTSCOUT"
-    case import_ = "IMPORT"
-}
-
-/// Discriminator-Context für Blutzucker-Messungen. Source of Truth: Server-
-/// `MeasurementContext`-Enum (`src/lib/validations/measurement.ts`). Server-
-/// Wire akzeptiert die vier camelCase-Mappings (FASTING / BEFORE_MEAL /
-/// AFTER_MEAL / BEDTIME) auf POST + PATCH und persistiert sie pro Glucose-
-/// Row, sodass Series-Charts + Alerts pro Context gruppieren können.
-///
-/// **Display-Strings (DE primary):** "Nüchtern" / "Vor Mahlzeit" /
-/// "Nach Mahlzeit" / "Schlafenszeit". Englische Lokalisierung lebt in
-/// `Localizable.xcstrings` — Display wird über `LocalizedStringResource`
-/// in `displayResource` aufgelöst, nicht über `displayName` (hardcoded
-/// PROJECT_GUIDE.md-Anti-Pattern).
-///
-/// **HK-Mapping:** Apple's `HKMetadataKeyBloodGlucoseMealTime` nimmt eines
-/// von `HKBloodGlucoseMealTime.preprandial` / `.postprandial`. Map:
-/// fasting + beforeMeal → `.preprandial`, afterMeal → `.postprandial`,
-/// bedtime → kein HK-Pendant (kein metadataValue gesetzt). Siehe
-/// `HealthKitService.writeMeasurement` für den Schreibpfad.
-///
-/// **CU-18 — bewusst GESCHLOSSEN, Toleranz sitzt am Lesepfad.** Das Enum hat
-/// keinen Unbekannt-Fall, weil `allCases` die Kontext-Picker in
-/// `MeasureSheetView` / `EditMeasurementSheet` speist — ein Sammelfall wäre
-/// dort eine anwählbare Option. Ein künftiges Server-Literal fängt statt
-/// dessen `MeasurementWireDTO.init(from:)` ab (String-Decode → `nil`), sodass
-/// die Messzeile überlebt statt verworfen zu werden.
-public enum GlucoseContext: String, Codable, Sendable, CaseIterable, Identifiable {
-    case fasting = "FASTING"
-    case beforeMeal = "BEFORE_MEAL"
-    case afterMeal = "AFTER_MEAL"
-    case bedtime = "BEDTIME"
-
-    public var id: String {
-        rawValue
-    }
-
-    /// Localized label for picker rows + chart annotations. Resolved against
-    /// `Localizable.xcstrings`; DE primary, EN secondary.
-    public var displayResource: LocalizedStringResource {
-        switch self {
-        case .fasting: LocalizedStringResource("Fasting", comment: "Glucose context — fasting")
-        case .beforeMeal: LocalizedStringResource("Before meal", comment: "Glucose context — before meal")
-        case .afterMeal: LocalizedStringResource("After meal", comment: "Glucose context — after meal")
-        case .bedtime: LocalizedStringResource("Bedtime", comment: "Glucose context — bedtime")
-        }
-    }
 }
 
 // MARK: - Domain ↔ Wire Mapping
@@ -692,44 +612,6 @@ public extension MeasurementWireDTO {
                 "glucoseMgdl: unknown BLOOD_GLUCOSE unit \(other ?? "<nil>", privacy: .private) — returning raw value unscaled (no guessed conversion)"
             )
             return value
-        }
-    }
-}
-
-public extension ServerMeasurementSource {
-    func toDomain() -> MeasurementSource {
-        switch self {
-        case .manual: .manual
-        case .appleHealth: .appleHealth
-        case .withings: .withings
-        case .whoop: .whoop
-        case .fitbit: .fitbit
-        case .googleHealth: .googleHealth
-        case .computed: .computed
-        case .strava: .strava
-        case .oura: .oura
-        case .polar: .polar
-        case .nightscout: .nightscout
-        case .import_: .import_
-        }
-    }
-}
-
-public extension MeasurementSource {
-    var wire: ServerMeasurementSource {
-        switch self {
-        case .manual: .manual
-        case .appleHealth: .appleHealth
-        case .withings: .withings
-        case .whoop: .whoop
-        case .fitbit: .fitbit
-        case .googleHealth: .googleHealth
-        case .computed: .computed
-        case .strava: .strava
-        case .oura: .oura
-        case .polar: .polar
-        case .nightscout: .nightscout
-        case .import_: .import_
         }
     }
 }

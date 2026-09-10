@@ -454,7 +454,12 @@ struct HKSyncDiagnosticsTests {
             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
             .walkingSteadinessEvent, .breathingDisturbanceEvent,
-            .mood // Build 7.3 — dashboard mood tile (server-sourced), not an HK sync type
+            .mood, // Build 7.3 — dashboard mood tile (server-sourced), not an HK sync type
+            // Audit B-4 — the audio-exposure EVENT is an HK CATEGORY sample, not
+            // a quantity type, so it is not on the iOS observer registry (its
+            // five sibling category events are exempt here for the same reason);
+            // `.unknown` is a decode sentinel with no HK counterpart at all.
+            .audioExposureEvent, .unknown
         ]
         let expectedKinds = Set(MetricKind.allCases).subtracting(kindsWithoutHKType)
         // `mappedKinds` must be a SUPERSET of the expected kinds.

@@ -433,10 +433,12 @@ struct MedicationWireTests {
         #expect(domain.schedule.entries.first?.cadence == .daily)
     }
 
-    @Test("unknown scheduleType decodes gracefully (forward-compat → SCHEDULED)")
+    @Test("unknown scheduleType decodes onto the sentinel and still dispatches on its fields")
     func toDomainScheduleTypeUnknownGraceful() throws {
-        // A future server enum value must not break the decode; it collapses to
-        // SCHEDULED so the field-presence dispatch still applies.
+        // Audit B-4 — a future server enum value must not break the decode, and
+        // must not be CLAIMED as SCHEDULED either: `.scheduled` is a statement
+        // about a cadence nobody has read. It lands on `.unknown` and falls
+        // through the same field-presence ladder, so the rrule still projects.
         let json = Data(#"""
         {
             "id": "med_future_typed",
@@ -452,7 +454,7 @@ struct MedicationWireTests {
         }
         """#.utf8)
         let dto = try decoder.decode(MedicationWireDTO.self, from: json)
-        #expect(dto.schedules?.first?.scheduleType == .scheduled)
+        #expect(dto.schedules?.first?.scheduleType == .unknown)
         #expect(dto.toDomain().schedule.entries.first?.cadence == .daily)
     }
 

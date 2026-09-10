@@ -4,8 +4,48 @@
 > per-version reports under `.planning/v05*-marathon/` and
 > `.planning/v056-marathon/`. This file resumes from v0.6.2.
 
-## 1.0.2 — unreleased (on `feat/v0141` after build 275)
+## 1.0.2 (276) — 2026-09-10
 
+Quality release from two broad audits (reachability and data paths); no new
+features. The theme: nothing the app cannot name is allowed to be lost or to
+be counted as something it is not.
+
+- **A write the app could not queue is reported, not swallowed.** Six
+  record types (allergies, labs, custom metrics, illnesses, nutrients, the
+  therapy log) told you nothing when the offline queue refused an entry;
+  they now show the reason, and the error text is the sentence meant for
+  people, not the name of a Swift case.
+- **Offline replays lose nothing silently.** A replayed write that the queue
+  had to discard is shown as discarded, an entry the app can no longer
+  decode is parked instead of dropped, and a server that answers "already in
+  progress" is retried instead of being mistaken for "delivered".
+- **A measurement type or source this build does not know keeps its row.**
+  It appears with a generic label, is left out of averages, the doctor
+  report, the widget headline and the Watch glance, and is never mirrored
+  to Apple Health or sent back to the server under an invented name. New
+  server values no longer cost existing builds any rows.
+- **A medication intake status the app does not know is not a dose taken.**
+  Compliance figures, streak anchors and reminder resolution treat it as
+  unresolved; the row itself stays.
+- **A mood level, nutrient, injection site, container form, side-effect
+  category or schedule type this build cannot name keeps its row.** The
+  mood history, a nutrient list and the medication inventory no longer go
+  blank when the server adds a value; the entry is shown as unknown, left
+  out of averages, summaries, pickers, the widget, the Watch and the doctor
+  report, and never written back under an invented name. An injection-site
+  allow-list the app cannot read no longer widens to every site, and a
+  side effect the app has not mapped is no longer logged as nausea.
+- **Day keys follow your profile's time zone.** HealthKit day rows,
+  compliance overlays and daily buckets are cut at the profile zone's
+  midnight, never at UTC or the device's, including on a background wake
+  before the profile has loaded; a device time-zone change re-arms the
+  medication reminders.
+- **A module that is off says why.** Settings shows whether you switched it
+  off, the share you are viewing does not include it, or this server does
+  not offer it — and only offers the switch in the first case.
+- **The compliance ring never wraps its count.** "11/11" stays on one line
+  and shrinks instead of breaking onto the caption, at accessibility text
+  sizes too (public issue #6, reported on build 275).
 - **"Sign out everywhere" keeps this device signed in** on servers from
   1.38.11; the confirmation, the result text and the footer say so. Older
   self-hosted servers keep the previous, equally honest wording.

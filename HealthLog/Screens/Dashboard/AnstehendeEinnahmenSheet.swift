@@ -343,6 +343,15 @@ extension AnstehendeEinnahmenSheet {
                     tint: .statusBad,
                     accessibilityLabelKey: "med.heatmap.status.missed"
                 )
+            case .unknown:
+                // Audit B-5 — a status this build cannot name. The row stays
+                // visible and states nothing: no Haken, no missed-red, no tap
+                // target (the view's `.pending` branch is the only one wired).
+                return TrailingPresentation(
+                    symbolName: "questionmark.circle",
+                    tint: .tertiary,
+                    accessibilityLabelKey: "dashboard.intakesSheet.status.unknown"
+                )
             }
         }
     }

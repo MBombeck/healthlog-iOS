@@ -9,22 +9,92 @@ import Foundation
 extension OutboxReplayService {
     // MARK: - Per-op replay outcome (audit-v0162 H1 / H-4)
 
-    /// A dispatch succeeded: drop the row, and — when the op was a `create` that
-    /// just landed with a real server id — remap every sibling (queued
-    /// update/delete on the same `optimistic-<uuid>`) so the dependent write
-    /// addresses the real record on replay, not a 404-ing optimistic id. The
-    /// in-pass map covers same-pass dependents; `applyEntityRemap` persists the
-    /// column so a later pass is covered too.
-    func onReplaySuccess(_ op: OutboxQueue.Operation) async {
-        try? await outbox.remove(id: op.id)
+    /// audit-v0162 H1 — the two reasons to leave a live row untouched this pass.
+    /// Over budget: the age-gated sweep at the end of the pass owns it, and it is
+    /// never deleted here, so the write stays recoverable. Inside the back-off
+    /// window: rapid replay triggers (a foreground edge and a reachability edge
+    /// seconds apart) must not burn several attempts within minutes.
+    func isOnHoldThisPass(_ op: OutboxQueue.Operation, now: Date) -> Bool {
+        if op.attempts >= maxAttempts { return true }
+        if let last = op.lastAttemptAt { return now.timeIntervalSince(last) < attemptBackoff }
+        return false
+    }
+
+    /// Audit B-2 — has the server already taken this operation? True from the
+    /// persisted stamp, or from this process' own record when the stamp itself
+    /// could not be written.
+    func isDelivered(_ op: OutboxQueue.Operation) -> Bool {
+        op.delivered || deliveredIDs.contains(op.id)
+    }
+
+    /// A dispatch succeeded — and the order of what follows is the fix.
+    ///
+    /// **Audit B-11 (remap first).** When the op was a `create` that just landed
+    /// with a real server id, every sibling (a queued update/delete on the same
+    /// `optimistic-<uuid>`) is retargeted so the dependent write addresses the
+    /// real record, not a 404-ing optimistic id. A remap that FAILS used to be
+    /// swallowed by `try?`, which left the dependents pointing at an id the
+    /// server never had — they replayed into a 404 and were discarded (B-3).
+    /// It is now a replay failure of this op: the create keeps its row, the
+    /// attempt is counted, and the next pass re-sends it under the SAME
+    /// idempotency key — which the server answers with the first response
+    /// (`X-Idempotent-Replay: true`), so the remap gets another chance without a
+    /// second record ever being created.
+    ///
+    /// **Audit B-2 (delivered before remove).** Only then is the row marked
+    /// delivered and removed — in that order, so a `remove` that fails cannot
+    /// put an operation the server already has back on the wire.
+    func onReplaySuccess(_ op: OutboxQueue.Operation) async throws {
+        if let serverId = lastCreatedServerId,
+           let optimisticId = op.clientEntityId,
+           optimisticId.hasPrefix("optimistic-")
+        {
+            idRemap[optimisticId] = serverId
+            do {
+                _ = try await outbox.applyEntityRemap(from: optimisticId, to: serverId)
+            } catch {
+                // Retriable protocol uncertainty, not a verdict: the write
+                // landed, but the queue is not yet consistent with it. Same
+                // posture the workout-batch arm uses; the message names no id.
+                throw HLError.network(.other("entity remap not persisted"))
+            }
+        }
+        deliveredIDs.insert(op.id)
+        do {
+            try await outbox.markDelivered(id: op.id)
+        } catch {
+            // The in-memory record above still guards this process; a restart
+            // before the row is removed is the residual window, and it is the
+            // one the persisted stamp exists to close.
+            let sanitized = LogSanitizer.redact(String(describing: error))
+            // Kind is public operator state; even sanitized error text stays private.
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            HLLog.outbox.error(
+                "Op \(op.kind.rawValue, privacy: .public) delivered-Marke nicht persistiert: \(sanitized, privacy: .private)"
+            )
+        }
         // Kind is a finite operator-grade enum; no operation id or payload.
         // swiftlint:disable:next hllog_public_privacy_interpolation
         HLLog.outbox.info("Op \(op.kind.rawValue, privacy: .public) erfolgreich repliziert")
-        guard let serverId = lastCreatedServerId,
-              let optimisticId = op.clientEntityId,
-              optimisticId.hasPrefix("optimistic-") else { return }
-        idRemap[optimisticId] = serverId
-        _ = try? await outbox.applyEntityRemap(from: optimisticId, to: serverId)
+        await completeDelivery(op)
+    }
+
+    /// **Audit B-2 — finish a write the server already took.** Removes the row;
+    /// a failure leaves it in place, still stamped delivered, so the next drain
+    /// lands here again instead of on the wire. Never counts an attempt and
+    /// never reports a discard: nothing was lost, a local delete is merely owed.
+    func completeDelivery(_ op: OutboxQueue.Operation) async {
+        do {
+            try await outbox.remove(id: op.id)
+            deliveredIDs.remove(op.id)
+        } catch {
+            let sanitized = LogSanitizer.redact(String(describing: error))
+            // Kind is public operator state; even sanitized error text stays private.
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            HLLog.outbox.warning(
+                "Op \(op.kind.rawValue, privacy: .public) zugestellt, lokales Entfernen offen: \(sanitized, privacy: .private)"
+            )
+        }
     }
 
     /// A retriable failure (`shouldPersistToOutbox`): keep the row. When the
@@ -48,14 +118,57 @@ extension OutboxReplayService {
         }
     }
 
-    /// A non-retriable failure (schema-drift decode, unknown kind, permanent
-    /// 4xx): drop the row so it can't block the queue.
+    /// A non-retriable failure (a permanent 4xx, an unroutable kind): drop the
+    /// row so it can't block the queue — but **audit B-3**: never in silence.
+    /// The pre-fix path left one log line behind, so a validation change on the
+    /// server or a resource deleted elsewhere ate offline edits with no trace on
+    /// any surface. Every drop now reaches the same honest failure count the
+    /// dead-letter lane feeds, named by kind and machine reason.
     func onNonRetriable(_ op: OutboxQueue.Operation, error: Error) async {
         let sanitized = LogSanitizer.redact(String(describing: error))
         // Kind is public operator state; even sanitized error text remains private.
         // swiftlint:disable:next hllog_public_privacy_interpolation
         HLLog.outbox.warning("Op \(op.kind.rawValue, privacy: .public) verworfen: \(sanitized, privacy: .private)")
         try? await outbox.remove(id: op.id)
+        await publishDiscard(.init(kind: op.kind.rawValue, reason: Self.discardReason(for: error)))
+    }
+
+    /// **Audit B-3 — our own stored payload no longer decodes.** The CI run of
+    /// 8 September showed the live case ("Op createMeasurement verworfen:
+    /// DecodingError … not valid JSON"): a payload an older build wrote and this
+    /// one cannot read used to be DELETED, as if the server had refused it. It
+    /// is the opposite — the server never saw it, and only this build's reader
+    /// is at fault — so the row is retained as a recoverable dead-letter
+    /// (counted, out of the replay snapshot, re-submittable) instead.
+    func onUndecodablePayload(_ op: OutboxQueue.Operation, error: DecodingError, now: Date) async {
+        let sanitized = LogSanitizer.redact(String(describing: error))
+        // Kind is public operator state; even sanitized error text remains private.
+        // swiftlint:disable:next hllog_public_privacy_interpolation
+        HLLog.outbox.error(
+            "Op \(op.kind.rawValue, privacy: .public) dead-lettered — Payload nicht lesbar: \(sanitized, privacy: .private)"
+        )
+        do {
+            try await outbox.markDeadLetter(id: op.id, lastError: sanitized, now: now)
+        } catch {
+            // Marking failed: the row stays live and will be re-read next pass,
+            // which is the safe direction (retained, never transmitted — the
+            // decode fails before anything reaches the wire).
+            HLLog.outbox.error("Outbox dead-letter mark failed: \(LogSanitizer.redact(String(describing: error)))")
+        }
+        await publishDiscard(.init(kind: op.kind.rawValue, reason: .payloadUnreadable))
+    }
+
+    /// Audit B-3 — name the failure in the finite vocabulary the surface reads.
+    /// `HLError.decoding` is the SERVER's answer being unreadable (we cannot
+    /// tell whether the write landed); `.unknown` is this build failing to route
+    /// the op at all; everything else that reaches here is a stated refusal.
+    static func discardReason(for error: Error) -> OutboxDiscardNotice.Reason {
+        guard let hlError = error as? HLError else { return .unroutable }
+        switch hlError {
+        case .decoding: return .responseUnreadable
+        case .unknown: return .unroutable
+        default: return .serverRejected
+        }
     }
 
     // MARK: - Lower-coupling dispatch arms

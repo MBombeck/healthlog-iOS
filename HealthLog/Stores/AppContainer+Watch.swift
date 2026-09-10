@@ -37,7 +37,7 @@ extension AppContainer {
             return WatchSnapshot.make(
                 medications: medicationsStore.medications,
                 derivedIntakes: medicationsStore.derivedTodayIntakes,
-                latestMood: moodStore?.recents(limit: 1).first,
+                recentMoods: moodStore?.entries ?? [],
                 moodCountToday: moodStore?.todayCount() ?? 0,
                 signedIn: canLog,
                 // v0.15.2 W-WATCH-COMPLICATIONS — fold the latest score + newest
@@ -119,7 +119,9 @@ extension AppContainer {
             WatchSnapshot.HealthScoreGlance.make(from: healthScoreStore?.score)
         }
         coordinator.latestMeasurementProvider = { [weak measurementsStore] in
-            let latest = measurementsStore?.recent.max { $0.recordedAt < $1.recordedAt }
+            // Audit B-4 — see the widget glance: the complication shows the
+            // newest reading this build can name, never the sentinel.
+            let latest = Measurement.latestNamedReading(in: measurementsStore?.recent ?? [])
             return WatchSnapshot.LatestMeasurement.make(from: latest, units: unitPreferences())
         }
 

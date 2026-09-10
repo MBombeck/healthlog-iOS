@@ -756,6 +756,9 @@ public extension MetricKindDescriptor {
             // (screener sums, wearable scores, sleep sub-scores, categorical
             // events). See `MetricKindDescriptor+B3Decoder.swift`.
             + b3DecoderDescriptors
+            // Audit B-4 — the audio-exposure event and the generic `unknown`
+            // arm. See `MetricKindDescriptor+AuditB4.swift`.
+            + auditB4Descriptors
         var dict: [MetricKind: MetricKindDescriptor] = [:]
         for entry in entries {
             dict[entry.kind] = entry

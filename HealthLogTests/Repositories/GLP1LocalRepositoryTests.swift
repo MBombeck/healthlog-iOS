@@ -406,6 +406,14 @@ struct GLP1InjectionSiteTests {
         #expect(InjectionSite.parse(nil) == nil)
         #expect(InjectionSite.parse("") == nil)
         #expect(InjectionSite.parse("not_a_site") == nil)
+        // Audit B-4 (fix round 1) — the sentinel's OWN raw value is not a site.
+        // `parse` ends in `InjectionSite(rawValue:)`, and `.unknown` has a raw
+        // value like every other case, so the wire string resolved straight to
+        // the sentinel — the one tolerant path in this wave that did not guard
+        // it. Every other one does (`ServerMoodLevel`, `NutrientCode`, the two
+        // medication enums).
+        #expect(InjectionSite.parse("__unknown__") == nil)
+        #expect(InjectionSite.parse("__UNKNOWN__") == nil)
     }
 }
 
@@ -547,7 +555,7 @@ struct InjectionSiteRotationTests {
         // Window of 8: every site used once. All ties → tie-break by
         // distance-from-most-recent; the most-recent is whatever the
         // first entry is in the `recent` array (newest-first ordering).
-        let history: [InjectionSite] = InjectionSite.allCases
+        let history: [InjectionSite] = InjectionSite.serverCases
         let suggestion = InjectionSiteRotation.suggestNext(recent: history)
         #expect(suggestion != nil)
         // Not the most-recent.

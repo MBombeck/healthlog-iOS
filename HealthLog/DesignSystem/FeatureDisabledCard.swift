@@ -29,9 +29,18 @@ public struct FeatureDisabledCard: View {
     }
 
     public let variant: Variant
+    /// **Audit A-7 — the server's own sentence, when it sent one.**
+    ///
+    /// The generic subtitle explains nothing: it is the same text whether the
+    /// operator turned the module off instance-wide or the sharing grant the
+    /// viewer is inside does not cover it. When ``ModuleGate/offReason(_:)``
+    /// can name the reason, it replaces the guess. `nil` → unchanged copy,
+    /// which is also what every operator-flag surface (F-1) passes.
+    public let reason: String?
 
-    public init(variant: Variant = .inline) {
+    public init(variant: Variant = .inline, reason: String? = nil) {
         self.variant = variant
+        self.reason = reason
     }
 
     public var body: some View {
@@ -45,7 +54,7 @@ public struct FeatureDisabledCard: View {
                     Text(String(localized: "feature_disabled.title"))
                         .font(.hlHeadline)
                         .foregroundStyle(HLText.secondary)
-                    Text(String(localized: "feature_disabled.subtitle"))
+                    Text(reason ?? String(localized: "feature_disabled.subtitle"))
                         .font(.hlSubhead)
                         .foregroundStyle(HLText.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -68,6 +77,7 @@ public struct FeatureDisabledCard: View {
     VStack(spacing: HLSpace.lg) {
         FeatureDisabledCard(variant: .hero)
         FeatureDisabledCard(variant: .inline)
+        FeatureDisabledCard(variant: .inline, reason: ModuleAccessState.notGranted.offReason)
     }
     .padding()
     .background(HLSurface.primary)

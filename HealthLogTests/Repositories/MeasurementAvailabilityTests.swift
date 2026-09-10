@@ -91,7 +91,11 @@ struct MeasurementAvailabilityTests {
         // slice and no availability key by design. It is data-gated by the summary
         // itself (the mood card is emitted only when `entryCount > 0`), not by this
         // measurement-availability path — so it is exempt here.
-        for kind in MetricKind.allCases where kind != .mood {
+        //
+        // Audit B-4 — `.unknown` is exempt for the mirror-image reason: it is no
+        // server `MeasurementType`, so there is no `count` that could ever gate
+        // it. It reaches the app only as a row the server already sent.
+        for kind in MetricKind.allCases where kind != .mood && !kind.isUnknown {
             #expect(
                 kind.availabilitySummaryKey != nil,
                 "MetricKind.\(kind) has no availabilitySummaryKey — its Insights pill could never light up"

@@ -241,6 +241,12 @@
         /// the disclaimer gate stays down even without the `-uitest-ack-disclaimer`
         /// flag. `onboardingTourCompleted: true` so the user is not re-dropped
         /// into setup.
+        ///
+        /// Audit A-7 — both module halves are present and EMPTY: an empty
+        /// `modules` map resolves every key default-ON (same as the absent map
+        /// this fixture carried before), and the empty `moduleAccess` beside it
+        /// keeps the invariant while giving the gate a v1.38.15-shaped payload
+        /// to load.
         private static let meJSON = """
         {
           "id": "hermetic-user",
@@ -250,13 +256,21 @@
           "createdAt": "2024-01-01T00:00:00.000Z",
           "disclaimerAcknowledgedAt": "2024-01-01T00:00:00.000Z",
           "onboardingTourCompleted": true,
-          "moodReminderEnabled": false
+          "moodReminderEnabled": false,
+          "modules": {},
+          "moduleAccess": {}
         }
         """
 
         /// `/api/auth/me/modules` — all modules ON (the gate fails open anyway).
+        ///
+        /// Audit A-7 — `moduleAccess` rides along, empty like `modules`: every
+        /// key is absent from BOTH halves, which is the invariant
+        /// (`modules[key] == (moduleAccess[key] == "enabled")`) trivially held
+        /// and exactly what the fixtures enabled before. The journeys keep
+        /// seeing every module on, now over a payload shaped like v1.38.15's.
         private static let modulesJSON = """
-        { "modules": {} }
+        { "modules": {}, "moduleAccess": {} }
         """
 
         /// `/api/meta/capabilities` — a small but REAL `share.leaves`

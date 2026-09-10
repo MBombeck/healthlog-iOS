@@ -108,7 +108,7 @@ struct MedicationsStoreQuickSiteForwardTests {
         let bodyData = try #require(capturedBody, "The mark must have sent a request body")
         let bodyString = try #require(String(bytes: bodyData, encoding: .utf8))
         #expect(
-            bodyString.contains(InjectionSite.thighLeft.serverRawValue),
+            bodyString.contains(InjectionSite.thighLeft.serverRawValue ?? ""),
             "POST body must carry the forwarded injection-site token (THIGH_LEFT), got: \(bodyString)"
         )
     }
@@ -139,7 +139,7 @@ struct MedicationsStoreQuickSiteForwardTests {
         let bodyData = try #require(capturedBody)
         let bodyString = try #require(String(bytes: bodyData, encoding: .utf8))
         #expect(
-            bodyString.contains(InjectionSite.abdomenLeftLower.serverRawValue),
+            bodyString.contains(InjectionSite.abdomenLeftLower.serverRawValue ?? ""),
             "POST body must carry ABDOMEN_LEFT, got: \(bodyString)"
         )
     }

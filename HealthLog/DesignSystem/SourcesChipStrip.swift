@@ -138,9 +138,13 @@ private struct SourceChip: View {
         case .oura: "circle.circle.fill"
         case .polar: "heart.circle.fill"
         case .nightscout: "drop.fill"
+        case .telegram: "paperplane.fill"
+        case .mcp: "terminal.fill"
+        case .external: "antenna.radiowaves.left.and.right"
         case .manual: "pencil.tip.crop.circle"
         case .computed: "function"
         case .import_: "square.and.arrow.down.fill"
+        case .unknown: "questionmark.circle"
         }
     }
 
@@ -155,9 +159,13 @@ private struct SourceChip: View {
         case .oura: String(localized: "Oura")
         case .polar: String(localized: "Polar")
         case .nightscout: String(localized: "Nightscout")
+        case .telegram: String(localized: "Telegram")
+        case .mcp: String(localized: "MCP")
+        case .external: String(localized: "measurement.source.external")
         case .manual: String(localized: "Manual")
         case .computed: String(localized: "measurement.source.computed")
         case .import_: String(localized: "Import")
+        case .unknown: String(localized: "measurement.source.unknown")
         }
     }
 }

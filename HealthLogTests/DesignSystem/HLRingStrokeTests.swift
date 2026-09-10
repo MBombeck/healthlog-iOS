@@ -66,4 +66,48 @@ struct HLRingStrokeTests {
         #expect(HLRing.strokeRatio == 0.085)
         #expect(HLRing.minStroke == 6)
     }
+
+    @Test("valueMinimumScale lets the value shrink to 60 % before anything is cut")
+    func valueMinimumScaleConstant() {
+        // Public issue #6 — the centre value is single-line and scales down
+        // instead of wrapping. Raising this floor brings the wrap back for the
+        // longest realistic compliance value ("11/11"); lowering it lets the
+        // number shrink under the legible-numeral threshold. The layout side of
+        // the contract is verified by `HLRingValueLayoutTests`.
+        #expect(HLRing.valueMinimumScale == 0.6)
+    }
+
+    @Test("the value grows with Dynamic Type until the inner diameter caps it")
+    func valueFontGrowsThenCaps() {
+        // Public issue #6, round 2 — `fontRatio` is a `@ScaledMetric`; at
+        // accessibility sizes it nearly doubles (0.22 → ≈ 0.456 at AX5) while
+        // the ring stays 92 pt. The font follows Dynamic Type up to
+        // `valueFontCap` of the inner diameter and stands still beyond it.
+        let side: CGFloat = 92
+        let stroke = HLRing.derivedStroke(forSide: side)
+        let inner = HLRing.innerDiameter(forSide: side, stroke: stroke)
+        let cap = inner * HLRing.valueFontCap
+        let standard = HLRing.valueFontSize(forSide: side, stroke: stroke, scaledRatio: 0.22)
+        let larger = HLRing.valueFontSize(forSide: side, stroke: stroke, scaledRatio: 0.30)
+        let ax5 = HLRing.valueFontSize(forSide: side, stroke: stroke, scaledRatio: 0.456)
+        #expect(abs(standard - 20.24) < 0.01, "the default size is untouched by the cap")
+        #expect(larger > standard, "bigger text still gets bigger text below the cap")
+        #expect(abs(ax5 - cap) < 0.001, "past the cap the value stands still")
+        #expect(HLRing.valueFontCap == 0.42)
+    }
+
+    @Test("five glyphs at the scale floor fit inside the inner diameter at 92 pt")
+    func longestValueFitsAtTheFloor() {
+        // "11/11" is five glyphs of the rounded bold face at ≈ 0.55 em each
+        // (monospaced digits; the "/" is narrower, so this over-estimates).
+        // Even when Dynamic Type drives the font to the cap, shrinking to
+        // `valueMinimumScale` must leave the string inside the ring — that is
+        // what keeps `lineLimit(1)` from answering with an ellipsis.
+        let side: CGFloat = 92
+        let stroke = HLRing.derivedStroke(forSide: side)
+        let inner = HLRing.innerDiameter(forSide: side, stroke: stroke)
+        let capped = HLRing.valueFontSize(forSide: side, stroke: stroke, scaledRatio: 0.456)
+        let widthAtFloor = 5 * 0.55 * capped * HLRing.valueMinimumScale
+        #expect(widthAtFloor < inner, "\(widthAtFloor) pt of glyphs do not fit \(inner) pt")
+    }
 }

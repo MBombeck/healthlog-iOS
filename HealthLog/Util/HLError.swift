@@ -55,6 +55,20 @@ public enum HLError: Error, Sendable, Equatable {
     /// stale token). The associated value is the route's conflict `errorCode`,
     /// for triage only — never user-facing.
     case writeConflictUnresolved(String)
+    /// **Audit B-2 — the server is still processing an EARLIER request that
+    /// carried this exact `Idempotency-Key`.** The wire shape is a `409` with the
+    /// response header `X-Idempotent-Replay: false`, prose in `error` and no
+    /// `errorCode` (confirmed with the server maintainer: none of the create
+    /// routes emits an "already exists" `409`, so this in-flight conflict is the
+    /// only `409` the outbox can meet).
+    ///
+    /// It is explicitly **not a verdict on the write** — it means *retry later*,
+    /// and the retry is safe precisely because the key is the same: once the
+    /// first request finishes, the replay of the same key answers `2xx` with
+    /// `X-Idempotent-Replay: true`, which is the first answer replayed, not a
+    /// second write. Retriable and outbox-persisted for exactly that reason;
+    /// treating it as permanent (the pre-fix behaviour) DELETED the write.
+    case idempotencyReplayInFlight
     /// Es ist **kein Server eingerichtet** (`AppEnvironment.baseURL == nil`).
     ///
     /// Die App bringt keinen eingebauten Server mit; bis der Nutzer im
@@ -120,6 +134,10 @@ public extension HLError {
         case let .server(status, _, _):
             status >= 500 || status == 408
         case .rateLimited:
+            true
+        // Audit B-2 — an in-flight idempotency conflict says "not yet", never
+        // "no": the same key must go back on the wire, not into the bin.
+        case .idempotencyReplayInFlight:
             true
         default:
             false
@@ -189,6 +207,7 @@ public extension HLError {
         case let .decoding(s): "Server-Antwort konnte nicht gelesen werden: \(s)"
         case .unauthorized: "Bitte erneut anmelden."
         case .rateLimited: "Zu viele Anfragen. Versuch es später erneut."
+        case .idempotencyReplayInFlight: "Wird noch verarbeitet. Wird automatisch erneut versucht."
         case .offline: "Kein Netzwerk."
         case .canceled: "Abgebrochen."
         case let .assistantDisabled(flag): "Funktion deaktiviert: \(flag.rawValue)"
@@ -221,6 +240,10 @@ public extension HLError {
             String(localized: "Sign-in expired. Please sign in again.")
         case .rateLimited:
             String(localized: "Too many requests. Please try again shortly.")
+        case .idempotencyReplayInFlight:
+            // Audit B-2 — the write is not lost and not refused; the server is
+            // still finishing the first attempt of this very request.
+            String(localized: "This is still being processed. We'll retry automatically.")
         case .canceled:
             ""
         case let .server(status, _, message) where (400 ... 499).contains(status):
@@ -272,5 +295,25 @@ public extension HLError {
         case .unknown:
             String(localized: "Something went wrong. Please try again.")
         }
+    }
+
+    /// Audit B-1 — the user-facing sentence for ANY thrown error, including one
+    /// that is not an ``HLError``.
+    ///
+    /// Stores that catch untyped `Error` used to build their visible string from
+    /// `LogSanitizer.redact(String(describing:))` or from `localizedDescription`.
+    /// Both are wrong on a user-facing surface: the first prints the Swift case
+    /// (`notPersisted("…")`), the second resolves — on an untyped `Error` — to
+    /// Foundation's "The operation couldn't be completed. (HealthLog.HLError
+    /// error 6.)", because ``HLError`` shadows `localizedDescription` rather than
+    /// conforming to `LocalizedError`. Neither is localized copy.
+    ///
+    /// A non-`HLError` gets the same neutral fallback ``unknown`` has: an
+    /// unrecognised error type carries no sentence we may show, and its
+    /// description may carry PHI. The full text still reaches triage through the
+    /// sanitized log line the caller writes — never through this string.
+    static func userFacingText(for error: Error) -> String {
+        (error as? HLError)?.userFacingDescription
+            ?? String(localized: "Something went wrong. Please try again.")
     }
 }

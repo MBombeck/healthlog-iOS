@@ -64,6 +64,15 @@ public enum AnamnesisFactFailure: Error, Sendable, Equatable {
         guard let hlError = error as? HLError else {
             return .other(.unknown(String(describing: error)))
         }
+        // Audit B-2 — since `APIClient` answers a 409 carrying
+        // `X-Idempotent-Replay: false` with `.idempotencyReplayInFlight`
+        // before any route-level mapping runs, the idempotency wrapper's
+        // "already in progress" 409 no longer arrives as `.server(409, nil, _)`.
+        // Both spellings mean the same thing on these routes: the first
+        // request is still running, retry later.
+        if case .idempotencyReplayInFlight = hlError {
+            return .requestInFlight
+        }
         guard case let .server(status, code, _) = hlError else {
             return .other(hlError)
         }

@@ -725,10 +725,9 @@ public final class AppContainer {
         )
         cycleGate = cycle.gate
         cycleStore = cycle.store
-        // HK-stats cluster (HR-bucket + daily-stats + live-today) — construction
-        // + the anchor-sweep / cache-sweep wiring lives in
-        // `AppContainer+HealthKitStats.makeHealthKitStatsCluster` (order
-        // preserved: HR-bucket first so it rides the daily-stats sweep hook).
+        // HK-stats cluster (HR-bucket + daily-stats + live-today). Construction and
+        // the anchor-sweep / cache-sweep wiring live in `makeHealthKitStatsCluster`
+        // (AppContainer+HealthKitStats): HR-bucket first, so it rides the sweep hook.
         let hkStats = Self.makeHealthKitStatsCluster(
             healthKit: healthKit,
             api: apiClient,
@@ -739,7 +738,8 @@ public final class AppContainer {
             keychain: keychain,
             registry: authenticatedSessionRegistry,
             retryQueue: outbox, // 07-04 — a non-terminal stats chunk becomes a durable row
-            moduleGate: moduleGate // GH #48 — nutrient sync gates on the module map
+            moduleGate: moduleGate, // GH #48 — nutrient sync gates on the module map
+            profileTimeZoneBox: profileTimeZoneBox // Audit B-7 — HK day totals on the profile zone
         )
         healthKitHRBucketSync = hkStats.hrBucket
         healthKitDailyStatsSync = hkStats.dailyStats

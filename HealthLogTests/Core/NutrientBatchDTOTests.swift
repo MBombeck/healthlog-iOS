@@ -12,9 +12,14 @@ struct NutrientBatchDTOTests {
     func catalogCoversEveryCode() {
         // 24 vitamins/minerals + water + caffeine.
         #expect(NutrientCatalog.all.count == 26)
-        #expect(NutrientCode.allCases.count == 26)
+        // Audit B-4 — `serverCases`, not `allCases`: the decode-only `.unknown`
+        // sentinel is not a catalogue member and must never be requested from
+        // HealthKit or offered anywhere.
+        #expect(NutrientCode.serverCases.count == 26)
+        #expect(NutrientCode.allCases.count == 27)
         let codes = Set(NutrientCatalog.all.map(\.code))
-        #expect(codes == Set(NutrientCode.allCases), "every catalog code is unique + present")
+        #expect(codes == Set(NutrientCode.serverCases), "every catalog code is unique + present")
+        #expect(!codes.contains(.unknown))
         for item in NutrientCatalog.all {
             #expect(["mg", "ug", "ml"].contains(item.unit), "\(item.code.rawValue) unit must be mg|ug|ml")
             #expect(item.hkIdentifier.hasPrefix("HKQuantityTypeIdentifierDietary"), "\(item.code.rawValue)")
@@ -40,7 +45,7 @@ struct NutrientBatchDTOTests {
 
     @Test("Energy / macros / sodium / potassium are NOT in the catalog (out of scope)")
     func outOfScopeCodesAbsent() {
-        let rawValues = Set(NutrientCode.allCases.map(\.rawValue))
+        let rawValues = Set(NutrientCode.serverCases.map(\.rawValue))
         for excluded in ["energy", "carbohydrates", "protein", "fat", "sugar", "fiber", "sodium", "potassium"] {
             #expect(!rawValues.contains(excluded), "\(excluded) must be out of scope")
         }

@@ -558,7 +558,10 @@ extension ChartDetailStore {
              .walkingSteadinessEvent, .breathingDisturbanceEvent,
              // Build 7 / item 7.3 — mood is not a `Measurement`; no series
              // endpoint. The tile renders from the summary snapshot.
-             .mood:
+             .mood,
+             // Audit B-4 — the audio-exposure event is not in the series kind
+             // enum, and `.unknown` has no kind name to send at all.
+             .audioExposureEvent, .unknown:
             false
         case .weight, .bloodPressure, .pulse, .glucose, .bodyFat, .spo2, .bodyWater, .boneMass, .sleep, .steps,
              .restingHeartRate, .hrv, .vo2Max:

@@ -22,19 +22,40 @@ public struct AuthMeModules: Decodable, Sendable, Equatable {
     /// supported backward-compat arm (`optimistic-lock.ts:101-103`).
     public let updatedAt: String?
 
-    public init(modules: [String: Bool]?, updatedAt: String? = nil) {
+    /// **Audit A-7 — why a module is off** (`moduleAccess`, server v1.38.15).
+    ///
+    /// One ``ModuleAccessState`` per module key, resolved outside-in by the
+    /// server (`unavailable` > `not_granted` > `disabled` > `enabled`). It
+    /// explains ``modules`` and never contradicts it — the invariant is
+    /// `modules[key] == (moduleAccess[key] == "enabled")`.
+    ///
+    /// `nil` on a server older than v1.38.15, which omits the field entirely;
+    /// behaviour is then exactly what it was before A-7 (a module that is off
+    /// says nothing). Unknown future state tokens decode onto
+    /// ``ModuleAccessState/unknown`` rather than throwing, so one new server
+    /// vocabulary word can never cost the whole map.
+    public let moduleAccess: [String: ModuleAccessState]?
+
+    public init(
+        modules: [String: Bool]?,
+        moduleAccess: [String: ModuleAccessState]? = nil,
+        updatedAt: String? = nil
+    ) {
         self.modules = modules
+        self.moduleAccess = moduleAccess
         self.updatedAt = updatedAt
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         modules = try container.decodeIfPresent([String: Bool].self, forKey: .modules)
+        moduleAccess = try container.decodeIfPresent([String: ModuleAccessState].self, forKey: .moduleAccess)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
     }
 
     private enum CodingKeys: String, CodingKey {
         case modules
+        case moduleAccess
         case updatedAt
     }
 }
@@ -110,8 +131,18 @@ public actor ModuleGateRepository {
     /// `nil` when the server omits the field (older server) — the gate then
     /// defaults to all-on.
     public func fetchModules() async throws -> [String: Bool]? {
+        try await fetchModuleGateState().modules
+    }
+
+    /// **Audit A-7 — the booleans AND the reasons in one hop.**
+    ///
+    /// `GET /api/auth/me` carries both halves (`modules` + `moduleAccess`), so
+    /// the gate reads them together: a boolean without its reason is exactly
+    /// the silence this audit item is about. ``fetchModules()`` stays as the
+    /// booleans-only projection for callers that only ever wanted the map.
+    public func fetchModuleGateState() async throws -> AuthMeModules {
         let req: APIRequest<AuthMeModules> = .get("/api/auth/me")
-        return try await api.send(req).modules
+        return try await api.send(req)
     }
 
     /// Apply a per-key module patch (v1.18.1 §4 Q3) and return the

@@ -301,15 +301,19 @@ extension MedicationDetailStore {
         }
         let today = calendar.startOfDay(for: now)
         // v1.7.0-capable server payload → per-day `due` overlay for empty days.
+        //
+        // Audit B-6 — ONE zone forms the key: the profile zone the caller's
+        // calendar carries. The UTC fallback that used to sit behind this
+        // lookup answered a profile day with its NEIGHBOUR's bucket for every
+        // user east of UTC — the UTC rendering of a profile-day midnight is the
+        // previous calendar date. The server buckets `dailyCompliance` by the
+        // profile zone (`compliance-payload.ts`), so a key that misses means the
+        // server minted no verdict for that day, and the local schedule — not a
+        // neighbouring day's `due` flag — decides what the glyph shows.
         let dueOverlay: (Date) -> Bool? = { [self] dayStart in
             guard let payload = compliance, payload.isV170Capable else { return nil }
-            let localFormatter = Self.dailyComplianceKeyFormatter(for: calendar.timeZone)
-            let utcFormatter = Self.dailyComplianceKeyFormatter(
-                for: TimeZone(identifier: "UTC") ?? calendar.timeZone
-            )
-            let bucket = payload.dailyCompliance[localFormatter.string(from: dayStart)]
-                ?? payload.dailyCompliance[utcFormatter.string(from: dayStart)]
-            return bucket?.wasDue
+            let formatter = Self.dailyComplianceKeyFormatter(for: calendar.timeZone)
+            return payload.dailyCompliance[formatter.string(from: dayStart)]?.wasDue
         }
         return (0 ..< days).reversed().map { offset -> VerlaufGlyph in
             guard let dayStart = calendar.date(byAdding: .day, value: -offset, to: today),
@@ -405,6 +409,9 @@ extension MedicationDetailStore {
     /// W-TZ-MED (v0.15.2) the caller's calendar defaults to the server-profile
     /// zone (not the device TZ), so a traveling user (device tz ≠ account tz)
     /// now keys on the same profile day the server graded against.
+    ///
+    /// **Audit B-6** — this is the only zone the lookup uses. The UTC second
+    /// attempt it used to be paired with is gone: see ``verlaufGlyphs(days:now:calendar:)``.
     private nonisolated static func dailyComplianceKeyFormatter(for timeZone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)

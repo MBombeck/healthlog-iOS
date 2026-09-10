@@ -373,8 +373,14 @@ public final class CustomMetricsStore {
         )
     }
 
+    /// Audit B-1 — the visible error is localized copy, not a Swift description.
+    /// `String(describing:)` printed the enum case (`notPersisted("…")`) onto a
+    /// user-facing surface; the sanitized description belongs in the log line,
+    /// where triage reads it. `HLError.userFacingText(for:)` resolves the
+    /// sentence the user is owed.
     private func applyError(_ error: Error) {
         lastErrorWasDuplicateName = CustomMetricsRepository.isDuplicateName(error)
-        lastError = LogSanitizer.redact(String(describing: error))
+        HLLog.ui.error("Custom-metrics write failed: \(LogSanitizer.redact(String(describing: error)))")
+        lastError = HLError.userFacingText(for: error)
     }
 }

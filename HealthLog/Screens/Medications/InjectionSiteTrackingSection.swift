@@ -19,7 +19,7 @@ struct InjectionSiteTrackingSection: View {
         if isInjection {
             Toggle("med.injection.track.toggle", isOn: $trackInjectionSites)
             if trackInjectionSites {
-                ForEach(InjectionSite.allCases, id: \.self) { site in
+                ForEach(InjectionSite.serverCases, id: \.self) { site in
                     Toggle(isOn: binding(for: site)) {
                         Text(site.localizedLabel)
                     }
@@ -39,7 +39,7 @@ struct InjectionSiteTrackingSection: View {
                 // First explicit toggle off from the "empty = all" state seeds
                 // the set with every-other-site so the choice is meaningful.
                 if allowedInjectionSites.isEmpty {
-                    allowedInjectionSites = Set(InjectionSite.allCases)
+                    allowedInjectionSites = Set(InjectionSite.serverCases)
                 }
                 if isOn {
                     allowedInjectionSites.insert(site)
@@ -48,7 +48,7 @@ struct InjectionSiteTrackingSection: View {
                 }
                 // A full set is equivalent to "no restriction" — normalise back
                 // to empty so the wire body sends `[]` (server default).
-                if allowedInjectionSites.count == InjectionSite.allCases.count {
+                if allowedInjectionSites.count == InjectionSite.serverCases.count {
                     allowedInjectionSites = []
                 }
             }

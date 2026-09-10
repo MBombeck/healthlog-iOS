@@ -168,19 +168,47 @@ struct MedicationSupplyEditorSheet: View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HLSectionLabel("med.inventory.editor.type.label")
-                Picker(
-                    String(localized: "med.inventory.editor.type.label"),
-                    selection: $containerType
-                ) {
-                    ForEach(MedicationContainerType.allCases) { type in
-                        Label(type.localizedLabel, systemImage: type.glyph).tag(type)
+                if let unnameable = Self.unnameableTypeLabel(for: item?.containerType) {
+                    Label(unnameable, systemImage: MedicationContainerType.unknown.glyph)
+                        .font(.hlBody)
+                        .foregroundStyle(HLText.secondary)
+                        .accessibilityIdentifier("med.inventory.editor.type.unnameable")
+                } else {
+                    Picker(
+                        String(localized: "med.inventory.editor.type.label"),
+                        selection: $containerType
+                    ) {
+                        ForEach(MedicationContainerType.serverCases) { type in
+                            Label(type.localizedLabel, systemImage: type.glyph).tag(type)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .tint(HLText.secondary)
+                    .accessibilityIdentifier("med.inventory.editor.type")
                 }
-                .pickerStyle(.menu)
-                .tint(HLText.secondary)
-                .accessibilityIdentifier("med.inventory.editor.type")
             }
         }
+    }
+
+    /// **Audit B-4 (fix round 1) — the container form the card has to STATE,
+    /// because it cannot offer it.**
+    ///
+    /// The picker enumerates ``MedicationContainerType/serverCases``, which
+    /// deliberately excludes the decode-only sentinel, so a menu picker seeded
+    /// with a form this build cannot name had no tag matching its selection and
+    /// rendered a BLANK current value: the one screen where the sentinel's new
+    /// label would help was the one screen that hid it.
+    ///
+    /// Answering with the label instead of a control costs nothing here — the
+    /// edit branch sends ``MedicationInventoryPatch``, which carries no
+    /// `containerType` at all, so the picker in correct-mode was already
+    /// decorative. Register-mode starts at ``MedicationContainerType/other`` and
+    /// can only be moved through `serverCases`, so it never reaches this arm.
+    ///
+    /// `nil` — the picker renders the seeded form itself — for every nameable
+    /// form and for a row that carries none (a ≤v1.16.9 payload).
+    nonisolated static func unnameableTypeLabel(for type: MedicationContainerType?) -> String? {
+        type == .unknown ? MedicationContainerType.unknown.localizedLabel : nil
     }
 
     private var unitsCard: some View {

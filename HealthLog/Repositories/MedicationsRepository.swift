@@ -86,7 +86,7 @@ public actor MedicationsRepository {
         // v0.13 WP — mirror the paired `record(intake:)` gate: a site rides only
         // on a `taken` dose, persisted as the server-wire raw value so an offline
         // injection logs its site like the paired path (+ adopt-on-pair round-trip).
-        let site = status == .taken ? injectionSite?.serverRawValue : nil
+        let site = status == .taken ? injectionSite.flatMap(\.serverRawValue) : nil
         let snap = try await standalone.local.standaloneAddIntake(
             medicationId: medicationId,
             takenAt: status == .taken ? takenAt : scheduledAt,
@@ -126,7 +126,9 @@ public actor MedicationsRepository {
         let snaps = try await standalone.local.standaloneIntakes(medicationId: nil)
         return snaps.compactMap { snap -> MedicationIntake? in
             guard snap.takenAt >= start, snap.takenAt < end else { return nil }
-            let status = IntakeStatus(rawValue: snap.status) ?? .taken
+            // Audit B-5 — an unnameable stored status keeps its row and
+            // states nothing; it is emphatically not a confirmed dose.
+            let status = IntakeStatus(stored: snap.status)
             return MedicationIntake(
                 id: snap.externalId,
                 medicationId: snap.medicationId,
@@ -279,7 +281,7 @@ public actor MedicationsRepository {
     ) async throws -> MedicationIntake {
         // v1.8.5 — the site is meaningful only on a TAKEN write; never attach
         // it to a skip (server would drop it anyway, but we keep the wire clean).
-        let site = status == .taken ? injectionSite?.serverRawValue : nil
+        let site = status == .taken ? injectionSite.flatMap(\.serverRawValue) : nil
         let body = try IntakeUpdate(intakeId: id, status: status.writableRawValue, takenAt: takenAt, injectionSite: site)
         let idempotencyKey = IdempotencyKey()
         do {

@@ -481,7 +481,9 @@ public actor EcgSyncCoordinator {
             return .halted(.unauthorized)
         case .rateLimited:
             return .halted(.rateLimited)
-        case .network, .offline, .canceled, .serverNotConfigured:
+        // Audit B-2 — an in-flight idempotency conflict is the server asking for
+        // a later retry, which is exactly what holding the cursor does.
+        case .network, .offline, .canceled, .serverNotConfigured, .idempotencyReplayInFlight:
             return .halted(.transport)
         case let .server(status, _, _):
             if status == 403 || status == 401 {

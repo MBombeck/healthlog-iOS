@@ -429,6 +429,21 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// Breathing-disturbance EVENT, distinct from the `.breathingDisturbances`
     /// COUNT. Server enum `BREATHING_DISTURBANCE_EVENT`, categorical (`1…1`).
     case breathingDisturbanceEvent
+    /// Audit B-4 — Apple-Health audio-exposure EVENT (the loud-listening
+    /// notification Apple fires when the rolling 7-day average crosses the WHO
+    /// 80-dBA threshold), distinct from the `.audioExposureEnvironment` /
+    /// `.audioExposureHeadphone` dBA READINGS. Server enum
+    /// `AUDIO_EXPOSURE_EVENT`, categorical (`1…1`).
+    ///
+    /// It is the 77th and last server `MeasurementType`, and until this case
+    /// existed it was the only one without a `MetricKind`: `toDomain()` returned
+    /// `nil` and every row of the type was discarded on the way into the app,
+    /// silently. Its five sibling events (`IRREGULAR_RHYTHM_NOTIFICATION`,
+    /// `HIGH_HEART_RATE_EVENT`, `LOW_HEART_RATE_EVENT`,
+    /// `WALKING_STEADINESS_EVENT`, `BREATHING_DISTURBANCE_EVENT`) all got a kind
+    /// in Build 3 / item 3.3; this one was left behind, and it is treated
+    /// exactly like them — `isCategoricalEvent`, unitless, read-only.
+    case audioExposureEvent
 
     // MARK: - Build 7 / item 7.3 — mood dashboard tile
 
@@ -447,18 +462,59 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     // token — that alias is bridged in `DashboardMetric.init(from:)`.
     case mood
 
+    // MARK: - Audit B-4 — the generic arm for a type this build does not know
+
+    /// Audit B-4 — a server `MeasurementType` that postdates this build.
+    ///
+    /// A decode-only sentinel, never a metric. `ServerMeasurementType` maps any
+    /// raw value it does not recognise onto its own `.unknown`, which lands
+    /// here, so the row is **carried and rendered generically** instead of being
+    /// discarded by `TolerantMeasurementWire` — the failure mode PR #109 hit
+    /// four times over on the source enum (`COMPUTED`, `STRAVA`/`OURA`/`POLAR`/
+    /// `NIGHTSCOUT`, `TELEGRAM`/`MCP`, `EXTERNAL`), each time after the data had
+    /// already been invisible in the app for releases.
+    ///
+    /// What it deliberately does NOT do: claim a unit, a plausible range, a
+    /// polarity, an Apple-Health identifier, a FHIR mapping or a place in the
+    /// doctor report. We do not know what the number means, so nothing may
+    /// compute with it — ``isUnknown`` is the single predicate every such gate
+    /// reads. It is likewise absent from ``selectableCases``, so it can never
+    /// become a pickable metric; only a row the server actually sent can put it
+    /// on screen.
+    case unknown
+
     public var id: String {
         rawValue
     }
 
-    /// Build 3 / item 3.3 — the five CATEGORICAL Apple-Health events whose
+    /// Audit B-4 — `true` only for the ``unknown`` sentinel: a row whose server
+    /// type postdates this build. Most gates that must not compute with it are
+    /// exhaustive switches the compiler forces to take a position; this
+    /// predicate serves the callers with no switch to hang the decision on —
+    /// the doctor-report aggregators, the glance headline, the bucket summary,
+    /// the coach digest.
+    public var isUnknown: Bool {
+        self == .unknown
+    }
+
+    /// Audit B-4 — every kind this build can actually name: `allCases` minus the
+    /// ``unknown`` decode sentinel. Read it wherever kinds are ENUMERATED rather
+    /// than looked up, so the sentinel never presents itself as a metric someone
+    /// could choose. Surfaces mapping an *existing* row still read `allCases`.
+    public static var selectableCases: [MetricKind] {
+        allCases.filter { !$0.isUnknown }
+    }
+
+    /// Build 3 / item 3.3 (+ audit B-4) — the six CATEGORICAL Apple-Health events whose
     /// server band is `1…1`: the value carries no information, only the
     /// occurrence and its timestamp do. Surfaces that would otherwise print a
     /// meaningless "1" use this to render an occurrence label instead.
     public var isCategoricalEvent: Bool {
         switch self {
         case .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent:
+             .walkingSteadinessEvent, .breathingDisturbanceEvent,
+             // Audit B-4 — the sixth, added when the type stopped being dropped.
+             .audioExposureEvent:
             true
         default:
             false
@@ -531,7 +587,10 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
              .recoveryScore, .stressScore, .strainScore,
              .dayStrain, .workoutStrain, .resilience,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent: ""
+             .walkingSteadinessEvent, .breathingDisturbanceEvent,
+             // Audit B-4 — the audio-exposure EVENT is the sixth categorical
+             // occurrence (band `1…1`), unitless like its five siblings.
+             .audioExposureEvent: ""
         case .hrvRMSSD: "ms"
         case .sleepPerformance, .sleepEfficiency, .sleepConsistency: "%"
         case .sleepNeed: "min"
@@ -539,6 +598,10 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
         // Build 7 / item 7.3 — mood is a unitless daily score; the summary tile
         // reads its label from the server `unitKey` anyway (empty here).
         case .mood: ""
+        // Audit B-4 — the unknown sentinel has no unit, because this build does
+        // not know what the number is. An invented one would be a lie printed
+        // next to a health value.
+        case .unknown: ""
         }
     }
 
@@ -653,19 +716,39 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     /// re-attributed from `MANUAL` by server migration 0225) is derived
     /// server-side; the provider-ingest sources `STRAVA` / `OURA` / `POLAR` /
     /// `NIGHTSCOUT` are wearable/CGM rows the server owns and never accepts on a
-    /// client write path (not in `WRITABLE_MEASUREMENT_SOURCES`). For all of
+    /// client write path (not in `WRITABLE_MEASUREMENT_SOURCES`); `EXTERNAL`
+    /// (#106) is the same for rows an ingest Bearer token wrote. For all of
     /// these, hand-editing or deleting the value is meaningless / would be
     /// rejected, so the list surface gates its Edit/Delete affordances off when
     /// this is `true` — the row renders but never offers a value-edit path.
     ///
+    /// **The server rule this mirrors**
+    /// (`src/app/api/measurements/[id]/route.ts:126-141`): a value edit is
+    /// refused with 409 `measurement.update.server_owned_source` whenever the
+    /// stored `source` is not in `WRITABLE_MEASUREMENT_SOURCES`
+    /// (`{MANUAL, APPLE_HEALTH}`). `TELEGRAM` and `MCP` are absent from that
+    /// list, so the server refuses their value edits exactly as it does
+    /// `COMPUTED`'s — they belong in this column. Two limits of the mirror are
+    /// deliberate and pre-date these cases: the server still allows a
+    /// `measuredAt` / note edit on a server-owned row, and its DELETE handler
+    /// (`route.ts:250`) carries no source gate at all, so this flag is
+    /// stricter than the server on both counts.
+    ///
     /// Exhaustive over `MeasurementSource` on purpose: adding a source forces a
     /// decision here (compiler-enforced), so a new read-only ingest can't slip
     /// through as accidentally editable. `whoop` / `fitbit` / `googleHealth` stay
-    /// in the editable column to preserve their pre-#46 behaviour.
+    /// in the editable column to preserve their pre-#46 behaviour, even though
+    /// the server refuses their value edits too.
     var isServerDerivedReadOnly: Bool {
         switch source {
-        case .computed, .strava, .oura, .polar, .nightscout: true
+        case .computed, .strava, .oura, .polar, .nightscout, .external,
+             .telegram, .mcp: true
         case .manual, .appleHealth, .withings, .whoop, .fitbit, .googleHealth, .import_: false
+        // Audit B-4 — a source we cannot name is server-owned until proven
+        // otherwise: `WRITABLE_MEASUREMENT_SOURCES` is `{MANUAL, APPLE_HEALTH}`
+        // and every value added since is outside it, so offering a value edit
+        // the server would refuse with 409 is the likelier mistake.
+        case .unknown: true
         }
     }
 }
@@ -763,94 +846,28 @@ public enum MeasurementSource: String, Codable, Sendable {
     /// Integration (`nightscoutIntegrationStore`). Server-owned read-only ingest
     /// (CGM-Glukose) — kein Client-Write-Pfad.
     case nightscout
+    /// Server-Wire-Form: `TELEGRAM` (Server v1.19.2). Numerische Antwort auf
+    /// eine Telegram-Erinnerung, aus dem chat-gebundenen Webhook geschrieben —
+    /// kein Client-Write-Pfad.
+    case telegram
+    /// Server-Wire-Form: `MCP` (Server v1.22.0). Über die bestätigte
+    /// MCP-Write-Fläche unter einem `health:write`-Token geschrieben — kein
+    /// Client-Write-Pfad.
+    case mcp
+    /// Server-Wire-Form: `EXTERNAL` (Server-PR #892, iOS #106). Zeilen aus einem
+    /// Ingest-Bearer-Token (Home-Assistant-Bridges, Waagen-Skripte).
+    /// Server-owned read-only ingest — kein Client-Write-Pfad (nicht in
+    /// `WRITABLE_MEASUREMENT_SOURCES`).
+    case external
     case import_ = "import"
-}
-
-/// List-Endpoint-Wrapper. Server liefert `{ measurements: [...], meta: {...} }`.
-public struct MeasurementListResponse: Codable, Sendable {
-    public let measurements: [Measurement]
-    public let meta: ListMeta?
-
-    public struct ListMeta: Codable, Sendable {
-        public let total: Int?
-        public let limit: Int?
-        public let offset: Int?
-    }
-}
-
-/// Series-Endpoint Antwort.
-///
-/// **W-B187 (#29) — server unit-at-source.** Since server v1.16.16 the
-/// `GET /api/measurements/series` payload carries an explicit `unit` token
-/// (e.g. glucose `"mg/dL"` | `"mmol/L"`, per the user's preference) and the
-/// `points[].value` + `stats` are ALREADY CONVERTED to that unit server-side —
-/// iOS must NOT re-convert (no client `convertGlucose` runs on series points;
-/// re-converting would be the 18× double-convert hazard). Read `unit` from the
-/// payload and use it as the display label; never assume mg/dL. The field is
-/// decoded leniently (`decodeIfPresent`) so an older server that omits it keeps
-/// today's behaviour (the per-`MetricKind` hardcoded unit). Resolve the display
-/// label through ``resolvedUnit(for:)`` so the consumer never hardcodes.
-public struct MeasurementSeries: Codable, Sendable {
-    public let kind: MetricKind
-    public let points: [SeriesPoint]
-    public let stats: SeriesStats
-    /// W-B187 (#29) — the server-resolved display unit for this series (v1.16.16
-    /// unit-at-source). `nil` on an older server / a kind the server doesn't
-    /// unit-stamp → the consumer falls back to the per-`MetricKind` default.
-    public let unit: String?
-
-    public init(kind: MetricKind, points: [SeriesPoint], stats: SeriesStats, unit: String? = nil) {
-        self.kind = kind
-        self.points = points
-        self.stats = stats
-        self.unit = unit
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case kind, points, stats, unit
-    }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        kind = try c.decode(MetricKind.self, forKey: .kind)
-        points = try c.decode([SeriesPoint].self, forKey: .points)
-        stats = try c.decode(SeriesStats.self, forKey: .stats)
-        // Tolerant: absent OR JSON `null` both decode to `nil` (older server).
-        unit = try c.decodeIfPresent(String.self, forKey: .unit)
-    }
-
-    /// The display unit label for this series — the server-resolved `unit`
-    /// (v1.16.16 unit-at-source) when present, else the per-`MetricKind`
-    /// hardcoded default. HONEST-ONLY: the server value is authoritative and is
-    /// rendered as-is; iOS never re-converts the pre-converted `points`/`stats`.
-    public func resolvedUnit(for kind: MetricKind) -> String {
-        if let unit, !unit.isEmpty { return unit }
-        return kind.unit
-    }
-}
-
-public struct SeriesPoint: Codable, Sendable, Identifiable {
-    public let id: String
-    public let at: Date
-    public let value: Double
-    public let secondary: Double? // diastolic for BP
-}
-
-public struct SeriesStats: Codable, Sendable {
-    public let mean: Double
-    public let min: Double
-    public let max: Double
-    public let stdDev: Double
-    public let count: Int
-}
-
-/// Effective range für Threshold-Checks. Spiegelt Server-Logik aus `src/lib/analytics/effective-range.ts`.
-public struct EffectiveRange: Codable, Sendable {
-    public let kind: MetricKind
-    public let warnLow: Double?
-    public let warnHigh: Double?
-    public let criticalLow: Double?
-    public let criticalHigh: Double?
+    /// Audit B-4 — a source value this build does not know (see
+    /// `MeasurementDTO+UnknownType.swift`). Four times running, a source the
+    /// server had shipped cost every row that carried it: `COMPUTED`, then
+    /// `STRAVA`/`OURA`/`POLAR`/`NIGHTSCOUT`, then `TELEGRAM`/`MCP`, then
+    /// `EXTERNAL`. Naming the source is still real work — the label, the
+    /// filter chip, the read-only and mirror decisions all want a real answer —
+    /// but the row no longer waits for it.
+    case unknown
 }
 
 public extension Measurement {

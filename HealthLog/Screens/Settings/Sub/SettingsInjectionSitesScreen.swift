@@ -30,7 +30,7 @@ struct SettingsInjectionSitesScreen: View {
                 footer: "Sites turned off here are hidden for every injection medication."
             ) {
                 VStack(spacing: 0) {
-                    let sites = InjectionSite.allCases
+                    let sites = InjectionSite.serverCases
                     ForEach(Array(sites.enumerated()), id: \.element) { idx, site in
                         row(for: site)
                         if idx < sites.count - 1 {

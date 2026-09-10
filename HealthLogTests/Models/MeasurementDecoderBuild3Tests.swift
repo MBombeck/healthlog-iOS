@@ -259,7 +259,11 @@ struct MeasurementDecoderBuild3Tests {
         #expect(resp.measurements.count == 23, "every catch-up type must survive the tolerant decoder")
     }
 
-    @Test("an unknown future type is still dropped rather than rejecting the page")
+    /// Audit B-4 (2026-09-10) inverted this: a type newer than the build is no
+    /// longer thrown away, it is carried on `MetricKind.unknown` and rendered
+    /// generically. What the case still locks is the part that was always the
+    /// point — one unreadable row never costs the page.
+    @Test("an unknown future type is carried, not dropped, and never costs the page")
     func unknownTypeStillTolerated() throws {
         let json = Data("""
         {"measurements":[
@@ -268,8 +272,9 @@ struct MeasurementDecoderBuild3Tests {
         ]}
         """.utf8)
         let resp = try Self.decoder().decode(MeasurementListWireResponse.self, from: json)
-        #expect(resp.measurements.count == 1, "tolerant decode keeps the known row and drops the unknown")
-        #expect(resp.measurements.first?.type == .activitySteps)
+        #expect(resp.measurements.count == 2, "the page decodes whole — neither row is discarded")
+        #expect(resp.measurements.contains { $0.id == "a" && $0.type == .activitySteps })
+        #expect(resp.measurements.contains { $0.id == "b" && $0.type == .unknown })
     }
 
     @Test("none of the 21 new kinds gains a manual-create wire row")

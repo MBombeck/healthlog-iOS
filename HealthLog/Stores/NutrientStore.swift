@@ -254,7 +254,15 @@ public final class NutrientStore {
 
     /// Fetch (or refresh) one nutrient's day-series + reference for the detail
     /// surface. Idempotent per code; a `403` flips ``isDisabled``.
+    ///
+    /// **Audit B-4 — the sentinel never reaches the query string.**
+    /// `/api/nutrients/daily` validates `nutrient` against the server catalogue
+    /// enum and answers 400 for `__UNKNOWN__`; there is also nothing to fetch,
+    /// since the sentinel is a bucket rather than a catalogue member. The list
+    /// already renders such a row without a detail link — this is the guard
+    /// behind it, so a future caller cannot reintroduce the request.
     public func loadDaily(_ code: NutrientCode, days: Int = 30) async {
+        guard code != .unknown else { return }
         loadingDaily.insert(code)
         defer { loadingDaily.remove(code) }
         do {
@@ -289,7 +297,7 @@ public final class NutrientStore {
                 lastError = nil
             } else {
                 applyWaterDelta(-amountMl)
-                lastError = error.localizedDescription
+                applyError(error)
             }
         }
     }
@@ -326,8 +334,18 @@ public final class NutrientStore {
             isDisabled = true
             lastError = nil
         } else {
-            lastError = error.localizedDescription
+            applyError(error)
         }
+    }
+
+    /// Audit B-1 — the visible error is localized copy, not a Swift description.
+    /// `String(describing:)` printed the enum case (`notPersisted("…")`) onto a
+    /// user-facing surface; the sanitized description belongs in the log line,
+    /// where triage reads it. `HLError.userFacingText(for:)` resolves the
+    /// sentence the user is owed.
+    private func applyError(_ error: Error) {
+        HLLog.ui.error("Nutrients request failed: \(LogSanitizer.redact(String(describing: error)))")
+        lastError = HLError.userFacingText(for: error)
     }
 
     /// `yyyy-MM-dd` for the current local day — the same day-key rule the sync

@@ -338,9 +338,11 @@ public struct PrivacyFirstPromptBuilder {
 
     private nonisolated static func recentMoodAvg(in moods: [MoodEntry], now: Date) -> Int? {
         let cutoff = now.addingTimeInterval(-7 * 86400)
-        let scores = moods.filter { $0.recordedAt >= cutoff }.map(\.score)
-        guard !scores.isEmpty else { return nil }
-        let avg = Double(scores.reduce(0, +)) / Double(scores.count)
+        // Audit B-4 — the coach prompt states a 1…5 average, so it is built from
+        // nameable levels only; a week of entries this build cannot name has no
+        // mood average to hand the model, and `nil` omits the line.
+        let window = moods.filter { $0.recordedAt >= cutoff }
+        guard let avg = MoodEntry.averageScore(of: window) else { return nil }
         return Int(avg.rounded())
     }
 

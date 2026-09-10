@@ -25,11 +25,22 @@ struct MeasurementSourceWireTests {
         #expect(decoded == .appleHealth)
     }
 
-    @Test("Legacy HEALTHKIT wire-value is rejected", arguments: ["HEALTHKIT", "healthKit", "AppleHealth"])
-    func legacyValueRejected(value: String) {
-        let data = Data("\"\(value)\"".utf8)
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(ServerMeasurementSource.self, from: data)
+    /// Audit B-4 (2026-09-10) changed what "rejected" means here. A legacy or
+    /// misspelled literal used to throw, and on the list path that throw cost
+    /// the whole measurement row. It now lands on the ``unknown`` sentinel: the
+    /// row survives with a generic provenance label, and the value is still
+    /// refused everywhere it matters — it is not `.appleHealth`, it never
+    /// round-trips onto the wire, and it is not a server case.
+    @Test(
+        "Legacy HEALTHKIT wire-value is refused, but no longer at the row's expense",
+        arguments: ["HEALTHKIT", "healthKit", "AppleHealth"]
+    )
+    func legacyValueRejected(value: String) throws {
+        let decoded = try JSONDecoder().decode(ServerMeasurementSource.self, from: Data("\"\(value)\"".utf8))
+        #expect(decoded == .unknown)
+        #expect(decoded != .appleHealth, "a legacy spelling must never resolve to the real Apple-Health source")
+        #expect(throws: EncodingError.self) {
+            _ = try JSONEncoder().encode(decoded)
         }
     }
 
@@ -194,5 +205,103 @@ struct MeasurementSourceWireTests {
     func newIngestSourcesReadOnly(source: MeasurementSource) {
         let row = HealthLog.Measurement(id: "x", kind: .weight, recordedAt: Date(), value: .scalar(1), source: source)
         #expect(row.isServerDerivedReadOnly)
+    }
+
+    // MARK: - #106 (server PR #892) — EXTERNAL ingest-token source
+
+    @Test("An EXTERNAL row survives the tolerant list decode (no silent drop)")
+    func externalRowNotDropped() throws {
+        // Third time for the same failure mode (COMPUTED #42, then STRAVA/OURA/
+        // POLAR/NIGHTSCOUT #46): a wire value the source enum cannot decode
+        // makes `TolerantMeasurementWire` drop the whole row, so everything
+        // written through an ingest Bearer token (Home Assistant bridges, scale
+        // scripts) vanishes from the app and the count diverges from the server.
+        let json = """
+        { "measurements": [
+          { "id": "e1", "type": "WEIGHT", "value": 80, "measuredAt": "2026-09-01T08:00:00Z", "source": "EXTERNAL" },
+          { "id": "m1", "type": "WEIGHT", "value": 81, "measuredAt": "2026-09-01T08:00:00Z", "source": "MANUAL" }
+        ] }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let response = try decoder.decode(MeasurementListWireResponse.self, from: Data(json.utf8))
+        #expect(response.measurements.count == 2)
+        #expect(response.measurements.contains { $0.id == "e1" && $0.source == .external })
+    }
+
+    @Test("EXTERNAL round-trips verbatim and maps domain ↔ wire totally")
+    func externalRoundTrip() throws {
+        let data = Data("\"EXTERNAL\"".utf8)
+        #expect(try JSONDecoder().decode(ServerMeasurementSource.self, from: data) == .external)
+        let reencoded = try String(data: JSONEncoder().encode(ServerMeasurementSource.external), encoding: .utf8)
+        #expect(reencoded == "\"EXTERNAL\"")
+        #expect(ServerMeasurementSource.external.toDomain() == .external)
+        #expect(MeasurementSource.external.wire == .external)
+    }
+
+    @Test("EXTERNAL is server-owned read-only and never mirrored into Apple Health")
+    func externalIsReadOnly() {
+        // `EXTERNAL` is absent from the server's `WRITABLE_MEASUREMENT_SOURCES`
+        // (`{MANUAL, APPLE_HEALTH}`) — a client-named source on the ingest path
+        // is refused with `measurement.batch.source_not_permitted`. So the row
+        // renders but never offers a value-edit path, and the server→Apple-
+        // Health mirror must never author it.
+        let row = HealthLog.Measurement(id: "x", kind: .weight, recordedAt: Date(), value: .scalar(1), source: .external)
+        #expect(row.isServerDerivedReadOnly)
+        #expect(!MeasurementSource.external.isServerMirrorEligible)
+    }
+
+    // MARK: - TELEGRAM / MCP — already dropped before EXTERNAL existed
+
+    @Test("TELEGRAM and MCP rows survive the tolerant list decode (no silent drop)")
+    func serverWrittenRowsNotDropped() throws {
+        // `measurementSourceEnum` has carried TELEGRAM since server v1.19.2 and
+        // MCP since v1.22.0 (`src/lib/validations/measurement.ts:204` + `:211`)
+        // and neither had a case here — so a numeric reply to a Telegram
+        // reminder, and anything logged through the MCP write surface, were
+        // being dropped in the app already, before EXTERNAL was proposed. Same
+        // failure mode, found while adding it.
+        let json = """
+        { "measurements": [
+          { "id": "t1", "type": "WEIGHT", "value": 80, "measuredAt": "2026-09-01T08:00:00Z", "source": "TELEGRAM" },
+          { "id": "c1", "type": "WEIGHT", "value": 81, "measuredAt": "2026-09-01T08:00:00Z", "source": "MCP" },
+          { "id": "m1", "type": "WEIGHT", "value": 82, "measuredAt": "2026-09-01T08:00:00Z", "source": "MANUAL" }
+        ] }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let response = try decoder.decode(MeasurementListWireResponse.self, from: Data(json.utf8))
+        #expect(response.measurements.count == 3)
+        #expect(response.measurements.contains { $0.id == "t1" && $0.source == .telegram })
+        #expect(response.measurements.contains { $0.id == "c1" && $0.source == .mcp })
+        #expect(response.measurements.contains { $0.id == "m1" && $0.source == .manual })
+    }
+
+    @Test("TELEGRAM and MCP round-trip verbatim and map domain ↔ wire totally", arguments: [
+        ("TELEGRAM", ServerMeasurementSource.telegram, MeasurementSource.telegram),
+        ("MCP", ServerMeasurementSource.mcp, MeasurementSource.mcp)
+    ])
+    func serverWrittenSourceRoundTrip(value: String, wire: ServerMeasurementSource, domain: MeasurementSource) throws {
+        let data = Data("\"\(value)\"".utf8)
+        #expect(try JSONDecoder().decode(ServerMeasurementSource.self, from: data) == wire)
+        #expect(try String(data: JSONEncoder().encode(wire), encoding: .utf8) == "\"\(value)\"")
+        #expect(wire.toDomain() == domain)
+        #expect(domain.wire == wire)
+    }
+
+    @Test("TELEGRAM and MCP mirror the server's own edit rule", arguments: [
+        MeasurementSource.telegram, .mcp
+    ])
+    func serverWrittenSourcesReadOnly(source: MeasurementSource) {
+        // `src/app/api/measurements/[id]/route.ts:126-141` refuses a value edit
+        // with 409 `measurement.update.server_owned_source` for any stored
+        // source outside `WRITABLE_MEASUREMENT_SOURCES` (`{MANUAL,
+        // APPLE_HEALTH}`). Neither TELEGRAM nor MCP is in that list, so the app
+        // shows them read-only like COMPUTED rather than offering an edit the
+        // server would reject. Neither is on the closed Apple-Health mirror
+        // allowlist (`{withings, import_}`).
+        let row = HealthLog.Measurement(id: "x", kind: .weight, recordedAt: Date(), value: .scalar(1), source: source)
+        #expect(row.isServerDerivedReadOnly)
+        #expect(!source.isServerMirrorEligible)
     }
 }

@@ -167,7 +167,7 @@ public actor LabsRepository {
             await invalidate([.labsResults])
             return created
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .createLab, payload: OutboxQueue.Payloads.CreateLab(body: body),
                 key: key, clientEntityId: clientEntityId
             )
@@ -201,7 +201,7 @@ public actor LabsRepository {
             await invalidate([.labsResults])
             return updated
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .updateLab, payload: OutboxQueue.Payloads.UpdateLab(id: id, patch: patch),
                 key: key, clientEntityId: id
             )
@@ -225,7 +225,7 @@ public actor LabsRepository {
             _ = try await api.send(req)
             await invalidate([.labsResults])
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
+            try await enqueue(
                 .deleteLab, payload: OutboxQueue.Payloads.DeleteLab(id: id),
                 key: key, clientEntityId: id
             )
@@ -257,7 +257,7 @@ public actor LabsRepository {
             await invalidate([.labsResults])
             return restored
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.restoreLabs, payload: OutboxQueue.Payloads.RestoreLabs(ids: ids), key: key)
+            try await enqueue(.restoreLabs, payload: OutboxQueue.Payloads.RestoreLabs(ids: ids), key: key)
             throw err
         }
     }
@@ -284,7 +284,7 @@ public actor LabsRepository {
             await invalidate([.biomarkers])
             return created
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.createBiomarker, payload: OutboxQueue.Payloads.CreateBiomarker(body: body), key: key)
+            try await enqueue(.createBiomarker, payload: OutboxQueue.Payloads.CreateBiomarker(body: body), key: key)
             throw err
         }
     }
@@ -309,7 +309,7 @@ public actor LabsRepository {
             await invalidate([.biomarkers, .labsResults])
             return updated
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.updateBiomarker, payload: OutboxQueue.Payloads.UpdateBiomarker(id: id, patch: patch), key: key)
+            try await enqueue(.updateBiomarker, payload: OutboxQueue.Payloads.UpdateBiomarker(id: id, patch: patch), key: key)
             throw err
         }
     }
@@ -335,7 +335,7 @@ public actor LabsRepository {
             // analyte/unit), so the lab list repaints too — drop both keys.
             await invalidate([.biomarkers, .labsResults])
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.deleteBiomarker, payload: OutboxQueue.Payloads.DeleteBiomarker(id: id), key: key)
+            try await enqueue(.deleteBiomarker, payload: OutboxQueue.Payloads.DeleteBiomarker(id: id), key: key)
             throw err
         }
     }
@@ -368,23 +368,32 @@ public actor LabsRepository {
 
     // MARK: - Outbox enqueue helper
 
-    /// Persist a retriable failed write to the encrypted outbox under its
-    /// idempotency key. A persistence failure compounds the network failure, so
-    /// it is logged (sanitized) and swallowed — the original `HLError` is the
-    /// one re-thrown to the caller (mirrors `MeasurementsRepository`).
+    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
+    /// under its idempotency key. A failure here is **not** swallowed: the
+    /// network attempt already failed, so the write is on no server either, and
+    /// re-throwing the original retriable error would let the store keep showing
+    /// the entry as "queued, replays later" for something that is permanently
+    /// lost. Since build 274 that is a reachable state, not a theoretical one —
+    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
+    /// when iOS grants no background execution time. Throws
+    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
+    /// used since G-2) so the caller rolls its optimistic row back and surfaces
+    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
     private func enqueue(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey,
         clientEntityId: String? = nil
-    ) async {
+    ) async throws {
         do {
             let data = try encoder.encode(payload)
             try await outbox.enqueue(.init(
                 kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
             ))
         } catch {
-            HLLog.outbox.error("Labs outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
+            let cause = LogSanitizer.redact(String(describing: error))
+            HLLog.outbox.error("Labs outbox enqueue failed: \(cause)")
+            throw HLError.notPersisted(cause)
         }
     }
 }

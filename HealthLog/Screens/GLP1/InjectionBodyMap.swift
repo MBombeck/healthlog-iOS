@@ -78,7 +78,7 @@ struct InjectionBodyMap: View {
                 .foregroundStyle(HLText.tertiary)
                 .accessibilityHidden(true)
 
-            ForEach(InjectionSite.allCases, id: \.self) { site in
+            ForEach(InjectionSite.serverCases, id: \.self) { site in
                 if let point = Self.positions[site] {
                     dot(for: site)
                         .position(x: point.x * bodyWidth, y: point.y * bodyHeight)

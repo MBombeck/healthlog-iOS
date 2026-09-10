@@ -129,6 +129,7 @@ public struct SideEffectsLogbookSection: View {
         case .appetiteLoss: String(localized: "Appetite loss")
         case .injectionSiteReaction: String(localized: "Reaction at injection site")
         case .headache: String(localized: "Headache")
+        case .unknown: String(localized: "glp1.sideEffect.kind.unknown")
         }
     }
 
@@ -272,7 +273,7 @@ struct SideEffectLogSheet: View {
                 }
                 Section(String(localized: "What")) {
                     Picker(String(localized: "Type"), selection: $kind) {
-                        ForEach(SideEffectKind.allCases, id: \.self) { kind in
+                        ForEach(SideEffectKind.pickerCases, id: \.self) { kind in
                             Text(SideEffectsLogbookSection.kindLabel(kind)).tag(kind)
                         }
                     }

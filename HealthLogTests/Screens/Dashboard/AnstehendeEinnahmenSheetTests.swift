@@ -319,6 +319,24 @@ struct AnstehendeEinnahmenSheetTrailingPresentationTests {
         #expect(p.accessibilityLabelKey == "med.heatmap.status.missed")
     }
 
+    /// **Audit B-5.** A stored status this build cannot name renders as a row
+    /// that states nothing: no Haken (it is not taken), no missed-red (it is
+    /// not a terminal miss), and no tap target — the view wires an action on
+    /// `.pending` alone.
+    @Test("Audit B-5: unknown → neutral questionmark glyph that claims neither taken nor missed")
+    func unknownMakesNoClaim() {
+        let unknown = Presentation.resolve(status: .unknown)
+        let taken = Presentation.resolve(status: .taken)
+        let missed = Presentation.resolve(status: .missed)
+        #expect(unknown.symbolName == "questionmark.circle")
+        #expect(unknown.symbolName.hasSuffix(".fill") == false)
+        #expect(unknown.tint == Tint.tertiary)
+        #expect(unknown.symbolName != taken.symbolName)
+        #expect(unknown.tint != taken.tint)
+        #expect(unknown.tint != missed.tint)
+        #expect(unknown.accessibilityLabelKey == "dashboard.intakesSheet.status.unknown")
+    }
+
     @Test("Pending and taken never share the same symbol — the canonical Y7 invariant")
     func pendingAndTakenAreDistinct() {
         let pending = Presentation.resolve(status: .pending)

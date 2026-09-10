@@ -53,9 +53,15 @@ struct EnvironmentScreen: View {
     private func loadedRows(store: EnvironmentStore) -> some View {
         if store.isDisabled {
             Section {
-                FeatureDisabledCard(variant: .hero)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
+                // Audit A-7 — the module is off; the server says why (a scoped
+                // sharing grant, the operator's instance switch, the viewer's
+                // own switch). `nil` on a server < v1.38.15 → the neutral copy.
+                FeatureDisabledCard(
+                    variant: .hero,
+                    reason: container?.moduleGate.offReason(.environment)
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
             }
             attributionSection(store: store)
         } else {

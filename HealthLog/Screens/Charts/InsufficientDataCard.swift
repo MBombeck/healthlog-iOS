@@ -114,6 +114,11 @@ struct InsufficientDataCard: View {
         case .breathingDisturbanceEvent: return "lungs"
         // Build 7 / item 7.3 — mood.
         case .mood: return "face.smiling"
+        // Audit B-4 — the audio-exposure event shares the ear glyph with the two
+        // dBA readings; the unnamed kind carries the same dashed question mark
+        // as its descriptor (`MetricKindDescriptor+AuditB4.swift`).
+        case .audioExposureEvent: return "ear.trianglebadge.exclamationmark"
+        case .unknown: return "questionmark.square.dashed"
         }
     }
 
@@ -170,8 +175,17 @@ struct InsufficientDataCard: View {
              // Build 7 / item 7.3 — mood is logged via its own capture flow, so
              // "log a measurement" is the honest CTA here (this card rarely shows
              // for mood, which the summary only surfaces once it has entries).
-             .mood:
+             .mood,
+             // Audit B-4 — the audio-exposure event arrives from Apple Health,
+             // but it is a notification nobody logs or chooses to receive, so
+             // the device CTA is the only honest one for it too.
+             .audioExposureEvent:
             return String(localized: "Log a \(metric) measurement now — or connect your device.")
+        // Audit B-4 — no CTA for a kind this build cannot name: there is
+        // nothing the user could log or connect that would fill it, and the
+        // rows that put it on screen came from the server already.
+        case .unknown:
+            return String(localized: "This app version doesn't know this measurement yet")
         }
     }
 }

@@ -9,41 +9,51 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **AUDIO fix — `AUDIO_EXPOSURE_EVENT` no longer decodes as `.sleep`.**
+/// **AUDIO fix, then audit B-4 — `AUDIO_EXPOSURE_EVENT` decodes as itself.**
 ///
-/// `audioExposureEvent` is an HK category/event type with NO chartable
-/// `MetricKind` (`InsightsMetricTabStrip` documents it as deliberately
-/// unchartable). The prior mapping `case .audioExposureEvent: .sleep` was a
-/// sleeping lie: the day the server emits such a row it would land in the sleep
-/// list + chart. `metricKind` is now `MetricKind?` and `toDomain()` is failable
-/// — a `nil`-kind row is dropped like the tolerant decoder drops an unknown
-/// type, never fabricated onto a foreign axis.
+/// The AUDIO fix replaced a sleeping lie (`case .audioExposureEvent: .sleep`,
+/// which would have landed a fired notification in the sleep list and chart)
+/// with a `nil` kind. That was honest about the axis and still wrong about the
+/// row: `toDomain()` dropped every one of them, so the type stayed invisible
+/// either way. Audit B-4 (2026-09-10) counted it — 76 of 77 server types known,
+/// this the 77th — and gave it the kind its five sibling category events have
+/// carried since Build 3 / item 3.3.
+///
+/// What both fixes share, and what this suite still locks: the row is never
+/// fabricated onto a foreign axis. It is its own kind, categorical and
+/// unitless, and it does not appear in any other kind's list.
 ///
 /// Real `APIClient` + `MockURLProtocol` for the integration arm (PROJECT_GUIDE.md
 /// anti-pattern: no mock-server), so a schema drift would actually break it. The
 /// suite is `.serialized` because the network assertion depends on the
 /// process-global `MockURLProtocol.handler` (audit-v0162 H2).
-@Suite("AUDIO_EXPOSURE_EVENT drop", .serialized)
+@Suite("AUDIO_EXPOSURE_EVENT", .serialized)
 struct AudioExposureEventDropTests {
-    // MARK: - Unit: the nil-kind seam
+    // MARK: - Unit: the kind it maps to
 
-    @Test("audioExposureEvent has no chartable MetricKind")
-    func audioExposureEventKindIsNil() {
-        #expect(ServerMeasurementType.audioExposureEvent.metricKind == nil)
+    @Test("audioExposureEvent maps to its own kind, not to a foreign axis")
+    func audioExposureEventKindIsItsOwn() {
+        #expect(ServerMeasurementType.audioExposureEvent.metricKind == .audioExposureEvent)
+        // The pre-AUDIO-fix bug, kept as a named assertion so it cannot return.
+        #expect(ServerMeasurementType.audioExposureEvent.metricKind != .sleep)
+        // Categorical like its five siblings: the value is always 1, so the
+        // timestamp is the information and the unit label would be a lie.
+        #expect(MetricKind.audioExposureEvent.isCategoricalEvent)
+        #expect(MetricKind.audioExposureEvent.unit.isEmpty)
     }
 
     @Test(
-        "every other server type still maps to a non-nil MetricKind",
-        arguments: ServerMeasurementType.allCases.filter { $0 != .audioExposureEvent }
+        "every server type maps to a MetricKind — no type is dropped on the way in",
+        arguments: ServerMeasurementType.allCases
     )
-    func everyOtherTypeMapsToAKind(_ type: ServerMeasurementType) {
+    func everyTypeMapsToAKind(_ type: ServerMeasurementType) {
         #expect(
             type.metricKind != nil,
-            "\(type.rawValue) unexpectedly maps to nil — only audioExposureEvent may be the non-chartable seam"
+            "\(type.rawValue) maps to nil — a nil kind means `toDomain()` discards the row"
         )
     }
 
-    // MARK: - Integration: the row drops, never reaches a kind list
+    // MARK: - Integration: the row survives and stays out of foreign lists
 
     private func makeRepo() throws -> MeasurementsRepository {
         let env = AppEnvironment(
@@ -63,8 +73,8 @@ struct AudioExposureEventDropTests {
         return f.string(from: date)
     }
 
-    @Test("an AUDIO_EXPOSURE_EVENT row drops without a decode error and never appears in any kind list")
-    func audioRowDropsFromEveryKindList() async throws {
+    @Test("an AUDIO_EXPOSURE_EVENT row is kept and never appears in a foreign kind list")
+    func audioRowSurvivesAndStaysOutOfForeignLists() async throws {
         let repo = try makeRepo()
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         // A mixed page: one non-chartable audio-event row + one real sleep row.
@@ -78,15 +88,14 @@ struct AudioExposureEventDropTests {
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
 
-        // The whole list decodes (no reject) — the audio row is dropped, not the page.
+        // Audit B-4 — both rows survive. The page never rejected; what changed
+        // is that the audio row is no longer thrown away on the way in.
         let all = try await repo.recent(limit: 100)
-        #expect(all.count == 1, "The audio-event row must be dropped; only the sleep row survives.")
-        #expect(all.first?.id == "sleep-1")
-        #expect(all.first?.kind == .sleep)
-        // The dropped row must NOT have been fabricated onto the sleep axis.
-        #expect(all.allSatisfy { $0.id != "audio-1" })
+        #expect(all.count == 2, "Both rows must survive; the audio-event row is no longer discarded.")
+        #expect(all.contains { $0.id == "audio-1" && $0.kind == .audioExposureEvent })
+        #expect(all.contains { $0.id == "sleep-1" && $0.kind == .sleep })
 
-        // The kind-scoped sleep list carries the real sleep row and nothing audio.
+        // ...and the audio row is on its OWN axis: the sleep list is unchanged.
         let sleepRows = try await repo.recent(kind: .sleep, limit: 100)
         #expect(sleepRows.contains { $0.id == "sleep-1" })
         #expect(sleepRows.allSatisfy { $0.id != "audio-1" })
@@ -94,8 +103,8 @@ struct AudioExposureEventDropTests {
 
     // MARK: - BP-merge regression: an audio row can't ghost a paired reading
 
-    @Test("mergeBloodPressure yields one BP measurement and no ghost row from an audio row")
-    func bpMergeDropsAudioRowNoGhost() {
+    @Test("mergeBloodPressure yields one BP measurement and the audio row beside it, never a ghost")
+    func bpMergeKeepsAudioRowOutOfThePair() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let sys = MeasurementWireDTO(id: "sys", type: .bloodPressureSystolic, value: 124, measuredAt: now)
         let dia = MeasurementWireDTO(id: "dia", type: .bloodPressureDiastolic, value: 78, measuredAt: now)
@@ -108,10 +117,10 @@ struct AudioExposureEventDropTests {
 
         let merged = MeasurementAggregator.mergeBloodPressure([sys, dia, audio])
 
-        #expect(merged.count == 1, "One paired BP measurement; the audio row is dropped, never a ghost.")
-        let bp = merged.first
-        #expect(bp?.kind == .bloodPressure)
+        #expect(merged.count == 2, "One paired BP measurement plus the audio row — the pair is not a ghost.")
+        let bp = merged.first { $0.kind == .bloodPressure }
         #expect(bp?.value == .bloodPressure(systolic: 124, diastolic: 78))
-        #expect(merged.allSatisfy { $0.id != "audio" })
+        // The audio row rides beside the pair, never inside it.
+        #expect(merged.contains { $0.id == "audio" && $0.kind == .audioExposureEvent })
     }
 }

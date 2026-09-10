@@ -552,8 +552,17 @@ enum ValueFormatter {
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
              .walkingSteadinessEvent, .breathingDisturbanceEvent,
              // Build 7 / item 7.3 — mood is a whole-number daily score.
-             .mood: 0
-        case .hrvRMSSD, .dayStrain, .workoutStrain: 1
+             .mood,
+             // Audit B-4 — the audio-exposure event is a whole occurrence count.
+             .audioExposureEvent: 0
+        // Audit B-4 — `.unknown` has no known precision; one decimal matches its
+        // descriptor's `.decimal1` and is the least-claiming default. The arm
+        // is unreachable from the report itself: `DoctorReportSpecBuilder`
+        // skips the sentinel explicitly in BOTH aggregators (`makeVitalsSummary`
+        // and `makeCharts`), so no unknown row reaches this formatter. It stays
+        // because the formatter is a general helper, not because the report
+        // happens not to build such a row.
+        case .hrvRMSSD, .dayStrain, .workoutStrain, .unknown: 1
         }
     }
 }

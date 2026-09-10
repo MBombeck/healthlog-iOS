@@ -134,10 +134,16 @@ public enum StatistikModeBriefingService {
             )
         }
 
-        if let latestMood = moodEntries.max(by: { $0.recordedAt < $1.recordedAt }) {
-            let avg = moodEntries.map { Double($0.score) }.reduce(0, +) / Double(moodEntries.count)
+        // Audit B-4 — the briefing states a level and an average, so it is built
+        // from nameable levels only. An entry this build cannot name contributes
+        // to neither, and a window of nothing BUT such entries has no mood line
+        // at all — which is the true statement.
+        let scoredMood = MoodEntry.scored(moodEntries)
+        if let latestMood = scoredMood.max(by: { $0.entry.recordedAt < $1.entry.recordedAt }),
+           let avg = MoodEntry.averageScore(of: moodEntries)
+        {
             let avgStr = String(format: "%.1f", avg)
-            let isToday = calendar.isDateInToday(latestMood.recordedAt)
+            let isToday = calendar.isDateInToday(latestMood.entry.recordedAt)
             let prefix = isToday
                 ? String(localized: "briefing.mood.today")
                 : String(localized: "briefing.mood.latest")
@@ -225,8 +231,9 @@ public enum StatistikModeBriefingService {
     }
 
     private static func moodFinding(entries: [MoodEntry]) -> KeyFinding? {
-        guard let latest = entries.max(by: { $0.recordedAt < $1.recordedAt }) else { return nil }
-        let avg = entries.map { Double($0.score) }.reduce(0, +) / Double(entries.count)
+        // Audit B-4 — nameable levels only; see the day-briefing line above.
+        guard let latest = MoodEntry.scored(entries).max(by: { $0.entry.recordedAt < $1.entry.recordedAt }),
+              let avg = MoodEntry.averageScore(of: entries) else { return nil }
         let avgStr = String(format: "%.1f", avg)
         let headline = String(localized: "briefing.mood.headline \(latest.score)")
         let detail = String(localized: "briefing.mood.detail \(avgStr)")

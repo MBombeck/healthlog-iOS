@@ -197,7 +197,11 @@ extension MetricKind {
              .walkingSteadinessEvent, .breathingDisturbanceEvent,
              // Build 7 / item 7.3 — mood has no dedicated coach-scope source
              // server-side → all-source snapshot.
-             .mood:
+             .mood,
+             // Audit B-4 — no dedicated coach-scope source for either; the
+             // unnamed kind must never narrow a snapshot to a token the server
+             // could not resolve.
+             .audioExposureEvent, .unknown:
             nil
         }
     }

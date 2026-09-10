@@ -72,15 +72,15 @@
       "line": 30,
       "character": 8,
       "rule_id": "type_body_length",
-      "reason": "Enum body should span 350 lines or less excluding comments and whitespace: currently spans 424 lines",
+      "reason": "Enum body should span 350 lines or less excluding comments and whitespace: currently spans 428 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/FHIR/MetricFHIRMapper.swift",
-      "line": 674,
+      "line": 684,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 674",
+      "reason": "File should contain 600 lines or less: currently contains 684",
       "severity": "warning"
     },
     {
@@ -109,15 +109,15 @@
     },
     {
       "file": "HealthLog/Models/DashboardWidgetLayout.swift",
-      "line": 691,
+      "line": 695,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 691",
+      "reason": "File should contain 600 lines or less: currently contains 695",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Models/Measurement.swift",
-      "line": 585,
+      "line": 648,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -125,10 +125,10 @@
     },
     {
       "file": "HealthLog/Models/Measurement.swift",
-      "line": 881,
+      "line": 898,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 881",
+      "reason": "File should contain 600 lines or less: currently contains 898",
       "severity": "warning"
     },
     {
@@ -149,7 +149,7 @@
     },
     {
       "file": "HealthLog/Models/MeasurementDTO.swift",
-      "line": 827,
+      "line": 709,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -157,10 +157,10 @@
     },
     {
       "file": "HealthLog/Models/MeasurementDTO.swift",
-      "line": 978,
+      "line": 860,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 978",
+      "reason": "File should contain 600 lines or less: currently contains 860",
       "severity": "warning"
     },
     {
@@ -173,10 +173,10 @@
     },
     {
       "file": "HealthLog/Models/Medication.swift",
-      "line": 928,
+      "line": 932,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 928",
+      "reason": "File should contain 600 lines or less: currently contains 932",
       "severity": "warning"
     },
     {
@@ -197,7 +197,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService+DeadLetterSink.swift",
-      "line": 68,
+      "line": 127,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -205,7 +205,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 228,
+      "line": 247,
       "character": 9,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -213,7 +213,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 276,
+      "line": 295,
       "character": 17,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -221,7 +221,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 323,
+      "line": 350,
       "character": 13,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 16",
@@ -229,7 +229,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 323,
+      "line": 350,
       "character": 13,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 75 lines",
@@ -280,7 +280,7 @@
       "line": 74,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 77 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 78 lines",
       "severity": "warning"
     },
     {
@@ -501,7 +501,7 @@
     },
     {
       "file": "HealthLog/Screens/Illness/IllnessJournalScreen.swift",
-      "line": 153,
+      "line": 161,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -557,7 +557,7 @@
     },
     {
       "file": "HealthLog/Screens/Insights/Sub/InsightsAuxChartDetailScreen.swift",
-      "line": 256,
+      "line": 262,
       "character": 65,
       "rule_id": "large_tuple",
       "reason": "Tuples should have at most 2 members",
@@ -805,7 +805,7 @@
     },
     {
       "file": "HealthLog/Screens/Medications/MedicationSupplyEditorSheet.swift",
-      "line": 211,
+      "line": 239,
       "character": 17,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -829,7 +829,7 @@
     },
     {
       "file": "HealthLog/Screens/Mood/MoodHistoryScreen.swift",
-      "line": 198,
+      "line": 200,
       "character": 17,
       "rule_id": "hl_no_system_buttonstyle",
       "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
@@ -837,10 +837,10 @@
     },
     {
       "file": "HealthLog/Screens/Mood/MoodScreen.swift",
-      "line": 678,
+      "line": 701,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 678",
+      "reason": "File should contain 600 lines or less: currently contains 701",
       "severity": "warning"
     },
     {
@@ -965,7 +965,7 @@
     },
     {
       "file": "HealthLog/Screens/Nutrition/NutrientListScreen.swift",
-      "line": 100,
+      "line": 110,
       "character": 25,
       "rule_id": "hl_no_system_buttonstyle",
       "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
@@ -1181,10 +1181,10 @@
     },
     {
       "file": "HealthLog/Services/AI/MiniCoachDataBinder.swift",
-      "line": 208,
+      "line": 218,
       "character": 13,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 81 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 83 lines",
       "severity": "warning"
     },
     {
@@ -1565,10 +1565,10 @@
     },
     {
       "file": "HealthLog/Stores/DashboardStore+MetricStates.swift",
-      "line": 629,
+      "line": 632,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 629",
+      "reason": "File should contain 600 lines or less: currently contains 632",
       "severity": "warning"
     },
     {

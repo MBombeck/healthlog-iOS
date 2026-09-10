@@ -319,7 +319,11 @@ public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
              .walkingSteadinessEvent, .breathingDisturbanceEvent,
              // Build 7 / item 7.3 — mood is a subjective daily score with no
              // population benchmark (the user's own baseline leads).
-             .mood:
+             // Audit B-4 — an occurrence flag has nothing to benchmark, and a
+             // kind this build cannot name has no population to compare against.
+             // (Same line as `.mood`: this body sits exactly on the 120-line
+             // SwiftLint error ceiling and one more code line breaks the build.)
+             .mood, .audioExposureEvent, .unknown:
             nil
         }
     }

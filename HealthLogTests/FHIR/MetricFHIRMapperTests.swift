@@ -42,7 +42,12 @@ struct MetricFHIRMapperTests {
         // Build 7 / item 7.3 — mood is a subjective self-report with no LOINC we
         // can stand behind; it is never FHIR-exported. Adding it here keeps the
         // FHIR-mapped count invariant (allCases +1, unmapped +1 → 51 unchanged).
-        .mood
+        .mood,
+        // Audit B-4 — the audio-exposure EVENT is a fired notification with no
+        // quantity to code (its five sibling events are unmapped for the same
+        // reason), and `.unknown` is a reading this build cannot name, so no
+        // LOINC could be stood behind. Both keep the count invariant.
+        .audioExposureEvent, .unknown
     ]
 
     @Test("Every MetricKind has a non-nil mapping")
@@ -75,6 +80,8 @@ struct MetricFHIRMapperTests {
         // waist LOINC 8280-0, grip + waist-to-height custom HealthLog codes) → 51.
         // Build 3 / item 3.3 — +21 decoder catch-up kinds, ALL of them
         // deliberately unmapped (see `unmappedWHOOPKinds`) → still 51.
+        // Audit B-4 — +2 kinds (audio-exposure event, unknown), both unmapped
+        // → still 51. A clinical export never gains a code we invented.
         #expect(MetricFHIRMapper.allMappings.count == 51)
     }
 

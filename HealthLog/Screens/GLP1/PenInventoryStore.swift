@@ -95,12 +95,30 @@ public final class PenInventoryStore {
                     let created = try await serverRepo.createInventoryItem(medicationID: medicationID, body: body)
                     try? await repo.setPenServerID(localID: inserted.id, serverID: created.id)
                     // If the pen was logged as already-started, sync first-use.
+                    //
+                    // Audit B-1 — this used to be `try?`. The pen itself is safe
+                    // either way (it is already in the on-device store and its
+                    // server row was created on the line above), but a dropped
+                    // first-use flip means the server-side running-low math
+                    // counts from the wrong date, and the user was never told.
+                    // A durably queued failure stays silent — the outbox will
+                    // replay it — everything else is logged and surfaced.
                     if let firstUsedAt {
-                        _ = try? await serverRepo.updateInventoryItem(
-                            medicationID: medicationID,
-                            itemID: created.id,
-                            patch: MedicationInventoryPatch(markAsFirstUseAt: .set(firstUsedAt))
-                        )
+                        do {
+                            _ = try await serverRepo.updateInventoryItem(
+                                medicationID: medicationID,
+                                itemID: created.id,
+                                patch: MedicationInventoryPatch(markAsFirstUseAt: .set(firstUsedAt))
+                            )
+                        } catch let err as HLError where err.shouldPersistToOutbox {
+                            // Queued for replay — the flip is not lost.
+                        } catch let err as HLError {
+                            HLLog.ui.error("Pen first-use sync failed: \(String(describing: err))")
+                            error = err
+                        } catch {
+                            HLLog.ui.error("Pen first-use sync failed: \(String(describing: error))")
+                            self.error = .unknown(String(describing: error))
+                        }
                     }
                 } catch let err as HLError where err.shouldPersistToOutbox {
                     // Queued for replay (incl. a transient-refresh 401 the

@@ -401,11 +401,15 @@ public enum InjectionSiteRotation {
         recent: [InjectionSite],
         window: Int = defaultWindow
     ) -> InjectionSite? {
+        // Audit B-4 — the rotation plan reasons about body regions, and a site
+        // this build cannot name has none. It is dropped from the history rather
+        // than counted as a region it might not be.
+        let recent = recent.filter { $0 != .unknown }
         guard !recent.isEmpty else { return nil }
         let bounded = Array(recent.prefix(max(1, window)))
         let mostRecent = bounded[0]
         var counts: [InjectionSite: Int] = [:]
-        for site in InjectionSite.allCases {
+        for site in InjectionSite.serverCases {
             counts[site] = 0
         }
         for site in bounded {
@@ -423,13 +427,15 @@ public enum InjectionSiteRotation {
 
     /// Coarse distance metric between two sites. Higher = "more
     /// different body region". Sufficient for tie-breaking.
+    ///
+    /// **Audit B-4 —** a site whose region this build cannot name scores `0`, the
+    /// same as "the very site you just used": it never wins a tie-break, because
+    /// there is no body geometry to claim it is far from anything.
     static func priority(_ site: InjectionSite, distanceFrom other: InjectionSite) -> Int {
         if site == other { return 0 }
-        let lhsRegion = region(site)
-        let rhsRegion = region(other)
+        guard let lhsRegion = region(site), let rhsRegion = region(other),
+              let lhsSide = side(site), let rhsSide = side(other) else { return 0 }
         if lhsRegion != rhsRegion { return 3 }
-        let lhsSide = side(site)
-        let rhsSide = side(other)
         if lhsSide != rhsSide { return 2 }
         return 1
     }
@@ -437,7 +443,9 @@ public enum InjectionSiteRotation {
     enum Region { case abdomen, thigh, arm }
     enum Side { case left, right }
 
-    static func region(_ site: InjectionSite) -> Region {
+    /// Audit B-4 — `nil` for the ``InjectionSite/unknown`` sentinel: this build
+    /// knows the server sent a site, not where on the body it is.
+    static func region(_ site: InjectionSite) -> Region? {
         switch site {
         case .abdomenLeftUpper, .abdomenRightUpper, .abdomenLeftLower, .abdomenRightLower:
             .abdomen
@@ -445,15 +453,20 @@ public enum InjectionSiteRotation {
             .thigh
         case .armLeft, .armRight:
             .arm
+        case .unknown:
+            nil
         }
     }
 
-    static func side(_ site: InjectionSite) -> Side {
+    /// Audit B-4 — see ``region(_:)``.
+    static func side(_ site: InjectionSite) -> Side? {
         switch site {
         case .abdomenLeftUpper, .abdomenLeftLower, .thighLeft, .armLeft:
             .left
         case .abdomenRightUpper, .abdomenRightLower, .thighRight, .armRight:
             .right
+        case .unknown:
+            nil
         }
     }
 }

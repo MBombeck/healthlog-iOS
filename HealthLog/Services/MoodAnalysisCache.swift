@@ -158,9 +158,11 @@ actor MoodAnalysisCache {
         return MoodAnalysisSnapshot(
             key: key,
             insights: engine.insights(request),
-            trend: scoped
-                .sorted { $0.recordedAt < $1.recordedAt }
-                .map { MoodTrendChart.Entry(date: $0.recordedAt, score: $0.score) }
+            // Audit B-4 — the trend line plots nameable levels only; an entry
+            // without one is a gap, never a fabricated point.
+            trend: MoodEntry.scored(scoped)
+                .sorted { $0.entry.recordedAt < $1.entry.recordedAt }
+                .map { MoodTrendChart.Entry(date: $0.entry.recordedAt, score: $0.score) }
         )
     }
 

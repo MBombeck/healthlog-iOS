@@ -72,6 +72,16 @@ public final class OutboxOperation {
     /// the row is live. Used only for triage / a future diagnostics surface.
     public var deadLetteredAt: Date?
 
+    /// **Audit B-2 — the server already took this write.** Stamped by the replay
+    /// service the instant a dispatch succeeds, BEFORE the row is removed, so a
+    /// remove that fails (SQLite busy, app-group lock, kill) can no longer let
+    /// the operation reach the wire a second time: the next drain sees the flag,
+    /// skips the dispatch, and only retries the removal. Rows carrying it stay
+    /// in the live snapshot on purpose — they still owe a local delete.
+    /// Non-optional with a default → lightweight migration (same posture as
+    /// `deadLettered`); legacy rows hydrate as `false`.
+    public var delivered: Bool = false
+
     /// **v0.16.2 audit-v0162 H-4 — optimistic→server id remap key.** For a PHI
     /// records/labs write this carries the ENTITY id the op concerns: a `create`
     /// stamps the `optimistic-<uuid>` id its store minted; a dependent
@@ -95,6 +105,7 @@ public final class OutboxOperation {
         ownerUserID: String? = nil,
         deadLettered: Bool = false,
         deadLetteredAt: Date? = nil,
+        delivered: Bool = false,
         clientEntityId: String? = nil
     ) {
         self.id = id
@@ -108,6 +119,7 @@ public final class OutboxOperation {
         self.ownerUserID = ownerUserID
         self.deadLettered = deadLettered
         self.deadLetteredAt = deadLetteredAt
+        self.delivered = delivered
         self.clientEntityId = clientEntityId
     }
 }

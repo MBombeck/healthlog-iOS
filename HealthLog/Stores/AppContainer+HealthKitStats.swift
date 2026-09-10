@@ -105,7 +105,8 @@ extension AppContainer {
         registry: AuthenticatedSessionLeaseRegistry,
         retryQueue: OutboxQueue?,
         hrBucketSync: HealthKitHRBucketSyncing? = nil,
-        nutrientSync: NutrientDailySyncing? = nil
+        nutrientSync: NutrientDailySyncing? = nil,
+        profileTimeZoneBox: ProfileTimeZoneBox? = nil
     ) -> HealthKitDailyStatsSyncing? {
         let stats = makeHealthKitDailyStatsSync(
             healthKit: healthKit,
@@ -113,7 +114,8 @@ extension AppContainer {
             featureFlagsStore: featureFlagsStore,
             keychain: keychain,
             registry: registry,
-            retryQueue: retryQueue
+            retryQueue: retryQueue,
+            profileTimeZoneBox: profileTimeZoneBox
         )
         // **Phase 07 / plan 07-09 — the bundled anchor-sweep hook is gone.**
         //
@@ -160,7 +162,8 @@ extension AppContainer {
         keychain: KeychainStoring,
         registry: AuthenticatedSessionLeaseRegistry,
         retryQueue: OutboxQueue?,
-        moduleGate: ModuleGate
+        moduleGate: ModuleGate,
+        profileTimeZoneBox: ProfileTimeZoneBox? = nil
     ) -> HealthKitStatsCluster {
         let hrBucketSync = makeHRBucketSync(
             healthKit: healthKit,
@@ -174,7 +177,8 @@ extension AppContainer {
             healthKit: healthKit,
             api: api,
             keychain: keychain,
-            moduleGate: moduleGate
+            moduleGate: moduleGate,
+            profileTimeZoneBox: profileTimeZoneBox
         )
         let dailyStats = wireHealthKitDailyStats(
             healthKit: healthKit,
@@ -186,7 +190,8 @@ extension AppContainer {
             registry: registry,
             retryQueue: retryQueue,
             hrBucketSync: hrBucketSync,
-            nutrientSync: nutrientSync
+            nutrientSync: nutrientSync,
+            profileTimeZoneBox: profileTimeZoneBox
         ) // V0.5.2 N4 + v0.7.0 W-STEPS Layer 2; W8-4 cache-sweep wired inside
         let liveToday = LiveHealthKitTodayStore(
             reader: { [weak dailyStats] in
@@ -201,6 +206,19 @@ extension AppContainer {
         )
     }
 
+    /// **Audit B-7 — the day-anchoring zone the statistics service cuts its day
+    /// boundaries on.** Reads the same lock-protected ``ProfileTimeZoneBox`` the
+    /// medication / dashboard / measurement day keys already share, so a HK day
+    /// total is posted under the day the server consolidates it into
+    /// (`consolidation-tz.ts`) rather than the device's. `nil` box (tests,
+    /// HK-less hosts) → `nil` provider → the service keeps its own calendar.
+    static func profileTimeZoneProvider(
+        _ box: ProfileTimeZoneBox?
+    ) -> (@Sendable () -> TimeZone)? {
+        guard let box else { return nil }
+        return { box.current }
+    }
+
     /// GH #48 — builds the nutrient daily-totals coordinator. Returns `nil` when
     /// `healthKit == nil` (non-iOS build / HK-less test host) so the slot stays
     /// inert. The `nutrients` module gate is read live off the main actor via a
@@ -209,12 +227,15 @@ extension AppContainer {
         healthKit: AnyHealthKitWriter?,
         api: APIClientProtocol,
         keychain: KeychainStoring,
-        moduleGate: ModuleGate
+        moduleGate: ModuleGate,
+        profileTimeZoneBox: ProfileTimeZoneBox? = nil
     ) -> NutrientDailySyncing? {
         #if canImport(HealthKit)
             guard healthKit != nil else { return nil }
             return NutrientDailySyncCoordinator(
-                statisticsService: HealthKitStatisticsService(),
+                statisticsService: HealthKitStatisticsService(
+                    timeZoneProvider: profileTimeZoneProvider(profileTimeZoneBox)
+                ),
                 api: api,
                 keychain: keychain,
                 isModuleEnabled: { [moduleGate] in
@@ -226,6 +247,7 @@ extension AppContainer {
             _ = api
             _ = keychain
             _ = moduleGate
+            _ = profileTimeZoneBox
             return nil
         #endif
     }
@@ -362,7 +384,8 @@ extension AppContainer {
         featureFlagsStore: FeatureFlagsStore,
         keychain: KeychainStoring? = nil,
         registry: AuthenticatedSessionLeaseRegistry? = nil,
-        retryQueue: OutboxQueue? = nil
+        retryQueue: OutboxQueue? = nil,
+        profileTimeZoneBox: ProfileTimeZoneBox? = nil
     ) -> HealthKitDailyStatsSyncing? {
         #if canImport(HealthKit)
             guard healthKit != nil else { return nil }
@@ -393,7 +416,9 @@ extension AppContainer {
             // The recovery ladder (persistent → non-trapping in-memory floor)
             // now lives in `HealthKitDailyStatsCache.makeWithRecovery()`.
             let cacheTask = HealthKitDailyStatsCache.makeWithRecoveryTask()
-            let stats = HealthKitStatisticsService()
+            let stats = HealthKitStatisticsService(
+                timeZoneProvider: profileTimeZoneProvider(profileTimeZoneBox)
+            )
             return HealthKitStatisticsSyncCoordinator(
                 statisticsService: stats,
                 cacheTask: cacheTask,
@@ -409,6 +434,7 @@ extension AppContainer {
             _ = keychain
             _ = registry
             _ = retryQueue
+            _ = profileTimeZoneBox
             return nil
         #endif
     }

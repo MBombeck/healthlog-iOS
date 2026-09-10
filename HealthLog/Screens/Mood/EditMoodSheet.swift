@@ -309,7 +309,11 @@ struct EditMoodSheet: View {
     }
 
     private func prefill() {
-        score = entry.score
+        // Audit B-4 — an entry whose level this build cannot name pre-fills the
+        // picker at the neutral middle. That is a suggestion the person then
+        // confirms with their own tap, not a claim the app files on their
+        // behalf: saving the sheet is an explicit re-statement of the level.
+        score = entry.score ?? 3
         recordedAt = entry.recordedAt
         note = entry.note ?? ""
         // Free-text legacy labels are pre-loaded as removable chips so they are

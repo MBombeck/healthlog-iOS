@@ -91,7 +91,13 @@ struct InsightsCategoryGroupsTests {
                 InsightsLayoutTileId.cardioRecovery
             ],
             .hearing: [
-                InsightsLayoutTileId.environmentalAudio, InsightsLayoutTileId.headphoneAudio
+                InsightsLayoutTileId.environmentalAudio, InsightsLayoutTileId.headphoneAudio,
+                // Audit B-4 — `audio-events` was the one place iOS diverged from
+                // the web's map, and only because no iOS `MetricKind` existed to
+                // hang a pill on. The web has grouped it under hearing since
+                // v1.7.0 (`sub-page-metric.ts:235`); now that
+                // `audioExposureEvent` is a kind, the mirror is verbatim again.
+                InsightsLayoutTileId.audioEvents
             ],
             .environment: [InsightsLayoutTileId.daylight],
             .metabolic: [

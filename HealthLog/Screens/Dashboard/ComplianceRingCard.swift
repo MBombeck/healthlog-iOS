@@ -233,3 +233,42 @@ private struct TappableComplianceModifier: ViewModifier {
         }
     }
 }
+
+// MARK: - Previews
+
+// **Public issue #6 — the 11-dose regimen.** The tester's case: eleven daily
+// doses, all taken, so the ring carries the five-glyph value "11/11" over the
+// "today" caption. Before the `HLRing` fix this broke as "11/1" + "1" with the
+// second line sitting on the caption.
+//
+// The preview renders the ring in the card's row geometry rather than
+// `ComplianceRingCard` itself: the card reads `SettingsStore` and
+// `MedicationsStore` out of the environment, and standing those up in a
+// preview would mean building the whole repository/API graph. The ring is the
+// surface the issue is about, and the layout contract is pinned by
+// `HLRingValueLayoutTests`.
+#Preview("11/11 regimen (public issue #6)") {
+    let snapshot = ComplianceSnapshot(scheduledToday: 11, takenToday: 11)
+    return HLCard {
+        HStack(alignment: .center, spacing: HLSpace.lg) {
+            HLRing(
+                progress: snapshot.ratio,
+                label: String(localized: "today"),
+                value: "\(snapshot.takenToday)/\(snapshot.scheduledToday)",
+                tint: HLText.primary,
+                accessibilityLabel: snapshot.ringAccessibilityLabel
+            )
+            .frame(width: 92, height: 92)
+            VStack(alignment: .leading, spacing: HLSpace.xs) {
+                Text(String(localized: "Medication compliance"))
+                    .font(.hlCaption).foregroundStyle(HLText.secondary)
+                Text(String(localized: "\(ComplianceRingCard.percentLabel(snapshot.ratio)) today"))
+                    .font(.hlTitle2)
+                    .foregroundStyle(HLText.primary)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+    .padding()
+    .background(HLSurface.primary)
+}

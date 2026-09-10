@@ -92,6 +92,14 @@ public final class SyncStateStore {
     /// drain). Sticky until a real drain, a re-submit, or logout clears it.
     public private(set) var showsFailedDrop: Bool = false
 
+    /// **Audit B-3 — what was lost, not just how much.** The writes this session
+    /// stopped carrying, each named by operation kind and machine reason (see
+    /// ``OutboxDiscardNotice``). Kept alongside ``failedDropCount`` rather than
+    /// as a second banner: one surface says "N Einträge konnten nicht übermittelt
+    /// werden", and this is the detail a diagnostics view or a log reader needs
+    /// to say WHICH. Cleared with the rest of the failure state.
+    public private(set) var discardedWrites: [OutboxDiscardNotice] = []
+
     /// Localized, count-aware footer caption for the dead-letter failure state
     /// (informal "du"). `nil` when there is nothing to surface. The footer
     /// primitive renders this verbatim.
@@ -259,11 +267,27 @@ public final class SyncStateStore {
         showsDrainConfirmation = false
     }
 
+    /// **Audit B-3 — surface a discarded write.** Sibling of
+    /// ``noteDeadLettered(_:)`` and deliberately the same destination: a write
+    /// the replay dropped for a permanent server verdict is exactly as lost as
+    /// one that ran out of retries, so it raises the same honest failure state
+    /// and disarms the drain-confirmation beat the same way. It adds only what
+    /// the count cannot say — which kind, and why.
+    public func noteDiscarded(_ notices: [OutboxDiscardNotice]) {
+        guard !notices.isEmpty else { return }
+        discardedWrites.append(contentsOf: notices)
+        failedDropCount += notices.count
+        showsFailedDrop = true
+        drainConfirmationTask?.cancel()
+        showsDrainConfirmation = false
+    }
+
     /// Clear the dead-letter failure state — e.g. after the user re-submits the
     /// stuck writes from a diagnostics surface, or the writes finally drain.
     public func clearFailedDrop() {
         failedDropCount = 0
         showsFailedDrop = false
+        discardedWrites = []
     }
 
     private func armDrainConfirmation() {
@@ -366,9 +390,11 @@ public final class SyncStateStore {
         drainConfirmationTask?.cancel()
         showsDrainConfirmation = false
         // audit-v0162 H1 (Opt 2) — a logout must not carry a stale DLQ failure
-        // banner into the next session.
+        // banner into the next session. Audit B-3 — nor the discard detail,
+        // which names the previous account's write kinds.
         failedDropCount = 0
         showsFailedDrop = false
+        discardedWrites = []
         // b178 W-SYNCVIS — drop the phase machine too; the generation bump
         // neutralizes any still-in-flight handshake or pending decay.
         handshakeGeneration &+= 1

@@ -80,9 +80,12 @@ public final class SideEffectsLogbookStore {
             )
             entries = mergeSortedDescending(existing: entries, inserted: inserted)
             // Mirror to the server when paired (Outbox-on-failure inside the repo).
-            if let serverRepo {
+            // Audit B-4 — the sentinel has no taxonomy entry, so there is
+            // nothing to mirror. It only ever arrives by hydrating a server row
+            // this build could not map, which means the server already holds it.
+            if let serverRepo, let entry = kind.serverEntry {
                 let body = MedicationSideEffectCreate(
-                    entry: kind.serverEntry,
+                    entry: entry,
                     severity: SideEffectSeverityBridge.toServer(severity),
                     occurredAt: loggedAt,
                     notes: note
@@ -141,7 +144,10 @@ public final class SideEffectsLogbookStore {
                     id: row.id,
                     medicationID: medicationID,
                     loggedAt: row.occurredAt,
-                    kindRaw: (SideEffectKind.from(serverEntry: row.entry) ?? .nausea).rawValue,
+                    // Audit B-4 — was `?? .nausea`: an entry this build cannot
+                    // map is the one thing it is certainly NOT, a symptom the
+                    // person named.
+                    kindRaw: SideEffectKind.from(serverEntry: row.entry).rawValue,
                     severity: SideEffectSeverityBridge.toLocal(row.severity),
                     note: row.notes,
                     createdAt: row.createdAt ?? row.occurredAt,
@@ -183,7 +189,11 @@ public final class SideEffectsLogbookStore {
     public var summaryByKind: [SummaryRow] {
         var counts: [SideEffectKind: (count: Int, weight: Int)] = [:]
         for entry in entries {
-            guard let kind = entry.kind else { continue }
+            // Audit B-4 — the chips name a dominant SYMPTOM and colour it by
+            // weighted severity. The sentinel is not a symptom (two rows on it
+            // may be two different taxonomy entries), so it gets no chip; the
+            // rows themselves stay in the day list below, labelled honestly.
+            guard let kind = entry.kind, kind != .unknown else { continue }
             let prev = counts[kind] ?? (0, 0)
             counts[kind] = (prev.count + 1, prev.weight + max(1, entry.severity))
         }

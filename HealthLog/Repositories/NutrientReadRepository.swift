@@ -102,7 +102,7 @@ public actor NutrientReadRepository {
         do {
             return try await send(body, idempotencyKey: key)
         } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(.logNutrientWater, payload: OutboxQueue.Payloads.LogNutrientWater(body: body), key: key)
+            try await enqueue(.logNutrientWater, payload: OutboxQueue.Payloads.LogNutrientWater(body: body), key: key)
             throw err
         }
     }
@@ -134,18 +134,29 @@ public actor NutrientReadRepository {
         return try await api.send(req)
     }
 
+    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
+    /// under its idempotency key. A failure here is **not** swallowed: the
+    /// network attempt already failed, so the write is on no server either, and
+    /// re-throwing the original retriable error would let the store keep showing
+    /// the entry as "queued, replays later" for something that is permanently
+    /// lost. Since build 274 that is a reachable state, not a theoretical one —
+    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
+    /// when iOS grants no background execution time. Throws
+    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
+    /// used since G-2) so the caller rolls its optimistic row back and surfaces
+    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
     private func enqueue(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey
-    ) async {
+    ) async throws {
         do {
             let data = try encoder.encode(payload)
             try await outbox.enqueue(.init(kind: kind, payload: data, idempotencyKey: key.raw))
         } catch {
-            HLLog.outbox.error(
-                "Nutrient-water outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))"
-            )
+            let cause = LogSanitizer.redact(String(describing: error))
+            HLLog.outbox.error("Nutrient-water outbox enqueue failed: \(cause)")
+            throw HLError.notPersisted(cause)
         }
     }
 }

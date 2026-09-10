@@ -71,9 +71,17 @@ public extension AppContainer {
         // `MeasurementsRepository` so its `.dashboardSummary` write-invalidation
         // day-key matches the day-key `DashboardStore` READS. The repo's provider
         // is `@Sendable`, so it reads the lock-protected box rather than reaching
-        // into the `@MainActor` `SettingsStore`. Seed the box with the current
-        // value and keep it fresh on every profile-timezone change.
-        profileTimeZoneBox.update(settingsStore.resolvedProfileTimeZone)
+        // into the `@MainActor` `SettingsStore`. Seed the box from the profile
+        // and keep it fresh on every profile-timezone change.
+        //
+        // Audit B-7 (fix round 1) — `updateIfResolved`, not `update`. This runs
+        // inside `AppContainer.init`, where `settingsStore.profile` is still
+        // `nil` and `resolvedProfileTimeZone` answers `.current`; pushing that
+        // overwrote the box's mirrored seed AND the mirror itself with the
+        // device zone on every launch, which is exactly the background-wake path
+        // the mirror was added for. The change closure below stays unconditional
+        // — a `profile.didSet` is a genuine server statement.
+        profileTimeZoneBox.updateIfResolved(settingsStore.profile?.timezone)
         settingsStore.onProfileTimeZoneChange = { [weak profileTimeZoneBox] zone in
             profileTimeZoneBox?.update(zone)
         }

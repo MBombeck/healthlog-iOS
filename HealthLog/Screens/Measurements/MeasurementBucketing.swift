@@ -215,14 +215,33 @@ enum MeasurementBucketing {
 /// place.
 struct SummaryStats: Equatable {
     let count: Int
-    let mean: Double
-    let min: Double
-    let max: Double
+    /// Audit B-4 — `nil` for a bucket of ``MetricKind/unknown`` rows, and only
+    /// for those. Every other bucket is one kind in one unit, so a mean is a
+    /// statement about comparable readings; `.unknown` is a BUCKET, not a kind,
+    /// and two rows in it may carry two different server types this build
+    /// cannot name. Averaging them, or drawing a Min/Max band across them, is a
+    /// number about nothing. The count survives, because how many readings the
+    /// server holds is exactly what the row can honestly say.
+    let mean: Double?
+    let min: Double?
+    let max: Double?
     let secondaryMean: Double?
     let secondaryMin: Double?
     let secondaryMax: Double?
 
     static func compute(items: [Measurement]) -> SummaryStats {
+        // The list is kind-scoped, so the bucket's kind is any item's kind.
+        guard items.first?.kind.isUnknown != true else {
+            return SummaryStats(
+                count: items.count,
+                mean: nil,
+                min: nil,
+                max: nil,
+                secondaryMean: nil,
+                secondaryMin: nil,
+                secondaryMax: nil
+            )
+        }
         let primaries = items.map(\.primaryValue)
         let secondaries: [Double] = items.compactMap { m in
             if case let .bloodPressure(_, d) = m.value { return d }

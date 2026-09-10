@@ -27,6 +27,7 @@ struct OutboxReplayStartupOrderingTests {
                 await syncState.noteDeadLettered(count)
                 await observer.record(count)
             },
+            onDiscarded: { notices in await syncState.noteDiscarded(notices) },
             ownerIsAlive: { true }
         )
         // Phase 09 / plan 09-05 — the bootstrap now waits for the app to draw

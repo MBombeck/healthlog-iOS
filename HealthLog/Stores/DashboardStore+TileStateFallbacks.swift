@@ -54,14 +54,21 @@ extension DashboardStore {
     /// actor. The projected rows are display-only (they never round-trip to the
     /// server) — mood writes still flow exclusively through `MoodStore`.
     nonisolated static func moodTileState(entries: [MoodEntry]) -> MetricDataState {
-        guard let newest = entries.max(by: { $0.recordedAt < $1.recordedAt }) else {
+        // Audit B-4 — the tile headline is ONE number, so it reads the newest
+        // NAMEABLE entry. A newer entry whose level this build cannot name has
+        // no number for that slot and must not displace the person's real
+        // latest mood; `.empty(.noData)` is the honest render when the window
+        // holds nothing but such entries.
+        guard let newest = MoodEntry.scored(entries)
+            .max(by: { $0.entry.recordedAt < $1.entry.recordedAt }) else
+        {
             return .empty(reason: .noData)
         }
         // `latest` = the true newest raw entry (real reading, not a day-mean).
         let latest = Measurement(
-            id: newest.id,
+            id: newest.entry.id,
             kind: .mood,
-            recordedAt: newest.recordedAt,
+            recordedAt: newest.entry.recordedAt,
             value: .scalar(Double(newest.score)),
             source: .manual
         )
@@ -152,8 +159,10 @@ extension DashboardStore {
     /// scheme). Bucket start-of-day + arithmetic mean live in `SeriesDownsampler`;
     /// this only bridges `MoodEntry` ⇄ `SeriesPoint` ⇄ `Measurement`.
     private nonisolated static func dailyMeanMoodSamples(from entries: [MoodEntry]) -> [Measurement] {
-        let points = entries.map { entry in
-            SeriesPoint(id: entry.id, at: entry.recordedAt, value: Double(entry.score), secondary: nil)
+        // Audit B-4 — the sparkline is a mean per day; an entry whose level this
+        // build cannot name has no value to average, so it is not a point.
+        let points = MoodEntry.scored(entries).map { entry, score in
+            SeriesPoint(id: entry.id, at: entry.recordedAt, value: Double(score), secondary: nil)
         }
         return SeriesDownsampler.aggregate(points, by: .day).map { point in
             Measurement(

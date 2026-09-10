@@ -118,8 +118,12 @@ enum MoodLevelAppEnum: String, AppEnum {
     }
 
     /// HealthLog mood score (1…5) for the repository call.
+    ///
+    /// Audit B-4 — `serverLevel` is built from a closed App-Intent enum that
+    /// names five levels, so it is never the sentinel and the score always
+    /// resolves; the fallback exists only to keep the type non-optional.
     var score: Int {
-        serverLevel.score
+        serverLevel.score ?? 3
     }
 
     /// Localized lower-case name woven into the spoken confirmation dialog

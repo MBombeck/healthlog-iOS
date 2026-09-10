@@ -325,6 +325,9 @@ public struct OutboxOperationSnapshot: Sendable {
     public let ownerUserID: String?
     /// audit-v0162 H1 — persisted dead-letter flag (recoverable, non-replaying).
     public let deadLettered: Bool
+    /// Audit B-2 — the server already took this write; only the local delete is
+    /// still owed. A row carrying it is never dispatched again (see model).
+    public let delivered: Bool
     /// audit-v0162 H-4 — optimistic→server entity-id remap key (see model).
     public let clientEntityId: String?
 
@@ -339,6 +342,7 @@ public struct OutboxOperationSnapshot: Sendable {
         lastError = model.lastError
         ownerUserID = model.ownerUserID
         deadLettered = model.deadLettered
+        delivered = model.delivered
         clientEntityId = model.clientEntityId
     }
 
@@ -357,6 +361,7 @@ public struct OutboxOperationSnapshot: Sendable {
         lastError = model.lastError
         ownerUserID = model.ownerUserID
         deadLettered = model.deadLettered
+        delivered = model.delivered
         clientEntityId = model.clientEntityId
     }
 }

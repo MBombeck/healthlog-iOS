@@ -48,7 +48,9 @@ struct MeasurementTypeCAT1Tests {
         #expect(decoded == .audioExposureEvent)
     }
 
-    @Test("All twelve cases survive round-trip", arguments: ServerMeasurementType.allCases)
+    /// Audit B-4 — `serverCases`, not `allCases`: `.unknown` is a decode-only
+    /// sentinel whose `encode` deliberately throws, so it has no round trip.
+    @Test("Every server case survives round-trip", arguments: ServerMeasurementType.serverCases)
     func allCasesRoundTrip(type: ServerMeasurementType) throws {
         let encoded = try JSONEncoder().encode(type)
         let decoded = try JSONDecoder().decode(ServerMeasurementType.self, from: encoded)
@@ -122,6 +124,13 @@ struct MeasurementTypeCAT1Tests {
         //   Screener-Scores, die WHOOP/Oura-Score-Klassen und die kategorialen
         //   Herz-/Atem-Events; verifiziert als Mengendifferenz gegen das
         //   77-gliedrige Server-Enum) = 77.
-        #expect(all.count == 77)
+        //
+        // Audit B-4 — die Zahl steht weiter für das Server-Enum, deshalb zählt
+        // sie `serverCases`: `__UNKNOWN__` ist kein Server-Wert, sondern der
+        // Sammelfall, auf dem ein 78. Server-Typ landet statt verworfen zu
+        // werden. `allCases` ist um genau diesen einen Fall größer.
+        #expect(Set(ServerMeasurementType.serverCases.map(\.rawValue)).count == 77)
+        #expect(all.count == 78)
+        #expect(all.contains("__UNKNOWN__"))
     }
 }
