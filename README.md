@@ -85,7 +85,7 @@ First launch asks for your server URL — there is no default; the app ships wit
 
 - **iPhone running iOS 18.0 or later.** The on-device AI Coach needs an Apple-Intelligence-eligible device on iOS 26; everything else runs on any iOS 18 iPhone. The Watch app needs watchOS 11.
 - **A reachable [HealthLog server](https://github.com/MBombeck/HealthLog)** — your own install or `demo.healthlog.dev` for a test drive — or standalone mode.
-- **For building from source:** a Mac with Xcode 26.6 (the pinned toolchain — see `project.yml` and CI), [XcodeGen](https://github.com/yonaskolb/XcodeGen), and an Apple Developer account for device installs. Simulator builds need no team.
+- **For building from source:** a Mac on macOS 15 or later with Xcode 26.6 (the pinned toolchain — see `project.yml` and CI), [XcodeGen](https://github.com/yonaskolb/XcodeGen), and an Apple Developer account for device installs. Simulator builds need no team.
 
 ## How it works
 
