@@ -7,11 +7,11 @@ import SwiftUI
 /// view only chooses the right body of copy (de + en in `Localizable.xcstrings`)
 /// and frames it with a tasteful, sparse warm-tint highlight.
 ///
-/// **Graphic insertion point (later update).** Each phase has a named asset slot —
-/// `cycle.phase.<phase>.highlight` — where the later update drops a generated
-/// warm-organic illustration (via Gemini). Until that asset exists, a native
+/// **Illustration slot.** Each phase has a named asset slot —
+/// `cycle.phase.<phase>.highlight` — for its illustration.
+/// Until that asset exists, a native
 /// fallback motif (a soft warm radial gradient over the monochrome base) renders
-/// in EXACTLY the same frame, so the layout is complete now and the generated
+/// in the same frame, so the layout is complete now and the
 /// art swaps in with zero layout churn. See ``PhaseHighlightSlot``.
 ///
 /// Monochrome doctrine: the body copy is monochrome `HLText`; the only colour is
@@ -120,7 +120,7 @@ struct CyclePhaseExplainer: View {
         }
     }
 
-    /// The named asset slot the later update fills with a generated illustration.
+    /// The named asset slot for the phase illustration.
     nonisolated static func highlightAssetName(for phase: CyclePhasePalette.Phase) -> String {
         switch phase {
         case .menstrual: "cycle.phase.menstrual.highlight"
@@ -134,9 +134,9 @@ struct CyclePhaseExplainer: View {
 // MARK: - Highlight slot (generated art slot + native fallback)
 
 /// The per-phase illustration slot. Renders `Image(highlightAssetName)` when the
-/// asset exists in the catalog (dropped in by the later update); otherwise a native
+/// asset exists in the catalog; otherwise a native
 /// warm-organic gradient motif fills the EXACT same frame so the layout never
-/// shifts when the generated art lands.
+/// shifts when the illustration is added.
 ///
 /// **No layout churn contract:** both branches occupy the parent-supplied frame
 /// identically; only the visual content swaps. Reduce-motion safe (fully static).
