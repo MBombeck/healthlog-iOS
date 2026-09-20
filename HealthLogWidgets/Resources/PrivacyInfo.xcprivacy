@@ -18,11 +18,23 @@
       UserDefaults Required-Reason API → NSPrivacyAccessedAPICategoryUserDefaults
       / CA92.1 is declared (same reason as the host app manifest). Leaving it
       empty is the under-declaration / rejection-risk direction.
-    - The widget's own persistence (`WidgetSnapshotStore`) still uses only the
-      App-Group snapshot file via `Data(contentsOf:)` / atomic write — no file
-      timestamps and no system boot time cross into the extension (grep-verified:
-      no creationDate/contentModificationDate/systemUptime call sites), so no
-      FileTimestamp / SystemBootTime reason is declared.
+    - The widget's own persistence (`WidgetSnapshotStore`) uses only the
+      App-Group snapshot file via `Data(contentsOf:)` / atomic write. But the
+      appex source set is wider than that store: it also compiles
+      `Services/DoctorReportTmpSweeper.swift` (project.yml), which reads
+      `.contentModificationDateKey` / `contentModificationDate` at :92,104,105 to
+      decide whether a stale temp export may be deleted. That links the
+      FileTimestamp Required-Reason API into THIS binary, so the category is
+      declared below (audit v1.4.1 row 19 — the earlier "grep-verified: no
+      contentModificationDate call sites" claim went stale when the sweeper
+      entered the widget source closure; under-declaring is what triggers the
+      ITMS-91053 mail after upload).
+    - Still no SystemBootTime: re-grepped the full 395-file appex source closure
+      for `systemUptime` / `mach_absolute_time` / `creationDate`
+      and found none. `DispatchTime.now().uptimeNanoseconds` in
+      `Cache/SWRSignpost.swift` is a libdispatch monotonic clock, not one of the
+      listed boot-time symbols, and the host-app manifest does not declare the
+      category for it either.
     - The extension does NO independent data collection or transmission. It only
       renders mood/medication data the host app already wrote into the shared
       App-Group container; the host app's own `PrivacyInfo.xcprivacy` declares
@@ -53,6 +65,24 @@
             <key>NSPrivacyAccessedAPITypeReasons</key>
             <array>
                 <string>CA92.1</string>
+            </array>
+        </dict>
+        <!--
+        FileTimestamp — the appex links the API through the compiled
+        `DoctorReportTmpSweeper`, which reads a temp export's modification date
+        inside the app's own container before deleting it. DDA9.1 ("access file
+        timestamps of files inside the app container") is that call site's exact
+        reason; C617.1 mirrors the host-app manifest, which declares the same
+        pair for the shared Services set. Same category, same file paths, two
+        binaries.
+        -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>C617.1</string>
+                <string>DDA9.1</string>
             </array>
         </dict>
     </array>

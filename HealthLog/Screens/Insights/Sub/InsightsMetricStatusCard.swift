@@ -39,12 +39,31 @@ struct InsightsMetricStatusCard: View {
         /// Localized metric title (`kind.displayName`).
         let title: String
         /// Optional guideline caption next to the title (BP → "ESH 2023").
-        let guidelineCaption: LocalizedStringKey?
+        /// Already localized by the builder — the card renders it verbatim and
+        /// the VoiceOver summary below folds it into one sentence, neither of
+        /// which a `LocalizedStringKey` can do (its key is not readable back).
+        let guidelineCaption: String?
+        /// **1.4.1** — the citation topic behind ``guidelineCaption``. With a
+        /// topic the caption becomes the tappable way into the sources sheet
+        /// (BP → ESH/ESC/ACC-AHA, BMI → WHO); `nil` leaves it plain text, so a
+        /// caption can never advertise a sheet that has nothing to show.
+        var sourcesTopic: MedicalSourceTopic?
         /// The classification / assessment chip text (e.g. "Hoch-normal",
         /// "Normalgewicht"). `nil` → no chip (honest self-suppression).
         let chipLabel: String?
         /// The chip tone (signal-only). Ignored when `chipLabel == nil`.
         let chipTone: HLBadge.Tone
+        /// **1.0.3 (App Review 1.4.1, audit row 10)** — the qualifier that
+        /// belongs to ``chipLabel``. "Hypertension grade 2" / "Obesity class
+        /// III" are diagnostic category names; the sentence that says a category
+        /// computed from home readings is not a diagnosis used to sit one tap
+        /// away inside the Sources sheet. It now rides on the card, next to the
+        /// chip it qualifies. Only BP and BMI set it — the other metrics
+        /// classify against the user's OWN target row, which claims no
+        /// diagnostic category and therefore needs no such disclaimer. Rendered
+        /// only when ``chipLabel`` is present, so a card with no chip never
+        /// shows a qualifier for a chip that is not there.
+        var chipCaption: String?
         /// The pre-formatted headline value (BP → "128/82"; others → the 30-day
         /// average or, honestly, the latest reading). `nil` → no headline.
         let headlineValue: String?
@@ -88,6 +107,31 @@ struct InsightsMetricStatusCard: View {
         }
     }
 
+    /// **1.4.1** — the card's one-utterance VoiceOver summary.
+    ///
+    /// The card used to combine its children, which read as a single sentence
+    /// for free. It now *contains* them, because the guideline caption became a
+    /// control and a combined element would swallow it — so the summary has to
+    /// be stated explicitly, exactly as the correlation card states its own.
+    /// Every honest-only slot stays honest: an absent chip, headline or
+    /// guideline contributes nothing rather than an empty clause.
+    nonisolated static func accessibilityLabel(for descriptor: Descriptor) -> String {
+        var parts = [descriptor.title]
+        if let guideline = descriptor.guidelineCaption { parts.append(guideline) }
+        if let chip = descriptor.chipLabel {
+            parts.append(chip)
+            // 1.0.3 (1.4.1) — the "not a diagnosis" qualifier is part of the
+            // claim, not decoration around it, so it follows the chip in the
+            // spoken sentence exactly as it follows it on screen. Tied to the
+            // chip on both paths: no chip → no qualifier, spoken or drawn.
+            if let caption = descriptor.chipCaption { parts.append(caption) }
+        }
+        if let value = descriptor.headlineValue {
+            parts.append(descriptor.unitCaption.isEmpty ? value : "\(value) \(descriptor.unitCaption)")
+        }
+        return parts.joined(separator: ". ")
+    }
+
     let descriptor: Descriptor
 
     var body: some View {
@@ -95,6 +139,7 @@ struct InsightsMetricStatusCard: View {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
                     headerRow
+                    chipCaptionRow
                     headlineRow
                     if let pct = descriptor.pctInTarget {
                         InsightsInTargetBar(pct: pct, windowLabel: descriptor.inTargetWindowLabel)
@@ -116,8 +161,30 @@ struct InsightsMetricStatusCard: View {
                     }
                 }
             }
-            .accessibilityElement(children: .combine)
+            // 1.4.1 — `.contain`, not `.combine`: the guideline caption is now a
+            // control (it opens the sources sheet), and a combined element would
+            // swallow it so neither VoiceOver nor an automated check could reach
+            // it. Same discipline as the correlation card, which already
+            // contains rather than combines for exactly this reason — and, like
+            // that card, the summary the combine used to produce is restated
+            // here so the card still reads as one sentence before its controls.
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(verbatim: Self.accessibilityLabel(for: descriptor)))
             .accessibilityIdentifier("insights.metric.statusCard.\(descriptor.identifierSuffix)")
+        }
+    }
+
+    /// 1.0.3 (1.4.1) — the chip's qualifier, on the line directly below the
+    /// header row the chip sits in. Full width rather than tucked under the
+    /// badge itself: at 393 pt a trailing-aligned sentence of this length wraps
+    /// into a ragged two-line column against the right edge.
+    @ViewBuilder
+    private var chipCaptionRow: some View {
+        if descriptor.chipLabel != nil, let caption = descriptor.chipCaption {
+            Text(caption)
+                .font(.hlCaption2)
+                .foregroundStyle(HLText.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -126,10 +193,11 @@ struct InsightsMetricStatusCard: View {
             Text(descriptor.title)
                 .font(.hlCaption.weight(.semibold))
                 .foregroundStyle(HLText.secondary)
+            // 1.4.1 — a guideline name IS a citation. When the catalog knows the
+            // topic behind it, the caption stops being decoration and becomes the
+            // way into the sources sheet; without a topic it stays plain text.
             if let guideline = descriptor.guidelineCaption {
-                Text(guideline)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                HLSourcesGuidelineCaption(caption: guideline, topic: descriptor.sourcesTopic)
             }
             Spacer()
             // C3 — the chip lives in the header row. Both the Letzte-Messung

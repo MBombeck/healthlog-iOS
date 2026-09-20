@@ -33,6 +33,10 @@ import Testing
 /// Real-device + Xcode-Cloud runs on eligible hardware execute the
 /// live model call and assert the shape of the returned `CoachInsight`.
 ///
+/// **1.0.3 (App Review 1.4.1, R11).** The round-trip now runs against the
+/// composed prompt rather than a bare question — see the comment at the call
+/// site for why the schema alone no longer carries the contract.
+///
 /// **Why not split into two `@Test`s — one for the unavailable path,
 /// one for the available path?** The available path requires the
 /// model catalog assets to be provisioned on the host, which is not
@@ -68,15 +72,39 @@ struct LocalLLMServiceResponseTests {
             return
         }
 
-        // Live model call. Use a short, deterministic prompt to keep
-        // the test runtime bounded — the AskCoach hero will issue
-        // richer prompts in production but the structural contract
-        // (non-empty title, body, ≥1 action) is the same.
+        // Live model call against the prompt production actually sends.
+        //
+        // **1.0.3 (R11).** This used to hand the model a bare question
+        // ("Was bedeutet ein Blutdruck von 138/92?") and still get a
+        // populated list back, because the schema field was
+        // `suggestedActions` guided by "1-3 konkrete Handlungsvorschläge"
+        // — the shape coerced an action list out of an unguided prompt all
+        // by itself. That coercion is exactly what 1.4.1 rejected and what
+        // `talkingPoints` removed. The instruction to produce questions for
+        // a doctor lives in `PrivacyFirstPromptBuilder`, so the test
+        // composes the prompt the way `CoachConversationStore` does. The
+        // locale is pinned rather than inherited — the builder selects its
+        // guardrail language from it.
+        //
+        // **R29 — and against a snapshot with something in it.** The
+        // composed prompt was still being handed `.empty`, which is the one
+        // state where the ask is close to unanswerable: asked to write
+        // questions a person could take to their doctor, about no data at
+        // all, the model reasonably produced none. That emptiness failed the
+        // release freeze twice. Production almost never sends `.empty` —
+        // `composePrompt` reads the live snapshot every turn — so the
+        // fixture now carries what a real turn carries. The count floor is
+        // enforced structurally by `.count(1...3)` on the schema; this makes
+        // the request a fair one on top of that.
+        let prompt = PrivacyFirstPromptBuilder.compose(
+            userText: "Was sagen meine Blutdruckwerte der letzten Tage?",
+            snapshot: Self.realisticSnapshot(now: Self.fixtureNow),
+            now: Self.fixtureNow,
+            locale: Locale(identifier: "de_DE")
+        )
         let insight: CoachInsight
         do {
-            insight = try await service.respond(
-                prompt: "Was bedeutet ein Blutdruck von 138/92?"
-            )
+            insight = try await service.respond(prompt: prompt)
         } catch LocalLLMError.foundationModelsUnavailable {
             // Race: availability flipped between the snapshot above
             // and the call (the service re-probes on every
@@ -100,8 +128,37 @@ struct LocalLLMServiceResponseTests {
             "body must hold at least one full sentence (≥20 chars), got \(insight.body.count)"
         )
         #expect(
-            insight.suggestedActions.count >= 1,
-            "must surface at least one suggested action"
+            insight.talkingPoints.count >= 1,
+            "must surface at least one talking point for the doctor visit"
+        )
+        // R11 — the talking points are for a conversation, not a to-do list.
+        // A live 3B model cannot be asserted into perfect phrasing, but the
+        // imperative openers the old guide invited are checkable.
+        for point in insight.talkingPoints {
+            #expect(
+                !point.hasPrefix("Nimm ") && !point.hasPrefix("Erhöhe ") && !point.hasPrefix("Reduziere "),
+                "a talking point must not be an instruction to act: \(point)"
+            )
+        }
+        #expect(insight.talkingPoints.count <= 3, "the generation guide caps the list at 3")
+    }
+
+    // MARK: - Fixtures (R29)
+
+    /// Pinned clock, so the composed prompt is a pure function of the fixture.
+    private static let fixtureNow = Date(timeIntervalSince1970: 1_700_000_000)
+
+    /// An ordinary week: blood pressure in the high-normal band, a calm resting
+    /// pulse, and seven hours of sleep. Deliberately unremarkable — the point is
+    /// to give the model something to write a question ABOUT, not to bait it
+    /// into a finding. Values as ruled in R29.
+    private static func realisticSnapshot(now: Date) -> HealthSnapshot {
+        HealthSnapshot(
+            latestBP: .init(sys: 128, dia: 82, date: now.addingTimeInterval(-86400)),
+            latestPulse: .init(bpm: 62, date: now.addingTimeInterval(-86400)),
+            latestWeight: .init(kg: 78.4, date: now.addingTimeInterval(-3 * 86400)),
+            last7dStepsAvg: 8200,
+            last7dSleepAvgHours: 7.0
         )
     }
 }

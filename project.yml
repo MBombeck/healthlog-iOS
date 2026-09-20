@@ -17,7 +17,7 @@ settings:
     # 2026-08-21 three of them hardcoded "0.19.0" instead — the same split as
     # the build number below, and it would have shipped a stale marketing
     # version on the first release that changed one.
-    MARKETING_VERSION: "1.0.2"
+    MARKETING_VERSION: "1.0.3"
     # 11-03 THE SINGLE FROZEN BUILD-NUMBER ALLOCATION POINT.
     #
     # This is the ONLY `CURRENT_PROJECT_VERSION:` assignment in this file, and
@@ -48,7 +48,7 @@ settings:
     #
     # The procedure and the receipt it must produce live in
     # .planning/active/apple-review-reliability/CANDIDATE-FREEZE.md.
-    CURRENT_PROJECT_VERSION: "276"
+    CURRENT_PROJECT_VERSION: "279"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -418,11 +418,21 @@ targets:
         # supported; the user reviews the text before sending.
         NSSpeechRecognitionUsageDescription: "HealthLog nutzt Spracherkennung, um deine diktierte Frage an den Coach in Text umzuwandeln – wo möglich direkt auf dem Gerät. Du prüfst den Text vor dem Senden."
         NSMicrophoneUsageDescription: "HealthLog nutzt das Mikrofon, um deine Frage an den Coach zu diktieren. Die Aufnahme wird auf dem Gerät in Text umgewandelt und nicht gespeichert."
-        # Camera + Photo Library serve two explicit user-driven flows: local
-        # Vision OCR for medication/lab entry, and the optional document vault
-        # whose selected images/scans are uploaded to the configured server.
+        # Camera serves two explicit user-driven flows: local Vision OCR for
+        # medication/lab entry, and the optional document vault whose selected
+        # scans are uploaded to the configured server.
+        #
+        # 1.0.3 / audit row 26 (5.1.1(ii)) — `NSPhotoLibraryUsageDescription` was
+        # REMOVED, not forgotten. Every photo entry point is the SwiftUI
+        # `PhotosPicker` / `.photosPicker` modifier (`PhotoOfMedSheet.swift:137`,
+        # `EditProfileScreen.swift:291`, `DocumentUploadSheet.swift:57`,
+        # `LabScanSheet.swift:41`), which runs out of process and hands back only
+        # the items the user picked — it never requests photo-library
+        # authorization, so the string could never be shown. Re-verified by grep
+        # in the source: zero hits for `PHPhotoLibrary`,
+        # `PHPickerViewController`, `UIImagePickerController` and `import Photos`.
+        # Reinstate the key the moment any of those four appears.
         NSCameraUsageDescription: "HealthLog nutzt die Kamera, um Medikamenten-Packungen und Laborberichte auf dem Gerät auszulesen oder von dir ausgewählte Scans in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen."
-        NSPhotoLibraryUsageDescription: "HealthLog liest nur von dir ausgewählte Fotos, um dein Profilbild festzulegen, sie auf dem Gerät auszulesen oder in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen."
         # v0.5.6 F.1 — SpeziBluetooth lazily allocates a `CBCentralManager`
         # the first time a `scanNearbyDevices` / `powerOn()` call mounts.
         # iOS requires `NSBluetoothAlwaysUsageDescription` for any
@@ -433,7 +443,13 @@ targets:
         # with a disabled "Gerät hinzufügen" CTA — no scan is started yet,
         # so the prompt stays dormant until F.2 wires the first device
         # profile. Localized permission copy lives in de/en InfoPlist.strings.
-        NSBluetoothAlwaysUsageDescription: "HealthLog koppelt Blutdruckmessgeräte, Glukose-Sensoren und Waagen über Bluetooth, damit Messungen automatisch landen."
+        # 1.0.3 / audit row 26 — narrowed from "Blutdruckmessgeräte,
+        # Glukose-Sensoren und Waagen" to what is actually registered: the single
+        # `Discover(OmronBloodPressureCuff, by: .advertisedService(BloodPressureService))`
+        # in `HealthLogSpeziDelegate.swift:309-313`. There is no scale and no
+        # glucose profile, so neither could ever be paired — and
+        # `SettingsDevicesScreen.swift:92-105` already says so in the UI.
+        NSBluetoothAlwaysUsageDescription: "HealthLog koppelt Blutdruckmessgeräte über Bluetooth – derzeit die Omron-Profile –, damit deine Messwerte automatisch in HealthLog landen."
         CFBundleLocalizations:
           - de
           - en

@@ -6,5 +6,4 @@
 "NSSpeechRecognitionUsageDescription" = "HealthLog uses speech recognition to turn your dictated Coach question into text, on device where available. You review the text before sending it.";
 "NSMicrophoneUsageDescription" = "HealthLog uses the microphone so you can dictate a Coach question. The recording is converted to text on device and is not stored.";
 "NSCameraUsageDescription" = "HealthLog uses the camera to read medication packages and lab reports on device, or to upload scans you select to your document vault on your configured HealthLog server.";
-"NSPhotoLibraryUsageDescription" = "HealthLog reads only photos you select, to set your profile picture, process them on device, or upload them to your document vault on your configured HealthLog server.";
-"NSBluetoothAlwaysUsageDescription" = "HealthLog connects to blood-pressure monitors, glucose sensors, and scales over Bluetooth so measurements can arrive automatically.";
+"NSBluetoothAlwaysUsageDescription" = "HealthLog connects to blood-pressure monitors over Bluetooth — Omron cuffs are the profile it knows today — so your readings arrive automatically.";

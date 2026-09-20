@@ -176,7 +176,11 @@ struct BiomarkerEditorSheet: View {
         } header: {
             Text("biomarker.editor.seed.section")
         } footer: {
-            Text("biomarker.editor.seed.footer")
+            VStack(alignment: .leading, spacing: HLSpace.xs) {
+                Text("biomarker.editor.seed.footer")
+                // 1.0.3 (1.4.1) — where the seeded reference ranges come from.
+                HLSourcesLink(topic: .labReferenceRanges)
+            }
         }
     }
 

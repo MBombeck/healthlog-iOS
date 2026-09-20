@@ -240,7 +240,6 @@ struct InsightsMedicationsPage: View {
             let panel = CorrelationsPanel(
                 digest: digest,
                 pairs: [.bpMedication],
-                showsDisclaimer: false,
                 onAskCoach: { pair in
                     coachSeedOverride = pair.coachSeed
                     coachScopeOverride = pair.coachLaunchScope

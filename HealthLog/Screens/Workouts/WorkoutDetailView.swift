@@ -284,7 +284,7 @@ struct WorkoutDetailView: View {
     }
 
     static func routeAccessibilityLabel(count: Int) -> String {
-        "Streckenkarte, \(count) GPS-Punkte."
+        String(localized: "workouts.detail.route.a11y \(count)")
     }
 
     // MARK: - Source card
@@ -292,7 +292,7 @@ struct WorkoutDetailView: View {
     private var sourceCard: some View {
         HLSettingsCard(
             icon: "antenna.radiowaves.left.and.right",
-            title: "Quelle"
+            title: "workouts.detail.source.title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HStack {

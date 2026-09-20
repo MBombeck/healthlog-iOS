@@ -141,8 +141,9 @@ struct SettingsSubtitleTests {
             "17-05 changes WORDS. A row that appeared, vanished or moved is a different change."
         )
         #expect(
+            // 1.0.3 (App Review 1.4.1) — `medical_sources` inserted after `vorsorge`.
             MoreScreen.Layout.renderedRows.map(\.id) == [
-                "about_me", "vorsorge", "labs", "illness", "documents",
+                "about_me", "vorsorge", "medical_sources", "labs", "illness", "documents",
                 "mental_wellbeing", "cycle", "cycle_settings", "nutrition",
                 "environment", "personal_records", "achievements", "workouts",
                 "measurements", "sign_out", "delete_account"

@@ -52,6 +52,9 @@ struct InsightsRhythmEventsCard: View {
                             }
                         }
                         disclaimer
+                        // 1.0.3 (App Review 1.4.1) — the device maker's own
+                        // documentation for the detections listed above.
+                        HLSourcesLink(topic: .ecgRhythm)
                     }
                 }
             }

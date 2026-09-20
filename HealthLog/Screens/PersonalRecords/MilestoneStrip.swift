@@ -40,41 +40,51 @@ struct MilestoneStrip: View {
 struct Milestone: Identifiable, Equatable {
     let id: String
     let symbol: String
-    let title: String
+    /// 1.0.3 / audit row 18 — a String-Catalog KEY, not display copy. These
+    /// pills used to carry German literals straight into `Text(String)`, which
+    /// does not localize, so the English UI rendered "Erste Bestleistung".
+    let titleKey: String
+
+    /// The pill's copy in the current locale. Also the piece the VoiceOver
+    /// label interpolates, so both paths resolve through the same catalog entry.
+    var localizedTitle: String {
+        String(localized: String.LocalizationValue(titleKey))
+    }
 
     /// Synthesise the canonical milestones from the user's enriched
     /// records. Returns 0-N pills depending on which thresholds the
     /// user has crossed; the strip never renders empty pills.
     ///
     /// **Rules** (operator-validated):
-    /// - "Erste Bestleistung" — at least one record exists.
-    /// - "100 Tage Daten" — Steps record with `metricSlot == "Bester
-    ///   Tag"` and `sparklineValues.count >= 100`.
-    /// - "Erste Wochen-Streak" — at least one streak record with
+    /// - `records.milestone.first` — at least one record exists.
+    /// - `records.milestone.hundredDays` — a record whose
+    ///   `sparklineValues.count >= 100`.
+    /// - `records.milestone.weekStreak` — at least one streak record with
     ///   `value >= 7`.
-    /// - "Monats-Streak" — at least one streak record with `value >= 30`.
+    /// - `records.milestone.monthStreak` — at least one streak record with
+    ///   `value >= 30`.
     static func synthesise(from records: [PersonalRecord]) -> [Milestone] {
         guard !records.isEmpty else { return [] }
         var out: [Milestone] = [
-            .init(id: "first", symbol: "rosette", title: "Erste Bestleistung")
+            .init(id: "first", symbol: "rosette", titleKey: "records.milestone.first")
         ]
         let sparkLong = records.contains { $0.sparklineValues.count >= 100 }
         if sparkLong {
-            out.append(.init(id: "100days", symbol: "calendar", title: "100 Tage Daten"))
+            out.append(.init(id: "100days", symbol: "calendar", titleKey: "records.milestone.hundredDays"))
         }
         let weekStreak = records.contains { record in
             let slot = (record.base.metricSlot ?? "").lowercased()
             return (slot.contains("serie") || slot.contains("streak")) && record.base.value >= 7
         }
         if weekStreak {
-            out.append(.init(id: "week-streak", symbol: "flame.fill", title: "Wochen-Streak"))
+            out.append(.init(id: "week-streak", symbol: "flame.fill", titleKey: "records.milestone.weekStreak"))
         }
         let monthStreak = records.contains { record in
             let slot = (record.base.metricSlot ?? "").lowercased()
             return (slot.contains("serie") || slot.contains("streak")) && record.base.value >= 30
         }
         if monthStreak {
-            out.append(.init(id: "month-streak", symbol: "flame.circle.fill", title: "Monats-Streak"))
+            out.append(.init(id: "month-streak", symbol: "flame.circle.fill", titleKey: "records.milestone.monthStreak"))
         }
         return out
     }
@@ -98,7 +108,7 @@ private struct MilestoneSticker: View {
                     // .hero (28pt) would overflow the chip.
                     .foregroundStyle(HLAccent.userBrandTint)
             }
-            Text(milestone.title)
+            Text(LocalizedStringKey(milestone.titleKey))
                 .font(.hlCaption.weight(.semibold))
                 .foregroundStyle(HLText.secondary)
                 .lineLimit(2)
@@ -106,16 +116,16 @@ private struct MilestoneSticker: View {
                 .frame(maxWidth: 80)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Meilenstein: \(milestone.title)"))
+        .accessibilityLabel(Text("records.milestone.a11y \(milestone.localizedTitle)"))
     }
 }
 
 #Preview("MilestoneStrip") {
     MilestoneStrip(milestones: [
-        Milestone(id: "first", symbol: "rosette", title: "Erste Bestleistung"),
-        Milestone(id: "100days", symbol: "calendar", title: "100 Tage Daten"),
-        Milestone(id: "week-streak", symbol: "flame.fill", title: "Wochen-Streak"),
-        Milestone(id: "month-streak", symbol: "flame.circle.fill", title: "Monats-Streak")
+        Milestone(id: "first", symbol: "rosette", titleKey: "records.milestone.first"),
+        Milestone(id: "100days", symbol: "calendar", titleKey: "records.milestone.hundredDays"),
+        Milestone(id: "week-streak", symbol: "flame.fill", titleKey: "records.milestone.weekStreak"),
+        Milestone(id: "month-streak", symbol: "flame.circle.fill", titleKey: "records.milestone.monthStreak")
     ])
     .padding(.vertical, HLSpace.md)
     .background(HLSurface.primary)

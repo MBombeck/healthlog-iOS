@@ -51,6 +51,11 @@ struct CyclePredictionSummary: View {
                     // `prediction.disclaimer` when present, else the local
                     // fertility-specific fallback.
                     disclaimerCaption(prediction)
+                    // 1.0.3 / App Review 1.4.1 — the caveat says the prediction
+                    // is an estimate; this says what the estimate rests on
+                    // (ACOG CO-651, Wilcox 2000). Sibling of the caption, not
+                    // inside it, so the sheet's button stays its own element.
+                    HLSourcesLink(topic: .cycle)
                 }
             }
         }

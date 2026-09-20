@@ -138,7 +138,7 @@ struct AppReviewConfigurationTests {
             "NSFaceIDUsageDescription", "NSUserNotificationsUsageDescription",
             "NSAlarmKitUsageDescription", "NSSpeechRecognitionUsageDescription",
             "NSMicrophoneUsageDescription", "NSCameraUsageDescription",
-            "NSPhotoLibraryUsageDescription", "NSBluetoothAlwaysUsageDescription"
+            "NSBluetoothAlwaysUsageDescription"
         ]
         let german = try text("HealthLog/Resources/de.lproj/InfoPlist.strings")
         let english = try text("HealthLog/Resources/en.lproj/InfoPlist.strings")
@@ -150,11 +150,9 @@ struct AppReviewConfigurationTests {
         for disclosure in ["EKGs", "Medikamente", "Dokumententresor", "Server"] {
             #expect(german.contains(disclosure), "German disclosure omits \(disclosure)")
         }
-        #expect(german.contains("Profilbild"))
         for disclosure in ["ECGs", "medications", "document vault", "server"] {
             #expect(english.localizedCaseInsensitiveContains(disclosure), "English disclosure omits \(disclosure)")
         }
-        #expect(english.contains("profile picture"))
         #expect(!english.contains("Gesundheitsdaten"), "English locale must not fall back to German copy")
     }
 

@@ -463,6 +463,13 @@ struct ServerAuthStep: View {
                     }
                 }
                 .accessibilityIdentifier("onboarding.passkeyCTA")
+                // 1.0.3 / audit row 30 — the `else` arm that used to sit here
+                // promised "Passkeys are available on the default HealthLog
+                // server", and the distributed build has no default server. It
+                // was also unreachable: this whole CTA only mounts under
+                // `AuthStepFormVisibility.showsPasskeyCTA`, which already
+                // requires `passkeySupportedForHost`. Stale copy on a dead
+                // branch, deleted with its string key.
                 if passkeySupportedForHost {
                     Text("onboarding.passkey.providers")
                         .font(.hlCaption)
@@ -473,14 +480,6 @@ struct ServerAuthStep: View {
                         .foregroundStyle(HLText.secondary.opacity(0.8))
                         .multilineTextAlignment(.center)
                         .padding(.top, HLSpace.xxs)
-                } else {
-                    // Honest degrade (audit 02 · H-1): feature stays visible + explained.
-                    Text("onboarding.passkey.selfHostedNote")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, HLSpace.xxs)
-                        .accessibilityIdentifier("onboarding.passkey.selfHostedNote")
                 }
             }
         }

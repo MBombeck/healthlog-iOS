@@ -57,7 +57,7 @@ struct MDRGatedDrugLevelSection: View {
                 EmptyDosesPlaceholder()
             case let .curve(curve):
                 DrugLevelChartView(drug: drug, curve: curve)
-                DisclaimerCaption()
+                DisclaimerCaption(drugID: drug.id)
             }
         }
     }
@@ -105,14 +105,22 @@ private struct EmptyDosesPlaceholder: View {
 
 // MARK: - Disclaimer caption
 
+/// 1.0.3 (App Review 1.4.1) — the disclaimer names EMA population PK, so the
+/// citation belongs directly beneath it: the sheet resolves the drug's own EMA
+/// EPAR (and, for tirzepatide, the Schneck & Urva DOI) from `drugID`.
 private struct DisclaimerCaption: View {
+    let drugID: GLP1DrugCatalog.DrugID
+
     var body: some View {
-        Text(String(localized: "Educational estimate from EMA-published population pharmacokinetics. Not a measurement."))
-            .font(.hlCaption)
-            .italic()
-            .foregroundStyle(HLText.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, HLSpace.xs)
+        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            Text(String(localized: "Educational estimate from EMA-published population pharmacokinetics. Not a measurement."))
+                .font(.hlCaption)
+                .italic()
+                .foregroundStyle(HLText.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            HLSourcesLink(topic: .glp1Pharmacokinetics(drugID))
+        }
+        .padding(.top, HLSpace.xs)
     }
 }
 

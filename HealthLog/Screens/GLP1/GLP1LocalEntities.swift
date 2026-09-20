@@ -23,10 +23,11 @@ import SwiftData
 //
 // **MDR boundary reminder:** every copy that surfaces these entries must
 // be journal/informational only. No "if X then do Y" prescriptive
-// language, no autonomous titration recommendation. The titration ladder
-// surfaces *historical* dose changes + the catalog's *standard* next-step
-// label ("Übliche Folge-Stufe gemäß Hersteller-Leitfaden — bespreche mit
-// Arzt vor Wechsel."), never a personal recommendation.
+// language, no autonomous titration recommendation. Since 1.0.3 (Apple
+// Guideline 1.4.2) the titration ladder surfaces *historical* dose changes
+// only: the catalog timeline is truncated at the dose the user recorded, and
+// the former "next step" label is gone — the app names no upcoming rung at
+// all, personal or standard.
 
 // MARK: - Titration ladder
 

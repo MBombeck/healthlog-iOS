@@ -62,6 +62,11 @@ struct SleepHypnogramScreen: View {
                     hypnogramCard(for: session)
                     legend(for: session)
                     napsSection
+                    // 1.0.3 (App Review 1.4.1, audit row 17) — the stage names
+                    // and the way a night is cut into them are AASM scoring,
+                    // not HealthLog's own vocabulary. At the foot of the
+                    // explanatory copy, once for the whole night.
+                    HLSourcesLink(topic: .sleepRhythm)
                 } else {
                     emptyState
                 }

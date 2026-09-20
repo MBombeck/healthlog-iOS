@@ -21,6 +21,18 @@ import SwiftUI
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         var body: some View {
+            // M1 (fix round 1) — no affordance when there is nothing behind it.
+            // `CoachProvenance.isEmpty` (the store's mount condition) is false
+            // for a windows-only envelope, but `chips` derives from `metrics`
+            // and `keyValues` may be absent — so that envelope used to offer a
+            // chevron that expanded into blank space. The chip fallback below
+            // rescues the windows-only case; this guard covers whatever is left.
+            if hasExpandableContent {
+                disclosure
+            }
+        }
+
+        private var disclosure: some View {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 disclosureHeader
                 if expanded {
@@ -35,6 +47,11 @@ import SwiftUI
                                 }
                             }
                         }
+                        // 1.0.3 (App Review 1.4.1, audit row 7) — the Sources
+                        // link moved OUT of this disclosure and up under every
+                        // assistant reply (`AskCoachSheet+Transcript.swift`).
+                        // A citation a reviewer has to expand a collapsed block
+                        // to find, on one arm of three, is not a citation.
                     }
                     .transition(.opacity)
                 }
@@ -71,10 +88,26 @@ import SwiftUI
             .accessibilityAddTraits(.isButton)
         }
 
+        /// Is there anything to show once the chevron is tapped? Drives whether
+        /// the disclosure renders at all (M1).
+        private var hasExpandableContent: Bool {
+            !chips.isEmpty || !(provenance.keyValues?.isEmpty ?? true)
+        }
+
         /// Pairs each metric with the first window (web parity: a single
         /// window-per-metric) + its sample count when present.
+        ///
+        /// **M1 (fix round 1)** — when the envelope names windows but no
+        /// metrics, the windows become the chips rather than nothing. The server
+        /// told us what it looked at over; saying so is better than an empty
+        /// block, and better than hiding a disclosure that does have content.
         private var chips: [ProvenanceChipModel] {
             let primaryWindow = provenance.windows.first
+            guard !provenance.metrics.isEmpty else {
+                return provenance.windows.map { window in
+                    ProvenanceChipModel(metricToken: "", windowToken: window, count: nil)
+                }
+            }
             return provenance.metrics.map { metric in
                 ProvenanceChipModel(
                     metricToken: metric,
@@ -148,10 +181,16 @@ import SwiftUI
 
         var body: some View {
             HStack(spacing: HLSpace.xxs) {
-                Text(CoachProvenanceLabels.metric(model.metricToken))
-                    .foregroundStyle(HLText.secondary)
+                // M1 — a window-only chip carries no metric token; it renders as
+                // the window alone rather than as a stray "· " separator.
+                if !model.metricToken.isEmpty {
+                    Text(CoachProvenanceLabels.metric(model.metricToken))
+                        .foregroundStyle(HLText.secondary)
+                }
                 if let windowToken = model.windowToken {
-                    Text("· " + CoachProvenanceLabels.window(windowToken))
+                    Text(model.metricToken.isEmpty
+                        ? CoachProvenanceLabels.window(windowToken)
+                        : "· " + CoachProvenanceLabels.window(windowToken))
                         .foregroundStyle(HLText.tertiary)
                 }
                 if let count = model.count {

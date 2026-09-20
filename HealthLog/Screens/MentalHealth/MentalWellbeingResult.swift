@@ -15,6 +15,14 @@ struct MentalWellbeingResult: View {
     var body: some View {
         if let result = store.result {
             VStack(alignment: .leading, spacing: HLSpace.md) {
+                // 1.0.3 (1.4.1) — the screening disclaimer belongs where the
+                // score is read, not only on the opt-in screen.
+                Text("mentalHealth.disclaimer")
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("mentalHealth.result.disclaimer")
+
                 Text(result.serverDerived ? "mentalHealth.saved" : "mentalHealth.result.provisionalNote")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
@@ -30,6 +38,9 @@ struct MentalWellbeingResult: View {
                 }
 
                 attribution(result)
+
+                // 1.0.3 (1.4.1) — the validation paper behind this instrument.
+                HLSourcesLink(topic: .mentalHealth(result.instrument))
 
                 HLButton(String(localized: "mentalHealth.result.takeAnother"), variant: .secondary) {
                     store.backToChoose()

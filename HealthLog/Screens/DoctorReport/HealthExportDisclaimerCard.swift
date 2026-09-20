@@ -30,6 +30,29 @@ struct HealthExportDisclaimerCard: View {
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
+                // 1.0.3 (App Review 1.4.1) — the document leaves the app here,
+                // so the caveat now carries the way to every source behind the
+                // numbers in it. Every host of this card (`MoreScreen`,
+                // `SettingsExportScreen`, `ShareWithClinicianScreen`) pushes
+                // `UnifiedSharingScreen` onto a `NavigationStack`, so the hub
+                // is a push, styled like the About screen's links row.
+                NavigationLink {
+                    MedicalSourcesScreen()
+                } label: {
+                    HStack(spacing: HLSpace.md) {
+                        Text("settings.about.medicalSources")
+                            .font(.hlSubhead)
+                            .foregroundStyle(HLText.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.hlIcon(HLIconSize.sm))
+                            .foregroundStyle(HLText.tertiary)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("export.disclaimer.sourcesLink")
             }
         }
         .accessibilityIdentifier(Self.accessibilityIdentifier)

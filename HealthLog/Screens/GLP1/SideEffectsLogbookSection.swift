@@ -79,7 +79,7 @@ public struct SideEffectsLogbookSection: View {
                 .font(.hlHeadline)
                 .foregroundStyle(HLText.primary)
                 Text(String(
-                    localized: "Erfasse beobachtete Nebenwirkungen, um Verträglichkeit über die Zeit zu dokumentieren."
+                    localized: "Log the side effects you notice to keep a record of tolerability over time."
                 ))
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)

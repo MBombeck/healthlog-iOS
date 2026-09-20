@@ -67,6 +67,9 @@ private struct SleepDebtCard: View {
                         .foregroundStyle(HLText.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     computedNote
+                    // 1.0.3 (App Review 1.4.1) — the sleep-need and
+                    // social-jetlag literature behind the balance.
+                    HLSourcesLink(topic: .sleepRhythm)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -203,6 +206,9 @@ private struct ChronotypeCard: View {
             .font(.hlCaption2)
             .foregroundStyle(HLText.tertiary)
             .fixedSize(horizontal: false, vertical: true)
+        // 1.0.3 (App Review 1.4.1) — MCTQ / social-jetlag / SRI literature
+        // behind the band and the midpoint.
+        HLSourcesLink(topic: .sleepRhythm)
     }
 
     private func detailRow(value: String, caption: LocalizedStringKey) -> some View {

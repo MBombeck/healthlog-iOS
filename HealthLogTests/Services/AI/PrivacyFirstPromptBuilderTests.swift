@@ -26,10 +26,21 @@ import Testing
 ///    contract the on-device LLM ground-truths against; reviewers
 ///    audit it by eye. We pin the systemPreamble, the
 ///    `taskInstruction` ("Antworte als CoachInsight…"), and the
-///    `disclaimer` ("Du gibst KEINE Diagnose…") substrings so a
-///    template tweak surfaces as an obvious test failure.
+///    UNVERHANDELBAR guardrail block so a template tweak surfaces as an
+///    obvious test failure.
+///
+/// 4. **R11 (1.0.3) — the ask describes, and it is bilingual.** The prompt
+///    must never ask for concrete action suggestions, and the guardrails
+///    must reach an English session too (the App-Review reviewer's).
 @Suite("PrivacyFirstPromptBuilder — privacy invariants + composition")
 struct PrivacyFirstPromptBuilderTests {
+    /// The German session. Pinned explicitly since 1.0.3 — `compose` now selects
+    /// its guardrail language from the locale, so a test that asserts German
+    /// anchors must SAY German rather than inherit whatever the runner has.
+    private static let german = Locale(identifier: "de_DE")
+    /// The App-Review reviewer's session.
+    private static let english = Locale(identifier: "en_US")
+
     // MARK: - Network-isolation invariant
 
     /// Sentinel that fails the test if ANY URLRequest reaches it.
@@ -59,7 +70,8 @@ struct PrivacyFirstPromptBuilderTests {
         let prompt = PrivacyFirstPromptBuilder.compose(
             userText: "Wie geht es meinem Blutdruck?",
             snapshot: snapshot,
-            now: now
+            now: now,
+            locale: Self.german
         )
 
         // Belt-and-braces: confirm the prompt body actually rendered
@@ -80,13 +92,14 @@ struct PrivacyFirstPromptBuilderTests {
         let prompt = PrivacyFirstPromptBuilder.compose(
             userText: "Hallo Coach",
             snapshot: .empty,
-            now: Date()
+            now: Date(),
+            locale: Self.german
         )
         // No bullet block on the empty path — but the preamble,
         // user question, and disclaimer all still render.
         #expect(prompt.contains("HealthLog Coach"))
         #expect(prompt.contains("Hallo Coach"))
-        #expect(prompt.contains("KEINE Diagnose"))
+        #expect(prompt.contains("UNVERHANDELBAR"))
         #expect(prompt.contains("Kontext über letzte Vitalwerte") == false)
         #expect(prompt.contains("•") == false)
     }
@@ -103,7 +116,8 @@ struct PrivacyFirstPromptBuilderTests {
         let prompt = PrivacyFirstPromptBuilder.compose(
             userText: "Was bedeutet mein Blutdruck?",
             snapshot: snapshot,
-            now: now
+            now: now,
+            locale: Self.german
         )
 
         #expect(prompt.contains("Du bist HealthLog Coach"))
@@ -111,7 +125,7 @@ struct PrivacyFirstPromptBuilderTests {
         #expect(prompt.contains("Kontext über letzte Vitalwerte:"))
         #expect(prompt.contains("Frage des Nutzers:"))
         #expect(prompt.contains("Antworte als CoachInsight"))
-        #expect(prompt.contains("Du gibst KEINE Diagnose"))
+        #expect(prompt.contains("Du gibst niemals eine medizinische Diagnose."))
         #expect(prompt.contains("• Blutdruck: 122/76 mmHg"))
         #expect(prompt.contains("• Stimmung Ø: 4/5"))
     }
@@ -183,7 +197,8 @@ struct PrivacyFirstPromptBuilderTests {
         let prompt = PrivacyFirstPromptBuilder.compose(
             userText: attackerInput,
             snapshot: .empty,
-            now: Date()
+            now: Date(),
+            locale: Self.german
         )
         // Exactly one open-fence + one close-fence on dedicated lines.
         let openMatches = prompt.components(separatedBy: "\n<user-input>\n").count - 1
@@ -212,7 +227,8 @@ struct PrivacyFirstPromptBuilderTests {
         let prompt = PrivacyFirstPromptBuilder.compose(
             userText: "Was bedeutet \"Hypertonie\"?",
             snapshot: .empty,
-            now: Date()
+            now: Date(),
+            locale: Self.german
         )
         // The fenced section must not include the legacy `"...?"`
         // wrapping. The user's own quotes around "Hypertonie" survive
@@ -235,12 +251,14 @@ struct PrivacyFirstPromptBuilderTests {
         let a = PrivacyFirstPromptBuilder.compose(
             userText: "Wie geht's?",
             snapshot: snapshot,
-            now: now
+            now: now,
+            locale: Self.german
         )
         let b = PrivacyFirstPromptBuilder.compose(
             userText: "Wie geht's?",
             snapshot: snapshot,
-            now: now
+            now: now,
+            locale: Self.german
         )
         #expect(a == b)
     }
@@ -268,12 +286,14 @@ struct PrivacyFirstPromptBuilderTests {
         let a = PrivacyFirstPromptBuilder.compose(
             userText: "Wie geht's?",
             snapshot: snapshot,
-            now: nowSameDay
+            now: nowSameDay,
+            locale: Self.german
         )
         let b = PrivacyFirstPromptBuilder.compose(
             userText: "Wie geht's?",
             snapshot: snapshot,
-            now: nowTwoDaysLater
+            now: nowTwoDaysLater,
+            locale: Self.german
         )
         #expect(a != b)
         #expect(a.contains("heute"))
@@ -291,6 +311,88 @@ struct PrivacyFirstPromptBuilderTests {
         )
         #expect(snapshot.activeMedications.contains("Lisinopril 5mg"))
         #expect(snapshot.activeMedications.contains("Metformin 500mg"))
+    }
+
+    // MARK: - R11 (1.0.3, App Review 1.4.1) — describe, defer, in both languages
+
+    /// The reviewer runs an English device. Before 1.0.3 the entire guardrail
+    /// was one German line, so the one reader who most needed it got none of
+    /// it — and the ask above it was for "1-3 konkreten Handlungsvorschlägen".
+    @Test("an English session gets the guardrails in English")
+    func englishSessionGetsEnglishGuardrails() {
+        let now = Date()
+        let snapshot = HealthSnapshot(latestBP: .init(sys: 122, dia: 76, date: now))
+        let prompt = PrivacyFirstPromptBuilder.compose(
+            userText: "What does my blood pressure mean?",
+            snapshot: snapshot,
+            now: now,
+            locale: Self.english
+        )
+
+        #expect(prompt.contains("NON-NEGOTIABLE:"))
+        #expect(prompt.contains("Never make a medical diagnosis."))
+        #expect(prompt.contains("Never recommend a dose, a therapy change, or a concrete action to take."))
+        #expect(prompt.contains("not medical advice"))
+        #expect(prompt.contains("The person asks:"))
+        // The context block speaks the same language, so a German bullet list
+        // cannot steer the answer back into German mid-reply.
+        #expect(prompt.contains("• Blood pressure: 122/76 mmHg"))
+        #expect(prompt.contains("today"))
+        #expect(!prompt.contains("UNVERHANDELBAR"))
+        #expect(!prompt.contains("Frage des Nutzers:"))
+    }
+
+    @Test("a German session still gets the German guardrail block")
+    func germanSessionKeepsGermanGuardrails() {
+        let prompt = PrivacyFirstPromptBuilder.compose(
+            userText: "Was bedeutet mein Blutdruck?",
+            snapshot: .empty,
+            now: Date(),
+            locale: Self.german
+        )
+        #expect(prompt.contains("UNVERHANDELBAR:"))
+        #expect(prompt.contains("Du empfiehlst niemals eine Dosis, eine Therapieänderung oder eine konkrete Handlung."))
+        #expect(prompt.contains("kein medizinischer Rat"))
+        #expect(!prompt.contains("NON-NEGOTIABLE"))
+    }
+
+    /// The load-bearing one. Whatever else the template says, it must never
+    /// ask the model for concrete things to do — in either language.
+    @Test("the prompt never asks for action suggestions, in any language")
+    func promptNeverAsksForActionSuggestions() {
+        for locale in [Self.german, Self.english] {
+            let prompt = PrivacyFirstPromptBuilder.compose(
+                userText: "Was jetzt?",
+                snapshot: .empty,
+                now: Date(),
+                locale: locale
+            )
+            #expect(!prompt.contains("Handlungsvorschl"), "no action-suggestion ask (\(locale.identifier))")
+            #expect(!prompt.localizedCaseInsensitiveContains("action suggestion"))
+            #expect(!prompt.contains("Befund-Einordnung"))
+            // What replaced it: describe the value, hand over questions for the
+            // doctor.
+            let asksForTalkingPoints = prompt.contains("mit Ärztin oder Arzt besprechen")
+                || prompt.contains("discuss with their doctor")
+            #expect(asksForTalkingPoints, "the ask must be questions for a clinician (\(locale.identifier))")
+        }
+    }
+
+    /// The generation schema pins the surface harder than the prompt does: a
+    /// `suggestedActions: [String]` field demands a to-do list whatever the
+    /// instruction above it says. `@Guide` descriptions are baked in at compile
+    /// time and cannot branch on locale, so they carry both languages.
+    @MainActor
+    @Test("the CoachInsight schema asks for talking points, bilingually")
+    func coachInsightSchemaDescribesRatherThanAdvises() throws {
+        let source = try CoachConversationStoreTests.source("HealthLog/Models/CoachInsight.swift")
+        #expect(source.contains("public var talkingPoints: [String]"))
+        #expect(!source.contains("public var suggestedActions: [String]"))
+        #expect(!source.contains("konkrete Handlungsvorschläge, deutsch"))
+        #expect(!source.contains("den Befund einordnen, deutsch"))
+        #expect(source.contains("no diagnosis, no therapy or dose recommendation"))
+        #expect(source.contains("keine Diagnose, "))
+        #expect(source.contains("questions or observations the person can discuss with their doctor"))
     }
 
     // MARK: - Fixtures

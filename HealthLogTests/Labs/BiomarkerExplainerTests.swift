@@ -8,7 +8,7 @@ import Testing
 /// string and (b) resolve from its German + English names / common aliases.
 @Suite("BiomarkerExplainer — catalogue + v1.25 longevity slugs")
 struct BiomarkerExplainerTests {
-    /// The v1.25 longevity slugs this wave added.
+    /// The v1.25 longevity slugs added in this release.
     private static let v125Slugs = ["apob", "lp-a", "omega-3-index", "fasting-insulin", "homa-ir"]
 
     @Test("every catalogue slug resolves to a non-empty, non-key explainer")
@@ -63,6 +63,15 @@ struct BiomarkerExplainerTests {
             )
             #expect(!text.isEmpty)
         }
+    }
+
+    /// 1.0.3 (App Review 1.4.1) — `BiomarkerDetailScreen` cites
+    /// `.labBiomarker(slug)` off this resolver and falls back to
+    /// `.labReferenceRanges` when it returns `nil`. Both legs are pinned here.
+    @Test("the citation slug resolver maps an alias and rejects an unknown analyte")
+    func citationSlugResolution() {
+        #expect(BiomarkerExplainer.slug(forName: "ALT (GPT)") == "alt")
+        #expect(BiomarkerExplainer.slug(forName: "unknown-thing") == nil)
     }
 
     @Test("an unknown analyte resolves no slug + no explainer (slot hides)")

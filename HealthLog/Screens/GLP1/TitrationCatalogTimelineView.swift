@@ -1,69 +1,48 @@
 import SwiftUI
 
-/// The catalog titration-ladder "you-are-here" plan — iOS mirror of the web
-/// v1.18.5 titration-timeline (`titration-timeline.tsx`). Renders the drug's
-/// standard escalation ladder as a calm vertical timeline: completed rungs
-/// checked behind, the current rung on the tint accent with a "Du bist hier"
-/// marker, upcoming rungs dimmed with a dashed connector.
+/// The label's standard titration schedule, truncated at the dose the user has
+/// actually reached, as a calm vertical list of plain informational rows.
 ///
-/// **MDR copy guard:** the ladder is the manufacturer's standard sequence
-/// (EMA EPAR §4.2), shown for orientation only — no rung is presented as a
-/// recommendation to escalate, no dates are attached. See
-/// `GLP1DrugCatalog` GROUND RULE 9.
+/// **1.4.2 boundary (ruling R10):** the forward ladder is gone. Earlier
+/// versions drew every rung of the escalation sequence with the upcoming ones
+/// dimmed behind a dashed connector and a "You are here" marker pointing at
+/// the next step — a dosage projection derived from the user's own dose, which
+/// Guideline 1.4.2 reserves for manufacturers, hospitals, universities,
+/// insurers and pharmacies. Nothing above the current dose renders any more,
+/// and no rung is styled as a suggestion to escalate. What is left is the
+/// manufacturer's published sequence (EMA EPAR §4.2) up to where the user
+/// stands, cited through the Sources link. See `GLP1DrugCatalog` GROUND RULE 9.
 ///
 /// **Self-suppressing:** renders nothing when `steps` is empty (non-titrating
-/// med — no catalog drug or a single-rung ladder).
+/// med, or no recorded dose to anchor the schedule at).
 ///
 /// **Reduce-motion safe:** static layout, no entrance animation.
 struct TitrationCatalogTimelineView: View {
     let steps: [TitrationCatalogTimeline.Step]
+    let drugID: GLP1DrugCatalog.DrugID
 
     var body: some View {
-        if steps.count >= 2 {
+        if !steps.isEmpty {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HLSectionLabel("medication.titration.plan.title")
 
-                let markerAfter = TitrationCatalogTimeline.markerAfterIndex(steps)
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                        // "You are here" marker sits between the current rung
-                        // and the first upcoming rung — or before the first
-                        // rung when nothing is yet in effect (markerAfter == -1).
-                        if (markerAfter == index - 1 && index > 0)
-                            || (markerAfter == -1 && index == 0)
-                        {
-                            youAreHereMarker
-                        }
-                        TitrationCatalogRow(
-                            step: step,
-                            isLast: index == steps.count - 1,
-                            nextIsPastOrCurrent: index + 1 < steps.count
-                                && (steps[index + 1].isPast || steps[index + 1].isCurrent)
-                        )
+                        TitrationCatalogRow(step: step, isLast: index == steps.count - 1)
                     }
                 }
+
+                // The schedule is the manufacturer's, not the app's — say so,
+                // and hand the reader the EMA source it comes from. The link
+                // stays outside every `.combine` group above it.
+                Text(String(localized: "Per the manufacturer's guide — discuss any change with your doctor."))
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HLSourcesLink(topic: .titration(drugID))
             }
-            .accessibilityElement(children: .contain)
         }
     }
-
-    private var youAreHereMarker: some View {
-        HStack(spacing: HLSpace.xs) {
-            Image(systemName: "location.fill")
-                .font(.hlCaption2)
-                .foregroundStyle(.tint)
-            Text(String(localized: "medication.titration.plan.youAreHere"))
-                .font(.hlCaption.weight(.medium))
-                .foregroundStyle(.tint)
-        }
-        .padding(.leading, Self.railLeadingInset)
-        .padding(.vertical, HLSpace.xxs)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// Leading inset that aligns the marker label with the rung dose text
-    /// (node width 20 + gap 12).
-    fileprivate static let railLeadingInset: CGFloat = 32
 }
 
 // MARK: - Row
@@ -71,7 +50,6 @@ struct TitrationCatalogTimelineView: View {
 private struct TitrationCatalogRow: View {
     let step: TitrationCatalogTimeline.Step
     let isLast: Bool
-    let nextIsPastOrCurrent: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: HLSpace.md) {
@@ -79,7 +57,7 @@ private struct TitrationCatalogRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(TitrationLadderSection.formatDose(step.doseMg))
                     .font(step.isCurrent ? .hlHeadline : .hlSubhead)
-                    .foregroundStyle(doseColor)
+                    .foregroundStyle(step.isCurrent ? Color.accentColor : HLText.primary)
                     .monospacedDigit()
                     .padding(.vertical, HLSpace.xs)
             }
@@ -93,7 +71,7 @@ private struct TitrationCatalogRow: View {
         VStack(spacing: 0) {
             node
             if !isLast {
-                connector
+                HLColor.separator
                     .frame(width: 1.5)
                     .frame(maxHeight: .infinity)
             }
@@ -105,77 +83,25 @@ private struct TitrationCatalogRow: View {
         ZStack {
             Circle()
                 .strokeBorder(
-                    nodeStroke,
-                    style: StrokeStyle(
-                        lineWidth: 1.5,
-                        dash: step.isUpcoming ? [2, 2] : []
-                    )
+                    step.isCurrent ? Color.accentColor : HLColor.separator,
+                    lineWidth: 1.5
                 )
-                .background(Circle().fill(nodeFill))
+                .background(
+                    Circle().fill(step.isCurrent ? Color.accentColor.opacity(0.12) : .clear)
+                )
                 .frame(width: 20, height: 20)
-            if step.isPast {
-                Image(systemName: "checkmark")
-                    .font(.hlCaption2.weight(.bold))
-                    .foregroundStyle(HLText.secondary)
-            } else if step.isCurrent {
+            if step.isCurrent {
                 Circle().fill(.tint).frame(width: 7, height: 7)
             }
         }
         .padding(.top, HLSpace.xs)
     }
 
-    @ViewBuilder
-    private var connector: some View {
-        if nextIsPastOrCurrent {
-            HLColor.separator
-        } else {
-            // Dashed connector for the planned-ahead segment.
-            Rectangle()
-                .fill(HLColor.separator)
-                .opacity(0.55)
-                .mask(
-                    VStack(spacing: 3) {
-                        ForEach(0 ..< 12, id: \.self) { _ in
-                            Rectangle().frame(height: 3)
-                        }
-                    }
-                )
-        }
-    }
-
-    private var doseColor: Color {
-        if step.isCurrent {
-            Color.accentColor
-        } else if step.isPast {
-            HLText.primary
-        } else {
-            HLText.tertiary
-        }
-    }
-
-    private var nodeStroke: Color {
-        if step.isCurrent {
-            Color.accentColor
-        } else if step.isPast {
-            HLColor.separator
-        } else {
-            HLColor.separator.opacity(0.7)
-        }
-    }
-
-    private var nodeFill: Color {
-        step.isCurrent ? Color.accentColor.opacity(0.12) : .clear
-    }
-
     private var accessibilityLabel: Text {
         let dose = TitrationLadderSection.formatDose(step.doseMg)
-        let state = if step.isCurrent {
-            String(localized: "medication.titration.plan.a11y.current")
-        } else if step.isPast {
-            String(localized: "medication.titration.plan.a11y.past")
-        } else {
-            String(localized: "medication.titration.plan.a11y.upcoming")
-        }
+        let state = step.isCurrent
+            ? String(localized: "medication.titration.plan.a11y.current")
+            : String(localized: "medication.titration.plan.a11y.past")
         return Text("\(dose), \(state)")
     }
 }

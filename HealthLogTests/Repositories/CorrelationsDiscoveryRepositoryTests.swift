@@ -183,14 +183,17 @@ struct CorrelationsDiscoveryRepositoryTests {
             r: 0.41, pValue: 0.012, qValue: 0.06, interpretation: "", lagDays: 1
         )
         let headline = InsightsCorrelationsDiscoveryBlock.headline(for: positive)
-        // No causal verbs — only "tends to go with" / "geht einher mit".
+        // No causal verbs — only "tends to go with" / the dash form the German
+        // template uses ("Mehr X – am Folgetag tendenziell auch mehr Y"), which
+        // 1.0.3 adopted because the old "mit mehr %@ … einher" produced a case
+        // error on every metric name that is not feminine.
         #expect(!headline.lowercased().contains("verbessert"))
         #expect(!headline.lowercased().contains("improves"))
         #expect(!headline.lowercased().contains("causes"))
         // Locale-resolved (host may run de) — assert the verbatim EN-or-DE form.
         #expect([
             "More time in daylight tends to go with more sleep duration the next day",
-            "Mehr Zeit im Tageslicht geht tendenziell mit mehr Schlafdauer am Folgetag einher"
+            "Mehr Zeit im Tageslicht – am Folgetag tendenziell auch mehr Schlafdauer"
         ].contains(headline))
     }
 

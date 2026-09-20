@@ -55,6 +55,7 @@ struct MedicalDisclaimerAckSheet: View {
                         title: "disclaimer.ack.consult.title",
                         body: "appstore.disclaimer.consult_doctor"
                     )
+                    sourcesPointer
                     Text("appstore.disclaimer.footer")
                         .font(.hlCaption)
                         .foregroundStyle(HLText.tertiary)
@@ -104,6 +105,36 @@ struct MedicalDisclaimerAckSheet: View {
                     .font(.hlBody)
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// 1.0.3 (App Review 1.4.1) — the reviewer's first screen points at the hub.
+    private var sourcesPointer: some View {
+        HLCard(style: .ghost) {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                Text("disclaimer.ack.sources.title")
+                    .font(.hlHeadline)
+                    .foregroundStyle(HLText.primary)
+                Text("disclaimer.ack.sources.body")
+                    .font(.hlSubhead)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                NavigationLink {
+                    MedicalSourcesScreen()
+                } label: {
+                    HStack(spacing: HLSpace.xs) {
+                        Image(systemName: "text.book.closed").accessibilityHidden(true)
+                        Text("disclaimer.ack.sources.cta")
+                        Image(systemName: "chevron.right").font(.hlCaption2).accessibilityHidden(true)
+                    }
+                    .font(.hlSubhead.weight(.semibold))
+                    .foregroundStyle(HLText.primary)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("disclaimer.ack.sourcesLink")
             }
         }
     }

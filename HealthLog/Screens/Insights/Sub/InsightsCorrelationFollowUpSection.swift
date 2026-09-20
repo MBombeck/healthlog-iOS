@@ -55,6 +55,9 @@ struct InsightsCorrelationFollowUpSection: View {
                     metricLink(kind)
                 }
             }
+            // 1.4.1 — the follow-up is still a correlation statement, so it
+            // carries the same citation as the card it opened from.
+            HLSourcesLink(topic: .correlations)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, HLSpace.xs)

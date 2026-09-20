@@ -145,6 +145,24 @@ struct SettingsAboutScreen: View {
                 url: URL(string: "https://docs.healthlog.dev"),
                 identifier: "settings.about.docsLink"
             )
+            // 1.0.3 (App Review 1.4.1) — in-app hub of every medical source.
+            NavigationLink {
+                MedicalSourcesScreen()
+            } label: {
+                HStack(spacing: HLSpace.md) {
+                    Text("settings.about.medicalSources")
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLText.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.hlIcon(HLIconSize.sm))
+                        .foregroundStyle(HLText.tertiary)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("settings.about.medicalSourcesLink")
         }
     }
 

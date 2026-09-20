@@ -60,6 +60,13 @@ struct MoodInfluenceCard: View {
                         .foregroundStyle(HLText.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    // 1.0.3 (1.4.1) — the guide plus the method behind the
+                    // present-vs-absent comparison.
+                    HStack(spacing: HLSpace.lg) {
+                        HLLearnMoreLink(concept: "MOOD")
+                        HLSourcesLink(topic: .mood)
+                    }
+
                     VStack(spacing: HLSpace.sm) {
                         ForEach(visibleRows) { row in
                             MoodInfluenceRowView(

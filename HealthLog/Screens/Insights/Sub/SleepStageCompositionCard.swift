@@ -57,6 +57,12 @@ struct SleepStageCompositionCard: View {
                         }
                     }
                 }
+                // 1.0.3 (App Review 1.4.1, audit row 17) — the stage shares are
+                // read against what a night is expected to look like, which is a
+                // claim with a literature behind it (AASM 2015 and the rhythm
+                // set). Outside the card so the link is a peer of the section,
+                // not a row inside the chart's own stack.
+                HLSourcesLink(topic: .sleepRhythm)
             }
         }
     }

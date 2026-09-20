@@ -33,6 +33,10 @@ struct InsightsHealthStatusCard: View {
                         .font(.hlCaption)
                         .foregroundStyle(HLText.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    // 1.0.3 (App Review 1.4.1) — how the personal band and the
+                    // level shifts are derived, plus the literature behind them.
+                    HLSourcesLink(topic: .healthStatus)
                 }
             }
             .accessibilityIdentifier("insights.clinicalSignals.healthStatus")

@@ -66,6 +66,23 @@ import SwiftUI
                                                 }
                                             }
                                         }
+                                    // 1.0.3 (App Review 1.4.1, audit row 7) — the
+                                    // citation under EVERY assistant reply, on
+                                    // every arm, visible without expanding
+                                    // anything. It used to live inside the
+                                    // server-arm provenance disclosure, which
+                                    // mounts on one arm of three and starts
+                                    // collapsed: on-device and BYO replies
+                                    // carried no Sources affordance at all, and
+                                    // the server's was one tap away from being
+                                    // seen. Sibling of the bubble, so it sits
+                                    // outside the bubble's
+                                    // `.accessibilityElement(children: .combine)`
+                                    // and reads as its own control.
+                                    if isAssistant(entity) {
+                                        HLSourcesLink(topic: .aiAssistant)
+                                            .padding(.leading, HLSpace.md)
+                                    }
                                     // CO4 (v0154) — the collapsed "what I'm
                                     // looking at" provenance disclosure under a
                                     // server-arm assistant reply. Server-arm only

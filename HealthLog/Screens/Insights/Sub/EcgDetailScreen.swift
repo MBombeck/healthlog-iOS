@@ -152,10 +152,15 @@ struct EcgDetailScreen: View {
                     .font(.hlFootnote)
                     .foregroundStyle(HLText.secondary)
                     .accessibilityHidden(true)
-                Text("insights.ecg.clinicianNote")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    Text("insights.ecg.clinicianNote")
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLText.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // 1.0.3 (App Review 1.4.1) — the device maker's own ECG /
+                    // irregular-rhythm documentation behind the verdict.
+                    HLSourcesLink(topic: .ecgRhythm)
+                }
             }
         }
         .accessibilityIdentifier("insights.ecg.detail.clinicianNote")

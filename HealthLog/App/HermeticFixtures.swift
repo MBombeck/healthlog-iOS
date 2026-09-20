@@ -27,7 +27,7 @@
             {
                 return marketing
             }
-            // Phase 08 Wave 0 — the scenario-keyed answers come first and only
+            // Scenario fixtures — the scenario-keyed answers come first and only
             // exist while `-uitest-phase8 <scenario>` is on the command line.
             // Outside a Phase-8 UI test this returns `nil` on every path and the
             // original table below is reached unchanged.
@@ -57,7 +57,7 @@
             // auth family is: three more branches here would put the router
             // over its cyclomatic budget. Checked before `/api/auth/me`,
             // because the report-selection route sits under that prefix.
-            if let sharing = sharingResponse(forPath: path, method: method) { return sharing }
+            if let overlay = overlayResponse(forPath: path, method: method) { return overlay }
             if let account = accountResponse(forPath: path) { return account }
             if path.hasPrefix("/api/dashboard/summary") { return ok(dashboardSummaryJSON) }
             if path.hasPrefix("/api/dashboard/snapshot") { return ok("{}") }
@@ -130,6 +130,13 @@
             if path.hasPrefix("/api/auth/me/modules") { return ok(modulesJSON) }
             if path.hasPrefix("/api/auth/me") { return ok(meJSON) }
             return nil
+        }
+
+        /// The opt-in overlays: the 1.0.3 citation-evidence table
+        /// (`-uitest-citations`, App Review 1.4.1) and the 18-03 sharing family.
+        /// Both answer `nil` outside their own routes, so the router keeps ONE branch.
+        private static func overlayResponse(forPath path: String, method m: String) -> (status: Int, body: Data)? {
+            CitationFixtures.response(forPath: path, method: m) ?? sharingResponse(forPath: path, method: m)
         }
 
         /// **18-03 — the sharing family.** The unified sharing journey needs a
@@ -384,7 +391,7 @@
 
     // MARK: - Phase 08 scenario fixtures
 
-    /// **Phase 08 Wave 0.** The scenario-keyed half of the hermetic backend.
+    /// **Scenario fixtures.** The scenario-keyed half of the hermetic backend.
     ///
     /// Every answer here is owned by exactly one launch scenario, so a UI RED
     /// can state the shape of the world it needs instead of arranging it by

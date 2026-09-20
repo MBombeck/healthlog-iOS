@@ -97,8 +97,7 @@ public struct MedicationDetailScreen: View {
         _titrationStore = State(initialValue: TitrationLadderStore(
             medicationID: medication.id,
             catalogDrug: detail.drug,
-            repo: glp1LocalRepo,
-            headlineDoseMgHint: MedicationDetailStore.parseHeadlineDose(medication.dose)
+            repo: glp1LocalRepo
         ))
         _sideEffectsStore = State(initialValue: SideEffectsLogbookStore(
             medicationID: medication.id,

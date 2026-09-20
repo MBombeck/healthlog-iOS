@@ -57,20 +57,41 @@ public final class DisclaimerAckStore {
         self.defaults = defaults
     }
 
+    #if DEBUG
+        /// The UI-test override of the acknowledgment state, or `nil` when no
+        /// launch argument asks for one.
+        ///
+        /// `-uitest-ack-disclaimer` forces ACKNOWLEDGED: the demo tenant runs
+        /// read-only, so `acknowledge()`'s POST can never succeed there and the
+        /// gesture-undismissible gate would block every capture run forever.
+        ///
+        /// `-uitest-disclaimer-unacked` (1.0.3, App Review 1.4.1) forces the
+        /// opposite, and is the ONLY way to photograph the first-launch
+        /// disclaimer sheet hermetically: the hermetic `/api/auth/me` fixture
+        /// stamps the acknowledgment, so the gate is always already satisfied.
+        /// The reviewer's first screen carries the app's first pointer at the
+        /// medical-sources hub, which is evidence the 1.4.1 reply needs.
+        /// Refusal wins over forcing if both are passed, so an existing test
+        /// that inherits the ack flag can never be flipped by accident.
+        ///
+        /// W-RECONCILE MED-1: DEBUG-gated, so neither compliance-gate override
+        /// exists in a shipping (Release) build.
+        static var uiTestForcedAcknowledgment: Bool? {
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("-uitest-disclaimer-unacked") { return false }
+            if args.contains("-uitest-ack-disclaimer") { return true }
+            return nil
+        }
+    #endif
+
     /// Refresh acknowledgment state from the server. Fail-soft: a network error
     /// leaves `isAcknowledged` unchanged (we never force the sheet on a transient
     /// blip — the gate also keys on `hasLoaded`).
     public func refresh() async {
-        // UI-test seam (`-uitest-ack-disclaimer`): the demo tenant runs in a
-        // read-only "modifications disabled" mode, so the acknowledge() POST can
-        // never succeed there and the gesture-undismissible gate would block
-        // every marketing/walkthrough capture forever. This flag forces the
-        // acknowledged state without a round-trip. Mirrors the existing
-        // `-uitest-*` launch seams. W-RECONCILE MED-1: DEBUG-gated so this
-        // compliance-gate bypass cannot exist in a shipping (Release) build.
+        // UI-test seam — see `uiTestForcedAcknowledgment` above.
         #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-uitest-ack-disclaimer") {
-                isAcknowledged = true
+            if let forced = Self.uiTestForcedAcknowledgment {
+                isAcknowledged = forced
                 hasLoaded = true
                 error = nil
                 return
@@ -113,10 +134,10 @@ public final class DisclaimerAckStore {
     /// fails (a local read can't blip), so `hasLoaded` always becomes `true`,
     /// which is what gates the standalone disclaimer in front of the shell.
     public func refreshStandalone() {
-        // W-RECONCILE MED-1: DEBUG-gated bypass (see `refresh()`).
+        // UI-test seam — see `uiTestForcedAcknowledgment` above.
         #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-uitest-ack-disclaimer") {
-                isAcknowledged = true
+            if let forced = Self.uiTestForcedAcknowledgment {
+                isAcknowledged = forced
                 hasLoaded = true
                 error = nil
                 return
