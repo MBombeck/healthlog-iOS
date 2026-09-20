@@ -216,7 +216,7 @@ struct InsightsAuxMoodStabilityDetailScreen: View {
                 HLEmptyState(
                     icon: "waveform.path.ecg",
                     title: "Not enough data yet",
-                    message: "Stabilität misst die Schwankung deiner Stimmung über sieben Tage. Logge mindestens zwei Wochen, um den Trend zu sehen."
+                    message: "insights.stability.empty.message"
                 )
             }
         }

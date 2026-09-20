@@ -1,63 +1,59 @@
 import Foundation
 
-/// Pure resolver for the **catalog titration ladder** "you-are-here"
-/// timeline — the iOS mirror of the web v1.18.5 titration-plan surface
-/// (`src/components/medications/titration-timeline.tsx`).
+/// Pure resolver for the **catalog titration ladder** shown under a GLP-1
+/// medication.
 ///
-/// Where `TitrationLadderStore.mergedTimeline` renders the user's recorded
-/// dose-CHANGE history (server + local journal rows with editable dates),
-/// this resolver renders the drug's *standard escalation ladder* from the
-/// EMA-sourced catalog (`GLP1DrugCatalog.titrationStepsMg`, e.g. 2.5 → 5 →
-/// 7.5 → 10 → 12.5 → 15 mg) and marks where the user's CURRENT dose sits on
-/// it: completed steps behind, the current step highlighted, upcoming steps
-/// dimmed. No dates — the ladder is the manufacturer's planned sequence, not
-/// a per-user schedule (MDR boundary: informational, never autonomous
-/// escalation guidance — see `GLP1DrugCatalog` GROUND RULE 9).
+/// 1.0.3 (App Review 1.4.2 — ruling R10): this used to be a forward
+/// "you-are-here" plan that drew the rungs *above* the user's dose as the
+/// upcoming escalation. Guideline 1.4.2 reserves drug-dosage calculators for
+/// manufacturers, hospitals, universities, insurers and pharmacies, and a rung
+/// list projected forward from the user's own dose is exactly that. The
+/// forward projection is gone — no upcoming rungs, no "next step", no marker
+/// beyond the current dose.
 ///
-/// Self-suppressing: a non-titrating med (no catalog drug, < 2 ladder steps,
-/// or no resolvable current dose) yields an empty step list so the view can
-/// omit itself entirely.
+/// What remains is backward-looking and informational: the label's standard
+/// schedule (`GLP1DrugCatalog.titrationStepsMg`, EMA EPAR §4.2) truncated at
+/// the rung the user has actually reached, so the section reads as "this is
+/// the schedule you have moved through", never "this is where you go next".
+///
+/// Self-suppressing: a non-titrating med (no catalog drug, < 2 ladder rungs)
+/// or an unknown / below-the-first-rung dose yields an empty step list so the
+/// view can omit itself entirely.
 public enum TitrationCatalogTimeline {
-    /// One rung of the standard ladder, classified against the current dose.
+    /// One rung of the standard ladder, up to and including the current dose.
     public struct Step: Equatable, Sendable, Identifiable {
         /// Stable id = the ladder index (the ladder is fixed per drug).
         public let id: Int
         public let doseMg: Double
-        /// Below the current dose — already escalated past (checkmark).
-        public let isPast: Bool
-        /// The rung at (or nearest at-or-below) the current dose — the
-        /// single "you are here" marker.
+        /// The rung at (or nearest at-or-below) the user's current dose — the
+        /// last rung of the resolved list. Every other rung is one the user
+        /// has already moved through.
         public let isCurrent: Bool
-        /// Above the current dose — planned / upcoming (dimmed, dashed).
-        public var isUpcoming: Bool {
-            !isPast && !isCurrent
-        }
 
-        public init(id: Int, doseMg: Double, isPast: Bool, isCurrent: Bool) {
+        public init(id: Int, doseMg: Double, isCurrent: Bool) {
             self.id = id
             self.doseMg = doseMg
-            self.isPast = isPast
             self.isCurrent = isCurrent
         }
     }
 
-    /// Classify the catalog ladder against the current dose.
+    /// Resolve the catalog ladder against the current dose, truncated at that
+    /// dose.
     ///
     /// - Parameters:
     ///   - ladderMg: the drug's `titrationStepsMg` (strictly ascending mg).
     ///   - currentDoseMg: the user's current dose in mg, or `nil` when
     ///     unknown.
-    /// - Returns: one `Step` per ladder rung. The **current** rung is the
-    ///   highest ladder value that is `<= currentDoseMg` (so an off-ladder
-    ///   in-between dose, e.g. 6 mg on a 5/7.5 ladder, marks 5 mg as current
-    ///   and 7.5 mg as upcoming). When `currentDoseMg` exactly matches a
-    ///   rung, that rung is current. When the current dose is below the first
-    ///   rung (or unknown), no rung is current and every rung is upcoming
-    ///   (the marker view renders "you are here" before the first step).
+    /// - Returns: one `Step` per ladder rung **at or below** the current dose.
+    ///   The last element is the current rung: the highest ladder value that
+    ///   is `<= currentDoseMg` (so an off-ladder in-between dose, e.g. 6 mg on
+    ///   a 5 / 7.5 ladder, ends the list at 5 mg). Rungs above the current
+    ///   dose are never returned.
     ///
-    /// Returns an **empty array** — the self-suppress signal — when the
-    /// ladder has fewer than two rungs (a lone rung is just the current dose;
-    /// there is no escalation plan to read).
+    /// Returns an **empty array** — the self-suppress signal — when the ladder
+    /// has fewer than two rungs (a lone rung is just the current dose; there
+    /// is no schedule to read), or when no rung is at-or-below the current
+    /// dose (unknown dose, or a dose below the first rung).
     public static func resolve(
         ladderMg: [Double],
         currentDoseMg: Double?
@@ -75,22 +71,11 @@ public enum TitrationCatalogTimeline {
                 currentIndex = i
             }
         }
+        guard currentIndex >= 0 else { return [] }
 
-        return rungs.enumerated().map { i, mg in
-            Step(
-                id: i,
-                doseMg: mg,
-                isPast: i < currentIndex,
-                isCurrent: i == currentIndex
-            )
+        return rungs.prefix(currentIndex + 1).enumerated().map { i, mg in
+            Step(id: i, doseMg: mg, isCurrent: i == currentIndex)
         }
-    }
-
-    /// Index in the resolved step list AFTER which the "you are here" marker
-    /// sits. `-1` means the marker sits before the first step (nothing in
-    /// effect yet). Mirrors the web `markerAfter` placement.
-    public static func markerAfterIndex(_ steps: [Step]) -> Int {
-        steps.firstIndex(where: \.isCurrent) ?? -1
     }
 
     /// Float tolerance for the at-or-below comparison so a dose stored as

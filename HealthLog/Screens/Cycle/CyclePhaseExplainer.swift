@@ -7,8 +7,8 @@ import SwiftUI
 /// view only chooses the right body of copy (de + en in `Localizable.xcstrings`)
 /// and frames it with a tasteful, sparse warm-tint highlight.
 ///
-/// **Graphic insertion point (next wave).** Each phase has a named asset slot —
-/// `cycle.phase.<phase>.highlight` — where the next wave drops a generated
+/// **Graphic insertion point (later update).** Each phase has a named asset slot —
+/// `cycle.phase.<phase>.highlight` — where the later update drops a generated
 /// warm-organic illustration (via Gemini). Until that asset exists, a native
 /// fallback motif (a soft warm radial gradient over the monochrome base) renders
 /// in EXACTLY the same frame, so the layout is complete now and the generated
@@ -29,29 +29,38 @@ struct CyclePhaseExplainer: View {
         // section title leads as a heading ABOVE the card; the warm headline +
         // body copy + the bottom-anchored highlight image live inside the card.
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("cycle.explain.title")
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                .accessibilityAddTraits(.isHeader)
-            HLCard {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    PhaseHighlightSlot(phase: phase)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 120)
-                        .clipShape(RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
-                        .overlay(alignment: .bottomLeading) { phaseChip }
-                    Text(Self.headlineKey(for: phase))
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(Self.bodyKey(for: phase))
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                Text("cycle.explain.title")
+                    .font(.hlHeadline)
+                    .foregroundStyle(HLText.primary)
+                    .accessibilityAddTraits(.isHeader)
+                HLCard {
+                    VStack(alignment: .leading, spacing: HLSpace.lg) {
+                        PhaseHighlightSlot(phase: phase)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 120)
+                            .clipShape(RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
+                            .overlay(alignment: .bottomLeading) { phaseChip }
+                        Text(Self.headlineKey(for: phase))
+                            .font(.hlHeadline)
+                            .foregroundStyle(HLText.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(Self.bodyKey(for: phase))
+                            .font(.hlBody)
+                            .foregroundStyle(HLText.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
+            .accessibilityElement(children: .combine)
+            // 1.0.3 (1.4.1) — the copy is deterministic, not invented. Guide +
+            // references sit OUTSIDE the combined a11y element above, so
+            // VoiceOver reaches each as its own control.
+            HStack(spacing: HLSpace.lg) {
+                HLLearnMoreLink(concept: "CYCLE")
+                HLSourcesLink(topic: .cycle)
+            }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private var phaseChip: some View {
@@ -111,7 +120,7 @@ struct CyclePhaseExplainer: View {
         }
     }
 
-    /// The named asset slot the next wave fills with a generated illustration.
+    /// The named asset slot the later update fills with a generated illustration.
     nonisolated static func highlightAssetName(for phase: CyclePhasePalette.Phase) -> String {
         switch phase {
         case .menstrual: "cycle.phase.menstrual.highlight"
@@ -125,7 +134,7 @@ struct CyclePhaseExplainer: View {
 // MARK: - Highlight slot (generated art slot + native fallback)
 
 /// The per-phase illustration slot. Renders `Image(highlightAssetName)` when the
-/// asset exists in the catalog (dropped in by the next wave); otherwise a native
+/// asset exists in the catalog (dropped in by the later update); otherwise a native
 /// warm-organic gradient motif fills the EXACT same frame so the layout never
 /// shifts when the generated art lands.
 ///

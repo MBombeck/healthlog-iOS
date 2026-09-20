@@ -9,8 +9,13 @@ import Testing
 // swiftlint:disable force_unwrapping
 
 /// State-level coverage for `TitrationLadderStore` — merge semantics
-/// between server `doseChanges` and local `TitrationStepEntry` rows, plus
-/// the catalog-driven "next standard step" suggestion.
+/// between server `doseChanges` and local `TitrationStepEntry` rows, plus the
+/// catalog schedule that is anchored to the recorded current dose.
+///
+/// 1.0.3 (App Review 1.4.2, ruling R10): the `nextStandardStepMg` suggestion
+/// this suite used to cover is gone. The cases below lock the replacement
+/// contract — no schedule at all without recorded history, and never a rung
+/// above the dose the user recorded.
 @Suite("Titration ladder store")
 @MainActor
 struct TitrationLadderStoreTests {
@@ -32,7 +37,7 @@ struct TitrationLadderStoreTests {
         await store.load(serverChanges: [])
         #expect(store.mergedTimeline.isEmpty)
         #expect(store.currentStep == nil)
-        #expect(store.nextStandardStepMg == nil)
+        #expect(store.catalogTimelineSteps.isEmpty)
     }
 
     @Test("Server-only changes surface in ascending order")
@@ -141,8 +146,8 @@ struct TitrationLadderStoreTests {
         #expect(timeline[1].source == .server)
     }
 
-    @Test("Next standard step from catalog above current dose")
-    func nextStandardStep() async throws {
+    @Test("Catalog schedule stops at the recorded dose — no rung above it")
+    func scheduleStopsAtCurrentDose() async throws {
         let repo = try makeRepo()
         let store = TitrationLadderStore(
             medicationID: medID,
@@ -151,12 +156,14 @@ struct TitrationLadderStoreTests {
         )
         await store.add(effectiveFrom: .now, doseMg: 5.0, note: nil)
         await store.load(serverChanges: [])
-        // Tirzepatide ladder: 2.5, 5, 7.5, 10, 12.5, 15. Current = 5.
-        #expect(store.nextStandardStepMg == 7.5)
+        // Tirzepatide ladder: 2.5, 5, 7.5, 10, 12.5, 15. Recorded dose = 5, so
+        // 7.5 and everything above it must never surface.
+        #expect(store.catalogTimelineSteps.map(\.doseMg) == [2.5, 5])
+        #expect(store.catalogTimelineSteps.last?.isCurrent == true)
     }
 
-    @Test("Next standard step nil at or above catalog max")
-    func nextStandardStepAtMax() async throws {
+    @Test("Catalog schedule covers the whole ladder at the catalog max")
+    func scheduleAtMax() async throws {
         let repo = try makeRepo()
         let store = TitrationLadderStore(
             medicationID: medID,
@@ -166,11 +173,12 @@ struct TitrationLadderStoreTests {
         // 15 mg is the max for Tirzepatide.
         await store.add(effectiveFrom: .now, doseMg: 15.0, note: nil)
         await store.load(serverChanges: [])
-        #expect(store.nextStandardStepMg == nil)
+        #expect(store.catalogTimelineSteps.map(\.doseMg) == [2.5, 5, 7.5, 10, 12.5, 15])
+        #expect(store.catalogTimelineSteps.last?.isCurrent == true)
     }
 
-    @Test("Next standard step nil when catalog absent")
-    func nextStandardStepNoCatalog() async throws {
+    @Test("No catalog schedule without a recognised catalog drug")
+    func scheduleNoCatalog() async throws {
         let repo = try makeRepo()
         let store = TitrationLadderStore(
             medicationID: medID,
@@ -179,7 +187,22 @@ struct TitrationLadderStoreTests {
         )
         await store.add(effectiveFrom: .now, doseMg: 1.0, note: nil)
         await store.load(serverChanges: [])
-        #expect(store.nextStandardStepMg == nil)
+        #expect(store.catalogTimelineSteps.isEmpty)
+    }
+
+    @Test("No catalog schedule without recorded dose history")
+    func scheduleNeedsHistory() async throws {
+        let repo = try makeRepo()
+        let store = TitrationLadderStore(
+            medicationID: medID,
+            catalogDrug: GLP1DrugCatalog.drug(for: .tirzepatide),
+            repo: repo
+        )
+        await store.load(serverChanges: [])
+        #expect(store.mergedTimeline.isEmpty)
+        // The ladder must not be drawn from a dose guessed out of the
+        // medication's name — nothing recorded, nothing rendered.
+        #expect(store.catalogTimelineSteps.isEmpty)
     }
 
     @Test("Update mutates dose and note")
@@ -224,7 +247,7 @@ struct TitrationLadderStoreTests {
         #expect(store.mergedTimeline.isEmpty)
     }
 
-    @Test("Semaglutide catalog step progression")
+    @Test("Semaglutide catalog schedule truncates at the recorded dose")
     func semaglutideProgression() async throws {
         let repo = try makeRepo()
         let store = TitrationLadderStore(
@@ -235,6 +258,6 @@ struct TitrationLadderStoreTests {
         // Semaglutide ladder: 0.25, 0.5, 1, 2.
         await store.add(effectiveFrom: .now, doseMg: 0.5, note: nil)
         await store.load(serverChanges: [])
-        #expect(store.nextStandardStepMg == 1.0)
+        #expect(store.catalogTimelineSteps.map(\.doseMg) == [0.25, 0.5])
     }
 }

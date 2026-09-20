@@ -14,6 +14,11 @@ struct IllnessInsightsScreen: View {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
                 if let insights = store.insights, insights.episodeCount > 0 {
                     summaryCard(insights)
+                    // 1.0.3 (App Review 1.4.1, audit row 17) — the typical
+                    // recovery gap is the screen's one medical-shaped figure,
+                    // so the method behind it is cited directly under the card
+                    // that states it rather than at the foot of the tallies.
+                    HLSourcesLink(topic: .illnessRecovery)
                     if !insights.byType.isEmpty {
                         byTypeCard(insights)
                     }

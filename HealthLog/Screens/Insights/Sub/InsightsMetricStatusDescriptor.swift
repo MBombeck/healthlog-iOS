@@ -71,9 +71,17 @@ enum InsightsMetricStatusDescriptor {
         let classification = digest?.bpClassification
         return InsightsMetricStatusCard.Descriptor(
             title: kind.displayName,
-            guidelineCaption: "insights.digest.bp.guideline.esh2023",
+            guidelineCaption: String(localized: "insights.digest.bp.guideline.esh2023"),
+            // 1.4.1 — the ESH caption is the claim's authority; make it the way
+            // into ESH 2023 / ESC 2024 / ACC-AHA 2017 rather than a bare name.
+            sourcesTopic: .bloodPressureClassification,
             chipLabel: classification.map(bpLabel),
             chipTone: classification.map(bpTone) ?? .neutral,
+            // 1.0.3 (1.4.1, audit row 10) — "Hypertension grade 2" is a
+            // diagnostic category name. The clause that says a category off
+            // home readings is not one lived only in the Sources sheet; it now
+            // rides on the card next to the chip.
+            chipCaption: String(localized: "insights.metric.statusCard.notADiagnosis"),
             headlineValue: headline,
             unitCaption: kind.unit,
             pctInTarget: digest?.bpPctInTarget,
@@ -100,12 +108,22 @@ enum InsightsMetricStatusDescriptor {
         }
     }
 
+    /// **1.0.3 (App Review 1.4.1, audit row 10 / ruling R20)** — no home-reading
+    /// category paints in `.critical`.
+    ///
+    /// The first pass moved only grade 3 out of the alarm tone, which left the
+    /// scale reading backwards: grade 2 red, grade 3 amber. R20 settles it the
+    /// other way — the alarm tone leaves the vocabulary entirely. A red chip on
+    /// a 30-day average of the user's own home readings is the card at its most
+    /// diagnosis-shaped, and it is the severity signal, not the category name,
+    /// that carries the claim. The categories stay (they are cited, ESH 2023)
+    /// and `.warning` still separates the hypertensive bands from the rest, so
+    /// nothing is hidden — it simply stops shouting.
     private static func bpTone(_ c: BPClassification) -> HLBadge.Tone {
         switch c {
         case .optimal, .normal: .success
         case .highNormal: .info
-        case .hypertensionGrade1: .warning
-        case .hypertensionGrade2, .hypertensionGrade3: .critical
+        case .hypertensionGrade1, .hypertensionGrade2, .hypertensionGrade3: .warning
         case .unknown: .neutral
         }
     }
@@ -134,9 +152,17 @@ enum InsightsMetricStatusDescriptor {
         let classification = digest?.bmiClassification
         return InsightsMetricStatusCard.Descriptor(
             title: kind.displayName,
-            guidelineCaption: nil,
+            // 1.4.1 — the BMI chip and its band hint are WHO 2000 bands. BP has
+            // always named its guideline in the header; BMI classified silently.
+            // It now says whose bands these are, and the caption cites them.
+            guidelineCaption: String(localized: "insights.digest.bmi.guideline.who2000"),
+            sourcesTopic: .bmi,
             chipLabel: classification.map(bmiLabel),
             chipTone: classification.map(bmiTone) ?? .neutral,
+            // 1.0.3 (1.4.1, audit row 10) — same qualifier as BP: "Obesity
+            // class III" is a WHO category computed from the user's own
+            // readings, not a diagnosis anyone made.
+            chipCaption: String(localized: "insights.metric.statusCard.notADiagnosis"),
             headlineValue: headline,
             unitCaption: kind.unit,
             pctInTarget: nil,
@@ -164,12 +190,15 @@ enum InsightsMetricStatusDescriptor {
         }
     }
 
+    /// **1.0.3 (1.4.1, audit row 10 / ruling R20)** — see ``bpTone``: the WHO
+    /// obesity classes keep their names and lose the alarm tone. The lower
+    /// bands are untouched; they were never `.critical`.
     private static func bmiTone(_ c: BMIClassification) -> HLBadge.Tone {
         switch c {
         case .underweight: .warning
         case .normal: .success
         case .overweight: .warning
-        case .obeseGradeI, .obeseGradeII, .obeseGradeIII: .critical
+        case .obeseGradeI, .obeseGradeII, .obeseGradeIII: .warning
         case .unknown: .neutral
         }
     }

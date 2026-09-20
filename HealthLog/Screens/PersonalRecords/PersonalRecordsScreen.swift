@@ -121,6 +121,7 @@ struct PersonalRecordsScreen: View {
         .sheet(item: $selectedBenchmark) { selection in
             BenchmarkSourceSheet(
                 metricLabel: selection.metricLabel,
+                kind: selection.record.kind ?? .unknown,
                 benchmark: selection.benchmark
             ) {
                 selectedBenchmark = nil
@@ -294,16 +295,23 @@ struct PersonalRecordsScreen: View {
 }
 
 extension PersonalRecordsScreen {
+    /// Every value here is fed to `LocalizedStringKey(_:)` at the call site, so
+    /// each one is a String-Catalog key. Four of them were German literals with
+    /// no catalog entry (1.0.3 / audit row 18): the screen title, the bucket
+    /// empty line, the comparison header and the milestones header all rendered
+    /// raw German in the English UI — on the screen a reviewer chasing
+    /// citations reaches through `BenchmarkSourceSheet`. `streaksHeader` stays a
+    /// literal because "Streaks" is the word in both locales.
     enum Layout {
-        static let navigationTitle = "Persönliche Rekorde"
+        static let navigationTitle = "records.title"
         static let emptyTitle = "No personal records yet"
         static let emptySubtitle =
             "Personal bests per metric unlock once you have enough data."
-        static let bucketEmpty = "Für diesen Zeitraum sind noch keine Rekorde verzeichnet."
+        static let bucketEmpty = "records.empty.bucket"
         static let bucketPickerLabel = "Time range"
         static let streaksHeader = "Streaks"
-        static let milestonesHeader = "Meilensteine"
-        static let comparisonHeader = "Vergleich"
+        static let milestonesHeader = "records.milestones.header"
+        static let comparisonHeader = "records.comparison.header"
     }
 }
 

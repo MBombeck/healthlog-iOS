@@ -37,7 +37,11 @@ struct IllnessCorrelationSection: View {
             // entfallen. Die Aussage „blickt zurück, sagt nichts voraus" trägt
             // jetzt genau einmal der Bullet auf dem Opt-in-Screen (R3), an dem
             // der Nutzer über das Modul entscheidet. Die Red-Flags-Karte
-            // („suche ärztliche Hilfe", Klasse 4) ist davon unberührt.
+            // (Klasse 4) ist davon unberührt.
+
+            // 1.0.3 (1.4.1) — the method behind the recovery gap and the red
+            // flags, cited once under the whole section.
+            HLSourcesLink(topic: .illnessRecovery)
         }
     }
 
@@ -118,8 +122,19 @@ struct IllnessCorrelationSection: View {
     }
 
     private func redFlagsCard(_ flags: [IllnessRedFlag]) -> some View {
-        // Escalating section. The badge tone is `.warning` (attention) — the
-        // copy itself escalates ("seek care if this recurs"). Not reassuring.
+        // Attention section, `.warning` tone.
+        //
+        // 1.0.3 (App Review 1.4.1, audit row 14 / ruling R12) — the footer used
+        // to read "If this pattern recurs, seek medical care." under headlines
+        // like "Sustained fever". That is a triage instruction, and the app
+        // cannot support one: the trigger is `!value.redFlags.isEmpty` and
+        // nothing more, the flags arrive decoded straight off the wire with no
+        // threshold the client can name, and the underlying entries can be
+        // free text the user typed. The line now says what it honestly is — a
+        // pattern in the user's own recorded values — and points at a
+        // conversation with their doctor rather than at care-seeking. The
+        // section keeps its warning tone: softening the claim is not the same
+        // as making the card reassuring.
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HStack(spacing: HLSpace.xs) {

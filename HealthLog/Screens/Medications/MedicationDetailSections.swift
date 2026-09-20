@@ -64,6 +64,11 @@ struct ComplianceKPISection: View {
             } else {
                 card
             }
+            // 1.0.3 (App Review 1.4.1) — the band that colours this number is
+            // a clinical convention, not a HealthLog invention. The link sits
+            // outside the disclosure Button so VoiceOver (and a tap) reach it
+            // as its own control rather than as part of the card.
+            HLSourcesLink(topic: .medicationCompliance)
         }
     }
 

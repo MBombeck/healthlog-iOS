@@ -59,6 +59,51 @@ extension CoachConversationStore {
         )
     }
 
+    // MARK: - MDR safety filter (R11 — 1.0.3, App Review 1.4.1)
+
+    /// **The decision: what a coach reply is allowed to say.**
+    ///
+    /// Until 1.0.3 the ``MDRSafetyFilter`` guarded six AI output paths and
+    /// **none of the three coach arms** — the one conversational surface where
+    /// the model is asked the most open-ended questions was the only one that
+    /// shipped its raw output straight into a bubble (audit row 2). This is the
+    /// pure decision, driven directly by the suite; the WIRING into each arm is
+    /// pinned by a source-text test, the same split
+    /// ``emptyGenerationOutcome(didRenderAnything:)`` uses and for the same
+    /// reason: a modelled fix must not be able to stand in for a real one.
+    ///
+    /// A flagged reply is replaced wholesale rather than edited — the house
+    /// contract everywhere else (`MDRSafetyFilter.scrub` returns a refusal, it
+    /// never rewrites). Partial redaction would leave the model's framing
+    /// standing with the incriminating clause cut out, which reads like an
+    /// endorsement with a gap in it.
+    nonisolated static func safeReplyText(
+        _ text: String,
+        refusal: String,
+        filter: MDRSafetyFilter
+    ) async -> String {
+        await filter.containsForbiddenPattern(in: text) ? refusal : text
+    }
+
+    /// Store-side convenience: filter one arm's final text against the store's
+    /// filter. Every arm calls exactly this before it commits a reply to the
+    /// transcript and to disk.
+    ///
+    /// **R19a (fix round 1).** The refusal used to borrow
+    /// `MiniCoachPrompt.refusalCopy`, which is an **input** refusal — "I can
+    /// only explain the data you logged" tells the person their question was
+    /// out of bounds. Here the question was fine and the *answer* was withheld,
+    /// so that copy blames the wrong party and sends the person away with no
+    /// idea what to do next. `coach.filtered.refusal` says what happened, says
+    /// the question was in order, and names the two routes on from here.
+    func filteredReply(_ text: String) async -> String {
+        await Self.safeReplyText(
+            text,
+            refusal: String(localized: "coach.filtered.refusal"),
+            filter: safetyFilter
+        )
+    }
+
     // MARK: - Prompt composition
 
     /// Compose the final on-device prompt: enrich the raw user text
@@ -74,9 +119,19 @@ extension CoachConversationStore {
     /// explicitly so the composer is a pure function of its inputs.
     /// Production sites pass `.now`; tests pin a fixture date through
     /// the optional `nowProvider`-equivalent if needed in future.
-    func composePrompt(userText: String) -> String {
+    ///
+    /// **Locale (1.0.3, R11):** the composer now picks its guardrail language
+    /// from the session locale, so the parameter is explicit here rather than
+    /// defaulted deep inside the builder — and a test can pin a language
+    /// instead of inheriting the runner's.
+    func composePrompt(userText: String, locale: Locale = .current) -> String {
         let snapshot = snapshotProvider?() ?? HealthSnapshot.empty
-        return PrivacyFirstPromptBuilder.compose(userText: userText, snapshot: snapshot, now: .now)
+        return PrivacyFirstPromptBuilder.compose(
+            userText: userText,
+            snapshot: snapshot,
+            now: .now,
+            locale: locale
+        )
     }
 
     // MARK: - Hydrate

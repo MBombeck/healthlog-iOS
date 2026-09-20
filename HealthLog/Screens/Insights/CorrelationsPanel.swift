@@ -66,10 +66,6 @@ public struct CorrelationsPanel: View {
     /// The subset of pairs this panel renders. The overview passed `.allCases`
     /// (now relocated per-metric); a metric page passes only the pair(s) it owns.
     let pairs: Set<CorrelationPair>
-    /// Whether to append the observational-not-causal reading note below the
-    /// cards. The overview row owned its own note; the per-metric block renders
-    /// one inline here so the relocated card never loses it.
-    let showsDisclaimer: Bool
     /// **A360 H2 (v0156)** — "Ask the coach about this" affordance per correlation
     /// card. The host opens the Coach pre-scoped to both metrics in the tapped
     /// pair (`pair.coachLaunchScope`) with a localized opener (`pair.coachSeed`).
@@ -79,12 +75,10 @@ public struct CorrelationsPanel: View {
     public init(
         digest: ComprehensiveDigest,
         pairs: Set<CorrelationPair> = Set(CorrelationPair.allCases),
-        showsDisclaimer: Bool = false,
         onAskCoach: ((CorrelationPair) -> Void)? = nil
     ) {
         self.digest = digest
         self.pairs = pairs
-        self.showsDisclaimer = showsDisclaimer
         self.onAskCoach = onAskCoach
     }
 
@@ -206,12 +200,9 @@ public struct CorrelationsPanel: View {
                 if isFullSet {
                     EmptyCorrelationCard()
                 }
-            } else if showsDisclaimer {
+            } else {
                 // v0.11 — causal-misread guard. A correlation card is the
-                // highest-risk surface for "X causes Y" misreading. The
-                // overview row owns its OWN note (`showsDisclaimer: false`
-                // there); the relocated per-metric block opts in so the card
-                // never loses it.
+                // highest-risk surface for "X causes Y" misreading.
                 //
                 // UI-Standard R17 (U1) — the line is a READING INSTRUCTION for
                 // the number above it, not a disclaimer: it is now the same
@@ -220,11 +211,23 @@ public struct CorrelationsPanel: View {
                 // is the ack-sheet's job, not this card's. The ack-gate that
                 // used to hide the whole footer fell with it: a reading
                 // instruction is content and never suppresses itself.
+                //
+                // 1.0.3 (App Review 1.4.1, audit row 3) — UNGATED. The note used
+                // to hang off a `showsDisclaimer` flag that every one of the
+                // three call sites passed `false`, so the reading instruction —
+                // and with it the Sources link — never rendered anywhere. A
+                // reading instruction that no surface shows is not a guard. The
+                // flag is gone rather than flipped, so it cannot be switched off
+                // again by a fourth call site.
                 Text("correlations.disclaimer")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("insights.correlations.disclaimer")
+                // 1.4.1 — the reading instruction says what the number is not;
+                // this says where the method comes from. Both belong to the
+                // same correlation statement, so they sit together.
+                HLSourcesLink(topic: .correlations)
             }
         }
     }
@@ -279,8 +282,18 @@ public struct CorrelationsPanel: View {
         }
     }
 
-    /// BP × Medication: the desired correlation is **negative** (more
-    /// compliance → lower BP) — we phrase it accordingly.
+    /// BP × Medication, **1.0.3 (App Review 1.4.1 / ruling R12)**: a pure
+    /// association between the user's own days — never a statement about what
+    /// the medicine does. The previous copy read the sign of `r` as a drug
+    /// effect ("intake days lower blood pressure", "no clear BP effect of your
+    /// intake rate"); ~20 home readings cannot carry either claim, and the
+    /// second one is the more harmful of the two because it reads as "your
+    /// adherence does not matter". Both now describe what the two sets of days
+    /// looked like and say outright that this is a within-user comparison. The
+    /// two remaining strong/moderate branches were already phrased as sequence
+    /// ("days … were followed by …"), not effect, and they carry the panel's
+    /// now-ungated "Associations, not causes." note plus its Sources link like
+    /// every other card.
     private func bpMedicationInterpretation(corr: BPMedicationCorrelation) -> String {
         let strength = corr.strength ?? .keine
         switch (strength, corr.r < 0) {
@@ -289,9 +302,9 @@ public struct CorrelationsPanel: View {
         case (.moderat, true):
             return String(localized: "Days with a high intake rate tended to be followed by lower blood pressure.")
         case (.schwach, true):
-            return String(localized: "Weak hint that intake days lower blood pressure.")
+            return String(localized: "correlations.bpMedication.lowerOnIntakeDays")
         case (.stark, false), (.moderat, false), (.schwach, false):
-            return String(localized: "Data show no clear BP effect of your intake rate.")
+            return String(localized: "correlations.bpMedication.noDifference")
         case (.keine, _):
             return String(localized: "Too little spread for a clear statement yet.")
         }

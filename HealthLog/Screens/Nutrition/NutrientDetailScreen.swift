@@ -83,6 +83,8 @@ struct NutrientDetailScreen: View {
             Text(reference.source)
                 .font(.hlCaption2)
                 .foregroundStyle(HLText.tertiary)
+            // 1.0.3 (1.4.1) — the reference values' own citation.
+            HLSourcesLink(topic: .nutrition)
         }
     }
 

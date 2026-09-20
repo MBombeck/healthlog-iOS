@@ -228,28 +228,30 @@ struct CoachConversationStoreTests {
                 )
             }
         )
-        let composed = store.composePrompt(userText: "Was sagst du dazu?")
+        let composed = store.composePrompt(userText: "Was sagst du dazu?", locale: Locale(identifier: "de_DE"))
         // The raw user text is preserved verbatim …
         #expect(composed.contains("Was sagst du dazu?"))
         // … and the snapshot bullets enrich the body.
         #expect(composed.contains("• Blutdruck: 122/76 mmHg"))
         #expect(composed.contains("• Stimmung Ø: 4/5"))
-        // The German preamble + disclaimer round-trip.
+        // The German preamble + guardrail block round-trip (1.0.3: the language
+        // is pinned rather than inherited from the runner — `composePrompt`
+        // selects it from the session locale now).
         #expect(composed.contains("Du bist HealthLog Coach"))
-        #expect(composed.contains("Du gibst KEINE Diagnose"))
+        #expect(composed.contains("Du gibst niemals eine medizinische Diagnose."))
     }
 
     @Test("composePrompt without a provider falls back to empty snapshot — no bullets")
     func composePromptWithoutProviderFallsBackToEmpty() {
         let store = CoachConversationStore(service: LocalLLMService())
-        let composed = store.composePrompt(userText: "Hallo")
+        let composed = store.composePrompt(userText: "Hallo", locale: Locale(identifier: "de_DE"))
         // No context block when the snapshot is empty …
         #expect(composed.contains("Kontext über letzte Vitalwerte") == false)
         #expect(composed.contains("•") == false)
         // … but the preamble + user question + disclaimer still render.
         #expect(composed.contains("HealthLog Coach"))
         #expect(composed.contains("Hallo"))
-        #expect(composed.contains("KEINE Diagnose"))
+        #expect(composed.contains("UNVERHANDELBAR"))
     }
 
     // MARK: - v0.6.1 F6 — double-response guard

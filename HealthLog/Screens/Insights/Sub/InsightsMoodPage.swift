@@ -331,7 +331,6 @@ struct InsightsMoodPage: View {
             let panel = CorrelationsPanel(
                 digest: digest,
                 pairs: [.moodBp],
-                showsDisclaimer: false,
                 onAskCoach: { pair in
                     coachSeedOverride = pair.coachSeed
                     coachScopeOverride = pair.coachLaunchScope

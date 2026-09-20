@@ -215,6 +215,9 @@ struct WellnessScoreDetailSheet: View {
                         .foregroundStyle(HLText.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                // 1.0.3 (App Review 1.4.1) — the guideline literature behind
+                // this derived score, one tap from the claim it qualifies.
+                HLSourcesLink(topic: .derivedScore(dto.metric))
             }
         }
     }

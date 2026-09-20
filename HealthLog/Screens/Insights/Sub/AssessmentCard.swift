@@ -102,7 +102,14 @@ struct AssessmentCard: View {
             }
         case let .ready(text, cached, updatedAt):
             section {
-                AssessmentBody(text: text, cached: cached, updatedAt: updatedAt)
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    AssessmentBody(text: text, cached: cached, updatedAt: updatedAt)
+                    // 1.0.3 (App Review 1.4.1) — how the assistant's prose is
+                    // produced. OUTSIDE `AssessmentBody`, whose root is a
+                    // `.combine`d accessibility element.
+                    HLSourcesLink(topic: .aiAssistant)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

@@ -63,6 +63,10 @@ struct IntradayPulseBlock: View {
                 caption
                 coverageNote
                 content
+                // 1.0.3 (App Review 1.4.1) — how the day's tension window is
+                // derived from the personal band. At the card's foot, the same
+                // place every other cited surface carries it.
+                HLSourcesLink(topic: .healthStatus)
             }
         }
         .accessibilityIdentifier("insights.metric.pulse.intraday")

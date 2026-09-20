@@ -346,10 +346,15 @@ struct EcgDisclaimerBlock: View {
                     .font(.hlFootnote)
                     .foregroundStyle(HLText.tertiary)
                     .accessibilityHidden(true)
-                Text("insights.ecg.disclaimer")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    Text("insights.ecg.disclaimer")
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // 1.0.3 (App Review 1.4.1) — the device maker's own ECG /
+                    // irregular-rhythm documentation, beside the attribution.
+                    HLSourcesLink(topic: .ecgRhythm)
+                }
             }
         }
         .accessibilityIdentifier("insights.ecg.disclaimer")

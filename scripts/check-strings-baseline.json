@@ -22,7 +22,10 @@
     "mood.tag.": "Models/MoodTagCatalog.swift:358 — MoodTagCatalogL10n.resolve(Server-`labelKey`)",
     "mood.tagCategory.": "Models/MoodTagCatalog.swift:358 — MoodTagCatalogL10n.resolve(Server-`labelKey`)",
     "nutrients.names.": "Models/NutrientDisplay.swift:15 — `nutrients.names.\\(code.rawValue)`",
-    "report.leaf.": "Models/ReportLeafDisplay.swift:27 — `report.leaf.\\(leaf)`"
+    "report.leaf.": "Models/ReportLeafDisplay.swift:27 — `report.leaf.\\(leaf)`",
+    "sources.caveat.": "MedicalSources/MedicalSource.swift:16 — `MedicalSource.caveatKey` builds `sources.caveat.\\(id.rawValue)`",
+    "sources.method.": "MedicalSources/MedicalSourceCatalog+Topics.swift:181 — `methodologyKey(for:)` returns the key as a literal per case; the sheet/hub localize it at the call site",
+    "sources.methodTitle.": "MedicalSources/MedicalSourceCatalog+Topics.swift:216 — `allMethodologyKeys` titleKey column, localized at the hub call site"
   },
   "knownOrphans": [],
   "serverProvided": [

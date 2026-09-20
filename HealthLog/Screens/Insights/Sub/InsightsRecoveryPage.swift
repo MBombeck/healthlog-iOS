@@ -81,7 +81,12 @@ struct InsightsRecoveryPage: View {
                 // A360-1 M2 — discreet pointer to the "Stress and Recovery"
                 // /learn guide (mirrors the server's LearnMoreLink on the
                 // Resilience surface).
-                HLLearnMoreLink(concept: "RESILIENCE")
+                // 1.0.3 (App Review 1.4.1) — the guide pointer keeps company
+                // with the literature behind the recovery score itself.
+                HStack(spacing: HLSpace.lg) {
+                    HLLearnMoreLink(concept: "RESILIENCE")
+                    HLSourcesLink(topic: .derivedScore("RECOVERY_SCORE"))
+                }
 
                 // v1.18.3 — when the server flags Rest Mode active (+ illness
                 // enabled), soften the recovery framing into a rest-aware tone:

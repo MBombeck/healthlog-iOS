@@ -317,7 +317,7 @@
     },
     {
       "file": "HealthLog/Screens/Coach/AskCoachSheet+Provenance.swift",
-      "line": 59,
+      "line": 76,
       "character": 21,
       "rule_id": "hl_no_handmade_chevron",
       "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
@@ -541,7 +541,7 @@
     },
     {
       "file": "HealthLog/Screens/Insights/InsightsMetricScreen+Sections.swift",
-      "line": 367,
+      "line": 388,
       "character": 25,
       "rule_id": "hl_no_handmade_chevron",
       "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
@@ -549,7 +549,7 @@
     },
     {
       "file": "HealthLog/Screens/Insights/InsightsMetricScreen+Sections.swift",
-      "line": 461,
+      "line": 482,
       "character": 25,
       "rule_id": "hl_no_handmade_chevron",
       "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
@@ -581,7 +581,7 @@
     },
     {
       "file": "HealthLog/Screens/Insights/Sub/InsightsMoodPage.swift",
-      "line": 434,
+      "line": 433,
       "character": 21,
       "rule_id": "hl_no_handmade_chevron",
       "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
@@ -613,7 +613,7 @@
     },
     {
       "file": "HealthLog/Screens/Insights/Sub/SleepStageCompositionCard.swift",
-      "line": 123,
+      "line": 129,
       "character": 22,
       "rule_id": "large_tuple",
       "reason": "Tuples should have at most 2 members",
@@ -621,7 +621,7 @@
     },
     {
       "file": "HealthLog/Screens/Insights/Sub/WellnessScoreDetailSheet.swift",
-      "line": 262,
+      "line": 265,
       "character": 21,
       "rule_id": "hl_no_handmade_chevron",
       "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
@@ -773,7 +773,7 @@
     },
     {
       "file": "HealthLog/Screens/Medications/MDRGatedDrugLevelSection.swift",
-      "line": 253,
+      "line": 261,
       "character": 64,
       "rule_id": "large_tuple",
       "reason": "Tuples should have at most 2 members",
@@ -1005,10 +1005,10 @@
     },
     {
       "file": "HealthLog/Screens/Onboarding/ServerAuthStep.swift",
-      "line": 816,
+      "line": 815,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 816",
+      "reason": "File should contain 600 lines or less: currently contains 815",
       "severity": "warning"
     },
     {
@@ -1149,26 +1149,26 @@
     },
     {
       "file": "HealthLog/Services/AI/CoachConversationStore.swift",
-      "line": 600,
+      "line": 624,
       "character": 13,
       "rule_id": "cyclomatic_complexity",
-      "reason": "Function should have complexity 12 or less; currently complexity is 14",
+      "reason": "Function should have complexity 12 or less; currently complexity is 15",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Services/AI/CoachConversationStore.swift",
-      "line": 600,
+      "line": 624,
       "character": 13,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 61 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 63 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Services/AI/CoachConversationStore.swift",
-      "line": 831,
+      "line": 870,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 831",
+      "reason": "File should contain 600 lines or less: currently contains 870",
       "severity": "warning"
     },
     {
@@ -1717,7 +1717,7 @@
     },
     {
       "file": "HealthLogTests/Compliance/AppReviewConfigurationTests.swift",
-      "line": 220,
+      "line": 218,
       "character": 5,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 73 lines",

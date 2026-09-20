@@ -86,12 +86,22 @@ extension InsightsMetricScreen {
                 // public /learn guide (mirrors the server's LearnMoreLink on the
                 // Vitals / Glucose / metric detail). Self-suppresses for any
                 // `MetricKind` the registry doesn't map (fail-closed).
-                HLLearnMoreLink(concept: kind.rawValue)
+                //
+                // 1.4.1 — the explainer paragraph IS a medical statement, so the
+                // citation rides next to the guide pointer. Both self-suppress
+                // independently; a row with neither renders as nothing.
+                HStack(spacing: HLSpace.lg) {
+                    HLLearnMoreLink(concept: kind.rawValue)
+                    HLSourcesLink(topic: .metric(kind))
+                }
             }
         } else {
             // Even when there's no static explainer copy yet, still surface the
             // learn pointer for the mapped metrics so the guide is reachable.
-            HLLearnMoreLink(concept: kind.rawValue)
+            HStack(spacing: HLSpace.lg) {
+                HLLearnMoreLink(concept: kind.rawValue)
+                HLSourcesLink(topic: .metric(kind))
+            }
         }
     }
 
@@ -184,32 +194,40 @@ extension InsightsMetricScreen {
            )
         {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text(String(
-                    format: String(localized: "insights.bp.derived.pulsePressure"),
-                    readout.pulsePressure
-                ))
-                Text(String(
-                    format: String(localized: "insights.bp.derived.meanArterialPressure"),
-                    readout.meanArterialPressure
-                ))
-                // UI-Standard R17 (U1) — Zuschreibung, kein Hinweis: dass
-                // Pulsdruck und MAP aus der letzten Messung ABGELEITET und
-                // nicht gemessen sind, ist eine Tatsache über die zwei Zahlen
-                // darüber. Der „nicht als Diagnose"-Schwanz ist gefallen, und
-                // mit ihm das Ack-Gate — eine Zuschreibung unterdrückt sich
-                // nicht selbst.
-                Text(String(localized: "insights.bp.derived.caveat"))
-                    .foregroundStyle(HLText.tertiary)
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    Text(String(
+                        format: String(localized: "insights.bp.derived.pulsePressure"),
+                        readout.pulsePressure
+                    ))
+                    Text(String(
+                        format: String(localized: "insights.bp.derived.meanArterialPressure"),
+                        readout.meanArterialPressure
+                    ))
+                    // UI-Standard R17 (U1) — Zuschreibung, kein Hinweis: dass
+                    // Pulsdruck und MAP aus der letzten Messung ABGELEITET und
+                    // nicht gemessen sind, ist eine Tatsache über die zwei Zahlen
+                    // darüber. Der „nicht als Diagnose"-Schwanz ist gefallen, und
+                    // mit ihm das Ack-Gate — eine Zuschreibung unterdrückt sich
+                    // nicht selbst.
+                    Text(String(localized: "insights.bp.derived.caveat"))
+                        .foregroundStyle(HLText.tertiary)
+                }
+                // I1 — match the canonical metric-page explainer style (intro
+                // `descriptionSlot` + Einschätzung `AssessmentBody` both use `.hlBody`).
+                // The Pulsdruck/MAP caption previously rode `.hlSubhead`, a smaller
+                // ramp that read as a different size/weight next to the prose.
+                .font(.hlBody)
+                .foregroundStyle(HLText.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                // 1.4.1 — Pulsdruck and MAP are derived clinical quantities, so
+                // they name their references. The link is a SIBLING of the
+                // combined element above, never inside it: VoiceOver must reach
+                // it as its own control.
+                HLSourcesLink(topic: .pulsePressureMAP)
             }
-            // I1 — match the canonical metric-page explainer style (intro
-            // `descriptionSlot` + Einschätzung `AssessmentBody` both use `.hlBody`).
-            // The Pulsdruck/MAP caption previously rode `.hlSubhead`, a smaller
-            // ramp that read as a different size/weight next to the prose.
-            .font(.hlBody)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
         }
     }
 
@@ -277,8 +295,12 @@ extension InsightsMetricScreen {
     var correlationBlock: some View {
         let pairs = correlationPairs
         if !pairs.isEmpty, backend.canShowCloudInsights, let digest = insightsStore.digest {
-            // v0.14.3 D3 — the bottom "correlation ≠ causation" disclaimer was
-            // removed (declutter); the per-metric block no longer opts in.
+            // 1.0.3 (App Review 1.4.1 / ruling R12) — the panel's own
+            // "Associations, not causes." reading instruction and its Sources
+            // link now render unconditionally whenever a correlation card does.
+            // They used to hang off a `showsDisclaimer` flag that this call site
+            // and both others passed `false`, so neither reached a screen; the
+            // flag is gone, and there is nothing here to opt into any more.
             // A360 H2 — each correlation card carries an "Ask the coach about
             // this" link that opens the canonical AskCoachSheet pre-scoped to both
             // metrics in the pair (same sheet the per-page coach circle opens; it
@@ -286,7 +308,6 @@ extension InsightsMetricScreen {
             let panel = CorrelationsPanel(
                 digest: digest,
                 pairs: pairs,
-                showsDisclaimer: false,
                 onAskCoach: { pair in
                     coachSeedOverride = pair.coachSeed
                     coachScopeOverride = pair.coachLaunchScope
@@ -316,7 +337,7 @@ extension InsightsMetricScreen {
     /// EXISTING `HeroStrip` (the operator's "the existing last-measurement tile":
     /// the latest value + unit + delta chip on one line, the weekday+day+time
     /// below it, and the server 7/30/90-day up/down trend slopes). v0.14.1 §5
-    /// retired the bespoke `InsightsLastMeasurementCard` the reconcile agent built
+    /// replaces the former bespoke `InsightsLastMeasurementCard`
     /// (the wrong card) — the canonical template reuses the HeroStrip tile and
     /// adds ONLY a "Letzte Messung" heading above it. Self-suppresses with no
     /// latest point so a fresh metric reads as a clean heading + chart.

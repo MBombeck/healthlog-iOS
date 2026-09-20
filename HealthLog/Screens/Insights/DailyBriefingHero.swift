@@ -81,13 +81,33 @@ public struct DailyBriefingHero: View {
         // the existing elevated `HLCard` surface. NO `.hlGlassEffect` on the
         // content card — glass on a text-heavy content surface violates
         // "content layer stays mono" and can hurt paragraph legibility.
-        if let onTap {
-            Button(action: onTap) { card }
-                .hlPressable() // QOL-AUDIT H1: press feedback
-                .accessibilityHint(Text(String(localized: "Double-tap to ask the coach")))
-        } else {
-            card
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
+            if let onTap {
+                Button(action: onTap) { card }
+                    .hlPressable() // QOL-AUDIT H1: press feedback
+                    .accessibilityHint(Text(String(localized: "Double-tap to ask the coach")))
+            } else {
+                card
+            }
+
+            // 1.0.3 (App Review 1.4.1) — the citation control is a SIBLING of
+            // the card, never a `Button` inside the whole-card `Button`'s
+            // label: a nested button has undefined tap forwarding and never
+            // becomes its own VoiceOver stop. Both arms share this shape, so
+            // the tappable and the plain hero lay out identically. The inset
+            // matches `HLCard`'s own `HLSpace.lg` padding, so the link lines up
+            // with the provenance row it cites.
+            if showsProvenanceRow {
+                HLSourcesLink(topic: .aiAssistant)
+                    .padding(.horizontal, HLSpace.lg)
+            }
         }
+    }
+
+    /// Exactly the condition under which `card` renders the provenance row —
+    /// the citation only appears where there is a provenance claim to qualify.
+    private var showsProvenanceRow: Bool {
+        style == .full && provenance.glyph != nil && provenance.label != nil
     }
 
     private var card: some View {

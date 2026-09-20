@@ -118,6 +118,12 @@ struct MetricAIExplainerSheet: View {
             // WORAUF der Assistent geschaut hat (Metrik, Zeitfenster, n) —
             // das ist die Zuschreibung, die diese Fläche trägt.
             citationRow
+            // 1.0.3 (App Review 1.4.1, §2.3) — `citationRow` says WHAT the
+            // assistant looked at; this says on what published basis a value is
+            // read as high, low or typical. A sibling of the prose and of the
+            // Ask-the-coach button, never nested inside either, so VoiceOver
+            // reaches it as its own control.
+            HLSourcesLink(topic: .aiAssistant)
             if let onAskCoach {
                 askCoachButton(onAskCoach)
             }

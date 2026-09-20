@@ -1,12 +1,14 @@
 import SwiftUI
 
-/// Renders the merged titration timeline + the catalog "next standard
-/// step" hint. Embedded as a child section of
+/// Renders the user's recorded dose-change history plus the label's standard
+/// schedule up to the dose they have reached. Embedded as a child section of
 /// `MedicationDetailScreen` behind an `isGLP1` gate.
 ///
-/// **MDR copy guard:** every visible string in this section is journal /
-/// informational. The "Folge-Stufe"-hint explicitly defers to the
-/// prescribing physician. No clinical recommendation is rendered.
+/// **1.4.2 boundary (ruling R10):** the "Usual next step: X mg" line — a mg
+/// figure computed from the user's own dose — was removed in 1.0.3, together
+/// with the forward ladder it introduced. Nothing here projects a dose the
+/// user has not recorded; every visible string is journal / informational and
+/// defers to the prescribing physician.
 public struct TitrationLadderSection: View {
     @State private var store: TitrationLadderStore
     @State private var editorEntry: TitrationLadderEntry?
@@ -67,32 +69,20 @@ public struct TitrationLadderSection: View {
 
     @ViewBuilder
     private var content: some View {
-        // The standard-ladder "you-are-here" plan (web v1.18.5 parity) sits
-        // above the recorded dose-change history. It self-suppresses for
-        // non-titrating meds (empty `catalogTimelineSteps`), so a recognised
-        // GLP-1 with a single-rung ladder or no current dose shows only the
-        // history / empty state below.
-        let catalogSteps = store.catalogTimelineSteps
+        // Without a recorded dose change there is nothing to anchor the
+        // label's schedule to, so the section is the empty state alone — no
+        // ladder is drawn from a dose guessed out of the medication's name.
         if store.mergedTimeline.isEmpty {
-            if catalogSteps.count >= 2 {
-                HLCard {
-                    TitrationCatalogTimelineView(steps: catalogSteps)
-                }
-            } else {
-                emptyState
-            }
+            emptyState
         } else {
+            let catalogSteps = store.catalogTimelineSteps
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    if catalogSteps.count >= 2 {
-                        TitrationCatalogTimelineView(steps: catalogSteps)
+                    if let drugID = store.catalogDrug?.id, !catalogSteps.isEmpty {
+                        TitrationCatalogTimelineView(steps: catalogSteps, drugID: drugID)
                         Divider().background(HLColor.separator)
                     }
                     timeline
-                    if let next = store.nextStandardStepMg {
-                        Divider().background(HLColor.separator)
-                        nextStepHint(nextStepMg: next)
-                    }
                 }
             }
         }
@@ -108,7 +98,7 @@ public struct TitrationLadderSection: View {
                 .font(.hlHeadline)
                 .foregroundStyle(HLText.primary)
                 Text(String(
-                    localized: "Erfasse Dosis-Änderungen, um den Verlauf zu dokumentieren."
+                    localized: "Log dose changes to keep a record of the course."
                 ))
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
@@ -132,27 +122,6 @@ public struct TitrationLadderSection: View {
                     Divider().background(HLColor.separator)
                 }
             }
-        }
-    }
-
-    private func nextStepHint(nextStepMg: Double) -> some View {
-        // Strictly informational — see file header for MDR boundary.
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "info.circle")
-                    .foregroundStyle(HLText.secondary)
-                Text(String(
-                    format: String(localized: "Usual next step: %@"),
-                    Self.formatDose(nextStepMg)
-                ))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-                .monospacedDigit()
-            }
-            Text(String(localized: "Per the manufacturer's guide — discuss any change with your doctor."))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

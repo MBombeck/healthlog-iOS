@@ -59,14 +59,14 @@ extension MoreScreen {
         /// v0.5.4-NF-2 — accessibility metadata for the gear-icon toolbar
         /// shortcut. Keeping the strings centralised mirrors the `Row`
         /// pattern + lets `MoreScreenLayoutTests` pin the identifier so a
-        /// future wave can't silently drop the affordance.
+        /// future change can't silently drop the affordance.
         static let gearToolbarAccessibilityLabel = "Open Settings"
         static let gearToolbarAccessibilityIdentifier = "more.toolbar.gear"
 
         /// v0.14.8 (Task D) — accessibility metadata for the header share glyph
         /// (left of the gear), which pushes `UnifiedSharingScreen`. Replaces the
         /// removed "Mit dem Arzt teilen" list row; the identifier is pinned by
-        /// `MoreScreenLayoutTests` so a future wave can't silently drop it.
+        /// `MoreScreenLayoutTests` so a future change can't silently drop it.
         static let shareToolbarAccessibilityLabel = "Share with your doctor"
         static let shareToolbarAccessibilityIdentifier = "more.toolbar.share"
 
@@ -308,11 +308,20 @@ extension MoreScreen {
             subtitle: "Measurement reminders, check-ups"
         )
 
+        /// 1.0.3 (App Review 1.4.1) — the citations hub. Sits directly after
+        /// Vorsorge in Health & care so it is the second row a reviewer sees.
+        static let medicalSourcesRow = Row(
+            id: "medical_sources",
+            icon: "text.book.closed",
+            title: "more.medicalSources.title",
+            subtitle: "more.medicalSources.subtitle"
+        )
+
         // v0152 W-COACH-CLEANUP (C2) — the `coachRow` descriptor was removed with
         // the More Coach row. The operator flagged the More-tab coach entry as a
         // stray surface that opened the coach against his External-AI pick; the
         // manual coach entry returns as an inline button on the Insights metric
-        // pages (next wave). Coach settings stay reachable under Settings → Coach.
+        // pages (later update). Coach settings stay reachable under Settings → Coach.
 
         // v0.14.8 (Task D) — `shareWithDoctorRow` removed: the list entry was
         // dropped in favour of the `MoreHeader` share glyph (left of the gear).
@@ -363,7 +372,10 @@ extension MoreScreen {
         /// self-info, so it does not belong in the hub. Allergies + family
         /// history STAY in the hub (they ARE static self-medical info), so their
         /// descriptors are still absent from this list.
-        static let clinicalRows: [Row] = [aboutMeRow, vorsorgeRow, labsRow, illnessRow, documentsRow, mentalWellbeingRow, cycleRow]
+        static let clinicalRows: [Row] = [
+            aboutMeRow, vorsorgeRow, medicalSourcesRow, labsRow, illnessRow, documentsRow,
+            mentalWellbeingRow, cycleRow
+        ]
 
         /// **R5-A1 (17-05) — every row the Mehr tab actually renders, in render
         /// order.** `recordsRows` and `clinicalRows` are section lists and do not
@@ -376,7 +388,7 @@ extension MoreScreen {
         /// row added later without a subtitle fails `SettingsSubtitleTests` instead
         /// of quietly reintroducing the inconsistency the operator flagged.
         static let renderedRows: [Row] = [
-            aboutMeRow, vorsorgeRow, labsRow, illnessRow, documentsRow,
+            aboutMeRow, vorsorgeRow, medicalSourcesRow, labsRow, illnessRow, documentsRow,
             mentalWellbeingRow, cycleRow, cycleSettingsRow, nutritionRow,
             environmentRow, personalRecordsRow, achievementsRow, workoutsRow,
             measurementsRow, signOutRow, deleteAccountRow

@@ -6,10 +6,15 @@ import Testing
 /// content must be identifiable; the first-launch disclaimer alone is one
 /// screen the reviewer may never reopen).
 ///
-/// It deliberately stops there. The medical framing lives where the project
-/// decided it belongs — the first-launch disclaimer and the AI consent sheet —
-/// and `UIStandardCopyGuardTests` keeps blanket "kein medizinischer Rat" tails
-/// out of ordinary surfaces.
+/// **1.0.3 (App Review 1.4.1, Ruling R11)** — it no longer stops at
+/// "generated and fallible". Apple rejected 1.0 under 1.4.1, and the audit's
+/// finding was that the only always-visible sentence on the coach surface
+/// stopped short of saying the answers are not medical advice. The medical
+/// framing still lives in the first-launch disclaimer and the AI consent
+/// sheet; this line now says it too, because it is the one the reviewer
+/// cannot miss. `UIStandardCopyGuardTests` keeps the phrase off ORDINARY
+/// surfaces — this key is named in that allowlist's `protected` bucket, with
+/// the reason.
 @Suite("Coach — AI-generated note copy")
 struct CoachAIGeneratedNoteTests {
     private static func catalog() throws -> [String: Any] {
@@ -20,7 +25,7 @@ struct CoachAIGeneratedNoteTests {
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
-    @Test("the note exists in both languages and names generation and fallibility")
+    @Test("the note exists in both languages and names generation, fallibility and non-advice")
     func noteCopy() throws {
         let strings = try #require(try Self.catalog()["strings"] as? [String: Any])
         let entry = try #require(strings["coach.aiGeneratedNote"] as? [String: Any])
@@ -35,9 +40,9 @@ struct CoachAIGeneratedNoteTests {
         #expect(en.localizedCaseInsensitiveContains("wrong"))
         #expect(de.localizedCaseInsensitiveContains("KI-generiert"))
         #expect(de.localizedCaseInsensitiveContains("falsch"))
-        // The blanket medical tail belongs to the disclaimer and the consent
-        // sheet, not to every AI surface (UIStandardCopyGuardTests, rule R16).
-        #expect(!de.contains("kein medizinischer Rat"))
+        // R11 — the sentence the 1.4.1 rejection asked for, in both languages.
+        #expect(en.localizedCaseInsensitiveContains("not medical advice"))
+        #expect(de.contains("kein medizinischer Rat"))
         #expect(en.count <= 90 && de.count <= 100, "one footnote line")
     }
 }

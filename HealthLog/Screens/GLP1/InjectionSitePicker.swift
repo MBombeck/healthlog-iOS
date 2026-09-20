@@ -50,6 +50,9 @@ public struct InjectionSitePicker: View {
                     Text(String(localized: "Rotate the site to protect your skin."))
                         .font(.hlCaption)
                         .foregroundStyle(HLText.tertiary)
+                    // 1.0.3 (App Review 1.4.1) — the rotation hygiene claim is
+                    // Frid et al. 2016 (FITTER injection technique).
+                    HLSourcesLink(topic: .injectionRotation)
                 }
             }
         }

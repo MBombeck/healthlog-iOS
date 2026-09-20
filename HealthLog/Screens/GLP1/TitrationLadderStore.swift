@@ -10,9 +10,12 @@ import Observation
 ///    user-editable journal entries that augment (or override on
 ///    timestamp overlap) the server history.
 /// 3. **Catalog standard ladder** from `GLP1DrugCatalog.titrationStepsMg`
-///    — surfaced as a static "übliche Folge-Stufe gemäß Hersteller-
-///    Leitfaden" hint **after** the current step. Never an autonomous
-///    recommendation (MDR boundary — see GROUND RULE 9 + 15).
+///    — surfaced as the label's published schedule, truncated at the dose
+///    the user has actually reached. 1.0.3 (App Review 1.4.2, ruling R10)
+///    removed the "next standard step" hint that used to sit after the
+///    current step: a mg figure computed from the user's own dose is a
+///    dosage projection, and Guideline 1.4.2 reserves those. Nothing above
+///    the current dose is derived or shown (MDR boundary — GROUND RULE 9 + 15).
 ///
 /// Merge rule for (1) + (2): two rows from different sources within the
 /// same calendar day count as one — local takes precedence (the user
@@ -24,10 +27,6 @@ import Observation
 public final class TitrationLadderStore {
     public let medicationID: String
     public let catalogDrug: GLP1DrugCatalog.DrugRecord?
-    /// Fallback current-dose hint (mg) parsed from the medication's headline
-    /// `dose` string — used by the catalog ladder marker when no dose-change
-    /// history is recorded yet. `nil` when the headline dose isn't parseable.
-    public let headlineDoseMgHint: Double?
 
     public private(set) var localSteps: [TitrationStepEntrySnapshot] = []
     public private(set) var serverChanges: [Glp1DoseChangeDTO] = []
@@ -39,13 +38,11 @@ public final class TitrationLadderStore {
     public init(
         medicationID: String,
         catalogDrug: GLP1DrugCatalog.DrugRecord?,
-        repo: GLP1LocalRepository,
-        headlineDoseMgHint: Double? = nil
+        repo: GLP1LocalRepository
     ) {
         self.medicationID = medicationID
         self.catalogDrug = catalogDrug
         self.repo = repo
-        self.headlineDoseMgHint = headlineDoseMgHint
     }
 
     // MARK: - Load + mutate
@@ -149,37 +146,17 @@ public final class TitrationLadderStore {
         mergedTimeline.last
     }
 
-    /// The catalog's next standard ladder step *after* the current dose
-    /// — surfaced as informational copy only. Returns `nil` when:
-    /// - no catalog drug is resolved,
-    /// - no current step exists,
-    /// - the current step is at or above the catalog max.
-    public var nextStandardStepMg: Double? {
-        guard let catalogDrug,
-              let current = currentStep?.doseMg else { return nil }
-        let steps = catalogDrug.titrationStepsMg
-        // First step strictly greater than the current dose.
-        return steps.first { $0 > current }
-    }
-
-    /// The resolved current dose (mg) for the catalog ladder marker: the
-    /// latest recorded dose-change wins; otherwise the parsed headline-dose
-    /// hint. `nil` when neither is known (the ladder then renders every rung
-    /// as upcoming with the marker before the first step).
-    public var resolvedCurrentDoseMg: Double? {
-        currentStep?.doseMg ?? headlineDoseMgHint
-    }
-
-    /// The standard catalog escalation ladder, classified against the
-    /// current dose into past / current / upcoming rungs — the data behind
-    /// the "you-are-here" titration plan (web v1.18.5 parity). Empty (the
-    /// self-suppress signal) for non-titrating meds: no catalog drug, or a
-    /// ladder shorter than two rungs.
+    /// The label's standard schedule, truncated at the recorded current dose
+    /// — the data behind the informational titration rows. Empty (the
+    /// self-suppress signal) when there is no catalog drug, when the ladder is
+    /// shorter than two rungs, or when nothing has been recorded yet: the
+    /// schedule is anchored to what the user logged, never to a dose guessed
+    /// from the medication's name (1.4.2, ruling R10).
     public var catalogTimelineSteps: [TitrationCatalogTimeline.Step] {
         guard let catalogDrug else { return [] }
         return TitrationCatalogTimeline.resolve(
             ladderMg: catalogDrug.titrationStepsMg,
-            currentDoseMg: resolvedCurrentDoseMg
+            currentDoseMg: currentStep?.doseMg
         )
     }
 

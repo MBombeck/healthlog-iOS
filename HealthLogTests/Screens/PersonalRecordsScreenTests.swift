@@ -8,9 +8,14 @@ import Testing
 /// The SwiftUI body itself is presentational.
 @Suite("PersonalRecordsScreen — layout + localisation")
 struct PersonalRecordsScreenTests {
-    @Test("Navigation title remains 'Persönliche Rekorde'")
+    @Test("Navigation title is a catalog key that resolves")
     func navigationTitle() {
-        #expect(PersonalRecordsScreen.Layout.navigationTitle == "Persönliche Rekorde")
+        // 1.0.3 / audit row 18 — the title used to be the German literal
+        // "Persönliche Rekorde", which is no catalog key, so the English UI
+        // rendered it raw. It is now a key; the assertion moved from the copy to
+        // the key plus proof that the key actually resolves in both locales.
+        #expect(PersonalRecordsScreen.Layout.navigationTitle == "records.title")
+        #expect(String(localized: "records.title") != "records.title")
     }
 
     @Test("Empty-state copy is locked")

@@ -68,6 +68,12 @@ struct SettingsHealthScoreScreen: View {
         if let store {
             if store.config != nil {
                 pillarsCard(store: store)
+                // 1.0.3 (App Review 1.4.1) — the card footer states the
+                // eligibility rule ("at least three different areas of
+                // health, one physically measured"). The references behind
+                // that rule sit directly under it, outside the card so
+                // VoiceOver reaches the control on its own.
+                HLSourcesLink(topic: .healthScore)
                 saveSection(store: store)
             } else if store.loadFailed {
                 loadFailedState(store: store)

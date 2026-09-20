@@ -9034,22 +9034,6 @@
         }
       }
     },
-    "Data show no clear BP effect of your intake rate.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Daten zeigen keinen klaren BD-Effekt deiner Einnahme-Quote."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Data show no clear BP effect of your intake rate."
-          }
-        }
-      }
-    },
     "Data source": {
       "extractionState": "manual",
       "localizations": {
@@ -17155,23 +17139,6 @@
         }
       }
     },
-    "Meilenstein: %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Meilenstein: %1$@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Milestone: %1$@"
-          }
-        }
-      }
-    },
     "Mental health": {
       "extractionState": "manual",
       "localizations": {
@@ -17713,7 +17680,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mehr %1$@ geht tendenziell mit weniger %2$@ am Folgetag einher"
+            "value": "Mehr %1$@ – am Folgetag tendenziell weniger %2$@"
           }
         },
         "en": {
@@ -17730,7 +17697,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mehr %1$@ geht tendenziell mit mehr %2$@ am Folgetag einher"
+            "value": "Mehr %1$@ – am Folgetag tendenziell auch mehr %2$@"
           }
         },
         "en": {
@@ -29719,22 +29686,6 @@
         }
       }
     },
-    "Usual next step: %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Übliche Folge-Stufe: %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Usual next step: %@"
-          }
-        }
-      }
-    },
     "VO₂ max": {
       "comment": "Compact title — VO2 max",
       "extractionState": "manual",
@@ -30732,22 +30683,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Weak"
-          }
-        }
-      }
-    },
-    "Weak hint that intake days lower blood pressure.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schwacher Hinweis, dass Einnahme-Tage den Blutdruck senken."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Weak hint that intake days lower blood pressure."
           }
         }
       }
@@ -35193,40 +35128,6 @@
         }
       }
     },
-    "benchmark.source.provenanceBody": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quelle: CDC / WHO Daten 2020–2024."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Source: CDC / WHO data 2020–2024."
-          }
-        }
-      }
-    },
-    "benchmark.source.provenanceTitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Herkunft"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Provenance"
-          }
-        }
-      }
-    },
     "benchmark.source.sourceTitle": {
       "extractionState": "manual",
       "localizations": {
@@ -38102,13 +38003,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "KI-generiert. Antworten können falsch sein."
+            "value": "KI-generiert — kein medizinischer Rat. Antworten können falsch sein."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI-generated. Answers can be wrong."
+            "value": "AI-generated — not medical advice. Answers can be wrong."
           }
         }
       }
@@ -51441,13 +51342,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "If this pattern recurs, seek medical care."
+            "value": "This is a pattern in your own recorded values, not a clinical finding. If it keeps happening, it is worth mentioning to your doctor."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wenn dieses Muster erneut auftritt, suche ärztliche Hilfe."
+            "value": "Das ist ein Muster in deinen eigenen Werten, kein klinischer Befund. Wenn es sich wiederholt, lohnt es sich, das ärztlich anzusprechen."
           }
         }
       }
@@ -51458,13 +51359,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Worth a closer look"
+            "value": "Worth mentioning"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Genauer hinschauen"
+            "value": "Erwähnenswert"
           }
         }
       }
@@ -68160,56 +68061,20 @@
         }
       }
     },
-    "medication.titration.plan.a11y.upcoming": {
-      "comment": "VoiceOver state for an upcoming rung on the titration ladder",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "geplant"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "upcoming"
-          }
-        }
-      }
-    },
     "medication.titration.plan.title": {
-      "comment": "Catalog titration ladder section heading (GLP-1 dose plan)",
+      "comment": "Heading for the label's titration schedule up to the user's current dose (GLP-1)",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Titrationsplan"
+            "value": "Bisherige Titration"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Titration plan"
-          }
-        }
-      }
-    },
-    "medication.titration.plan.youAreHere": {
-      "comment": "Marker on the titration ladder at the user's current dose",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du bist hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You are here"
+            "value": "Titration so far"
           }
         }
       }
@@ -76982,23 +76847,6 @@
         }
       }
     },
-    "onboarding.passkey.selfHostedNote": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Passkeys sind auf dem Standard-HealthLog-Server verfügbar. Auf deiner eigenen Instanz meldest du dich mit E-Mail und Passwort an."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Passkeys are available on the default HealthLog server. On your own instance, sign in with email and password."
-          }
-        }
-      }
-    },
     "onboarding.passkey.title": {
       "comment": "v0.7.0 — Primary Passkey CTA label on ServerAuthStep — re-enabled in v0.7.0 after the v0.6.1.16 gate was dropped.",
       "localizations": {
@@ -82462,7 +82310,7 @@
       }
     },
     "settings.hkdiag.limits_openIosSettings": {
-      "comment": "UI-Standard R4 (U2) — Absprung, der den Prosa-Wegweiser auf „Hintergrundaktualisierung\" ersetzt.",
+      "comment": "UI-Standard R4 (U2) — Absprung, der den Prosa-Wegweiser auf „Hintergrundaktualisierung“ ersetzt.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -90102,6 +89950,3084 @@
           "stringUnit": {
             "state": "translated",
             "value": "Records an intake now"
+          }
+        }
+      }
+    },
+    "sources.link.label": {
+      "comment": "1.4.1 — label of the citation affordance under a medical statement",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sources"
+          }
+        }
+      }
+    },
+    "sources.link.a11y": {
+      "comment": "1.4.1 — accessibility label of the citation affordance",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quellen und Methode"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sources and method"
+          }
+        }
+      }
+    },
+    "sources.sheet.title": {
+      "comment": "1.4.1 — sources sheet title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quellen & Methode"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sources & method"
+          }
+        }
+      }
+    },
+    "sources.sheet.methodTitle": {
+      "comment": "1.4.1 — sources sheet section",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So wird das berechnet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How this is computed"
+          }
+        }
+      }
+    },
+    "sources.sheet.referencesTitle": {
+      "comment": "1.4.1 — sources sheet section",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "References"
+          }
+        }
+      }
+    },
+    "sources.sheet.openLink": {
+      "comment": "1.4.1 — a11y label of a reference link",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelle öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open source"
+          }
+        }
+      }
+    },
+    "sources.sheet.footer": {
+      "comment": "1.4.1 — sources sheet footer",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allgemeine Informationen aus veröffentlichten Leitlinien und Studien — keine ärztliche Beurteilung deiner Person. Referenzbereiche sind Richtwerte; dein Labor, deine Ärztin oder dein Arzt und deine Vorgeschichte gehen vor."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General information from published guidelines and studies — not a medical assessment of you. Reference ranges are orientation values; your lab, doctor and personal history come first."
+          }
+        }
+      }
+    },
+    "sources.hub.title": {
+      "comment": "1.4.1 — hub screen title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medizinische Quellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medical sources"
+          }
+        }
+      }
+    },
+    "sources.hub.intro": {
+      "comment": "1.4.1 — hub intro",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HealthLog zeigt Referenzbereiche, Scores und Erklärungen. Diese Seite nennt für jede davon die Herkunft und die Rechenweise. Jede Referenz öffnet das Originaldokument."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HealthLog shows reference ranges, scores and explanations. This page lists where every one of them comes from and how it is computed. Each reference opens the original document."
+          }
+        }
+      }
+    },
+    "sources.hub.methodsTitle": {
+      "comment": "1.4.1 — hub section",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So rechnet HealthLog"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How HealthLog computes things"
+          }
+        }
+      }
+    },
+    "sources.hub.learnTitle": {
+      "comment": "1.4.1 — hub section: /learn guides",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiterlesen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Further reading"
+          }
+        }
+      }
+    },
+    "sources.hub.learnBody": {
+      "comment": "1.4.1 — hub /learn section body",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verständliche Guides auf healthlog.dev, jeder mit eigenen Fußnoten-Quellen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plain-language guides on healthlog.dev, each with its own footnoted sources."
+          }
+        }
+      }
+    },
+    "sources.hub.group.guidelines": {
+      "comment": "1.4.1 — reference group",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klinische Leitlinien"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clinical guidelines"
+          }
+        }
+      }
+    },
+    "sources.hub.group.ranges": {
+      "comment": "1.4.1 — reference group",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenzbereiche & Labor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference ranges & labs"
+          }
+        }
+      }
+    },
+    "sources.hub.group.questionnaires": {
+      "comment": "1.4.1 — reference group",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fragebögen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questionnaires"
+          }
+        }
+      }
+    },
+    "sources.hub.group.pharmacology": {
+      "comment": "1.4.1 — reference group",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pharmakologie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pharmacology"
+          }
+        }
+      }
+    },
+    "sources.hub.group.methods": {
+      "comment": "1.4.1 — reference group",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistische Methoden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistical methods"
+          }
+        }
+      }
+    },
+    "sources.hub.group.devices": {
+      "comment": "1.4.1 — reference group",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gerätedokumentation"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device documentation"
+          }
+        }
+      }
+    },
+    "sources.hub.group.other": {
+      "comment": "1.4.1 — reference group",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bevölkerungsdaten & Physiologie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Population data & physiology"
+          }
+        }
+      }
+    },
+    "more.medicalSources.title": {
+      "comment": "1.4.1 — More tab row title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medizinische Quellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medical sources"
+          }
+        }
+      }
+    },
+    "more.medicalSources.subtitle": {
+      "comment": "1.4.1 — More tab row subtitle",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leitlinien, Referenzbereiche, Methoden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guidelines, reference ranges, methods"
+          }
+        }
+      }
+    },
+    "settings.about.medicalSources": {
+      "comment": "1.4.1 — About → Links row",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medizinische Quellen & Referenzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medical sources & references"
+          }
+        }
+      }
+    },
+    "disclaimer.ack.sources.title": {
+      "comment": "1.4.1 — disclaimer sheet pointer title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Woher unsere Referenzwerte kommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where our reference values come from"
+          }
+        }
+      }
+    },
+    "disclaimer.ack.sources.body": {
+      "comment": "1.4.1 — disclaimer sheet pointer body",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Bereich, Score und jede Erklärung in HealthLog ist belegt. Du kannst die Quellen jetzt lesen oder später unter Mehr → Medizinische Quellen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every range, score and explanation in HealthLog is cited. You can read the sources now or later under More → Medical sources."
+          }
+        }
+      }
+    },
+    "disclaimer.ack.sources.cta": {
+      "comment": "1.4.1 — disclaimer sheet pointer link",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quellen ansehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View sources"
+          }
+        }
+      }
+    },
+    "sources.methodTitle.correlations": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenhänge in deinen Daten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relationships in your data"
+          }
+        }
+      }
+    },
+    "sources.method.correlations": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Zusammenhangs-Karte vergleicht einen deiner Tageswerte (zum Beispiel Schlafdauer) mit einem anderen Wert am Folgetag (zum Beispiel diastolischer Blutdruck), Tag für Tag, über deine eigene Historie. HealthLog berechnet auf diesen Tagespaaren den Pearson-Korrelationskoeffizienten r. Ein Paar erscheint nur, wenn mindestens 20 gepaarte Tage vorliegen, der zweiseitige p-Wert unter 0,05 liegt und es die Benjamini-Hochberg-Kontrolle der Falschentdeckungsrate bei q = 0,10 über alle geprüften Paare übersteht. Die Stärke folgt |r|: unter 0,3 schwach, unter 0,5 mittel, sonst stark. Kleine Stichproben werden Richtung null geschrumpft, damit wenige Tage kein stark wirkendes r erzeugen. Das sind statistische Zusammenhänge in deinen eigenen Aufzeichnungen — keine Ursachen, keine Bevölkerungsbefunde und nie ein Grund, ein Medikament zu ändern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A relationship card compares one of your daily values (for example sleep duration) with another value on the following day (for example diastolic blood pressure), day by day, over your own history. HealthLog computes the Pearson correlation coefficient r on those day-pairs. A pair is shown only if at least 20 paired days exist, the two-sided p-value is below 0.05, and it survives the Benjamini–Hochberg false-discovery control at q = 0.10 across all pairs tested. Strength labels follow |r|: below 0.3 weak, below 0.5 moderate, otherwise strong. Small samples are shrunk toward zero so a handful of days cannot produce a strong-looking r. These are statistical associations in your own records — not causes, not population findings, and never a reason to change a medication."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.healthScore": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health Score"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health Score"
+          }
+        }
+      }
+    },
+    "sources.method.healthScore": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Health Score ist HealthLogs eigener 0–100-Wert aus bis zu acht Säulen: Blutdruck, Blutzucker, Aktivität, Schlaf, Taille, Wohlbefinden, Fitness und Blutfette. Jede Säule vergleicht deine jüngsten Werte mit den unten genannten Referenzbändern; Säulen ohne ausreichende Daten entfallen, die übrigen Gewichte werden neu skaliert. Er ist eine Zusammenfassung zur Orientierung, kein klinischer Risiko-Score und nicht an Krankheitsverläufen validiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Health Score is HealthLog's own 0–100 composite of up to eight pillars: blood pressure, blood sugar, activity, sleep, waist, wellbeing, fitness and blood lipids. Each pillar compares your recent values with the reference bands listed below; pillars without enough data are left out and the remaining weights are rescaled. It is a summary for orientation, not a clinical risk score and not validated against outcomes."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.derivedScores": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Readiness, Schlaf, Erholung, Stress, Belastung, Fitness- und Gefäßalter"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Readiness, sleep, recovery, stress, strain, fitness and vascular age"
+          }
+        }
+      }
+    },
+    "sources.method.derivedScores": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Scores sind beschreibende Näherungswerte aus deiner eigenen Baseline: Ruhepuls, Herzratenvariabilität, Schlaf und Aktivität werden mit deinem üblichen Bereich der letzten Wochen verglichen und zu einem 0–100-Wert verrechnet. Das Fitnessalter nutzt deine VO₂max-Schätzung; das Gefäßalter ordnet einen Wert ein, den dein Gerät berechnet. Keiner davon ist eine Diagnose, eine trainingswissenschaftliche Messung oder eine EDA-Stressmessung; die nächtliche HRV einer Smartwatch ist nicht mit klinischen 24-Stunden-Normwerten vergleichbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These scores are descriptive proxies computed from your own baseline: resting heart rate, heart-rate variability, sleep and activity are compared with your usual range over recent weeks and blended into a 0–100 value. Fitness age uses your VO₂max estimate; vascular age re-frames a value your device computes. None of them is a diagnosis, a training-grade measurement or an EDA stress reading; a wearable's overnight HRV is not comparable to clinical 24-hour norms."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.rangeBands": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Im Bereich“ und Zielbänder"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“In range” and target bands"
+          }
+        }
+      }
+    },
+    "sources.method.rangeBands": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Zielband einer Kachel ist entweder ein Bereich, den du selbst gesetzt hast, ein Bereich aus deinem eigenen Laborbefund oder ein allgemeines Erwachsenen-Referenzband aus den hier genannten Leitlinien. „Tage im Bereich“ zählt deine Messwerte innerhalb dieses Bandes. Farbe ist nur eine Lesehilfe: ein Wert außerhalb ist eine Information, kein Alarm."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A tile's target band is either a range you set yourself, a range from your own lab result, or a general adult reference band from the guidelines listed on this page. “Days in range” counts your readings inside that band. Colour is only a reading aid: a value outside the band is information, not an alarm."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.metricExplainer": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metrik-Erklärungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metric explanations"
+          }
+        }
+      }
+    },
+    "sources.method.metricExplainer": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die kurze Erklärung auf jeder Metrik-Seite beschreibt, was der Wert ist und wie ein typischer Erwachsenen-Bereich aussieht. Die typischen Bereiche stammen aus den Referenzen unten; die individuelle Streuung ist groß, und deine eigene Baseline zählt mehr als eine Bevölkerungszahl."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The short explanation on each metric page describes what the value is and what a typical adult range looks like. The typical ranges come from the references below; individual variation is wide and your own baseline matters more than a population number."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.bpClassification": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blutdruck-Einordnung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blood-pressure classification"
+          }
+        }
+      }
+    },
+    "sources.method.bpClassification": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Chip auf der Blutdruck-Seite nutzt die ESH-2023-Kategorien (optimal, normal, hochnormal, Hypertonie Grad 1–3) auf deinem 30-Tage-Mittel. Die US-Dokumente ACC/AHA 2017 und ESC 2024 ziehen die Grenzen anders; sie sind zum Vergleich aufgeführt. Eine Kategorie aus Heimmessungen ist keine Diagnose — dafür braucht es wiederholte, korrekt durchgeführte Messungen und ärztliche Beurteilung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chip on the blood-pressure page uses the ESH 2023 categories (optimal, normal, high-normal, hypertension grade 1–3) applied to your 30-day average. The US ACC/AHA 2017 and ESC 2024 documents draw the lines differently; they are listed for comparison. A category from home readings is not a diagnosis — that needs repeated, properly taken measurements and a clinician."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.pulsePressureMAP": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsdruck und mittlerer arterieller Druck"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulse pressure and mean arterial pressure"
+          }
+        }
+      }
+    },
+    "sources.method.pulsePressureMAP": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pulsdruck ist systolisch minus diastolisch; der mittlere arterielle Druck ist diastolisch plus ein Drittel des Pulsdrucks. Beide sind aus deiner letzten Messung abgeleitet, nicht gemessen. Die „typischen“ Zahlen sind physiologische Lehrbuchwerte, brauchbar als Gesprächsanlass mit Ärztin oder Arzt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulse pressure is systolic minus diastolic; mean arterial pressure is diastolic plus one third of the pulse pressure. Both are derived from your last reading, not measured. The “typical” figures are textbook physiology values, useful as a conversation starter with a clinician."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.bmi": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BMI und Taille"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BMI and waist"
+          }
+        }
+      }
+    },
+    "sources.method.bmi": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die BMI-Klassen folgen den WHO-2000-Grenzen (18,5, 25, 30, 35, 40 kg/m²). Der BMI ist ein Bevölkerungs-Screening: er unterscheidet nicht Muskel von Fett, und die Risikogrenzen unterscheiden sich zwischen Bevölkerungsgruppen. Taillenmaße folgen dem WHO-Bericht 2011."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BMI classes follow the WHO 2000 cut-offs (18.5, 25, 30, 35, 40 kg/m²). BMI is a population screen: it does not distinguish muscle from fat and the risk cut-offs differ between populations. Waist measurements follow the WHO 2011 report."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.healthStatus": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abweichungen und anhaltende Verschiebungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deviations and sustained shifts"
+          }
+        }
+      }
+    },
+    "sources.method.healthStatus": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Abweichung heißt, dass ein aktueller Wert außerhalb der Streuung deiner eigenen vorangegangenen Wochen liegt; eine anhaltende Verschiebung heißt, dass ein Änderungspunkt-Detektor eine bleibende Niveauänderung in deiner Reihe gefunden hat. Beides vergleicht dich mit dir selbst, nicht mit einer Bevölkerung; beides sind Anlässe hinzusehen, keine Befunde."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A deviation means a recent value sits outside the spread of your own preceding weeks; a sustained shift means a change-point detector found a lasting level change in your series. Both compare you with yourself, not with a population; both are prompts to look, not findings."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.sleepRhythm": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schlafdefizit, Chronotyp und sozialer Jetlag"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sleep debt, chronotype and social jetlag"
+          }
+        }
+      }
+    },
+    "sources.method.sleepRhythm": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Schlafdefizit ist HealthLogs rollierende Bilanz aus einem 7-Stunden-Bedarf minus dem Schlaf der letzten Nächte. Der Chronotyp ist die Schlafmitte an freien Tagen, um den Nachholschlaf der Arbeitstage bereinigt (MSFsc, Roenneberg); sozialer Jetlag ist der Abstand zwischen Schlafmitte an Arbeits- und freien Tagen (Wittmann). Schlafregelmäßigkeit folgt Phillips 2017. Alles beschreibend."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sleep debt is HealthLog's rolling balance of a 7-hour need minus the sleep you got over recent nights. Chronotype is the mid-sleep time on free days corrected for weekday catch-up (MSFsc, Roenneberg); social jetlag is the gap between workday and free-day mid-sleep (Wittmann). Sleep regularity follows Phillips 2017. All are descriptive."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.breathing": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atmungsstörungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Breathing disturbances"
+          }
+        }
+      }
+    },
+    "sources.method.breathing": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Atmungs-Screening-Karte gibt eine Einordnung wieder, die dein Gerät über rund 30 Nächte berechnet hat. HealthLog wertet das Signal nicht selbst aus. Wie die Funktion arbeitet und was sie nicht erkennt, steht in der Gerätedokumentation."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The breathing-screening card repeats a classification your device computed over roughly 30 nights. HealthLog does not analyse the signal itself. See the device documentation for how the feature works and what it cannot detect."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.ecgRhythm": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EKG und Rhythmus-Hinweise"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ECG and rhythm notifications"
+          }
+        }
+      }
+    },
+    "sources.method.ecgRhythm": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EKG-Ergebnisse sowie Hinweise auf unregelmäßigen Rhythmus, hohen oder niedrigen Puls stammen von deinem Aufzeichnungsgerät und werden so angezeigt, wie sie aufgezeichnet wurden. HealthLog liest die Kurve nicht und ordnet sie nicht neu ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ECG results and irregular-rhythm, high- or low-heart-rate notices are produced by your recording device and shown as recorded. HealthLog neither reads the waveform nor re-classifies it."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.medicationCompliance": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medikamenten-Therapietreue"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medication compliance"
+          }
+        }
+      }
+    },
+    "sources.method.medicationCompliance": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Therapietreue ist der Anteil geplanter Dosen, die du als genommen markiert hast, aus dem Dosis-Ledger deines Servers. Die Ringfarben (70 % und 40 %) sind HealthLogs eigene Lesehilfe, keine klinische Adhärenz-Schwelle."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compliance is the share of scheduled doses you marked as taken, from your server's dose ledger. The ring colours (70 % and 40 %) are HealthLog's own reading aid, not a clinical adherence threshold."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.glp1PK": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geschätzter Wirkstoffspiegel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated drug level"
+          }
+        }
+      }
+    },
+    "sources.method.glp1PK": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Kurve ist ein Ein-Kompartiment-Lehrmodell auf Basis der Populations-Halbwertszeit und Resorptionsangaben aus der EMA-Produktinformation deines Wirkstoffs. Sie ist absichtlich einheitenlos und misst nichts in deinem Blut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The curve is a one-compartment educational model driven by the population half-life and absorption figures in the EMA product information for your drug. It is unit-less on purpose and is not a measurement of anything in your blood."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.titration": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titrationsschema"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titration schedule"
+          }
+        }
+      }
+    },
+    "sources.method.titration": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das gezeigte Schema ist das Standard-Steigerungsschema des Herstellers aus der EMA-Produktinformation (Abschnitt 4.2), nur bis zu der Dosis, die du erfasst hast. Das ist Information über die Zulassung, kein Rat, deine Dosis zu ändern — das entscheidest du mit deiner verschreibenden Ärztin oder deinem Arzt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The schedule shown is the manufacturer's standard escalation from the EMA product information (section 4.2), drawn only up to the dose you have recorded. It is information about the label, not advice to change your dose — that is a decision for you and your prescriber."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.injectionRotation": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotation der Injektionsstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Injection-site rotation"
+          }
+        }
+      }
+    },
+    "sources.method.injectionRotation": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die vorgeschlagene Stelle ist die, die du im Rotationsfenster am längsten nicht genutzt hast. Der Wechsel subkutaner Injektionsstellen ist Standard der Injektionstechnik zur Vermeidung von Lipohypertrophie; auch die Produktinformation verlangt ihn."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The suggested site is the one you used least recently within the rotation window. Rotating subcutaneous injection sites is standard injection-technique guidance to avoid lipohypertrophy; the product information asks for it as well."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.glucoseTargets": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glukose-Ziele"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glucose targets"
+          }
+        }
+      }
+    },
+    "sources.method.glucoseTargets": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne den Diabetes-Schalter wird Glukose mit der WHO/IDF-Nüchternreferenz verglichen. Mit ihm gelten die engeren ADA-2024-Glykämieziele (nüchtern 80–130 mg/dL, nach Mahlzeiten unter 180 mg/dL). Deine eigenen vereinbarten Ziele gehen immer vor."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Without the diabetes switch, glucose is compared with the WHO/IDF fasting reference. With it, the tighter ADA 2024 glycaemic targets apply (fasting 80–130 mg/dL, after meals below 180 mg/dL). Your own agreed targets always take precedence."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.labBiomarker": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laborwert-Erklärungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lab-value explanations"
+          }
+        }
+      }
+    },
+    "sources.method.labBiomarker": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Erklärung beschreibt, was der Marker misst und welche Richtung üblicherweise besprechenswert ist, nach den Referenzen unten. Ob dein Wert im Bereich liegt, entscheidet das Referenzintervall auf deinem eigenen Laborbefund, das HealthLog unverändert übernimmt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each explanation describes what the marker measures and which direction is usually worth discussing, following the references below. Whether your value is in range is decided by the reference interval printed on your own lab report, which HealthLog uses as given."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.labReferenceRanges": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorausgefüllte Referenzbereiche"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pre-filled reference ranges"
+          }
+        }
+      }
+    },
+    "sources.method.labReferenceRanges": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn du einen Marker anlegst, füllt HealthLog einen gängigen Erwachsenen-Referenzbereich als Startwert vor (zum Beispiel LDL ≤ 116 mg/dL nach ESC/EAS 2019, HbA1c < 5,7 % nach ADA, eGFR ≥ 90 nach KDIGO, allgemeine Chemie nach dem ABIM-Referenzblatt). Bereiche unterscheiden sich nach Labor, Methode, Geschlecht und Alter — ersetze sie durch die auf deinem Befund."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When you define a marker, HealthLog pre-fills a common adult reference range as a starting point (for example LDL ≤ 116 mg/dL from ESC/EAS 2019, HbA1c < 5.7 % from ADA, eGFR ≥ 90 from KDIGO, general chemistry from the ABIM reference sheet). Ranges differ by laboratory, method, sex and age — replace them with the ones on your report."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.mentalHealth": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wohlbefindens-Fragebögen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wellbeing questionnaires"
+          }
+        }
+      }
+    },
+    "sources.method.mentalHealth": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PHQ-9, GAD-7, WHO-5 und der Sleep Condition Indicator sind veröffentlichte Screening-Instrumente; HealthLog nutzt ihre Originalfragen und die Grenzwerte aus den unten genannten Validierungsstudien (PHQ-9/GAD-7-Bänder 5/10/15/20, WHO-5 ≤ 50, SCI ≤ 16). Ein Screening-Wert ist keine Diagnose — die kann nur qualifiziertes Fachpersonal stellen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PHQ-9, GAD-7, WHO-5 and the Sleep Condition Indicator are published screening instruments; HealthLog uses their original items and the cut-offs from the validation papers below (PHQ-9/GAD-7 bands 5/10/15/20, WHO-5 ≤ 50, SCI ≤ 16). A screening score is not a diagnosis — only a qualified professional can make one."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.personalRecords": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vergleichsbereiche bei Bestwerten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparison ranges on personal records"
+          }
+        }
+      }
+    },
+    "sources.method.personalRecords": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Vergleichsband setzt deinen Bestwert gegen einen Bevölkerungsmittelwert ± eine Standardabweichung aus den unten genannten Erhebungen und Tabellen. Es beantwortet „ist das typisch?“, nicht „ist das gesund?“."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The comparison band places your best value against a population mean ± one standard deviation from the surveys and charts below. It answers “is this typical?”, not “is this healthy?”."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.nutrition": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nährstoff-Referenzwerte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nutrient reference values"
+          }
+        }
+      }
+    },
+    "sources.method.nutrition": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tägliche Nährstoffziele sind die EFSA-Referenzwerte für Erwachsene (Population Reference Intake, Adequate Intake oder Upper Level, wie beschriftet). Die Zufuhrdaten kommen aus Apple Health."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily nutrient targets are the EFSA Dietary Reference Values for adults (population reference intake, adequate intake or upper level, as labelled). Intake data comes from Apple Health."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.cycle": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zyklusphasen und Vorhersagen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cycle phases and predictions"
+          }
+        }
+      }
+    },
+    "sources.method.cycle": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phasen-Erklärungen beschreiben die typische Physiologie; Vorhersagen sind Kalenderschätzungen aus deinen erfassten Zyklen. Das fruchtbare Fenster schwankt stark zwischen und innerhalb von Personen (Wilcox 2000). Nichts davon ist Verhütung oder medizinischer Rat."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phase explanations describe typical physiology; predictions are calendar estimates from your logged cycles. The fertile window varies widely between and within people (Wilcox 2000). Nothing here is contraception or medical advice."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.mood": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung und Faktoren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mood and factors"
+          }
+        }
+      }
+    },
+    "sources.method.mood": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmungskarten vergleichen deine durchschnittliche Stimmung an Tagen mit und ohne einen Tag oder Faktor, aus deinen eigenen Einträgen. Das sind Zusammenhänge, keine Ursachen, und es kommt keine klinische Skala zum Einsatz."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mood cards compare your average mood on days with and without a tag or factor, from your own entries. They are associations, not causes, and use no clinical scale."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.illnessRecovery": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Krankheitsepisoden und Erholung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Illness episodes and recovery"
+          }
+        }
+      }
+    },
+    "sources.method.illnessRecovery": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Während einer Episode werden deine Vitalwerte mit deiner eigenen Baseline aus den Wochen davor verglichen; die Erholungslücke ist die Zahl der Tage, bis sie dorthin zurückkehren. „Genauer hinsehen“ markiert ein Muster in deinen Daten, keinen klinischen Befund — wiederkehrende Beschwerden gehören zu Ärztin oder Arzt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "During an episode your vitals are compared with your own baseline from the weeks before; the recovery gap is the number of days until they return to it. “Worth a closer look” flags a pattern in your data, not a clinical finding — recurring symptoms belong with a clinician."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.aiAssistant": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assistent, Briefing und Einschätzungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assistant, briefing and assessments"
+          }
+        }
+      }
+    },
+    "sources.method.aiAssistant": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einschätzungen, das tägliche Briefing und Coach-Antworten sind generierter Text — auf deinem Gerät, von deinem eigenen Anbieter oder deinem Server — auf Basis deiner eigenen Werte und der unten aufgeführten Referenzen. Er kann falsch sein. Er ist beschreibend, nie eine Diagnose und nie ein Grund, eine Behandlung ohne ärztliche Rücksprache zu ändern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assessments, the daily briefing and coach answers are generated text — on your device, by your own provider, or by your server — grounded in your own values and in the published references listed below. They can be wrong. They are descriptive, never a diagnosis, and never a reason to change treatment without a clinician."
+          }
+        }
+      }
+    },
+    "sources.methodTitle.vorsorge": {
+      "comment": "1.4.1 methodology title",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorsorge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preventive care"
+          }
+        }
+      }
+    },
+    "sources.method.vorsorge": {
+      "comment": "1.4.1 methodology",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorsorge-Erinnerungen nutzen die Intervalle, die du oder deine Ärztin bzw. dein Arzt eingetragen habt. HealthLog liefert keinen eigenen Screening-Plan mit."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preventive-care reminders use the intervals you or your doctor entered. HealthLog does not ship a screening schedule of its own."
+          }
+        }
+      }
+    },
+    "sources.caveat.esh-2023-hypertension": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reine Hypertonie-Leitlinie; seit 2023 kein gemeinsames ESC-Dokument."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pure hypertension guideline; not a joint ESC document since 2023."
+          }
+        }
+      }
+    },
+    "sources.caveat.steps-saint-maurice-2020": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "US-Erwachsenenkohorte, beobachtend; der Nutzen steigt bis etwa 12.000 Schritte/Tag weiter."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "US adult cohort, observational; benefit keeps accumulating through ~12,000 steps/day."
+          }
+        }
+      }
+    },
+    "sources.caveat.who-2020-physical-activity": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nennt Minuten pro Woche, kein Schrittziel."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publishes minutes per week, not a step quota."
+          }
+        }
+      }
+    },
+    "sources.caveat.bts-2017-emergency-oxygen": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klinischer Notfallkontext, kein Verbraucher-Monitoring."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hospital emergency context, not consumer monitoring."
+          }
+        }
+      }
+    },
+    "sources.caveat.nice-ng115-copd": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COPD-bezogen; nur als „ärztlich abklären“-Untergrenze brauchbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COPD-focused; useful only as the “call your provider” floor."
+          }
+        }
+      }
+    },
+    "sources.caveat.ada-2024-glycemic": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nüchtern 80–130, nach Mahlzeiten < 180 mg/dL; kein publiziertes Erwachsenen-Ziel zur Schlafenszeit."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fasting 80–130, post-meal < 180 mg/dL; no published adult bedtime target."
+          }
+        }
+      }
+    },
+    "sources.caveat.ispad-2022-pediatric": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pädiatrischer Typ-1-Kontext; nicht für Erwachsene validiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paediatric type-1 context; not validated for adults."
+          }
+        }
+      }
+    },
+    "sources.caveat.ace-body-fat-standards": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenzkategorien; klinische Entscheidungen nutzen DEXA oder Hydrodensitometrie."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference categories; clinical decisions use DEXA or hydrostatic weighing."
+          }
+        }
+      }
+    },
+    "sources.caveat.aasm-2015-adult-sleep": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziel ≥ 7 h für Erwachsene; ältere Menschen brauchen ggf. etwas weniger."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target ≥ 7 h for adults; older adults may need slightly less."
+          }
+        }
+      }
+    },
+    "sources.caveat.watson-1980-tbw": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anthropometrische Schätzung des Gesamtkörperwassers; Vorhersage, keine Messung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anthropometric estimate of total body water; predictive, not a measurement."
+          }
+        }
+      }
+    },
+    "sources.caveat.icrp-89-reference-man": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenzwerte für einen idealisierten Erwachsenen; große individuelle Streuung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference values for an idealised adult; individual variation is broad."
+          }
+        }
+      }
+    },
+    "sources.caveat.aha-2024-rhr": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allgemeines Erwachsenenband 60–100; ein trainiertes Herz liegt oft bei 40–60. Ein neuer Tiefwert mit Schwindel ist das Warnzeichen, nicht die Zahl."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General adult band 60–100; a trained heart can sit at 40–60. A new low with dizziness is the concern, not the number."
+          }
+        }
+      }
+    },
+    "sources.caveat.statpearls-pulse-ox": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesundes Raumluft-Band; optische Verbraucher-SpO₂ ist ±2–4 % genau, ein einzelner Tiefwert ist oft ein Artefakt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthy room-air band; consumer optical SpO₂ is ±2–4 %, a single low reading is often artefact."
+          }
+        }
+      }
+    },
+    "sources.caveat.acc-aha-2017-bp": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "US-Leitlinie; stuft 130–139/80–89 als Stadium 1 ein — strenger als die ESH-Vorgabe, zum Vergleich gezeigt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "US guideline; labels 130–139/80–89 as stage 1 — stricter than the ESH default, shown for comparison."
+          }
+        }
+      }
+    },
+    "sources.caveat.esc-2024-bp": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Europäisch; ergänzt ein „erhöht“-Band 120–139/70–89 und ein Behandlungsziel 120–129 — Kontext, nicht die verwendete Einteilung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "European; adds an “elevated” 120–139/70–89 band and a treated target of 120–129 — context, not the shipped classification."
+          }
+        }
+      }
+    },
+    "sources.caveat.statpearls-pulse-pressure": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Physiologische Lehrreferenz; der Pulsdruck ist ein Gesprächsanlass, nie eine Diagnose."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Educational physiology reference; pulse pressure is a discussion prompt, never a diagnosis."
+          }
+        }
+      }
+    },
+    "sources.caveat.statpearls-map": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Untergrenze von etwa 60 mmHg ist ein Perfusionskonzept der Akutmedizin, kein Verbraucheralarm."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The ~60 mmHg floor is an acute-care perfusion concept, not a consumer alarm."
+          }
+        }
+      }
+    },
+    "sources.caveat.esc-esh-2018-pwv": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cf-PWV > 10 m/s ist die klinische Referenz; Gefäßalter-Schätzungen von Verbrauchergeräten sind Näherungen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cf-PWV > 10 m/s is the clinical reference; consumer vascular-age estimates are proxies."
+          }
+        }
+      }
+    },
+    "sources.caveat.fda-2024-pulse-ox": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belegt Überschätzung bei dunklerer Haut; ein einzelner fast-normaler Wert ist keine Entwarnung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documents over-reading on darker skin; a single near-normal reading is not a clearance."
+          }
+        }
+      }
+    },
+    "sources.caveat.jgim-2019-temperature": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oral-äquivalenter Mittelwert; Messorte weichen bis ~1 °C ab — Messort vor dem Vergleich beachten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oral-equivalent mean; sites differ by up to ~1 °C — note the measurement site before comparing."
+          }
+        }
+      }
+    },
+    "sources.caveat.rcp-2017-news2": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klinischer Verschlechterungs-Score; die Grenze ≥ 25/min ist klinischer Kontext, kein Selbstmonitoring-Alarm."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hospital deterioration score; the ≥ 25/min cut-off is clinical context, not a self-monitoring alarm."
+          }
+        }
+      }
+    },
+    "sources.caveat.ala-respiratory-rate": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allgemeines Ruheband für Erwachsene; bei Kindern höher, verändert sich mit Aktivität, Fieber und Emotion."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General adult resting band; rates run higher in children and shift with activity, fever and emotion."
+          }
+        }
+      }
+    },
+    "sources.caveat.vat-imaging-threshold": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildgebungs-Grenzwerte in cm²; die „Viszeralfett-Stufe“ einer Waage ist eine eigene, einheitenlose Skala."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imaging cm² thresholds; a scale's “visceral fat rating” is a separate unit-less scale."
+          }
+        }
+      }
+    },
+    "sources.caveat.wilcox-2000-fertile-window": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Zeitpunkt des fruchtbaren Fensters schwankt stark; Kalenderschätzungen sind keine Verhütungsmethode."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertile-window timing is highly variable; calendar estimates are not a contraceptive method."
+          }
+        }
+      }
+    },
+    "sources.caveat.acog-co651-2015": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zyklus als Vitalzeichen; genaue Abklärungsgrenzen bitte an der aktuellen ACOG-Guidance prüfen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cycle as a vital sign; exact consultation thresholds should be confirmed against the live ACOG guidance."
+          }
+        }
+      }
+    },
+    "sources.caveat.phillips-2017-sri": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konstrukt der Schlafregelmäßigkeit; keine universelle Gut/Schlecht-Grenze — als persönlichen Trend lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sleep-regularity construct; no universal good/bad threshold — read it as a personal trend."
+          }
+        }
+      }
+    },
+    "sources.caveat.cdc-2024-sleep": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allgemeine Schlafhygiene-Empfehlungen; der Bedarf ist individuell."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General sleep-hygiene guidance; individual needs vary."
+          }
+        }
+      }
+    },
+    "sources.caveat.who-2000-bmi": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bevölkerungs-Screening, keine Diagnose; in asiatischen Bevölkerungen steigt das Risiko bei niedrigeren Grenzen, und der BMI unterscheidet nicht Muskel von Fett."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Population screen, not a diagnosis; Asian-population risk rises at lower cut-offs and BMI does not distinguish muscle from fat."
+          }
+        }
+      }
+    },
+    "sources.caveat.who-idf-2006-glucose": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setzt die Grenze für gestörte Nüchternglukose bei 110 mg/dL; die Diabetes-Grenze (≥ 126) ist mit der ADA identisch."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sets the impaired-fasting-glucose floor at 110 mg/dL; the diabetes threshold (≥ 126) is shared with ADA."
+          }
+        }
+      }
+    },
+    "sources.caveat.esc-naspe-1996-hrv": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klinische 24-Stunden-SDNN-Normen sind nicht mit nächtlichem Wearable-RMSSD austauschbar; nur der persönliche Trend ist aussagekräftig."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clinical 24-hour SDNN norms are not interchangeable with an overnight wearable RMSSD; only the personal trend is meaningful."
+          }
+        }
+      }
+    },
+    "sources.caveat.benjamini-hochberg-1995": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontrolliert den erwarteten Anteil falscher Entdeckungen unter den gezeigten Paaren; macht kein einzelnes Paar sicher."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controls the expected share of false discoveries among the shown pairs; it does not make any single pair certain."
+          }
+        }
+      }
+    },
+    "sources.caveat.esc-eas-2019-dyslipidaemia": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LDL-Ziele hängen vom individuellen Herz-Kreislauf-Risiko ab; das vorausgefüllte ≤ 116 mg/dL ist das Ziel bei niedrigem Risiko."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LDL goals depend on individual cardiovascular risk; the pre-filled ≤ 116 mg/dL is the low-risk goal."
+          }
+        }
+      }
+    },
+    "sources.caveat.eas-2022-lpa": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lp(a) ist weitgehend genetisch; die Linie bei 125 nmol/L markiert erhöhtes Risiko, keine Behandlungsschwelle."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lp(a) is largely genetic; the 125 nmol/L line marks increased risk, not a treatment threshold."
+          }
+        }
+      }
+    },
+    "sources.caveat.kdigo-2012-ckd": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eGFR-Kategorien brauchen Persistenz über drei Monate und Kontext; ein Einzelwert ist keine Diagnose."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eGFR categories need persistence over three months and context; a single value is not a diagnosis."
+          }
+        }
+      }
+    },
+    "sources.caveat.matthews-1985-homa-ir": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modellschätzung aus Nüchternglukose und -insulin; assayabhängig, keine universelle Grenze."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A model estimate from fasting glucose and insulin; assay-dependent, no universal cut-off."
+          }
+        }
+      }
+    },
+    "sources.caveat.harris-2004-omega3-index": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorgeschlagene Risikozonen (< 4 %, 4–8 %, > 8 %) aus Kohortendaten; kein Behandlungsziel."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proposed risk zones (< 4 %, 4–8 %, > 8 %) from cohort data; not a treatment target."
+          }
+        }
+      }
+    },
+    "sources.caveat.kroenke-2001-phq9": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screening-Instrument; die Schwerebänder 5/10/15/20 unterstützen ein klinisches Gespräch, ersetzen es nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screening instrument; severity bands 5/10/15/20 support, but do not replace, a clinical interview."
+          }
+        }
+      }
+    },
+    "sources.caveat.spitzer-2006-gad7": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screening-Instrument; die Bänder 5/10/15 zeigen leichte/mittlere/schwere Symptome an, keine Diagnose."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screening instrument; bands 5/10/15 indicate mild/moderate/severe symptoms, not a diagnosis."
+          }
+        }
+      }
+    },
+    "sources.caveat.topp-2015-who5": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Wert ≤ 50 deutet auf niedriges Wohlbefinden hin, das einen genaueren Blick lohnt; keine Depressionsdiagnose."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A score ≤ 50 suggests low wellbeing worth a closer look; it is not a depression diagnosis."
+          }
+        }
+      }
+    },
+    "sources.caveat.espie-2014-sci": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In einer Online-Stichprobe validiert; ≤ 16 war mit wahrscheinlicher Insomnie assoziiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Validated in an online sample; ≤ 16 was associated with probable insomnia disorder."
+          }
+        }
+      }
+    },
+    "sources.caveat.roenneberg-2003-mctq": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fragebogen-basierter Chronotyp; HealthLog wendet dieselbe Schlafmitte-Formel auf erfassten Schlaf an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questionnaire-derived chronotype; HealthLog applies the same mid-sleep formula to tracked sleep."
+          }
+        }
+      }
+    },
+    "sources.caveat.wittmann-2006-social-jetlag": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definiert sozialen Jetlag als Differenz der Schlafmitte zwischen Arbeits- und freien Tagen; Zusammenhänge, keine Ursachen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Defines social jetlag as the workday/free-day mid-sleep difference; associations, not causes."
+          }
+        }
+      }
+    },
+    "sources.caveat.tudor-locke-2011-steps": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erwachsenen-Schrittkategorien aus Pedometer-Studien; nur Orientierung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adult step-count categories from pedometer studies; orientation only."
+          }
+        }
+      }
+    },
+    "sources.caveat.hirshkowitz-2015-nsf-sleep": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expertenkonsens: 7–9 h empfohlen für Erwachsene 18–64, 7–8 h ab 65."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expert consensus: 7–9 h recommended for adults 18–64, 7–8 h for 65+."
+          }
+        }
+      }
+    },
+    "sources.caveat.cdc-nhanes": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "US-Bevölkerungserhebung; Mittelwerte und Streuungen sind keine persönlichen Ziele."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "US population survey data; means and spreads are not personal targets."
+          }
+        }
+      }
+    },
+    "sources.caveat.efsa-drv": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenzwerte für gesunde europäische Erwachsene; der Bedarf weicht in Schwangerschaft, Krankheit und unter Medikation ab."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference values for healthy European adults; needs differ in pregnancy, illness and with medication."
+          }
+        }
+      }
+    },
+    "sources.caveat.who-2020-ferritin": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferritin-Grenzen verschieben sich bei Entzündung; zusammen mit CRP und Transferrinsättigung deuten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferritin thresholds shift with inflammation; interpret with CRP and transferrin saturation."
+          }
+        }
+      }
+    },
+    "sources.caveat.holick-2011-vitamin-d": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definiert ausreichende Versorgung ab ≥ 30 ng/mL; andere Gremien setzen 20 ng/mL — die Bereiche unterscheiden sich tatsächlich."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Defines sufficiency at ≥ 30 ng/mL; other bodies set 20 ng/mL — ranges genuinely differ."
+          }
+        }
+      }
+    },
+    "sources.caveat.jonklaas-2014-ata-thyroid": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TSH-Referenzintervalle sind labor- und altersabhängig; 0,4–4 mIU/L ist ein gängiges Erwachsenenfenster."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TSH reference intervals are lab- and age-dependent; 0.4–4 mIU/L is a common adult window."
+          }
+        }
+      }
+    },
+    "sources.caveat.pearson-2003-crp": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hs-CRP < 1 niedrig, 1–3 durchschnittlich, > 3 mg/L höheres Herz-Kreislauf-Risiko — nur außerhalb akuter Infekte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hs-CRP < 1 low, 1–3 average, > 3 mg/L higher cardiovascular risk — only outside acute infection."
+          }
+        }
+      }
+    },
+    "sources.caveat.who-2024-haemoglobin": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anämie-Grenzen nach Geschlecht, Alter und Schwangerschaft; Anpassungen für Höhe und Rauchen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anaemia cut-offs by sex, age and pregnancy; altitude and smoking adjustments apply."
+          }
+        }
+      }
+    },
+    "sources.caveat.frid-2016-injection-technique": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insulin-bezogene Empfehlungen; die Stellenrotation gilt für alle subkutanen Injektionen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insulin-focused recommendations; site rotation applies to all subcutaneous injections."
+          }
+        }
+      }
+    },
+    "sources.caveat.nes-2011-fitness-age": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VO₂peak-Modell ohne Belastungstest aus einer norwegischen Kohorte; eine Wearable-VO₂max-Schätzung addiert eigenen Fehler."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non-exercise VO₂peak model from a Norwegian cohort; a wearable VO₂max estimate adds its own error."
+          }
+        }
+      }
+    },
+    "sources.caveat.who-2011-waist": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taillengrenzen unterscheiden sich nach Geschlecht und Bevölkerung; das Maßband braucht eine konstante Position."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waist cut-offs differ by sex and population; a tape measure needs consistent placement."
+          }
+        }
+      }
+    },
+    "sources.caveat.leong-2015-grip": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Griffkraft sagt auf Bevölkerungsebene Verläufe voraus; Gerät und Haltung verändern die Zahl."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grip strength predicts outcomes at population level; device and posture change the number."
+          }
+        }
+      }
+    },
+    "sources.caveat.ats-2002-six-minute-walk": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klinikprotokoll auf ebener 30-m-Strecke; eine Telefon-Schätzung ist nicht der standardisierte Test."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clinic protocol on a flat 30 m course; a phone estimate is not the standardised test."
+          }
+        }
+      }
+    },
+    "sources.caveat.who-2018-noise": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesundheitsleitlinie zu Umgebungslärm; die Expositionsschätzung des Telefons ist nur ein Anhaltspunkt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Environmental-noise health guidance; a phone's exposure estimate is indicative only."
+          }
+        }
+      }
+    },
+    "sources.caveat.apple-ecg": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die EKG-App ordnet nur den Rhythmus ein; sie erkennt keinen Herzinfarkt und keine Gerinnsel."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The ECG app classifies rhythm only; it cannot detect a heart attack or clots."
+          }
+        }
+      }
+    },
+    "sources.caveat.apple-irregular-rhythm": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinweise sind gelegentliche Hintergrundprüfungen, kein Dauermonitoring."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications are occasional background checks, not continuous monitoring."
+          }
+        }
+      }
+    },
+    "sources.caveat.apple-walking-steadiness": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus iPhone-Bewegungsdaten beim Tragen geschätzt; keine klinische Ganganalyse."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated from iPhone motion data while carried; not a clinical gait analysis."
+          }
+        }
+      }
+    },
+    "sources.caveat.apple-sleep-apnea": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erkennt Anzeichen mittlerer bis schwerer Schlafapnoe über 30 Nächte; schließt Apnoe nicht aus."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flags signs of moderate-to-severe sleep apnea over 30 nights; it does not rule apnea out."
+          }
+        }
+      }
+    },
+    "sources.caveat.studenski-2011-gait-speed": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gepoolte Kohortenanalyse bei älteren Erwachsenen; Gehgeschwindigkeit ist ein Bevölkerungsmarker, kein individuelles Urteil."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pooled cohort analysis in older adults; gait speed is a population marker, not an individual verdict."
+          }
+        }
+      }
+    },
+    "sources.caveat.abim-2026-lab-reference-ranges": {
+      "comment": "1.4.1 caveat",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenzblatt für Ärztinnen und Ärzte (Erwachsenen-Intervalle); das gedruckte Intervall deines Labors gilt immer."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference sheet for physicians (adult intervals); your laboratory's printed interval always wins."
+          }
+        }
+      }
+    },
+    "insights.digest.bmi.guideline.who2000": {
+      "comment": "1.4.1 — BMI status card guideline caption",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WHO 2000"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WHO 2000"
+          }
+        }
+      }
+    },
+    "benchmark.sourceLabel.restingHeartRate": {
+      "comment": "Quelle der Ruhepuls-Referenzkurve im Benchmark-Quellen-Sheet.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CDC NHANES 2017–2020 + AHA-Ruhepuls-Tabelle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CDC NHANES 2017-2020 + AHA Resting-Heart-Rate Chart"
+          }
+        }
+      }
+    },
+    "benchmark.sourceLabel.bloodPressure": {
+      "comment": "Quelle der Blutdruck-Referenzkurve im Benchmark-Quellen-Sheet.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ACC/AHA 2017 + ESH 2023 (systolisch, Erwachsenen-Population)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ACC/AHA 2017 + ESH 2023 (systolic, adult population)"
+          }
+        }
+      }
+    },
+    "benchmark.sourceLabel.bodyFat": {
+      "comment": "Quelle der Körperfett-Referenzkurve im Benchmark-Quellen-Sheet.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ACE Fitness Körperfett-Tabelle + ACSM (grob, geschlechtsgemischt)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ACE Fitness Body-Fat-Chart + ACSM (rough, gender-pooled)"
+          }
+        }
+      }
+    },
+    "benchmark.sourceLabel.spo2": {
+      "comment": "Quelle der SpO₂-Referenzkurve im Benchmark-Quellen-Sheet.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WHO klinische Untergrenze (Meereshöhe)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WHO clinical floor (sea level)"
+          }
+        }
+      }
+    },
+    "benchmark.sourceLabel.bmi": {
+      "comment": "Quelle der BMI-Referenzkurve im Benchmark-Quellen-Sheet.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WHO BMI-Klassifikation (gesunder Bereich 18,5–24,9)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WHO BMI classification (healthy range 18.5–24.9)"
+          }
+        }
+      }
+    },
+    "benchmark.sourceLabel.steps": {
+      "comment": "Quelle der Schritte-Referenzkurve im Benchmark-Quellen-Sheet.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tudor-Locke et al. 2011 + CDC BRFSS 2019–2023"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tudor-Locke et al. 2011 + CDC BRFSS 2019-2023"
+          }
+        }
+      }
+    },
+    "benchmark.sourceLabel.sleep": {
+      "comment": "Quelle der Schlaf-Referenzkurve im Benchmark-Quellen-Sheet.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NSF 2015 Empfehlung (Erwachsene 7–9 h) + CDC BRFSS 2020"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NSF 2015 recommendation (adults 7–9 h) + CDC BRFSS 2020"
+          }
+        }
+      }
+    },
+    "Log dose changes to keep a record of the course.": {
+      "comment": "GLP-1 titration section empty state",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasse Dosis-Änderungen, um den Verlauf zu dokumentieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log dose changes to keep a record of the course."
+          }
+        }
+      }
+    },
+    "%@ is not in the EMA catalog. A drug level curve is only available for approved GLP-1 medicines.": {
+      "comment": "Unknown GLP-1 brand — why no drug level curve is shown",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist nicht im EMA-Katalog. Eine Wirkstoffkurve ist nur für zugelassene GLP-1-Präparate verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is not in the EMA catalog. A drug level curve is only available for approved GLP-1 medicines."
+          }
+        }
+      }
+    },
+    "Log the side effects you notice to keep a record of tolerability over time.": {
+      "comment": "GLP-1 side-effects logbook empty state",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasse beobachtete Nebenwirkungen, um Verträglichkeit über die Zeit zu dokumentieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log the side effects you notice to keep a record of tolerability over time."
+          }
+        }
+      }
+    },
+    "Log your pens to keep track of supply and prescriptions.": {
+      "comment": "GLP-1 pen inventory empty state",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasse Pens, um Vorrat + Rezepte besser planen zu können."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log your pens to keep track of supply and prescriptions."
+          }
+        }
+      }
+    },
+    "labs.detail.reference.caption": {
+      "comment": "1.4.1 — says where the lab reference range came from, above the Sources link on the lab result detail.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenzbereich wie auf deinem Laborbefund."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference range as printed on your lab report."
+          }
+        }
+      }
+    },
+    "insights.stability.empty.message": {
+      "comment": "Empty state of the mood-stability chart (Insights → aux chart detail).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stabilität misst die Schwankung deiner Stimmung über sieben Tage. Logge mindestens zwei Wochen, um den Trend zu sehen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stability measures how much your mood swings over seven days. Log for at least two weeks to see the trend."
+          }
+        }
+      }
+    },
+    "records.milestones.header": {
+      "comment": "Section header above the milestone pills on Personal Records.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meilensteine"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Milestones"
+          }
+        }
+      }
+    },
+    "records.milestone.first": {
+      "comment": "Milestone pill — the user has at least one personal record.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erste Bestleistung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First personal best"
+          }
+        }
+      }
+    },
+    "records.milestone.hundredDays": {
+      "comment": "Milestone pill — a record carries at least 100 sparkline days.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "100 Tage Daten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "100 days of data"
+          }
+        }
+      }
+    },
+    "records.milestone.weekStreak": {
+      "comment": "Milestone pill — a streak record of at least 7.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wochen-Streak"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Week streak"
+          }
+        }
+      }
+    },
+    "records.milestone.monthStreak": {
+      "comment": "Milestone pill — a streak record of at least 30.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monats-Streak"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Month streak"
+          }
+        }
+      }
+    },
+    "records.milestone.a11y %@": {
+      "comment": "VoiceOver label of a milestone pill; %@ is the milestone title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meilenstein: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Milestone: %@"
+          }
+        }
+      }
+    },
+    "workouts.detail.source.title": {
+      "comment": "Card title of the data-source card on the workout detail screen.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        }
+      }
+    },
+    "workouts.detail.route.a11y %lld": {
+      "comment": "VoiceOver label of the workout route map; %lld is the GPS-point count.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Streckenkarte, %lld GPS-Punkte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Route map, %lld GPS points."
+          }
+        }
+      }
+    },
+    "records.title": {
+      "comment": "Navigation title of the Personal Records screen.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persönliche Rekorde"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personal records"
+          }
+        }
+      }
+    },
+    "records.empty.bucket": {
+      "comment": "Personal Records — empty line for a time bucket with no records.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für diesen Zeitraum sind noch keine Rekorde verzeichnet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No records for this time range yet."
+          }
+        }
+      }
+    },
+    "records.comparison.header": {
+      "comment": "Personal Records — section header above the benchmark comparison.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vergleich"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparison"
+          }
+        }
+      }
+    },
+    "correlations.bpMedication.lowerOnIntakeDays": {
+      "comment": "1.0.3 (App Review 1.4.1) — BP x medication: association-only wording, no drug-effect claim.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An Tagen mit erfasster Einnahme waren deine Blutdruckwerte etwas niedriger. Das vergleicht deine eigenen Tage miteinander und kann nicht zeigen, ob das Medikament die Ursache ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On days you logged an intake, your blood pressure readings were slightly lower. This compares your own days with each other and cannot show whether the medicine caused it."
+          }
+        }
+      }
+    },
+    "correlations.bpMedication.noDifference": {
+      "comment": "1.0.3 (App Review 1.4.1) — BP x medication, no-difference case: association-only wording, no drug-effect claim.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Werte an Einnahme- und anderen Tagen sehen etwa gleich aus. Das ist ein Vergleich deiner eigenen Tage, keine Aussage über das Medikament."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your readings on intake days and other days look about the same. That is a comparison of your own days, not a statement about the medicine."
+          }
+        }
+      }
+    },
+    "insights.metric.statusCard.notADiagnosis": {
+      "comment": "1.0.3 (App Review 1.4.1) — caption under the BP/BMI classification chip on the canonical metric status card.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kategorie aus deinen Heimmessungen — keine Diagnose."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Category from your home readings — not a diagnosis."
+          }
+        }
+      }
+    },
+    "coach.filtered.refusal": {
+      "comment": "1.4.1 R19a — shown instead of an assistant reply the MDR output filter held back",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Antwort wurde zurückgehalten, weil sie wie ein medizinischer Rat klang — den gibt der Assistent nicht. Deine Frage ist in Ordnung: Frag, was deine Werte zeigen, oder nimm sie mit zu Ärztin oder Arzt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This answer was held back because it read like medical advice, which the assistant does not give. Your question is fine — try asking what your values show, or bring it to your doctor."
           }
         }
       }

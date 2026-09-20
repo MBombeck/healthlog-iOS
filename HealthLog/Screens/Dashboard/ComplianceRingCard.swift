@@ -45,21 +45,33 @@ struct ComplianceRingCard: View {
     }
 
     var body: some View {
-        Group {
-            if isFullyEmpty {
-                emptyStateCard
-            } else {
-                contentCard
+        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            Group {
+                if isFullyEmpty {
+                    emptyStateCard
+                } else {
+                    contentCard
+                }
+            }
+            .modifier(TappableComplianceModifier(
+                isActive: onTap != nil && !isFullyEmpty,
+                tapTick: tapTick,
+                onTap: {
+                    tapTick &+= 1
+                    onTap?()
+                }
+            ))
+            // 1.0.3 (App Review 1.4.1) — the compliance percentage and the
+            // band colouring it are clinical conventions; the link names the
+            // references. Deliberately OUTSIDE the tappable card: nesting a
+            // Button inside the card's own Button would let the intake sheet
+            // swallow the tap, and VoiceOver would read one merged control.
+            // Suppressed on the empty card — there is no claim to cite yet.
+            if !isFullyEmpty {
+                HLSourcesLink(topic: .medicationCompliance)
+                    .padding(.horizontal, HLSpace.lg)
             }
         }
-        .modifier(TappableComplianceModifier(
-            isActive: onTap != nil && !isFullyEmpty,
-            tapTick: tapTick,
-            onTap: {
-                tapTick &+= 1
-                onTap?()
-            }
-        ))
     }
 
     private var emptyStateCard: some View {

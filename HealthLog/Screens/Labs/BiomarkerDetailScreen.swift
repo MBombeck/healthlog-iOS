@@ -134,9 +134,24 @@ struct BiomarkerDetailScreen: View {
                     .accessibilityLabel(Text("biomarker.detail.explainer.a11y"))
                 // A360-1 M2 — discreet pointer to the generic lab-biomarker
                 // /learn guide (mirrors the server's LearnMoreLink on Labs detail).
-                HLLearnMoreLink(concept: "LAB_BIOMARKER")
+                // 1.0.3 (1.4.1) — beside it, the citations for THIS marker; an
+                // analyte the catalogue cannot resolve falls back to the shared
+                // reference-range sources.
+                HStack(spacing: HLSpace.lg) {
+                    HLLearnMoreLink(concept: "LAB_BIOMARKER")
+                    HLSourcesLink(topic: sourcesTopic)
+                }
             }
         }
+    }
+
+    /// The citation topic for this marker: the resolved catalogue slug when the
+    /// analyte name maps to one, else the shared lab reference-range topic.
+    private var sourcesTopic: MedicalSourceTopic {
+        if let slug = BiomarkerExplainer.slug(forName: biomarker?.name ?? analyte) {
+            return .labBiomarker(slug)
+        }
+        return .labReferenceRanges
     }
 
     @ViewBuilder

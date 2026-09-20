@@ -253,6 +253,10 @@ private struct DocumentationCard: View {
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+                // 1.0.3 (App Review 1.4.1) — the eight-pillar explainer is a
+                // medical claim about how a health number is built; the
+                // reader gets the references that back it, right here.
+                HLSourcesLink(topic: .healthScore)
             }
         }
     }

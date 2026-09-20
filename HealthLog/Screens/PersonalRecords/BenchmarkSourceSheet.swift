@@ -20,6 +20,13 @@ import SwiftUI
 /// waren `LocalizedStringKey`s ohne Katalogeintrag und rannen damit
 /// unübersetzt durch (PROJECT_GUIDE.md: keine hardcodierten UI-Strings).
 ///
+/// **1.0.3 (App Review 1.4.1):** die Pauschalzeile „Quelle: CDC / WHO Daten
+/// 2020–2024" war eine Behauptung ohne Beleg. Sie ist durch die benannten
+/// Referenzen aus ``MedicalSourceCatalog`` ersetzt (`.personalRecords(kind)`),
+/// jede als Safari-`Link` über ``HLSourceRow``. Das Quellenlabel der Kurve
+/// selbst kommt jetzt aus `benchmark.sourceLabel.<kind>` (de + en) statt aus
+/// einem deutschen Literal im Provider.
+///
 /// **Localization:** every string surfaced here flows through
 /// `LocalizedStringKey` + the project `Localizable.xcstrings` so the
 /// EN translation can extend without code edits. Source label comes
@@ -27,8 +34,14 @@ import SwiftUI
 /// localised at definition site in `LiveClinicalBenchmarkProvider`).
 struct BenchmarkSourceSheet: View {
     let metricLabel: String
+    /// 1.0.3 (App Review 1.4.1) — which metric's references to cite.
+    let kind: MetricKind
     let benchmark: ClinicalBenchmark
     let onDismiss: () -> Void
+
+    private var sources: [MedicalSource] {
+        MedicalSourceCatalog.sources(for: .personalRecords(kind))
+    }
 
     var body: some View {
         NavigationStack {
@@ -36,7 +49,9 @@ struct BenchmarkSourceSheet: View {
                 VStack(alignment: .leading, spacing: HLSpace.xl) {
                     header
                     sourceCard
-                    provenanceCard
+                    if !sources.isEmpty {
+                        referencesCard
+                    }
                 }
                 .padding(.horizontal, HLSpace.lg)
                 .padding(.vertical, HLSpace.xl)
@@ -121,23 +136,26 @@ struct BenchmarkSourceSheet: View {
         .padding(.top, HLSpace.xs)
     }
 
-    private var provenanceCard: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
+    /// 1.0.3 (App Review 1.4.1) — the standing "CDC/WHO 2020–2024" prose is
+    /// replaced by the named references themselves, each a Safari `Link`
+    /// (A360-3), rendered with the shared ``HLSourceRow``.
+    private var referencesCard: some View {
+        VStack(alignment: .leading, spacing: HLSpace.md) {
             HStack(spacing: HLSpace.xs) {
-                Image(systemName: "info.circle")
+                Image(systemName: "text.book.closed")
                     .font(.hlIcon(HLIconSize.rowAction))
                     .foregroundStyle(HLText.secondary)
                     .accessibilityHidden(true)
-                HLSectionLabel(LocalizedStringKey(Layout.provenanceTitle))
+                HLSectionLabel("sources.sheet.referencesTitle")
             }
-            Text(LocalizedStringKey(Layout.provenanceBody))
-                .font(.hlBody)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
+            ForEach(sources) { source in
+                HLSourceRow(name: source.name, year: source.year, caveatKey: source.caveatKey, url: source.url)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(HLSpace.lg)
         .background(HLSurface.tertiary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
+        .accessibilityIdentifier("benchmark.source.references")
     }
 
     // MARK: - Derived
@@ -152,7 +170,7 @@ struct BenchmarkSourceSheet: View {
 
     private static let numberFormatter: NumberFormatter = {
         let f = NumberFormatter()
-        f.locale = Locale(identifier: "de_DE")
+        f.locale = Locale.current
         f.numberStyle = .decimal
         f.maximumFractionDigits = 1
         f.minimumFractionDigits = 0
@@ -171,14 +189,13 @@ extension BenchmarkSourceSheet {
         static let typicalRangeLabel = "benchmark.source.typicalRange"
         static let clinicalFloorLabel = "benchmark.source.clinicalFloor"
         static let clinicalCeilingLabel = "benchmark.source.clinicalCeiling"
-        static let provenanceTitle = "benchmark.source.provenanceTitle"
-        static let provenanceBody = "benchmark.source.provenanceBody"
     }
 }
 
 #Preview("BenchmarkSourceSheet — Schritte") {
     BenchmarkSourceSheet(
         metricLabel: "Steps",
+        kind: .steps,
         benchmark: ClinicalBenchmark(
             mean: 7500,
             sigma: 3000,

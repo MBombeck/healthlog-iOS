@@ -36,6 +36,8 @@ struct MeasurementRemindersScreen: View {
     var body: some View {
         HLSettingsPage(title: "reminders.manage.title") {
             content(store: store)
+            // 1.0.3 (1.4.1) — where the screening cadences come from.
+            HLSourcesLink(topic: .vorsorge)
             HLSyncStatusFooter(screenLoading: store.isLoading)
         }
         .navigationTitle("reminders.manage.title")

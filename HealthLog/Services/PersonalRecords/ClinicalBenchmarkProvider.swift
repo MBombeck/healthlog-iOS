@@ -184,7 +184,7 @@ public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
                 clinicalFloor: 50,
                 clinicalCeiling: 100,
                 favorability: .lowerIsBetter,
-                sourceLabel: "CDC NHANES 2017-2020 + AHA Resting-Heart-Rate Chart"
+                sourceLabel: String(localized: "benchmark.sourceLabel.restingHeartRate")
             )
         case .bloodPressure:
             // Treat the server PR `value` as systolic — `BP_SYSTOLIC`
@@ -197,7 +197,7 @@ public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
                 clinicalFloor: 90,
                 clinicalCeiling: 140,
                 favorability: .centered,
-                sourceLabel: "AHA 2017 + ESH 2023 (Systolisch, Erwachsenen-Population)"
+                sourceLabel: String(localized: "benchmark.sourceLabel.bloodPressure")
             )
         case .bodyFat:
             ClinicalBenchmark(
@@ -206,7 +206,7 @@ public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
                 clinicalFloor: nil,
                 clinicalCeiling: nil,
                 favorability: .lowerIsBetter,
-                sourceLabel: "ACE Fitness Body-Fat-Chart + ACSM (rough, gender-pooled)"
+                sourceLabel: String(localized: "benchmark.sourceLabel.bodyFat")
             )
         case .spo2:
             ClinicalBenchmark(
@@ -215,7 +215,7 @@ public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
                 clinicalFloor: 95,
                 clinicalCeiling: nil,
                 favorability: .higherIsBetter,
-                sourceLabel: "WHO klinische Untergrenze (Meereshöhe)"
+                sourceLabel: String(localized: "benchmark.sourceLabel.spo2")
             )
         case .bmi:
             ClinicalBenchmark(
@@ -224,7 +224,7 @@ public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
                 clinicalFloor: 18.5,
                 clinicalCeiling: 25,
                 favorability: .centered,
-                sourceLabel: "WHO BMI-Klassifikation (gesunder Bereich 18,5–24,9)"
+                sourceLabel: String(localized: "benchmark.sourceLabel.bmi")
             )
         case .steps:
             ClinicalBenchmark(
@@ -233,7 +233,7 @@ public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
                 clinicalFloor: nil,
                 clinicalCeiling: nil,
                 favorability: .higherIsBetter,
-                sourceLabel: "Tudor-Locke et al. 2011 + CDC BRFSS 2019-2023"
+                sourceLabel: String(localized: "benchmark.sourceLabel.steps")
             )
         case .sleep:
             ClinicalBenchmark(
@@ -242,7 +242,7 @@ public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
                 clinicalFloor: 6,
                 clinicalCeiling: 9,
                 favorability: .higherIsBetter,
-                sourceLabel: "NSF 2015 Empfehlung (Erwachsene 7-9 h) + CDC BRFSS 2020"
+                sourceLabel: String(localized: "benchmark.sourceLabel.sleep")
             )
         case .weight,
              .pulse,

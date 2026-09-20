@@ -554,7 +554,7 @@ struct UnknownGLP1BrandSection: View {
                 .foregroundStyle(HLText.primary)
                 Text(String(
                     format: String(
-                        localized: "%@ ist nicht im EMA-Katalog. Eine Wirkstoffkurve ist nur für zugelassene GLP-1-Präparate verfügbar."
+                        localized: "%@ is not in the EMA catalog. A drug level curve is only available for approved GLP-1 medicines."
                     ),
                     brand
                 ))

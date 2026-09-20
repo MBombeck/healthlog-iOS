@@ -159,6 +159,15 @@ struct LabResultDetailScreen: View {
                     Text(band)
                         .font(.hlSubhead)
                         .foregroundStyle(HLText.secondary)
+                    // 1.0.3 / App Review 1.4.1 — a reference range plus a
+                    // verdict is a medical-shaped statement, so it says where
+                    // the range came from and offers the sources behind it.
+                    // Outside `LabReferenceRangeRow`'s combine group by
+                    // construction: that group lives in the row's own body.
+                    Text("labs.detail.reference.caption")
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.tertiary)
+                    HLSourcesLink(topic: .labReferenceRanges)
                 }
             }
         }

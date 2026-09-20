@@ -13,7 +13,7 @@ import Foundation
         /// Renders a `CoachInsight.PartiallyGenerated` snapshot into the same
         /// Markdown shape as ``render(_:)``. Each partial field is `Optional`
         /// until the model emits it, so each renders only once present — the
-        /// headline lands, then the body, then the bullets, no placeholder
+        /// headline lands, then the body, then the talking points, no placeholder
         /// flicker.
         nonisolated static func renderPartial(_ partial: CoachInsight.PartiallyGenerated) -> String {
             var output = ""
@@ -23,15 +23,15 @@ import Foundation
             if let body = partial.body?.trimmingCharacters(in: .whitespacesAndNewlines), !body.isEmpty {
                 output += body
             }
-            let actions = (partial.suggestedActions ?? [])
+            let points = (partial.talkingPoints ?? [])
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-            if !actions.isEmpty {
+            if !points.isEmpty {
                 if !output.isEmpty {
                     output += "\n\n"
                 }
-                for action in actions {
-                    output += "- " + action + "\n"
+                for point in points {
+                    output += "- " + point + "\n"
                 }
             }
             return output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -47,15 +47,15 @@ import Foundation
             if !trimmedBody.isEmpty {
                 output += trimmedBody
             }
-            let actions = insight.suggestedActions
+            let points = insight.talkingPoints
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-            if !actions.isEmpty {
+            if !points.isEmpty {
                 if !output.isEmpty {
                     output += "\n\n"
                 }
-                for action in actions {
-                    output += "- " + action + "\n"
+                for point in points {
+                    output += "- " + point + "\n"
                 }
             }
             return output.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -133,11 +133,17 @@ struct WorkoutDetailHelperTests {
         #expect(WorkoutDetailView.routeCoordinates(from: empty) == nil)
     }
 
-    @Test("Route a11y label includes GPS-point count")
+    /// 1.0.3 / audit row 18 — the label used to be a German literal
+    /// ("Streckenkarte, 412 GPS-Punkte.") that VoiceOver read out in the English
+    /// UI. It now resolves through the catalog, so the assertion is that the key
+    /// RESOLVED (a missing entry would hand back the key itself) and that the
+    /// count survived the format, not which words came back.
+    @Test("Route a11y label resolves from the catalog and includes the GPS-point count")
     func routeAccessibilityLabelCount() {
         let label = WorkoutDetailView.routeAccessibilityLabel(count: 412)
         #expect(label.contains("412"))
-        #expect(label.contains("Streckenkarte"))
+        #expect(!label.contains("workouts.detail.route.a11y"), "catalog key did not resolve: \(label)")
+        #expect(!label.contains("%lld"), "format specifier leaked into the label: \(label)")
     }
 }
 

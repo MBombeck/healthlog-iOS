@@ -1,8 +1,17 @@
 # Changelog
 
-> **Note 2026-05-24:** Between v0.4.1.1 and v0.6.2 release notes live in
-> per-version reports under `.planning/v05*-marathon/` and
-> `.planning/v056-marathon/`. This file resumes from v0.6.2.
+> This changelog resumes at v0.6.2; earlier detailed release notes are not included in this repository.
+
+## 1.0.3 (279) — 2026-09-20
+
+HealthLog Companion App is available on the [App Store](https://apps.apple.com/app/id6769501341). This source release corresponds to the published build.
+
+- Medical explanations link to their sources from the relevant screens, with a searchable sources library under More.
+- Blood-pressure and medication comparisons describe associations in recorded data. Cycle estimates, lab ranges and other health explanations show their basis and limitations.
+- The Coach identifies generated responses, presents questions to discuss with a clinician, and applies the same response checks across provider paths. Safety instructions follow the selected language.
+- GLP-1 screens distinguish recorded treatment information from prescribing advice.
+- Permission descriptions match the features that request them, and the widget privacy manifest declares the APIs it uses.
+- Regression coverage checks medical wording in both languages, source links, permissions, response filtering and the related navigation paths.
 
 ## 1.0.2 (276) — 2026-09-10
 

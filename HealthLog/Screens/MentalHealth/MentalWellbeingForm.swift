@@ -69,6 +69,13 @@ struct MentalWellbeingForm: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("mentalHealth.validatedInEnglishNote")
             }
+            // 1.0.3 (1.4.1) — screening, not diagnosis: stated before the first
+            // question, not just on the result.
+            Text("mentalHealth.disclaimer")
+                .font(.hlCaption)
+                .foregroundStyle(HLText.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("mentalHealth.form.disclaimer")
         }
     }
 

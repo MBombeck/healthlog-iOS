@@ -265,6 +265,93 @@ struct InsightsMetricStatusCardTests {
         )
     }
 
+    // MARK: - 1.4.1 — the guideline caption cites its guideline
+
+    @Test("BP and BMI classifications name the guideline they rest on and cite it")
+    func classificationCaptionsCarryTheirSourcesTopic() {
+        let bp = InsightsMetricStatusDescriptor.build(
+            kind: .bloodPressure,
+            digest: ComprehensiveDigest(bpClassification: .highNormal),
+            target: nil,
+            latestValue: nil
+        )
+        #expect(bp.sourcesTopic == .bloodPressureClassification, "The ESH caption opens the BP-classification sources.")
+
+        // Apple 1.4.1 — BMI used to classify silently. It now names WHO 2000 in
+        // the header the way BP has always named ESH, and that caption is the
+        // way into the WHO references.
+        let bmi = InsightsMetricStatusDescriptor.build(
+            kind: .bmi,
+            digest: ComprehensiveDigest(bmi: 24.2, bmiClassification: .normal),
+            target: nil,
+            latestValue: nil
+        )
+        #expect(bmi.guidelineCaption != nil, "BMI names the WHO 2000 guideline its bands come from.")
+        #expect(bmi.sourcesTopic == .bmi, "The WHO caption opens the BMI sources.")
+
+        // Every other metric classifies from the user's own target row, not from
+        // a guideline — so it names none and the caption stays absent.
+        let pulse = InsightsMetricStatusDescriptor.build(
+            kind: .pulse,
+            digest: nil,
+            target: nil,
+            latestValue: 62
+        )
+        #expect(pulse.guidelineCaption == nil, "A target-driven metric has no guideline to name.")
+        #expect(pulse.sourcesTopic == nil, "…and therefore nothing for the caption to cite.")
+    }
+
+    @Test("the card still reads as one sentence before its controls")
+    func summaryAccessibilityLabelComposesTheCardsSlots() throws {
+        // The card contains rather than combines its children now (the guideline
+        // caption is a control), so the one-utterance summary the combine used
+        // to produce has to be stated explicitly — and it must carry the same
+        // facts the card shows.
+        let bp = InsightsMetricStatusDescriptor.build(
+            kind: .bloodPressure,
+            digest: ComprehensiveDigest(
+                summaries: [
+                    "BLOOD_PRESSURE_SYS": MetricSummary(avg30: 128),
+                    "BLOOD_PRESSURE_DIA": MetricSummary(avg30: 82)
+                ],
+                bpClassification: .highNormal
+            ),
+            target: nil,
+            latestValue: nil
+        )
+        let label = InsightsMetricStatusCard.accessibilityLabel(for: bp)
+        let chip = try #require(bp.chipLabel)
+        let guideline = try #require(bp.guidelineCaption)
+        #expect(label.contains(bp.title), "The summary names the metric.")
+        #expect(label.contains(chip), "The summary carries the classification chip.")
+        #expect(label.contains("128/82"), "The summary carries the headline value.")
+        #expect(label.contains(guideline), "The summary names the guideline the chip rests on.")
+        // 1.0.3 (1.4.1, audit row 10) — the qualifier the card now draws under
+        // the chip is part of the claim, so VoiceOver must hear it too. A
+        // sighted reviewer sees "not a diagnosis"; a screen-reader user used to
+        // get the diagnostic category with nothing attached.
+        let caption = try #require(bp.chipCaption, "BP classifies into a named category, so it carries the qualifier.")
+        #expect(label.contains(caption), "The summary carries the 'not a diagnosis' qualifier.")
+
+        // Honest-only: a slot the card does not show contributes no clause. A
+        // target-driven metric has no guideline, so the guideline text is absent
+        // rather than an empty ". ." in the middle of the sentence.
+        let pulse = InsightsMetricStatusDescriptor.build(
+            kind: .pulse,
+            digest: nil,
+            target: nil,
+            latestValue: 62
+        )
+        let pulseLabel = InsightsMetricStatusCard.accessibilityLabel(for: pulse)
+        #expect(pulse.guidelineCaption == nil, "Precondition: the pulse card names no guideline.")
+        // …and a target-driven metric claims no diagnostic category either, so
+        // it carries no qualifier for one — honest-only on this slot as well.
+        #expect(pulse.chipCaption == nil, "A target-driven metric makes no category claim to qualify.")
+        #expect(!pulseLabel.contains(String(localized: "insights.digest.bp.guideline.esh2023")))
+        #expect(!pulseLabel.contains(". ."), "An absent slot leaves no empty clause behind.")
+        #expect(pulseLabel.hasPrefix(pulse.title), "The summary still opens with the metric.")
+    }
+
     // MARK: - BMI path (honest: WEIGHT summary must NOT be mislabeled)
 
     @Test("BMI uses the server BMI value, never the WEIGHT summary average")
@@ -338,5 +425,104 @@ struct InsightsMetricStatusCardTests {
                 return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("///")
             }
             .joined(separator: "\n")
+    }
+}
+
+/// **1.0.3 — App Review 1.4.1, audit row 10.** The classification chip is the
+/// card's most diagnosis-shaped element: "Hypertension grade 2" and "Obesity
+/// class III" are category names out of a guideline, computed here from the
+/// user's own 30-day home average. The mitigation used to live one tap away in
+/// the Sources sheet. These tests hold it on the card — and hold the top bands
+/// out of the alarm tone.
+///
+/// A suite of its own rather than more cases in the one above, which already
+/// sits at the lint ceiling for type body length.
+@Suite("Insights metric status card — 1.4.1 classification qualifier")
+struct InsightsMetricStatusCardClassificationQualifierTests {
+    @Test("BP and BMI chips carry the 'not a diagnosis' qualifier on the card itself")
+    func classificationChipsCarryTheNotADiagnosisCaption() {
+        let expected = String(localized: "insights.metric.statusCard.notADiagnosis")
+        let bp = InsightsMetricStatusDescriptor.build(
+            kind: .bloodPressure,
+            digest: ComprehensiveDigest(bpClassification: .hypertensionGrade2),
+            target: nil,
+            latestValue: nil
+        )
+        #expect(bp.chipLabel != nil, "Precondition: the BP card shows a category chip.")
+        #expect(bp.chipCaption == expected, "The BP category names itself as a category, not a diagnosis.")
+
+        let bmi = InsightsMetricStatusDescriptor.build(
+            kind: .bmi,
+            digest: ComprehensiveDigest(bmi: 41.0, bmiClassification: .obeseGradeIII),
+            target: nil,
+            latestValue: nil
+        )
+        #expect(bmi.chipLabel != nil, "Precondition: the BMI card shows a WHO category chip.")
+        #expect(bmi.chipCaption == expected, "The WHO category carries the same qualifier as BP's.")
+    }
+
+    @Test("no BP or BMI classification paints in the alarm tone (R20)")
+    func noHomeReadingCategoryIsCritical() {
+        // Ruling R20. The first pass moved only the top band out of `.critical`,
+        // which left the scale reading backwards — grade 2 red above grade 3
+        // amber. The alarm tone leaves the vocabulary instead: a red chip on a
+        // 30-day average of the user's own home readings is the card at its most
+        // diagnosis-shaped, and the severity signal is what carries that, not
+        // the category name. Exhaustive over both enums, so a case added later
+        // cannot quietly bring the alarm back.
+        for classification in BPClassification.allCases {
+            let descriptor = InsightsMetricStatusDescriptor.build(
+                kind: .bloodPressure,
+                digest: ComprehensiveDigest(bpClassification: classification),
+                target: nil,
+                latestValue: nil
+            )
+            #expect(descriptor.chipTone != .critical, "BP \(classification) must not paint in the alarm tone.")
+        }
+        for classification in BMIClassification.allCases {
+            let descriptor = InsightsMetricStatusDescriptor.build(
+                kind: .bmi,
+                digest: ComprehensiveDigest(bmi: 24.2, bmiClassification: classification),
+                target: nil,
+                latestValue: nil
+            )
+            #expect(descriptor.chipTone != .critical, "BMI \(classification) must not paint in the alarm tone.")
+        }
+    }
+
+    @Test("the hypertensive and obesity bands keep their category and their warning tone")
+    func escalatedBandsStayNamedAndAmber() {
+        // Nothing is hidden by R20: the cited categories still render, and
+        // `.warning` still separates them from the bands that are not escalated.
+        for classification in [
+            BPClassification.hypertensionGrade1, .hypertensionGrade2, .hypertensionGrade3
+        ] {
+            let descriptor = InsightsMetricStatusDescriptor.build(
+                kind: .bloodPressure,
+                digest: ComprehensiveDigest(bpClassification: classification),
+                target: nil,
+                latestValue: nil
+            )
+            #expect(descriptor.chipLabel != nil, "BP \(classification) keeps its cited category (ESH 2023).")
+            #expect(descriptor.chipTone == .warning, "BP \(classification) stays distinguishable as escalated.")
+        }
+        for classification in [BMIClassification.obeseGradeI, .obeseGradeII, .obeseGradeIII] {
+            let descriptor = InsightsMetricStatusDescriptor.build(
+                kind: .bmi,
+                digest: ComprehensiveDigest(bmi: 41.0, bmiClassification: classification),
+                target: nil,
+                latestValue: nil
+            )
+            #expect(descriptor.chipLabel != nil, "BMI \(classification) keeps its cited category (WHO 2000).")
+            #expect(descriptor.chipTone == .warning, "BMI \(classification) stays distinguishable as escalated.")
+        }
+        // The lower bands are untouched by R20 — they were never `.critical`.
+        let healthy = InsightsMetricStatusDescriptor.build(
+            kind: .bmi,
+            digest: ComprehensiveDigest(bmi: 22.0, bmiClassification: .normal),
+            target: nil,
+            latestValue: nil
+        )
+        #expect(healthy.chipTone == .success, "A normal-weight chip still reads as reassuring.")
     }
 }

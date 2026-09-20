@@ -5,7 +5,7 @@ import Testing
 ///
 /// The Mehr tab is described declaratively by `MoreScreen.Layout`. These
 /// tests pin the **shape** of that descriptor — section titles, row order,
-/// accessibility identifiers — so a future wave cannot silently
+/// accessibility identifiers — so a future change cannot silently
 /// re-introduce a Benachrichtigungen duplicate row or split the merged
 /// "Mentale Gesundheit und Vitalwerte" section back into two.
 ///
@@ -108,7 +108,7 @@ struct MoreScreenLayoutTests {
         #expect(MoreScreen.Layout.clinicalSectionTitle == "Health & care")
         let ids = MoreScreen.Layout.clinicalRows.map(\.id)
         // v0152 W-COACH-CLEANUP (C2) — the stray More Coach row was removed; the
-        // manual coach entry returns inline on the Insights pages (next wave).
+        // manual coach entry returns inline on the Insights pages (later update).
         // v1.25 W-MENTAL-HEALTH — the PHQ-9 / GAD-7 screener front door.
         // Documents — the opt-in `inboundDocuments` vault front door.
         // v1.26 W-ABOUT-ME — the "Über mich" hub (`about_me` → `AboutMeScreen`)
@@ -117,7 +117,24 @@ struct MoreScreenLayoutTests {
         // RESTORED as a direct clinical-spine row next to Labs (it is an ongoing
         // symptom log, not static self-info). Allergies + family history STAY in
         // the hub, so they remain absent here.
-        #expect(ids == ["about_me", "vorsorge", "labs", "illness", "documents", "mental_wellbeing", "cycle"])
+        // 1.0.3 (App Review 1.4.1) — `medical_sources` was inserted directly
+        // after `vorsorge` (see `medicalSourcesRowPresent` below).
+        #expect(ids == ["about_me", "vorsorge", "medical_sources", "labs", "illness", "documents", "mental_wellbeing", "cycle"])
+    }
+
+    // MARK: - 1.0.3 (App Review 1.4.1) — Medical sources hub
+
+    @Test("1.4.1 — Medical sources row is a Health & care row and is rendered")
+    func medicalSourcesRowPresent() {
+        let row = MoreScreen.Layout.medicalSourcesRow
+        #expect(row.id == "medical_sources")
+        #expect(row.icon == "text.book.closed")
+        #expect(row.subtitle != nil)
+        #expect(MoreScreen.Layout.clinicalRows.contains(where: { $0.id == "medical_sources" }))
+        #expect(MoreScreen.Layout.renderedRows.contains(where: { $0.id == "medical_sources" }))
+        // directly after Vorsorge so a reviewer sees it near the top of Health & care
+        let ids = MoreScreen.Layout.clinicalRows.map(\.id)
+        #expect(ids.firstIndex(of: "medical_sources") == (ids.firstIndex(of: "vorsorge").map { $0 + 1 }))
     }
 
     @Test("Build 9 (C7) — cycle settings row descriptor is stable and stays OUT of the curated clinicalRows")
@@ -201,7 +218,7 @@ struct MoreScreenLayoutTests {
     func coachNavHomeRowRemoved() {
         // The operator flagged the stray More Coach entry; it opened the coach
         // against his External-AI pick. The manual coach entry returns as an
-        // inline button on the Insights metric pages (next wave). Coach settings
+        // inline button on the Insights metric pages (later update). Coach settings
         // (Past conversations, memory) stay reachable under Settings → Coach.
         #expect(!MoreScreen.Layout.clinicalRows.contains { $0.id == "coach" })
     }
@@ -317,7 +334,7 @@ struct MoreScreenLayoutTests {
         // The Mehr → Settings shortcut is reachable via the `gearshape`
         // trailing nav-bar item *in addition* to the bottom "App"
         // section's Einstellungen row. Pin the identifier so a future
-        // wave can't silently drop the affordance — operators (and UI
+        // change cannot silently drop the affordance — operators (and UI
         // tests) rely on the namespaced `more.toolbar.gear` reference.
         #expect(MoreScreen.Layout.gearToolbarAccessibilityIdentifier == "more.toolbar.gear")
     }
@@ -336,7 +353,7 @@ struct MoreScreenLayoutTests {
     func shareToolbarAccessibilityIdentifier() {
         // v0.14.8 (Task D) — the "Mit dem Arzt teilen" list row was replaced by
         // a header share glyph that pushes the sharing surface. Pin the
-        // identifier so a future wave can't silently drop the affordance —
+        // identifier so a future change can't silently drop the affordance —
         // UI tests resolve the namespaced `more.toolbar.share` reference.
         #expect(MoreScreen.Layout.shareToolbarAccessibilityIdentifier == "more.toolbar.share")
     }

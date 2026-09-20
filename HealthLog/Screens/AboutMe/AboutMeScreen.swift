@@ -395,6 +395,8 @@ struct AboutMeScreen: View {
                 isEnabled: !diabetesInFlight && diabetes.hasDiabetes != nil,
                 accessibilityID: "aboutMe.diabetesToggle"
             )
+            // 1.0.3 (1.4.1) — which guideline the tightened target bands follow.
+            HLSourcesLink(topic: .glucoseTargets)
         }
     }
 

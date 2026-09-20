@@ -41,14 +41,17 @@ Every reading you log on iOS lands in the same Postgres your web UI reads. The i
 
 ## Getting the app
 
-There are two ways in, and they carry the same code:
+**HealthLog Companion App is now on the [App Store](https://apps.apple.com/app/id6769501341).** This repository carries version **1.0.3 (279)**, the source release corresponding to the App Store build.
 
-1. **Build from source** — this repository, instructions below. Free, no account needed beyond what Apple requires for device installs.
-2. **TestFlight** — the newest build, always free: [testflight.apple.com/join/bucuTBpa](https://testflight.apple.com/join/bucuTBpa).
+1. **App Store** — [install the app](https://apps.apple.com/app/id6769501341) for a small one-time price. The price helps cover the annual Apple Developer fee.
+2. **TestFlight** — the newest public beta, always free: [testflight.apple.com/join/bucuTBpa](https://testflight.apple.com/join/bucuTBpa). Beta builds may be ahead of the App Store release.
+3. **Build from source** — this repository, instructions below. Free, no account needed beyond what Apple requires for device installs.
+
+If the price is a barrier, email [support](mailto:marc@healthlog.dev) for a free code. No explanation needed. Read the [App Store announcement](https://github.com/MBombeck/healthlog-iOS/discussions/8) for the background.
 
 ## Try it in two minutes
 
-1. **Install** the [TestFlight build](https://testflight.apple.com/join/bucuTBpa).
+1. **Install** the [App Store app](https://apps.apple.com/app/id6769501341) or the free [TestFlight build](https://testflight.apple.com/join/bucuTBpa).
 2. **Open** the app. The first screen asks for your server URL.
 3. **Point** it at `https://demo.healthlog.dev` (or your own install).
 4. **Sign in** with the credentials shown on the demo server's landing page — or with your own Passkey if you already have a HealthLog account.

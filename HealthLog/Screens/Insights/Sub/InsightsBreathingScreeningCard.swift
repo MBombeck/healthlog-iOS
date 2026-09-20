@@ -42,6 +42,10 @@ struct InsightsBreathingScreeningCard: View {
                         .font(.hlCaption)
                         .foregroundStyle(HLText.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    // 1.0.3 (App Review 1.4.1) — Apple's own sleep-apnea
+                    // notification documentation behind the device's index.
+                    HLSourcesLink(topic: .breathing)
                 }
             }
             .accessibilityIdentifier("insights.clinicalSignals.breathing")

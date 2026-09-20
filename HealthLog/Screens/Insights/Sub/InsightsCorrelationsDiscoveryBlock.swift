@@ -90,6 +90,10 @@ struct InsightsCorrelationsDiscoveryBlock: View {
                                 .font(.hlCaption)
                                 .foregroundStyle(HLText.tertiary)
                                 .accessibilityIdentifier("insights.correlations.discovery.footer")
+                            // 1.4.1 — the block-level citation. The footer states
+                            // how many pairs were tested; this names the method
+                            // (Benjamini-Hochberg) the statement rests on.
+                            HLSourcesLink(topic: .correlations)
                         }
                     }
                     .padding(.top, HLSpace.sm)
@@ -193,6 +197,10 @@ struct InsightsCorrelationsDiscoveryBlock: View {
                 // so a card could previously end with nothing at all. This one
                 // cannot be gated away.
                 followUpLink(for: pair)
+                // 1.4.1 — the citation Apple photographed. On EVERY card and
+                // visible without expanding anything: a correlation statement
+                // never stands without its method and reference.
+                HLSourcesLink(topic: .correlations)
                 if expandedPairID == pair.id {
                     InsightsCorrelationFollowUpSection(pair: pair, onSelectMetric: onSelectMetric)
                 }

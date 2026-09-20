@@ -117,6 +117,15 @@ public final class CoachConversationStore {
     /// dropped on `reset()` / `clearOnLogout` / availability change.
     public let service: LocalLLMService
 
+    /// **R11 (1.0.3, App Review 1.4.1)** — the MDR safety filter every arm's
+    /// final reply passes through before it reaches the transcript. Held by the
+    /// store (not by each arm's service) because the three arms produce their
+    /// text in three different places and the guarantee has to be the same one:
+    /// on-device streams `CoachInsight` partials, BYO returns a single string,
+    /// the server streams SSE tokens — all three end in
+    /// ``filteredReply(_:)`` before `persistMessage`.
+    public let safetyFilter = MDRSafetyFilter()
+
     /// **v0.5.7 G.4** — snapshot provider invoked once per send to
     /// build a sanitized `HealthSnapshot` for prompt enrichment. Held
     /// as a closure (not a direct `AppContainer` reference) so:
@@ -169,7 +178,7 @@ public final class CoachConversationStore {
     /// permissive in tests that don't care about the gate.
     public var serverConsentGate: (@MainActor () -> Bool)?
 
-    /// **v0.11 marathon (AI-1)** — `true` when the user *explicitly* chose the
+    /// **v0.11 provider selection** — `true` when the user *explicitly* chose the
     /// server ("External AI" / `.online`) arm. Production wires this to
     /// `AIConsentStore.aiMode == .online`; `nil` → legacy on-device-first
     /// fallback (the unit tests pre-dating the explicit-pick path).
@@ -481,8 +490,13 @@ public final class CoachConversationStore {
         defer { isResponding = false }
         let composedPrompt = composePrompt(userText: userText)
         do {
-            let text = try await byoService.generate(prompt: composedPrompt, provider: provider)
+            let raw = try await byoService.generate(prompt: composedPrompt, provider: provider)
             // AUD-5 H2 — sheet dismissed mid-request: don't persist a dead-view turn.
+            if Task.isCancelled { return }
+            // R11 (1.0.3) — the BYO arm runs a provider we do not control, on a
+            // prompt the user can steer. Non-streaming, so the filter sees the
+            // whole reply before anything is rendered at all.
+            let text = await filteredReply(raw)
             if Task.isCancelled { return }
             appendAssistant(text)
             persistMessage(role: .assistant, text: text)
@@ -550,7 +564,17 @@ public final class CoachConversationStore {
                     if Task.isCancelled { return }
                     // Persist only the final, complete assistant turn.
                     if didAppend {
-                        persistMessage(role: .assistant, text: lastRendered)
+                        // R11 (1.0.3) — the stream may have painted partials the
+                        // filter never saw; the FINAL bubble is the filtered one.
+                        // Overwriting the trailing turn in place (the same seam
+                        // the partials used) means a flagged reply never settles
+                        // on screen and never reaches disk.
+                        let finalText = await filteredReply(lastRendered)
+                        if Task.isCancelled { return }
+                        if finalText != lastRendered {
+                            upsertStreamingAssistant(finalText, isFirstPartial: false)
+                        }
+                        persistMessage(role: .assistant, text: finalText)
                     } else {
                         // 22-02 (D-14-04-A) — the stream completed having
                         // rendered nothing. Saying nothing about that leaves the
@@ -658,10 +682,25 @@ public final class CoachConversationStore {
             // bubble settles on the authoritative text rather than the raw token
             // concatenation. When NO token arrived (older server / refusal path
             // routed through `parseSSE`-style frames), append fresh as before.
+            // R11 (1.0.3) — the SSE arm is the one that streams text the filter
+            // cannot see token by token. It does not have to: the server's `done`
+            // frame carries the authoritative, cleaned reply, and the arm already
+            // overwrites the accumulated bubble with it. Filtering THAT text — the
+            // one thing that both settles on screen and is persisted — is what
+            // makes the guarantee hold for a stream.
+            let replyText = await filteredReply(reply.text)
+            // AUD-5 H2 / fix round 1 (I1) — `filteredReply` is a suspension
+            // point, so a dismiss can land between the filter and the settle.
+            // The BYO and on-device arms re-check here; this arm did not, and
+            // would have painted a bubble into a gone view's transcript. The
+            // persist below is separately guarded, so the gap was cosmetic —
+            // but "cosmetic on an @Observable a view no longer owns" is the
+            // kind of thing that stops being cosmetic quietly.
+            if Task.isCancelled { return }
             if streamRender.didAppend {
-                upsertStreamingAssistant(reply.text, isFirstPartial: false)
+                upsertStreamingAssistant(replyText, isFirstPartial: false)
             } else {
-                appendAssistant(reply.text)
+                appendAssistant(replyText)
             }
             // v1.18.1 (§3) — surface the cadence suggestion (if the server emitted
             // one this turn) as an actionable card under the reply. A new turn
@@ -694,7 +733,7 @@ public final class CoachConversationStore {
             // the persist. If the user dismissed mid-block, do not write the
             // assistant reply as a completed message.
             if Task.isCancelled { return }
-            persistMessage(role: .assistant, text: reply.text)
+            persistMessage(role: .assistant, text: replyText)
         } catch {
             // AUD-5 H2 — a dismiss-triggered cancellation surfaces here as a
             // URLError(.cancelled); it is not a real failure, so don't paint a

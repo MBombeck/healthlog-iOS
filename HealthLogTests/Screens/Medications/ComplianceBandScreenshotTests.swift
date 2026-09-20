@@ -11,7 +11,19 @@ import Testing
 /// medications (and the project deliberately avoids pixel snapshots of full
 /// hosts). To produce a reproducible artifact without a live session, this
 /// renders each surface's compliance presentation in isolation via
-/// `ImageRenderer` and writes PNGs into `.planning/v012-megamarathon/W4-screens/`.
+/// `ImageRenderer` and writes PNGs.
+///
+/// By default the PNGs land in a scratch directory under
+/// `FileManager.default.temporaryDirectory` so a normal unit-test run never
+/// dirties the checkout (D-11-29-A: a stale-but-committed set of these PNGs
+/// once made the release sealer refuse a candidate build because the test
+/// left modified tracked files behind). Set `HL_WRITE_SCREENSHOTS=1` in the
+/// environment (`TEST_RUNNER_HL_WRITE_SCREENSHOTS=1` when invoking via
+/// `xcodebuild test`, which only forwards `TEST_RUNNER_`-prefixed variables
+/// to the test host) to opt back into writing the repo copy at
+/// `docs/screenshots/compliance/` — the intended path for
+/// refreshing the committed v012 documentation shots after a rendering
+/// change.
 ///
 /// Each surface is rendered at the three band-representative percentages
 /// (75 % `.good` graphite, 55 % `.warn`, 30 % `.bad`) so the side-by-side shows
@@ -21,12 +33,23 @@ import Testing
 @MainActor
 @Suite("ComplianceBand — cross-surface screenshot artifact")
 struct ComplianceBandScreenshotTests {
-    private static let outputDir = URL(fileURLWithPath: #filePath)
+    /// Repo checkout path, used only when `HL_WRITE_SCREENSHOTS=1` opts in.
+    private static let repoOutputDir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent() // Medications
         .deletingLastPathComponent() // Screens
         .deletingLastPathComponent() // HealthLogTests
         .deletingLastPathComponent() // repo root
-        .appendingPathComponent(".planning/v012-megamarathon/W4-screens", isDirectory: true)
+        .appendingPathComponent("docs/screenshots/compliance", isDirectory: true)
+
+    /// Default: a temp scratch dir, so a plain test run never writes into the
+    /// checkout. Opt into the repo path with `HL_WRITE_SCREENSHOTS=1`.
+    private static let outputDir: URL =
+        if ProcessInfo.processInfo.environment["HL_WRITE_SCREENSHOTS"] == "1" {
+            repoOutputDir
+        } else {
+            FileManager.default.temporaryDirectory
+                .appendingPathComponent("hl-w4-screens", isDirectory: true)
+        }
 
     /// The three band-representative percentages.
     private static let samples: [(pct: Int, name: String)] = [

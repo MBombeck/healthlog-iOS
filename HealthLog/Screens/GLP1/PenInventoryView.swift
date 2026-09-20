@@ -87,7 +87,7 @@ public struct PenInventoryView: View {
                 .font(.hlHeadline)
                 .foregroundStyle(HLText.primary)
                 Text(String(
-                    localized: "Erfasse Pens, um Vorrat + Rezepte besser planen zu können."
+                    localized: "Log your pens to keep track of supply and prescriptions."
                 ))
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
