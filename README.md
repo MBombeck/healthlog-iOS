@@ -1,94 +1,106 @@
-<h1 align="center">HealthLog iOS</h1>
+<h1 align="center">HealthLog Companion App for iPhone and Apple Watch</h1>
 
 <p align="center">
-  Native iOS client for the <a href="https://github.com/MBombeck/HealthLog">HealthLog</a> self-hosted health-tracking platform — <a href="https://healthlog.dev/">healthlog.dev</a>.
-</p>
-
-<p align="center">
+  The native iOS app for <a href="https://github.com/MBombeck/HealthLog">HealthLog</a>, the self-hosted health tracker you run on your own server.<br />
   <strong>Your health on your iPhone. Your data on your server.</strong>
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-PolyForm--Noncommercial--1.0.0-blue.svg" alt="License: PolyForm-Noncommercial-1.0.0" /></a>
-  <a href="https://testflight.apple.com/join/bucuTBpa"><img src="https://img.shields.io/badge/TestFlight-public%20beta-007AFF?logo=apple&logoColor=white" alt="TestFlight public beta" /></a>
-  <img src="https://img.shields.io/badge/iOS-18%2B-000000?logo=apple&logoColor=white" alt="iOS 18+" />
+  <a href="https://apps.apple.com/app/id6769501341"><img src="https://img.shields.io/itunes/v/6769501341?label=App%20Store&color=0D96F6" alt="HealthLog on the App Store" /></a>
+  <img src="https://img.shields.io/badge/iOS-18%2B-000000" alt="iOS 18 or later" />
+  <img src="https://img.shields.io/badge/watchOS-11%2B-000000" alt="watchOS 11 or later" />
   <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6" />
-  <a href="https://github.com/MBombeck/HealthLog"><img src="https://img.shields.io/badge/Companion%20to-HealthLog%20server-success" alt="Companion to HealthLog server" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-blue.svg" alt="License: PolyForm Noncommercial 1.0.0" /></a>
 </p>
 
 <p align="center">
-  <a href="https://healthlog.dev/">Website</a> &middot;
+  <a href="https://apps.apple.com/app/id6769501341"><strong>Download on the App Store</strong></a> &middot;
+  <a href="https://healthlog.dev/">healthlog.dev</a> &middot;
+  <a href="https://docs.healthlog.dev/ios/ios-app/">iOS docs</a> &middot;
   <a href="https://github.com/MBombeck/HealthLog">Server project</a> &middot;
-  <a href="https://demo.healthlog.dev">Live demo server</a> &middot;
-  <a href="https://docs.healthlog.dev">Documentation</a>
+  <a href="https://healthlog.dev/support">Support</a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/screenshots/ios-dashboard.png" width="240" alt="Dark-mode dashboard — greeting and profile photo up top, a medication-compliance ring with 2 of 3 doses taken today, and vitals tiles for weight, blood pressure and pulse, each with a sparkline trend" />
-  <img src="docs/screenshots/ios-medications.png" width="240" alt="Dark-mode medications list with per-medication cards — last and next intake, 7- and 30-day compliance bars, and one-tap Taken / Skipped actions" />
-  <img src="docs/screenshots/ios-sharing.png" width="240" alt="Dark-mode Share screen: choose what is included, the time range, and the output form — revocable link, PDF report or ZIP record" />
+  <img src="docs/screenshots/ios-dashboard.png" width="240" alt="HealthLog home screen in dark mode: a medication compliance ring showing 2 of 3 doses taken today, and tiles for weight, blood pressure and pulse, each with a trend line. Synthetic demo data." />
+  <img src="docs/screenshots/ios-medications.png" width="240" alt="Medications list in dark mode: one card per medication with last and next intake, 7-day and 30-day compliance bars, and Taken and Skipped buttons. Synthetic demo data." />
+  <img src="docs/screenshots/ios-sharing.png" width="240" alt="Share screen in dark mode: pick what is included, the time range, and the output as a revocable link, a PDF report or a ZIP record. Synthetic demo data." />
 </p>
 
-## What it is
+HealthLog is a health tracker for iPhone and Apple Watch that stores everything on a server you run yourself. It keeps Apple Health (HealthKit) in two-way sync with that server, reminds you about your medications, and shows blood pressure, weight, glucose, sleep and your other readings as charts you can actually read. It is meant for people who self-host things: in a homelab, on a NAS or on a small VPS.
 
-HealthLog iOS is the native iOS surface for the [HealthLog server](https://github.com/MBombeck/HealthLog) — the self-hosted personal health tracker that runs from a single `docker compose up`. The app does the things a phone is best at: capture a reading without opening a laptop, surface a calm at-a-glance home screen, push HealthKit data into your own server, deliver medication reminders that actually fire, and let you ask the AI Coach about your numbers from anywhere.
+The app needs a [HealthLog server](https://github.com/MBombeck/HealthLog) to talk to. It has no built-in server and no default address. On first launch you enter the URL of your own instance, and every reading you log lands in the same database your HealthLog web app reads from. If you don't have a server yet, you can look around on the public demo first (see below).
 
-Every reading you log on iOS lands in the same Postgres your web UI reads. The iOS client is one more surface on the same data — never a parallel silo, never a cloud middleman. There is deliberately **no built-in server and no default host**: on first launch you point the app at your own instance, and until you do (or if you choose standalone mode, which runs entirely without a server) nothing leaves the device.
-
-**For the full experience you need the [HealthLog server](https://github.com/MBombeck/HealthLog) running somewhere reachable** — homelab, NAS, small VPS. Don't have one yet? Point the first-launch step at `demo.healthlog.dev` and take it for a spin first.
+This repository holds the full source of the app. Each [release](https://github.com/MBombeck/healthlog-iOS/releases) here matches an App Store build, and the [CHANGELOG](CHANGELOG.md) lists what changed.
 
 ## Getting the app
 
-**HealthLog Companion App is now on the [App Store](https://apps.apple.com/app/id6769501341).** This repository carries version **1.0.3 (279)**, the source release corresponding to the App Store build.
+The easiest way is the [App Store](https://apps.apple.com/app/id6769501341). HealthLog costs a small one-time price there, with no subscription and no in-app purchases. The price helps cover Apple's yearly developer fee. If the price is a problem for you, write to [marc@healthlog.dev](mailto:marc@healthlog.dev) and you'll get a free code, no questions asked. The [App Store announcement](https://github.com/MBombeck/healthlog-iOS/discussions/8) has the background.
 
-1. **App Store** — [install the app](https://apps.apple.com/app/id6769501341) for a small one-time price. The price helps cover the annual Apple Developer fee.
-2. **TestFlight** — the newest public beta, always free: [testflight.apple.com/join/bucuTBpa](https://testflight.apple.com/join/bucuTBpa). Beta builds may be ahead of the App Store release.
-3. **Build from source** — this repository, instructions below. Free, no account needed beyond what Apple requires for device installs.
+There are two free alternatives. The [TestFlight beta](https://testflight.apple.com/join/bucuTBpa) gets new builds before the App Store does. You can also build the app yourself from this repository; the steps are further down.
 
-If the price is a barrier, email [support](mailto:marc@healthlog.dev) for a free code. No explanation needed. Read the [App Store announcement](https://github.com/MBombeck/healthlog-iOS/discussions/8) for the background.
+## Try it with the demo server
 
-## Try it in two minutes
+1. Install the app and open it. The first screen asks for a server address.
+2. Enter `https://demo.healthlog.dev`.
+3. Sign in with the demo credentials from the demo section on [healthlog.dev](https://healthlog.dev/).
 
-1. **Install** the [App Store app](https://apps.apple.com/app/id6769501341) or the free [TestFlight build](https://testflight.apple.com/join/bucuTBpa).
-2. **Open** the app. The first screen asks for your server URL.
-3. **Point** it at `https://demo.healthlog.dev` (or your own install).
-4. **Sign in** with the credentials shown on the demo server's landing page — or with your own Passkey if you already have a HealthLog account.
+The demo holds about a year of synthetic data. You can browse all of it, but changes are not saved.
 
-## Features
+## What the app does
 
-- **Calm dashboard.** Health Score ring up top, then your vitals at a glance: blood pressure, pulse, weight, steps, mood, glucose, sleep. Today's medication compliance sits inline on the dashboard instead of screaming from an alert banner.
-- **One-tap capture.** A central "+" sheet for every metric the server tracks, plus quick-entry surfaces that get out of your way.
-- **HealthKit two-way sync.** Today's step count reads live from HealthKit; the rest syncs in both directions with an external-UUID anti-duplicate scheme so the server and HealthKit never echo each other. Background refresh keeps the picture current while you sleep. A cluster filter lets you opt families out of sync.
-- **Medications that nag without annoying.** Schedules including weekly and cyclic regimens, intake history with retro-mutate, a 14-day glyph track per medication, Live Activities for due doses, and notification action buttons that hit the server's mark-intake endpoint directly — no app launch needed. GLP-1 medications additionally get pharmacokinetic level curves, titration ladders, injection-site tracking, and a side-effects logbook.
-- **Charts that mean something.** Per-metric drill-down with linear or logarithmic axis, time-range picker, reference-range bands from ESC/ESH and ADA, and full VoiceOver chart descriptors.
-- **Insights and the Coach.** Health Score breakdown, correlation cards, a daily briefing, and a conversational AI Coach. On iOS 26 Apple-Intelligence-eligible iPhones the Coach runs **fully on-device** via Apple's FoundationModels — no prompt or response leaves the device. Alternatively, bring your own provider key (Anthropic, OpenAI, Google Gemini, or any OpenAI-compatible endpoint): requests go straight from your device to your provider, and the key lives in your Keychain. Every AI feature is opt-in behind an explicit consent step.
-- **Apple Watch companion + widgets.** Watch app with complications, home-screen and lock-screen widgets, App Intents / Shortcuts ("Did I take my medication?"), and Spotlight indexing of your medications.
-- **Doctor-report export.** A FHIR-flavoured PDF bundle for your physician, based on the LOINC mappings reviewed in the server's clinician surface.
-- **Standalone mode.** No server yet? The app can run purely on-device and sync to your own instance later.
+- **Home screen.** Today at a glance: a health ring, your medication compliance, and tiles for blood pressure, pulse, weight, steps, mood, glucose and sleep. A "+" sheet lets you log any metric your server tracks.
+- **Apple Health sync in both directions.** Weight, blood pressure, heart rate, HRV, blood oxygen, glucose and mood (State of Mind) go both ways. Steps, activity, workouts, sleep stages and ECG recordings go from Apple Health to your server. Every write carries an external ID, so the server and Apple Health don't copy each other's entries back and forth. The [table below](#what-syncs-with-apple-health) has the details.
+- **Medication tracker and reminders.** Daily, weekly, cyclic, rolling and as-needed schedules. You can correct past intakes. Due doses show up as Live Activities, and the buttons in a reminder notification record a dose without opening the app. GLP-1 medications also get drug-level curves calculated from your actual doses, titration plans, injection-site tracking and a side-effects log.
+- **Charts.** Every metric has a detail view with a linear or logarithmic axis, a time range picker, reference bands from the ESC/ESH and ADA guidelines, and VoiceOver descriptions. Reference ranges and scores link to the sources they are based on.
+- **Insights and an optional coach.** A health score breakdown, correlation cards, a daily briefing and a coach you can ask about your numbers. All AI features are off until you turn them on (see [Privacy](#privacy)).
+- **Apple Watch, widgets and Shortcuts.** A Watch app with complications, home screen and lock screen widgets, App Intents for Siri and Shortcuts ("Did I take my medication?"), and Spotlight search for your medications.
+- **Sharing with your doctor.** You choose what is included, the time range and the format: a link you can revoke, a PDF report, or a ZIP of the record. There is also a doctor report based on FHIR with LOINC codes.
 
-English is the primary language; German is fully supported. The [CHANGELOG](CHANGELOG.md) tracks releases.
+The app is available in English and German.
 
-## What syncs from HealthKit
+## What syncs with Apple Health
 
-| Metric family | Direction | Notes |
+| Data | Direction | Notes |
 | --- | --- | --- |
-| Steps, active energy, walking distance, flights climbed | HK → server | Today's value reads live from HealthKit; historical days from the server cache. |
-| Body mass, body fat, BMI, height | HK ↔ server | Bi-directional. iOS writes carry `HKMetadataKeyExternalUUID = measurement.id` so re-reads dedup cleanly. |
-| Blood pressure, heart rate, HRV, resting HR, SpO₂, blood glucose | HK ↔ server | Same anti-duplicate pattern. The server is canonical for entries you typed; HealthKit for entries a device captured. |
-| Workouts incl. heart-rate samples and GPS routes | HK → server | Delivered as workout bundles. |
-| Mood, medication intake, notes | Server only | Not standardised in HealthKit. iOS and web both write directly to the server. |
+| Steps, active energy, walking distance, flights climbed | Apple Health → server | Today's value is read live from HealthKit, earlier days come from the server. |
+| Weight, body fat, BMI, body temperature, VO₂ max | Apple Health ↔ server | Writes from the app carry `HKMetadataKeyExternalUUID` so re-reads are recognised and not duplicated. |
+| Blood pressure, heart rate, resting heart rate, HRV, blood oxygen, blood glucose | Apple Health ↔ server | Same duplicate protection. The server is the reference for values you typed in, Apple Health for values a device measured. |
+| Mood (State of Mind) | Apple Health ↔ HealthLog | Can be turned off in the app's settings. |
+| Sleep stages, walking metrics, respiratory rate and other measured values | Apple Health → server | |
+| ECG recordings | Apple Health → server | |
+| Workouts with heart rate detail | Apple Health → server | Sent as workout bundles. |
+| Medication intakes, notes | Server only | HealthKit has no standard type for these, so the app and the web UI write them to the server directly. |
 
-## Authentication, briefly
-
-First launch asks for your server URL — there is no default; the app ships without a built-in server. After you connect, you sign in with **email and password** or with **a Passkey** if you built the app under your own bundle id with your host in the `webcredentials:` associated domain (see [docs/self-hosting.md](docs/self-hosting.md)). Tokens refresh in the background; the app never asks you to reauthenticate during normal use.
+You decide per data type in the iOS permission sheet what the app may read and write. Types you don't allow stay on the phone.
 
 ## Requirements
 
-- **iPhone running iOS 18.0 or later.** The on-device AI Coach needs an Apple-Intelligence-eligible device on iOS 26; everything else runs on any iOS 18 iPhone. The Watch app needs watchOS 11.
-- **A reachable [HealthLog server](https://github.com/MBombeck/HealthLog)** — your own install or `demo.healthlog.dev` for a test drive — or standalone mode.
-- **For building from source:** a Mac on macOS 15 or later with Xcode 26.6 (the pinned toolchain — see `project.yml` and CI), [XcodeGen](https://github.com/yonaskolb/XcodeGen), and an Apple Developer account for device installs. Simulator builds need no team.
+- An iPhone with iOS 18 or later. The Watch app needs watchOS 11.
+- A [HealthLog server](https://github.com/MBombeck/HealthLog) the phone can reach over HTTPS, or the demo server for a first look. Keep the server up to date: the app checks the server version and only offers features your server supports. Signing in through your instance's own login page needs server v1.32.11 or later.
+- For the on-device coach: an iPhone that supports Apple Intelligence, on iOS 26.
+
+## Signing in
+
+You sign in to your own server, never to an account of ours. Email and password work everywhere. On a current server the app can also open your instance's login page in a secure in-app browser, so passkeys, your password manager and single sign-on work the same way they do on the web. Tokens are kept in the iOS Keychain and refresh in the background.
+
+If you build the app yourself under your own bundle ID, you can also enable native passkeys for your host. [docs/self-hosting.md](docs/self-hosting.md) explains how.
+
+## Privacy
+
+There is no HealthLog cloud. The app talks to the server you chose and to nothing else that we run. There is no developer backend, no account with us, no analytics SDK, no tracking and no advertising.
+
+The coach is off until you choose how it should work, and you can pick none of the options:
+
+- **On the device** with Apple Intelligence (iOS 26). Nothing leaves the iPhone.
+- **Your own provider key** for Anthropic, OpenAI, Google Gemini or any OpenAI-compatible endpoint. Requests go straight from the phone to that provider, and the key stays in your Keychain.
+- **Your server's provider**, if your HealthLog instance has one configured.
+
+Before any health data goes to a provider, the app tells you what it sends. The full policy is at [healthlog.dev/privacy](https://healthlog.dev/privacy).
+
+HealthLog is not a medical device. It does not diagnose, treat or give medical advice, and it doesn't replace your doctor.
 
 ## How it works
 
@@ -104,15 +116,15 @@ Actor-based Services  (APIClient, HealthKit, Passkey, Notifications)
 Codable + Sendable Models
 ```
 
-Strict-concurrency Swift 6 throughout. The Outbox queues every write under network failure into a local SwiftData store and replays on the next reachable foreground; idempotency keys ride every POST and persist with the queued payload so retries are safe.
+The code uses Swift 6 strict concurrency throughout. When the network is down, the Outbox queues every write in a local SwiftData store and replays it the next time the server is reachable. Each POST carries an idempotency key that is stored with the queued payload, so a retry can't create a second entry.
 
-`HealthLogCore` is an internal SPM library defined in [`Package.swift`](Package.swift) — the platform-independent Models, APIClient, Keychain, Logger, Repositories, Sync and Pharmacokinetics layers. `swift build` compiles it iOS-free, which doubles as an architecture gate: core code cannot silently grow UIKit or HealthKit dependencies.
+`HealthLogCore` is an internal SPM library defined in [`Package.swift`](Package.swift). It holds the platform-independent layers: models, APIClient, Keychain, logger, repositories, sync and pharmacokinetics. `swift build` compiles it without iOS, which doubles as an architecture check: core code can't quietly pick up a UIKit or HealthKit dependency.
 
-A deeper dive lives under [`docs/`](docs/) — architecture, security, API contract, and the decision log carry the *why* for the load-bearing choices.
+More detail lives under [`docs/`](docs/): architecture, security, the API contract, and the decision log that explains the bigger choices.
 
 ## Build from source
 
-The repository does not commit `HealthLog.xcodeproj` — it is regenerated from `project.yml` via [XcodeGen](https://github.com/yonaskolb/XcodeGen). (The SwiftPM lockfile inside the workspace *is* tracked, so dependency resolution is pinned.)
+The repository does not commit `HealthLog.xcodeproj`. [XcodeGen](https://github.com/yonaskolb/XcodeGen) generates it from `project.yml`. The SwiftPM lockfile inside the workspace is tracked, so dependency versions are pinned.
 
 ```bash
 brew install xcodegen swiftlint swiftformat
@@ -127,15 +139,17 @@ xcodegen
 open HealthLog.xcodeproj    # scheme: HealthLog
 ```
 
+You need a Mac with macOS 15 or later and Xcode 26.6 (the pinned toolchain, see `project.yml` and CI). Device installs need an Apple Developer account; simulator builds don't.
+
 The platform-independent core also builds without Xcode:
 
 ```bash
 swift build    # compiles HealthLogCore
 ```
 
-Quality gates the project holds itself to (and CI enforces): `swiftlint` and `swiftformat --lint` clean, `xcodebuild build` with warnings as errors, and the test suite green — see [TESTING.md](TESTING.md) for the concrete commands and the simulator baseline.
+CI holds the project to these gates: `swiftlint` and `swiftformat --lint` clean, `xcodebuild build` with warnings as errors, and a green test suite. [TESTING.md](TESTING.md) has the exact commands and the simulator baseline.
 
-**Certificate pinning is opt-in and operator-owned.** The repository ships no pins and no pinned host — there is no built-in server, so there is nothing to pin by default. A build without pinning validates via system trust, which is the normal state. If you want pinning, passkeys, or universal links in your own build, provide the Info.plist keys `CertificatePinner` reads (`HLPinnedHosts`, `HLPinnedSPKIHashes`, `HLPasskeyRelyingPartyHosts`) in your own build configuration; `scripts/extract-spki.sh` computes the SPKI hashes for your host, and a release build crashes early on a *half* configuration — hashes without hosts or vice versa — because both look like pinning and are none. `Config/local.example.yml` documents the shape of such an overlay.
+**Certificate pinning is opt-in and up to whoever runs the server.** The repository ships no pins and no pinned host, because there is no built-in server to pin. A build without pinning validates through system trust, which is the normal case. If you want pinning, passkeys or universal links in your own build, provide the Info.plist keys that `CertificatePinner` reads (`HLPinnedHosts`, `HLPinnedSPKIHashes`, `HLPasskeyRelyingPartyHosts`) in your own build configuration. `scripts/extract-spki.sh` computes the SPKI hashes for your host. A release build crashes early if the configuration is only half there (hashes without hosts or the other way round), because that looks like pinning but isn't. `Config/local.example.yml` shows the shape of such an overlay.
 
 ## Project layout
 
@@ -152,7 +166,7 @@ Quality gates the project holds itself to (and CI enforces): `swiftlint` and `sw
 │   ├── Repositories/           # SWR + Outbox network glue
 │   ├── Screens/                # SwiftUI screen surfaces
 │   ├── Services/               # APIClient, Keychain, HealthKit, Passkey, AI/
-│   ├── Standalone/             # Server-less local mode
+│   ├── Standalone/             # Local-only runtime (its entry point is switched off in release builds)
 │   ├── Stores/                 # @MainActor @Observable view-models
 │   └── Sync/                   # BackgroundSyncCoordinator + cluster filter
 ├── HealthLogWatch/             # watchOS companion app
@@ -167,31 +181,32 @@ Quality gates the project holds itself to (and CI enforces): `swiftlint` and `sw
 
 ## Acknowledgements
 
-This app is built on [Stanford Spezi](https://github.com/StanfordSpezi) ([spezi.stanford.edu](https://spezi.stanford.edu)), the open-source digital-health framework from Stanford's Biodesign Digital Health group — and it deserves loud credit: sixteen Spezi packages carry HealthLog's HealthKit integration, FHIR mapping, LLM plumbing, Bluetooth device support, scheduling, onboarding, storage, and more, plus four packages from the sibling [StanfordBDHG](https://github.com/StanfordBDHG) org (HealthKitOnFHIR among them). Spezi supported this project enormously; if you build health software for Apple platforms, look at it first.
+This app is built on [Stanford Spezi](https://github.com/StanfordSpezi) ([spezi.stanford.edu](https://spezi.stanford.edu)), the open-source digital health framework from Stanford's Biodesign Digital Health group, and it deserves loud credit. Sixteen Spezi packages carry HealthLog's HealthKit integration, FHIR mapping, LLM plumbing, Bluetooth device support, scheduling, onboarding, storage and more, plus four packages from the sibling [StanfordBDHG](https://github.com/StanfordBDHG) org (HealthKitOnFHIR among them). Spezi helped this project enormously. If you build health software for Apple platforms, look at it first.
 
-Beyond the Spezi ecosystem, HealthLog iOS stands on: Apple's [FHIRModels](https://github.com/apple/FHIRModels) and the [swift-openapi](https://github.com/apple/swift-openapi-generator) stack, [MLX Swift](https://github.com/ml-explore/mlx-swift) for on-device inference, [swift-markdown-ui](https://github.com/gonzalezreal/swift-markdown-ui), [Pow](https://github.com/EmergeTools/Pow), [SQLite.swift](https://github.com/stephencelis/SQLite.swift), Point-Free's [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing), and a number of further community packages pinned in the tracked `Package.resolved`. All dependencies arrive via Swift Package Manager under their own licenses; nothing is vendored into this tree.
+Beyond the Spezi ecosystem, HealthLog iOS uses Apple's [FHIRModels](https://github.com/apple/FHIRModels) and the [swift-openapi](https://github.com/apple/swift-openapi-generator) stack, [MLX Swift](https://github.com/ml-explore/mlx-swift), [swift-markdown-ui](https://github.com/gonzalezreal/swift-markdown-ui), [Pow](https://github.com/EmergeTools/Pow), [SQLite.swift](https://github.com/stephencelis/SQLite.swift), Point-Free's [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing), and more community packages pinned in the tracked `Package.resolved`. All dependencies come in through Swift Package Manager under their own licenses; nothing is vendored into this tree.
 
-## Feedback · bug reports · contributions
+## Feedback, bug reports and contributions
 
 The most useful things you can do:
 
-- **Run the app** against your own server (or `demo.healthlog.dev`) and tell me where it breaks.
-- **Open an [issue](https://github.com/MBombeck/healthlog-iOS/issues)** with the build number from **More → About**, one line on what you tried, one line on what happened vs. what you expected, a screenshot if it's visual, and whether it reproduces.
-- **Suggest what's missing.** The roadmap is driven by what real self-hosters actually reach for.
-- **Pull requests** are welcome for small fixes and tests. For larger work please open an issue first so we don't duplicate effort. Working with AI tooling is fine — see [CONTRIBUTING-AI.md](CONTRIBUTING-AI.md) for the ground rules.
+- **Run the app** against your own server (or the demo) and tell me where it breaks.
+- **Open an [issue](https://github.com/MBombeck/healthlog-iOS/issues)** with the build number from **More → About**, one line on what you tried, one line on what happened compared with what you expected, a screenshot if it's visual, and whether it happens again.
+- **Tell me what's missing.** The roadmap follows what people who self-host actually reach for.
+- **Pull requests** are welcome for small fixes and tests. For larger work please open an issue first so we don't duplicate effort. Working with AI tooling is fine; [CONTRIBUTING-AI.md](CONTRIBUTING-AI.md) has the ground rules.
 
-If you find a **security issue**, please disclose responsibly via the [server project's security channel](https://github.com/MBombeck/HealthLog/security) rather than a public issue.
+Questions that don't fit an issue go to the [support page](https://healthlog.dev/support). If you find a **security issue**, please report it privately through the [server project's security channel](https://github.com/MBombeck/HealthLog/security) instead of a public issue.
 
 ## License
 
-HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) — the same license as the [server project](https://github.com/MBombeck/HealthLog). It is free to use, build, and modify for noncommercial purposes; commercial use requires a separate agreement.
+HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE), the same license as the [server project](https://github.com/MBombeck/HealthLog). The source is available, and you may use, build and modify it for noncommercial purposes. Commercial use needs a separate agreement.
 
 ---
 
 <p align="center">
+  <a href="https://apps.apple.com/app/id6769501341">App Store</a> &middot;
   <a href="https://healthlog.dev/">Website</a> &middot;
-  <a href="https://testflight.apple.com/join/bucuTBpa">TestFlight</a> &middot;
+  <a href="https://docs.healthlog.dev/ios/ios-app/">Documentation</a> &middot;
   <a href="https://github.com/MBombeck/HealthLog">Server project</a> &middot;
-  <a href="https://demo.healthlog.dev">Live demo</a> &middot;
+  <a href="https://testflight.apple.com/join/bucuTBpa">TestFlight</a> &middot;
   <a href="https://github.com/MBombeck/healthlog-iOS/issues">Issues</a>
 </p>
