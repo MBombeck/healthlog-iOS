@@ -44,6 +44,12 @@ public final class LocalDoctorReportStore {
     private var previousFHIRURL: URL?
     private let calendar: Calendar
     private let now: () -> Date
+    /// #115 · 1.2 — reads the server's per-medication adherence
+    /// (`GET /api/medications/compliance`) when a report is generated. One
+    /// request, user-initiated, never on the launch path. Tests inject a stub;
+    /// `nil` result = unavailable (offline / standalone / old server).
+    @ObservationIgnored
+    var complianceFetch: @MainActor () async -> [MedicationComplianceSummaryEntry]?
 
     public init(
         renderer: DoctorReportRenderer = DoctorReportRenderer(),
@@ -61,6 +67,10 @@ public final class LocalDoctorReportStore {
         self.settingsStore = settingsStore
         self.calendar = calendar
         self.now = now
+        complianceFetch = { [medicationsStore] in
+            let repo = medicationsStore.repo
+            return try? await repo.complianceSummary()
+        }
     }
 
     /// Pulls a snapshot from the stores, builds the spec, renders the
@@ -70,7 +80,7 @@ public final class LocalDoctorReportStore {
         isWorking = true
         error = nil
         defer { isWorking = false }
-        let snapshot = makeSnapshot()
+        let snapshot = await makeSnapshot(serverCompliance: complianceFetch())
         let end = now()
         let start = calendar.date(byAdding: .day, value: -periodDays, to: end) ?? end
         let spec = DoctorReportSpecBuilder.build(
@@ -121,7 +131,9 @@ public final class LocalDoctorReportStore {
 
     // MARK: - Snapshot
 
-    func makeSnapshot() -> DoctorReportSpecBuilder.Snapshot {
+    func makeSnapshot(
+        serverCompliance: [MedicationComplianceSummaryEntry]? = nil
+    ) -> DoctorReportSpecBuilder.Snapshot {
         let patientName: String = settingsStore.profile?.displayName
             ?? settingsStore.profile?.username
             ?? ""
@@ -134,9 +146,12 @@ public final class LocalDoctorReportStore {
             appVersion: Self.appVersion(),
             measurements: measurementsStore.recent,
             medications: medicationsStore.medications,
-            compliance: medicationsStore.compliance,
-            intakes: medicationsStore.todayIntakes,
-            moodEntries: moodStore.entries
+            serverCompliance: serverCompliance,
+            moodEntries: moodStore.entries,
+            // #115 B5 — the PDF prints glucose in the account's unit.
+            glucoseUnit: settingsStore.glucoseUnit,
+            // #115 P2 — and weight / temperature / waist in the account's unit.
+            accountUnits: settingsStore.unitPreferences
         )
     }
 

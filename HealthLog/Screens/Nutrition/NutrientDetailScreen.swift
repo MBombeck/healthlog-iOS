@@ -91,16 +91,19 @@ struct NutrientDetailScreen: View {
     /// "Referenzwert (PRI)" / "Zufuhrziel (AI)" / "Obergrenze" prose per kind +
     /// direction.
     private func referenceHeadline(_ reference: NutrientReferenceDTO) -> String {
-        let kindKey = switch reference.kind {
+        let kindKey: String? = switch reference.kind {
         case .pri: "nutrients.reference.kind.pri"
         case .ai: "nutrients.reference.kind.ai"
         case .safeLevel: "nutrients.reference.kind.safeLevel"
+        // #115 B6 — a kind this build cannot name: the direction alone.
+        case .unknown: nil
         }
         let directionKey = reference.direction == .upperGuidance
             ? "nutrients.reference.direction.upper"
             : "nutrients.reference.direction.target"
-        let kind = String(localized: String.LocalizationValue(kindKey))
         let direction = String(localized: String.LocalizationValue(directionKey))
+        guard let kindKey else { return direction }
+        let kind = String(localized: String.LocalizationValue(kindKey))
         return "\(direction) (\(kind))"
     }
 

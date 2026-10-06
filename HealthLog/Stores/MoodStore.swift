@@ -7,6 +7,12 @@ public final class MoodStore {
     public private(set) var entries: [MoodEntry] = []
     public private(set) var isLoading: Bool = false
     public private(set) var error: HLError?
+    /// **#115 R3 (server v1.39.7)** — the tag / rated-factor keys the server
+    /// dropped on the most recent `update` / log (unknown or archived keys; the
+    /// entry itself was saved). Empty when everything arrived or the write
+    /// failed. The editors read it right after their `await` to tell the person
+    /// instead of letting the tags vanish silently.
+    public private(set) var lastWriteDroppedKeys: [String] = []
 
     /// **Phase 09 / plan 09-04 — the O(1) invalidation axis.**
     ///
@@ -17,6 +23,10 @@ public final class MoodStore {
     /// history. A revalidation that comes back with byte-identical entries is
     /// deliberately *not* a change: it must not throw away a resident analysis.
     public private(set) var entriesRevision: Int = 0
+    /// #115 · 1.3 — the server's daily mood series, the Mood analysis's day
+    /// spine. Loaded lazily by the analysis surface (never on the launch path).
+    /// `nil` = not loaded / standalone / unreachable.
+    private(set) var dailySeries: MoodAnalyticsEnrichment?
 
     /// The bounded, actor-owned analysis cache for this account's history. It
     /// is owned by the store — not a process-wide singleton — so both Mood
@@ -115,6 +125,14 @@ public final class MoodStore {
         }
     }
 
+    /// #115 · 1.3 — refresh ``dailySeries``. Keeps the last good series on a
+    /// transient failure. Called by the Mood analysis surface when it appears
+    /// and whenever `entriesRevision` moves (a write dropped the SWR row).
+    func loadDailySeries() async {
+        guard let series = try? await repo.dailySeries() else { return }
+        dailySeries = series
+    }
+
     /// Fetch one filtered history page without mutating `entries`. Dashboard,
     /// widgets, and insights continue to observe the broad analytics snapshot.
     public func history(query: MoodHistoryQuery) async throws -> MoodListResponse {
@@ -131,7 +149,9 @@ public final class MoodStore {
 
     public func clearOnLogout() {
         publish([])
+        dailySeries = nil
         error = nil
+        lastWriteDroppedKeys = []
         onEntriesDidChange?()
         // 09-04 — the revision bump above already makes every cached analysis
         // key unreachable, but an unreachable snapshot is still a resident one.
@@ -283,6 +303,7 @@ public final class MoodStore {
         recordedAt: Date,
         note: String? = nil
     ) async -> Bool {
+        lastWriteDroppedKeys = []
         let snapshot = entries
         let cleanTags = tags.filter { !$0.hasPrefix("note:") }
         let resolvedTagKeys = tagKeys ?? entry.tagKeys
@@ -319,6 +340,7 @@ public final class MoodStore {
             if let i = entries.firstIndex(where: { $0.id == entry.id }) {
                 replaceEntry(at: i, with: saved)
             }
+            lastWriteDroppedKeys = saved.droppedKeys
             onEntriesDidChange?()
             // v0.10.0 W-Mood-B — mirror edits into HKStateOfMind too (the
             // original write only mirrored on `log`). Anti-dupe via the same
@@ -433,6 +455,7 @@ public final class MoodStore {
     ) async -> MoodLogResult {
         // Optimistic insert mit lokal-temporärer ID — Repo enqueued Outbox bei
         // `shouldPersistToOutbox`-Fehlern (retriable + `.unauthorized`).
+        lastWriteDroppedKeys = []
         let stamp = recordedAt ?? .now
         let local = MoodEntry(id: "local-\(UUID().uuidString)", recordedAt: stamp, score: score, tags: tags, tagKeys: tagKeys, note: note)
         insertEntry(local, at: 0)
@@ -442,6 +465,7 @@ public final class MoodStore {
             if let i = entries.firstIndex(where: { $0.id == local.id }) {
                 replaceEntry(at: i, with: saved)
             }
+            lastWriteDroppedKeys = saved.droppedKeys
             // Bidirectional HK mirror: write to HKStateOfMindSample with
             // externalUUID = server-id so a future read-back skips dup.
             do {

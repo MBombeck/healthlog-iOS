@@ -12,7 +12,7 @@ import Testing
 /// card snapshots and reports the covered ids so the caller fans out only over
 /// the remainder.
 @MainActor
-@Suite("Medication batch compliance — Build 6.3", .serialized)
+@Suite("Medication batch compliance — Build 6.3", .serialized, .mockURLSession)
 struct MedicationComplianceBatchTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -33,7 +33,7 @@ struct MedicationComplianceBatchTests {
         let store = MedicationsStore(repo: repo)
 
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             let json = #"""
             {"data":[
@@ -68,7 +68,7 @@ struct MedicationComplianceBatchTests {
         let repo = MedicationsRepository(api: makeClient(), outbox: outbox)
         let store = MedicationsStore(repo: repo)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let covered = await store.refreshCardComplianceViaBatch()

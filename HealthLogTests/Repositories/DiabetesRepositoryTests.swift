@@ -15,7 +15,7 @@ import Testing
 /// `{ data, error, meta }` envelope. Uses the real `APIClient` over a
 /// `MockURLProtocol` session (PROJECT_GUIDE.md doctrine — never a hand-rolled mock
 /// server) so envelope-shape drift is caught.
-@Suite("DiabetesRepository", .serialized)
+@Suite("DiabetesRepository", .serialized, .mockURLSession)
 struct DiabetesRepositoryTests {
     private struct RecordedCall {
         let method: String
@@ -71,7 +71,7 @@ struct DiabetesRepositoryTests {
     func fetchRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(method: req.httpMethod ?? "?", path: req.url!.path, body: Self.bodyFromStream(req))
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -91,7 +91,7 @@ struct DiabetesRepositoryTests {
     func updateRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(method: req.httpMethod ?? "?", path: req.url!.path, body: Self.bodyFromStream(req))
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -114,7 +114,7 @@ struct DiabetesRepositoryTests {
     @Test("update can clear the flag (false echoed back)")
     func updateClears() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":{"hasDiabetes":false}}"#.utf8)

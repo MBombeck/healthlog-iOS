@@ -10,7 +10,7 @@ import Testing
 /// through the live envelope, and the `403 module.disabled` gate classification.
 ///
 /// `.serialized` — the suite installs a process-global `MockURLProtocol.handler`.
-@Suite("EnvironmentRepository — overview read + module gate", .serialized)
+@Suite("EnvironmentRepository — overview read + module gate", .serialized, .mockURLSession)
 struct EnvironmentRepositoryTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -47,7 +47,7 @@ struct EnvironmentRepositoryTests {
         let api = makeClient()
         let repo = EnvironmentRepository(api: api)
         let recorder = PathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let home = #"{"lat":51.48,"lon":7.22,"label":"Bochum","timezone":"Europe/Berlin","since":"2026-01-01T00:00:00Z"}"#
             let ctx = #"{"days":12,"latestDate":"2026-07-20","latestFetchedAt":"2026-07-21T03:00:00Z"}"#
@@ -70,7 +70,7 @@ struct EnvironmentRepositoryTests {
     func overviewMissingAttributionFallsBack() async throws {
         let api = makeClient()
         let repo = EnvironmentRepository(api: api)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.ok(#"{"home":null,"travel":[],"context":{"days":0}}"#, url: req.url!)
         }
 
@@ -85,7 +85,7 @@ struct EnvironmentRepositoryTests {
     func moduleDisabledIsClassified() async throws {
         let api = makeClient()
         let repo = EnvironmentRepository(api: api)
-        MockURLProtocol.handler = { req in Self.moduleDisabled(url: req.url!) }
+        MockURLProtocol.install { req in Self.moduleDisabled(url: req.url!) }
 
         var captured: Error?
         do {

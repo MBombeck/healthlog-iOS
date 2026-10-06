@@ -76,6 +76,11 @@ public enum CacheKey: Hashable, Sendable {
     /// caches the aggregate ~60s; this row mirrors that so the Mood-page cards
     /// paint cache-first on launch + revalidate in the background.
     case moodInsights
+    /// #115 · 1.3 — the canonical daily mood series (`GET /api/mood/analytics`):
+    /// one mean per profile-zone day plus the server's summary slopes. The
+    /// Mood analysis draws its day means from this row instead of bucketing
+    /// entries on the device calendar.
+    case moodDailySeries
     case userProfile
     case hkSyncConfig
     case notificationsPreferences
@@ -249,6 +254,7 @@ public extension CacheKey {
         case let .medicationsCompliance(days): "medicationsCompliance:\(days)"
         case let .moodEntries(days): "moodEntries:\(days)"
         case .moodInsights: "moodInsights"
+        case .moodDailySeries: "moodDailySeries"
         case .userProfile: "userProfile"
         case .hkSyncConfig: "hkSyncConfig"
         case .notificationsPreferences: "notificationsPreferences"
@@ -328,6 +334,7 @@ public extension CacheKey {
         // Mirrors the server-side 60s `cached()` window on the mood-insights
         // aggregate so the relations cards paint from disk on a warm bounce.
         case .moodInsights: 60
+        case .moodDailySeries: 60
         case .hkSyncConfig: 5 * 60
         case .notificationsPreferences: 5 * 60
         case .metricInsights: 60

@@ -189,18 +189,20 @@ struct MedicationRecurrenceEngineTests {
         #expect(Self.berlinDay(slots[0].at) == Self.berlinDay(expected))
     }
 
-    @Test("rolling=7 + lastIntake=nil + startsOn=NOW-2d → one slot at startsOn+7d")
+    /// R1 — the server has emitted the FIRST rolling dose on the start day
+    /// itself since v1.8.5 ("a rolling first dose is due on startsOn",
+    /// `recurrence-timezones.test.ts` at v1.39.3); the `+ N` cadence only starts
+    /// once an intake is logged. This case used to pin `startsOn + 7`.
+    @Test("rolling=7 + lastIntake=nil → the first dose is due ON startsOn")
     func rollingAnchorsOnStartsOn() {
-        let now = Self.iso("2026-06-10T12:00:00Z")
-        // startsOn is a course date — model it as the 2-days-ago calendar day.
         let slots = run(
             Self.entry(cadence: .rolling(intervalDays: 7), times: ["08:00"]),
             Self.ctx(startsOn: "2026-06-08", lastIntakeAt: nil),
-            from: now,
-            to: now.addingTimeInterval(14 * 86400)
+            from: Self.courseDate("2026-06-01"),
+            to: Self.iso("2026-06-30T00:00:00Z")
         )
         #expect(slots.count == 1)
-        #expect(Self.berlinDay(slots[0].at) == "2026-06-15")
+        #expect(Self.berlinDay(slots[0].at) == "2026-06-08")
     }
 
     @Test("rolling terminates when endsOn falls before next-due")
@@ -464,10 +466,10 @@ struct MedicationRecurrenceEngineTests {
 
     // MARK: - Cyclic on/off-weeks (v1.7.0 SB-SCHED-5)
 
-    /// 3-on / 1-off anchored on 2026-06-01 (a Monday). Weeks are Sunday-rooted:
-    /// the anchor week starts 2026-05-31 (Sun). On-weeks: indices 0,1,2 of each
-    /// 4-week period → weeks of 05-31, 06-07, 06-14 fire; week of 06-21 (off);
-    /// week of 06-28 fires again (period restart).
+    /// 3-on / 1-off anchored on 2026-06-01 (a Monday). R1 (server 1.39.3) —
+    /// weeks are seven-day blocks from the start day: 06-01…06-21 on (21 days),
+    /// 06-22…06-28 off, 06-29 on again (period restart). The old Sunday-rooted
+    /// count put the restart on 06-28.
     @Test("cyclic 3-on/1-off: off-week is silent, on-weeks fire daily")
     func cyclicThreeOnOneOff() {
         // 09-14 — the anchor is no longer an associated value of the cadence.
@@ -480,14 +482,14 @@ struct MedicationRecurrenceEngineTests {
             ),
             Self.ctx(startsOn: "2026-06-01"),
             from: Self.courseDate("2026-06-01"),
-            to: Self.iso("2026-06-28T23:59:59Z")
+            to: Self.iso("2026-06-29T23:59:59Z")
         )
-        // 2026-06-01..06-20 are on-weeks (20 days), 06-21..06-27 off (silent),
-        // 06-28 on again (1 day). Daily within on-weeks.
         let days = Set(slots.map { Self.berlinDay($0.at) })
         #expect(days.contains("2026-06-15")) // on-week
+        #expect(days.contains("2026-06-21")) // last day of the third on-week
         #expect(!days.contains("2026-06-24")) // off-week — silent
-        #expect(days.contains("2026-06-28")) // period restart, on-week
+        #expect(!days.contains("2026-06-28")) // still the off-week
+        #expect(days.contains("2026-06-29")) // period restart, on-week
     }
 
     @Test("cyclic off-week firesOn is false, on-week is true")
@@ -515,9 +517,9 @@ struct MedicationRecurrenceEngineTests {
         )
         #expect(next != nil)
         let day = try Self.berlinDay(#require(next?.at))
-        // The first on-day after the off-week is 2026-06-28 (Sunday, period
-        // restart) per Sunday-rooted weeks.
-        #expect(day == "2026-06-28")
+        // The first on-day after the off-week is 2026-06-29: the period
+        // restarts four whole weeks after the 06-01 start day.
+        #expect(day == "2026-06-29")
     }
 
     @Test("cyclic weeksOff == 0 is always-on (every day fires)")

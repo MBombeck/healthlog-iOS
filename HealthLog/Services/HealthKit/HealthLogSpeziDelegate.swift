@@ -240,8 +240,8 @@
                     // rolling / cyclic / day-29–31 monthly) can drain dry before
                     // the next background top-up. The window was widened 4 → 8
                     // weeks to MATCH `MedicationsSchedulerModule.preArmHorizon`,
-                    // so the H3 pre-armed `.once` runway (up to
-                    // `maxPreArmedOccurrences` future occurrences per slot) all
+                    // so the H3 pre-armed `.once` runway (R5: filled up to this
+                    // limit, `MedicationReminderRunway.plan`) all
                     // falls inside the window SpeziScheduler turns into pending
                     // `UNNotificationRequest`s. Daily / weekly / monthly / yearly
                     // stay single OS-repeating triggers regardless of the window

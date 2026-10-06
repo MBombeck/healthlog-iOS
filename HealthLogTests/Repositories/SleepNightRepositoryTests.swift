@@ -13,7 +13,7 @@ import Testing
 /// - a concrete `date` still sends the `?date=YYYY-MM-DD` query.
 /// - a `404`/`422` maps to an EMPTY night (`main == nil`), the calm empty state,
 ///   never a thrown error (mirrors `NarrativeRepository.fetch`).
-@Suite("SleepNightRepository — default-no-date + 422→empty", .serialized)
+@Suite("SleepNightRepository — default-no-date + 422→empty", .serialized, .mockURLSession)
 struct SleepNightRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -41,7 +41,7 @@ struct SleepNightRepositoryTests {
     @Test("night(for: nil) — default omits the date query + returns the latest night")
     func defaultOmitsDateQuery() async throws {
         let repo = SleepNightRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // The DEFAULT entry must NOT carry a `date=` query — the server picks
             // the most-recent night, sidestepping the device-tz day-key mismatch.
             // CU-07: assert only on OUR route — the handler is process-global.
@@ -58,7 +58,7 @@ struct SleepNightRepositoryTests {
     @Test("night(for: date) — a concrete date still sends ?date=YYYY-MM-DD")
     func concreteDateSendsQuery() async throws {
         let repo = SleepNightRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/sleep/night") {
                 #expect(req.url?.query?.contains("date=") == true)
             }
@@ -72,7 +72,7 @@ struct SleepNightRepositoryTests {
     @Test("night — 422 (day-key rejected) → empty night, NOT a thrown error")
     func unprocessableMapsToEmpty() async throws {
         let repo = SleepNightRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, Data())
         }
         // No throw — the screen renders its calm empty state on `main == nil`.
@@ -105,7 +105,7 @@ struct SleepNightRepositoryTests {
         },"error":null}
         """#.utf8)
         let repo = SleepNightRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let dto = try await repo.night(for: nil)
@@ -118,7 +118,7 @@ struct SleepNightRepositoryTests {
     @Test("night — 404 (route absent) → empty night, NOT a thrown error")
     func notFoundMapsToEmpty() async throws {
         let repo = SleepNightRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         let dto = try await repo.night(for: nil)
@@ -130,7 +130,7 @@ struct SleepNightRepositoryTests {
     @Test("W-B180 — latest night lands in the cache under nil AND its resolved day-key")
     func latestNightCachesUnderResolvedDayKey() async throws {
         let repo = SleepNightRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.nightBody)
         }
         #expect(await repo.cachedNight(forDayKey: nil) == nil)
@@ -146,7 +146,7 @@ struct SleepNightRepositoryTests {
     func dayKeyFetchSendsQueryAndRevalidates() async throws {
         let repo = SleepNightRepository(api: makeAPI())
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/sleep/night") {
                 requestCount += 1
                 #expect(req.url?.query?.contains("date=2026-06-04") == true)

@@ -22,21 +22,29 @@ import Testing
 ///
 /// 4. `.bodyTemperature` is server-side series-unsupported (HK write-only)
 ///    — fallback short-circuits without firing the series call.
-@Suite("DashboardStore.refreshMetricStates — series-endpoint fallback", .serialized)
+@Suite("DashboardStore.refreshMetricStates — series-endpoint fallback", .serialized, .mockURLSession)
 struct DashboardStoreSeriesFallbackTests {
-    @Test("unknown weight, steps, and sleep trends derive from bounded visible values")
-    func supportedDashboardTrendsDeriveFromVisibleValues() {
-        #expect(DashboardStore.dashboardTrend(server: .unknown, kind: .weight, visibleValues: [72.0, 72.4]) == .up)
-        #expect(DashboardStore.dashboardTrend(server: .unknown, kind: .steps, visibleValues: [8000, 7500]) == .down)
-        #expect(DashboardStore.dashboardTrend(server: .unknown, kind: .sleep, visibleValues: [7.2, 7.2]) == .flat)
+    @Test("#115 B7: steps and sleep no longer derive a direction from their own sparkline")
+    func noClientDerivedDashboardTrend() {
+        for kind in [MetricKind.steps, .sleep] {
+            let metric = DashboardMetric(
+                id: kind.rawValue, kind: kind, title: "", latestValue: 1, secondaryValue: nil,
+                unit: "", trend: .unknown, sparkline: [8000, 7500], updatedAt: nil
+            )
+            #expect(metric.dashboardTrend == .unknown, "no server direction → no arrow for \(kind.rawValue)")
+        }
     }
 
-    @Test("derived dashboard trend preserves server signal and stays unknown without honest support")
-    func dashboardTrendHonestyGuards() {
-        #expect(DashboardStore.dashboardTrend(server: .down, kind: .weight, visibleValues: [72.0, 73.0]) == .down)
-        #expect(DashboardStore.dashboardTrend(server: .unknown, kind: .weight, visibleValues: [72.0]) == .unknown)
-        #expect(DashboardStore.dashboardTrend(server: .unknown, kind: .pulse, visibleValues: [60, 70]) == .unknown)
-        #expect(DashboardStore.dashboardTrend(server: .unknown, kind: .sleep, visibleValues: [7.0, .nan]) == .unknown)
+    @Test("the server's direction is shown as sent")
+    func serverDirectionPassesThrough() {
+        let cases: [(MetricKind, TrendIndicator)] = [(.steps, .down), (.sleep, .flat), (.weight, .down), (.pulse, .up)]
+        for (kind, trend) in cases {
+            let metric = DashboardMetric(
+                id: kind.rawValue, kind: kind, title: "", latestValue: 1, secondaryValue: nil,
+                unit: "", trend: trend, sparkline: [1, 2], updatedAt: nil
+            )
+            #expect(metric.dashboardTrend == trend)
+        }
     }
 
     @MainActor
@@ -101,7 +109,7 @@ struct DashboardStoreSeriesFallbackTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let bpPayload = bpSeriesPayload(now: now)
         let emptyMeasurements = emptyMeasurementsPayload()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -150,7 +158,7 @@ struct DashboardStoreSeriesFallbackTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let pulsePayload = pulseSeriesPayload(now: now)
         let emptyMeasurements = emptyMeasurementsPayload()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -188,7 +196,7 @@ struct DashboardStoreSeriesFallbackTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let emptyMeasurements = emptyMeasurementsPayload()
         let emptyGlucoseSeries = emptySeriesPayload(kindKey: "glucose")
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -222,7 +230,7 @@ struct DashboardStoreSeriesFallbackTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         nonisolated(unsafe) var seriesCallCount = 0
         let emptyMeasurements = emptyMeasurementsPayload()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -260,7 +268,7 @@ struct DashboardStoreSeriesFallbackTests {
             Data(("{\"data\":{\"measurements\":[{\"id\":\"w1\",\"type\":\"WEIGHT\",\"value\":72.0,\"measuredAt\":\"" + recentAtIso +
                     "\"}]}}").utf8)
         nonisolated(unsafe) var seriesCallCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,

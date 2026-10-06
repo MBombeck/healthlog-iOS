@@ -19,7 +19,7 @@ import Testing
 /// Uses a real `APIClient` against `MockURLProtocol` — anti-pattern per
 /// PROJECT_GUIDE.md is using a mock-server for replay paths because we miss
 /// schema-drift bugs. We exercise the actual on-wire envelope.
-@Suite("DailyBriefingStore", .serialized)
+@Suite("DailyBriefingStore", .serialized, .mockURLSession)
 struct DailyBriefingStoreTests {
     @Test("Direct-fetch load populates briefing + summary + provider label")
     @MainActor
@@ -29,7 +29,7 @@ struct DailyBriefingStoreTests {
         // on a PARALLEL suite's request too. Record OUR namespace and assert
         // afterwards instead — same claim, no dependence on the schedule.
         nonisolated(unsafe) var insightsPaths: [String] = []
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets(prefixedBy: "/api/insights") {
                 insightsPaths.append(request.url?.path ?? "")
             }
@@ -55,7 +55,7 @@ struct DailyBriefingStoreTests {
     func refreshSetsForceFlag() async {
         let (api, _) = makeAPIClient()
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // CU-07: record only OUR route — the handler is process-global.
             if request.targets("/api/insights/generate") { capturedBody = request.bodyBytes() }
             return (Self.ok(request), Self.wrap(Self.successJSON))
@@ -73,7 +73,7 @@ struct DailyBriefingStoreTests {
     func errorPathPreservesPrevious() async {
         let (api, _) = makeAPIClient()
         nonisolated(unsafe) var callCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // CU-07: only OUR route advances the phase machine.
             if request.targets("/api/insights/generate") { callCount += 1 }
             if callCount == 1 {
@@ -101,7 +101,7 @@ struct DailyBriefingStoreTests {
     @MainActor
     func clearOnLogout() async {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Self.wrap(Self.successJSON))
         }
         let store = DailyBriefingStore(repo: InsightsRepository(api: api))
@@ -141,7 +141,7 @@ struct DailyBriefingStoreTests {
         // must leave `response` nil, no network call must fire.
         let (api, _) = makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // CU-07: `requestCount == 0` is only an assertion about the consent
             // gate if a parallel suite's request cannot raise it.
             if request.targets(prefixedBy: "/api/insights") { requestCount += 1 }
@@ -169,7 +169,7 @@ struct DailyBriefingStoreTests {
         // past the consent boundary.
         let (api, _) = makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // CU-07: `requestCount == 0` is only an assertion about the consent
             // gate if a parallel suite's request cannot raise it.
             if request.targets(prefixedBy: "/api/insights") { requestCount += 1 }
@@ -190,7 +190,7 @@ struct DailyBriefingStoreTests {
     @MainActor
     func staleSnapshotBriefingSurfaces() async {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Self.wrap(Self.successJSON))
         }
         let store = DailyBriefingStore(repo: InsightsRepository(api: api))
@@ -218,7 +218,7 @@ struct DailyBriefingStoreTests {
     @MainActor
     func freshResponseMasksStaleCaption() async {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Self.wrap(Self.successJSON))
         }
         let store = DailyBriefingStore(repo: InsightsRepository(api: api))
@@ -243,7 +243,7 @@ struct DailyBriefingStoreTests {
     @MainActor
     func noProviderSnapshotFlagsFallback() async {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Self.wrap(Self.successJSON))
         }
         let store = DailyBriefingStore(repo: InsightsRepository(api: api))
@@ -264,7 +264,7 @@ struct DailyBriefingStoreTests {
     @MainActor
     func snapshotFetchFailureIsSilent() async {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Self.wrap(Self.successJSON))
         }
         let store = DailyBriefingStore(repo: InsightsRepository(api: api))
@@ -281,7 +281,7 @@ struct DailyBriefingStoreTests {
     @MainActor
     func clearOnLogoutDropsSnapshot() async {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Self.wrap(Self.successJSON))
         }
         let store = DailyBriefingStore(repo: InsightsRepository(api: api))

@@ -81,7 +81,8 @@ private struct StreakCapsule: View {
 
     private var streakLabel: String {
         let value = Int(record.base.value.rounded())
-        return "\(value) \(record.base.unit.isEmpty ? "Tage" : record.base.unit)"
+        let unit = record.base.unit.isEmpty ? String(localized: "records.streak.unit") : record.base.unit
+        return "\(value) \(unit)"
     }
 }
 

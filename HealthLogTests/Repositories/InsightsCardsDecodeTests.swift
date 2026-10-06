@@ -18,7 +18,7 @@ import Testing
 /// generatedAt / provider) so a schema drift can never silently blank the
 /// cards list. Uses the real `APIClient` + stubbed `URLProtocol` per the
 /// project rule (no mock server).
-@Suite("InsightsRepository.cards — consolidated cards decode", .serialized)
+@Suite("InsightsRepository.cards — consolidated cards decode", .serialized, .mockURLSession)
 struct InsightsCardsDecodeTests {
     private func makeRepo() -> InsightsRepository {
         let env = AppEnvironment(
@@ -60,7 +60,7 @@ struct InsightsCardsDecodeTests {
         ]}
         """#.utf8)
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -78,20 +78,18 @@ struct InsightsCardsDecodeTests {
         #expect(first.recommendations.count == 1)
         #expect(first.recommendations[0].label == "Review with your doctor")
         #expect(first.recommendations[0].actionURL == nil)
-        #expect(first.providerLabel == "Anthropic")
 
         // Wide provider vocabulary must not throw the array (W2a-A2 §2.4) —
-        // The wider model-family identifier is kept raw and mapped to the
-        // neutral provider-family label.
+        // the wider model-family identifier is kept raw (never rendered since
+        // #115 · 0.2 dropped the badge).
         #expect(cards[1].severity == .good)
         #expect(cards[1].provider == "claude_haiku")
-        #expect(cards[1].providerLabel == "Anthropic")
     }
 
     @Test("Empty cards array decodes to an empty list, not an error")
     func decodesEmptyArray() async throws {
         let body = Data(#"{"data":[]}"#.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let repo = makeRepo()

@@ -15,7 +15,7 @@ import Testing
 /// - 404/422 → nil (route absent / unknown period) → card hidden, never error
 /// - store: per-period lazy load, settled-vs-empty distinction, double-optional
 ///   flattening in `narrative(for:)`
-@Suite("Narrative — wire contract + retrospective store semantics", .serialized)
+@Suite("Narrative — wire contract + retrospective store semantics", .serialized, .mockURLSession)
 struct NarrativeRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -37,7 +37,7 @@ struct NarrativeRepositoryTests {
         // provenance anymore (Codable ignores the unknown key), so the REAL
         // object payload must decode cleanly with the text + updatedAt intact.
         let repo = NarrativeRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "period":"week",
@@ -68,7 +68,7 @@ struct NarrativeRepositoryTests {
     @Test("fetch — narrative:null (fresh / provider-less) decodes to empty arm")
     func fetchNullNarrative() async throws {
         let repo = NarrativeRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":{"period":"month","locale":"en","narrative":null,"revalidating":true},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -80,7 +80,7 @@ struct NarrativeRepositoryTests {
     @Test("fetch — 404 (route not deployed) → nil → card hidden, no error")
     func fetch404IsNil() async throws {
         let repo = NarrativeRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch(period: .week, locale: "de") == nil)
@@ -89,7 +89,7 @@ struct NarrativeRepositoryTests {
     @Test("fetch — 422 (unknown period rejected) → nil (never an error)")
     func fetch422IsNil() async throws {
         let repo = NarrativeRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch(period: .month, locale: "en") == nil)
@@ -100,11 +100,11 @@ struct NarrativeRepositoryTests {
         // The route calls `requireAssistantSurface("insightStatus")`; a
         // provider-less / operator-gated account throws 403 with errorCode
         // `assistant.disabled.insights`, which the APIClient surfaces as
-        // `HLError.assistantDisabled`. The repo must map that to nil so the
+        // `HLError.aiUnavailable`. The repo must map that to nil so the
         // "Zeitraum im Rückblick" card shows the calm empty state, not its error
         // arm (the b150 bug: provider-less ⇒ broken-looking tile).
         let repo = NarrativeRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"Assistant disabled","errorCode":"assistant.disabled.insights"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -116,7 +116,7 @@ struct NarrativeRepositoryTests {
         // Defensive: even a 403 that does NOT carry the typed assistant-disabled
         // errorCode (so it surfaces as `.server(403,…)`) maps to the empty state.
         let repo = NarrativeRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch(period: .month, locale: "en") == nil)
@@ -131,7 +131,7 @@ struct NarrativeRepositoryTests {
         #expect(!store.hasSettled(.week))
         #expect(store.narrative(for: .week) == nil)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"period":"week","locale":"de",
              "narrative":{"text":"Kurzer Rückblick.","provenance":null,"updatedAt":null},
@@ -151,7 +151,7 @@ struct NarrativeRepositoryTests {
     func storeEmptyArm() async {
         let repo = NarrativeRepository(api: makeAPI())
         let store = NarrativeStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":{"period":"month","locale":"de","narrative":null,"revalidating":false},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -173,7 +173,7 @@ struct NarrativeRepositoryTests {
         // the card re-polls in the SAME session once the warm completes.
         let repo = NarrativeRepository(api: makeAPI())
         let store = NarrativeStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":{"period":"week","locale":"de","narrative":null,"revalidating":true},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -191,7 +191,7 @@ struct NarrativeRepositoryTests {
         // body), the store settles normally and surfaces the text.
         let repo = NarrativeRepository(api: makeAPI())
         let store = NarrativeStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"period":"week","locale":"de",
              "narrative":{"text":"Warmer Rückblick.","provenance":null,"updatedAt":null},
@@ -210,7 +210,7 @@ struct NarrativeRepositoryTests {
     func storeClearOnLogout() async {
         let repo = NarrativeRepository(api: makeAPI())
         let store = NarrativeStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(
                 #"{"data":{"period":"week","locale":"de","narrative":{"text":"x","provenance":null,"updatedAt":null},"revalidating":false},"error":null}"#
                     .utf8

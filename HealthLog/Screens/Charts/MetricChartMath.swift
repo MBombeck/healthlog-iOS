@@ -14,9 +14,8 @@ import Foundation
 /// live surfaces no longer reference a "Screen" type for pure math, and the
 /// parked view simply delegates here too.
 enum MetricChartMath {
-    /// `MetricKind` → server target-type string. Mirrors the inverse mapping
-    /// `InsightsTargetTileGrid.kindForChartDetail` so the tile + the detail
-    /// panel agree on which metric owns which target.
+    /// `MetricKind` → server target-type string, so the metric page and the
+    /// target panel agree on which metric owns which target.
     static func targetType(for kind: MetricKind) -> String? {
         switch kind {
         case .weight: "WEIGHT"

@@ -11,7 +11,7 @@ import Testing
 /// - null `lastSyncedAt` decodes cleanly (first-ever handshake)
 /// - clock-skew helper math
 /// - server-error surfaces as `HLError`
-@Suite("SyncStateRepository — wire contract", .serialized)
+@Suite("SyncStateRepository — wire contract", .serialized, .mockURLSession)
 struct SyncStateRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -31,7 +31,7 @@ struct SyncStateRepositoryTests {
     @Test("handshake — decodes the full envelope")
     func handshakeDecodesEnvelope() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "userId":"usr_abc","timezone":"Europe/Berlin",
@@ -56,7 +56,7 @@ struct SyncStateRepositoryTests {
     @Test("handshake — null lastSyncedAt decodes (first-ever handshake)")
     func handshakeNullLastSyncedAtDecodes() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "userId":"usr_x","timezone":"Europe/Berlin",
@@ -92,7 +92,7 @@ struct SyncStateRepositoryTests {
     @Test("handshake — server 500 surfaces as HLError")
     func handshakeFailsOn500() async {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
         }
         do {
@@ -113,7 +113,7 @@ struct SyncStateRepositoryTests {
     @Test("SyncStateStore — handshake mirrors DTO into observable state")
     func storeHandshakeMirrors() async {
         let store = SyncStateStore(repo: SyncStateRepository(api: makeAPI()))
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "userId":"usr","timezone":"Europe/Berlin",

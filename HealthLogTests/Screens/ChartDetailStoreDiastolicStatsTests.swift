@@ -10,7 +10,7 @@ import Testing
 /// on-device by `ChartDetailStore.diastolicStats` / `diastolicMedian`. These
 /// tests pin that aggregation against a known BP series and confirm the
 /// accessors self-suppress for non-BP kinds.
-@Suite("ChartDetailStore — diastolic stats (I4)", .serialized)
+@Suite("ChartDetailStore — diastolic stats (I4)", .serialized, .mockURLSession)
 @MainActor
 struct ChartDetailStoreDiastolicStatsTests {
     private func makeAPIClient() -> APIClient {

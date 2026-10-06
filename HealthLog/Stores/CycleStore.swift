@@ -211,17 +211,7 @@ public final class CycleStore {
         do {
             let dto = try await repository.logDayLog(write)
             lastSaveSucceeded = true
-            // Best-effort Apple-Health mirror of the MANUAL row. Failure here
-            // never fails the save (the server is the source of truth).
-            if write.source == "MANUAL" {
-                do {
-                    try await healthKit?.writeCycleDayLogToHealth(dto, isCycleStart: isKnownCycleStartDay(dto.date))
-                } catch {
-                    HLLog.healthKit.error(
-                        "cycle HK mirror failed: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
-                    )
-                }
-            }
+            await mirrorToHealth(dto, source: write.source, isCycleStart: isKnownCycleStartDay(dto.date))
             await load()
             return true
         } catch let err as HLError where err.shouldPersistToOutbox {
@@ -281,10 +271,13 @@ public final class CycleStore {
         guard gate.isCycleTrackingAvailable else { return false }
         lastError = nil
         var enqueuedOffline = false
+        // #115 1.6 — a stored boundary can absorb or restore a start: refetch.
+        var periodStored = false
 
         if let request {
             do {
                 try await repository.period(request)
+                periodStored = true
             } catch let error as HLError where error.shouldPersistToOutbox {
                 enqueuedOffline = true
             } catch {
@@ -300,30 +293,34 @@ public final class CycleStore {
             } else {
                 try await repository.logDayLog(write)
             }
-            if write.source == "MANUAL" {
-                let isCycleStart = (request?.action == .start && request?.date == dto.date)
-                    || isKnownCycleStartDay(dto.date)
-                do {
-                    try await healthKit?.writeCycleDayLogToHealth(dto, isCycleStart: isCycleStart)
-                } catch {
-                    HLLog.healthKit.error(
-                        "cycle HK mirror failed: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
-                    )
-                }
-            }
+            let isCycleStart = (request?.action == .start && request?.date == dto.date)
+                || isKnownCycleStartDay(dto.date)
+            await mirrorToHealth(dto, source: write.source, isCycleStart: isCycleStart)
         } catch let error as HLError where error.shouldPersistToOutbox && existingID == nil {
             enqueuedOffline = true
         } catch {
+            if periodStored { await load() }
             if CycleRepository.isCycleDisabled(error) { isDisabled = true }
             lastError = LogSanitizer.redact(String(describing: error))
             return false
         }
 
         lastSaveSucceeded = true
-        if !enqueuedOffline {
-            await load()
-        }
+        if !enqueuedOffline || periodStored { await load() }
         return true
+    }
+
+    /// Best-effort Apple-Health mirror of a MANUAL row (C2 writer). Failure here
+    /// never fails the save (the server is the source of truth).
+    private func mirrorToHealth(_ dto: CycleDayLogDTO, source: String, isCycleStart: Bool) async {
+        guard source == "MANUAL" else { return }
+        do {
+            try await healthKit?.writeCycleDayLogToHealth(dto, isCycleStart: isCycleStart)
+        } catch {
+            HLLog.healthKit.error(
+                "cycle HK mirror failed: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
+            )
+        }
     }
 
     /// Is `date` (`YYYY-MM-DD`) a known menstrual-cycle start day? Drives the

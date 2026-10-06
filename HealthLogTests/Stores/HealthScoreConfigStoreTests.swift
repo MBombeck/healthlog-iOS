@@ -20,7 +20,7 @@ import Testing
 /// Equally deliberate is what is **not** here: no test asserts that the store
 /// predicts a refusal, because it must not. The lower bound counts fields of
 /// health, not pillars, and the pillar→field mapping rides no wire.
-@Suite("GH #83 — health-score config store", .serialized)
+@Suite("GH #83 — health-score config store", .serialized, .mockURLSession)
 @MainActor
 struct HealthScoreConfigStoreTests {
     /// The suite is `@MainActor` (the store is), but the mock handler runs off
@@ -52,7 +52,7 @@ struct HealthScoreConfigStoreTests {
 
     @Test("load seeds the ticks from the server's resolved composition")
     func loadSeedsSelection() async {
-        MockURLProtocol.handler = { req in Self.ok(req, Self.loaded) }
+        MockURLProtocol.install { req in Self.ok(req, Self.loaded) }
         let store = makeStore()
         await store.load()
         #expect(store.selection == [.bloodPressure, .glycaemia, .activity, .sleep])
@@ -63,7 +63,7 @@ struct HealthScoreConfigStoreTests {
 
     @Test("the offered catalogue keeps a pillar this build does not know")
     func offersUnknownPillar() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.ok(req, """
             {"pillars":["SLEEP","VO2MAX_NEXT"],"excludedPillars":["ACTIVITY"],"hasSelection":true,\
             "version":1,"updatedAt":"T0"}
@@ -80,7 +80,7 @@ struct HealthScoreConfigStoreTests {
     @Test("save sends the ticked set in registry order and adopts the echo")
     func saveSendsRegistryOrder() async {
         nonisolated(unsafe) var sent: [String]?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else { return Self.ok(req, Self.loaded) }
             let raw = req.bodyOrStream().flatMap { try? JSONSerialization.jsonObject(with: $0) }
             sent = (raw as? [String: Any])?["pillars"] as? [String]
@@ -105,7 +105,7 @@ struct HealthScoreConfigStoreTests {
 
     @Test("save is not offered when nothing moved — an unchanged write would bump the recipe version")
     func noChangesNoSave() async {
-        MockURLProtocol.handler = { req in Self.ok(req, Self.loaded) }
+        MockURLProtocol.install { req in Self.ok(req, Self.loaded) }
         let store = makeStore()
         await store.load()
         #expect(!store.hasChanges)
@@ -120,7 +120,7 @@ struct HealthScoreConfigStoreTests {
         arguments: ["three_domains_required", "measured_physiological_domain_required"]
     )
     func refusalIsNotFailure(rawReason: String) async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else { return Self.ok(req, Self.loaded) }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
@@ -148,7 +148,7 @@ struct HealthScoreConfigStoreTests {
     @Test("the refusal explanation is our own sentence, never the server's prose")
     func refusalTextIsOurs() async {
         let serverProse = "server prose written for the web client"
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else { return Self.ok(req, Self.loaded) }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
@@ -174,7 +174,7 @@ struct HealthScoreConfigStoreTests {
 
     @Test("changing a tick clears a stale refusal — an explanation must not outlive what it explained")
     func toggleClearsRefusal() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else { return Self.ok(req, Self.loaded) }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
@@ -195,7 +195,7 @@ struct HealthScoreConfigStoreTests {
 
     @Test("a transport failure is a failure, not a refusal")
     func transportFailureStaysFailure() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else { return Self.ok(req, Self.loaded) }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
@@ -214,7 +214,7 @@ struct HealthScoreConfigStoreTests {
 
     @Test("a first load that never lands offers a retry instead of an empty card")
     func loadFailure() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"boom"}"#.utf8)

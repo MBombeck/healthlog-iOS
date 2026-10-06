@@ -50,20 +50,15 @@ struct ComplianceWindowLabelTests {
         #expect(label.count > window.count)
     }
 
-    /// The detail KPI trailing label must name the in-time metric, not just
-    /// the window — otherwise the detail headline (30-day in-time) looks
-    /// contradictory next to the card's raw cadence-scaled rate over a
-    /// similar window.
-    @Test("Detail KPI window label names the in-time metric")
+    /// #115 · 1.3 — the detail KPI is now the server's `compliance30` (taken
+    /// of expected), the same metric family as the card's rows, so the label
+    /// names the window and "taken", never a client "on time" tally.
+    @Test("Detail KPI window label names the 30-day window and the taken metric")
     func detailKpiWindowLabel() {
-        // Resolve in whatever localization the test bundle settles on (the CI
-        // simulator's preferred language overrides a per-call `locale:`), then
-        // assert the label names BOTH the window and the in-time qualifier —
-        // that qualifier is what disambiguates the detail's stricter in-time
-        // number from the card's raw cadence-scaled rate over a similar period.
-        let label = String(localized: "med.compliance.window").lowercased()
+        let label = String(localized: "med.compliance.window.taken").lowercased()
         #expect(label.contains("30"))
-        #expect(label.contains("pünktlich") || label.contains("on time"))
+        #expect(label.contains("eingenommen") || label.contains("taken"))
+        #expect(!label.contains("pünktlich") && !label.contains("on time"))
     }
 
     /// The card + Insights bars label each row with its own window day count;

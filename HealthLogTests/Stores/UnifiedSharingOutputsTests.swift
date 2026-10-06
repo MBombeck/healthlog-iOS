@@ -18,7 +18,7 @@ import Testing
 /// calendar, so "identical inputs → identical bytes" is a claim about the same
 /// inputs on both sides rather than a claim about two different ones.
 @MainActor
-@Suite("UnifiedSharingOutputs", .serialized)
+@Suite("UnifiedSharingOutputs", .serialized, .mockURLSession)
 struct UnifiedSharingOutputsTests {
     private typealias Inputs = SharingWireFixtureTests.Inputs
 
@@ -51,7 +51,7 @@ struct UnifiedSharingOutputsTests {
     /// The capabilities + profile reads every loaded store makes, answered with
     /// the fixture vocabulary and no saved profile (so nothing is preselected).
     private func stubSelectionReads(recorder: WireRecorder? = nil) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder?.record(req)
             if req.url?.path == "/api/meta/capabilities" {
                 return SharingWire.jsonOK(req, SharingWire.capabilitiesJSON(leaves: Inputs.vocabulary))
@@ -68,7 +68,7 @@ struct UnifiedSharingOutputsTests {
         let store = await makeLoadedStore(form: .pdf)
 
         let recorder = WireRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return SharingWire.binaryOK(req, contentType: "application/pdf", bytes: Data("%PDF-1.4".utf8))
         }
@@ -106,7 +106,7 @@ struct UnifiedSharingOutputsTests {
         let store = await makeLoadedStore(form: .zip)
 
         let recorder = WireRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return SharingWire.binaryOK(req, contentType: "application/zip", bytes: Data("PK".utf8))
         }
@@ -155,7 +155,7 @@ struct UnifiedSharingOutputsTests {
         let store = await makeLoadedStore(form: .link, selectAll: selectAll)
 
         let recorder = WireRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return req.httpMethod == "POST"
                 ? SharingWire.jsonOK(req, SharingWire.shareLinkResponseJSON)
@@ -184,7 +184,7 @@ struct UnifiedSharingOutputsTests {
         let store = await makeLoadedStore(form: .fhir)
 
         let recorder = WireRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             if req.url?.path == "/api/auth/me/report-selection" {
                 return SharingWire.jsonOK(

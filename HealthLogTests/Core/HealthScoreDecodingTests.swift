@@ -178,8 +178,8 @@ struct HealthScoreDecodingTests {
         let score = try decoder.decode(HealthScore.self, from: json)
         #expect(score.score == 90)
         #expect(score.band == nil)
-        // The local colour thresholds take over for the UI only.
-        #expect(score.displayBand == .green)
+        // #115 B7 — no local colour thresholds take over; the UI stays neutral.
+        #expect(score.displayBand == nil)
     }
 
     @Test("an unknown confidence band decodes as .unknown, never as a known one")

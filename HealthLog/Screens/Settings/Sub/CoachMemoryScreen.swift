@@ -11,7 +11,7 @@ import SwiftUI
 /// on `BackendAvailability.hasServer` (standalone → the calm
 /// `HLCloudDerivedPlaceholder`, never a dead list). When paired but the operator
 /// disabled the Coach surface, the store flips `isCoachDisabled` (from the typed
-/// `HLError.assistantDisabled`) and we render the disabled-surface placeholder —
+/// `HLError.aiUnavailable`) and we render the disabled-surface placeholder —
 /// the same kill-switch the rest of the Coach stack honours.
 ///
 /// Entry point: `Settings → Coach → What the assistant knows`.

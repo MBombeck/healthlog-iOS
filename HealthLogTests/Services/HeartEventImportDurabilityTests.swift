@@ -21,7 +21,7 @@ import Testing
     /// No real health sample is constructed and no event value is ever logged: the
     /// entries are synthetic wire rows carrying `value = 1, unit = "event"`, which
     /// is exactly what the importer emits.
-    @Suite("Heart-event import durability — admitted, exact, durable", .serialized)
+    @Suite("Heart-event import durability — admitted, exact, durable", .serialized, .mockURLSession)
     struct HeartEventImportDurabilityTests {
         static let owner = "account-a"
         private static let highHeartRate = HKCategoryTypeIdentifier.highHeartRateEvent.rawValue
@@ -99,7 +99,7 @@ import Testing
         }
 
         private func respond(_ json: String, status: Int = 200) {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let response = HTTPURLResponse(
                     url: req.url!,
                     statusCode: status,
@@ -211,7 +211,7 @@ import Testing
         @Test("a page whose account was replaced never reaches the wire")
         func replacedAccountNeverPosts() async throws {
             let posted = EcgRequestRecorder()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.targets("/api/measurements/batch") { posted.record(req) }
                 return (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

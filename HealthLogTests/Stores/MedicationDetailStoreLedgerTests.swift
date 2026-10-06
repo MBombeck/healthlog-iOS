@@ -19,40 +19,6 @@ struct MedicationDetailStoreLedgerTests {
 
     // MARK: - Ledger-first compliance KPI
 
-    @Test("Ledger KPI: on-time/late/missed count, skipped+upcoming+ad-hoc don't")
-    func ledgerComplianceCounting() {
-        let rows: [MedicationDoseHistoryRow] = [
-            slotRow(daysAgo: 1, status: "taken_on_time"),
-            slotRow(daysAgo: 2, status: "taken_on_time"),
-            slotRow(daysAgo: 3, status: "taken_late"),
-            slotRow(daysAgo: 4, status: "missed"),
-            // Deliberate skip leaves the denominator (W19e doctrine).
-            slotRow(daysAgo: 5, status: "skipped"),
-            // b162 dose-safety: a future slot never reads as taken/missed.
-            slotRow(daysAgo: -1, status: "upcoming"),
-            // Off-schedule take — no punctuality semantics.
-            adHocRow(daysAgo: 6)
-        ]
-        let store = makeStore(doseHistory: envelope(rows: rows))
-        let summary = store.complianceSummary(now: now)
-        #expect(summary.inTime == 2)
-        #expect(summary.total == 4, "2 on-time + 1 late + 1 missed; skip/upcoming/ad-hoc excluded")
-    }
-
-    @Test("Ledger rows older than the trailing 30 d stay out of the KPI window")
-    func ledgerComplianceWindow() {
-        let rows: [MedicationDoseHistoryRow] = [
-            slotRow(daysAgo: 1, status: "taken_on_time"),
-            slotRow(daysAgo: 45, status: "missed"),
-            slotRow(daysAgo: 90, status: "missed")
-        ]
-        let store = makeStore(doseHistory: envelope(rows: rows))
-        let summary = store.complianceSummary(now: now)
-        #expect(summary.inTime == 1)
-        #expect(summary.total == 1)
-        #expect(summary.percentage == 100)
-    }
-
     // MARK: - Era boundary (glyph track)
 
     @Test("Era boundary: days without minted ledger rows render noSchedule, not missed")
@@ -77,6 +43,31 @@ struct MedicationDetailStoreLedgerTests {
         )
     }
 
+    @Test("v1.39: the envelope's from/to never shape the KPI or the glyph track")
+    func envelopeWindowIsNotRead() {
+        // Server v1.39 changed what `from`/`to` in the response mean: `from` is
+        // the requested start after the span clamp, `to` can sit up to a day
+        // past the requested end (a dose recorded ahead of its slot). Nothing
+        // on iOS may derive a window or a count from them — the rows alone
+        // decide. Same rows, a narrow and a stretched envelope: same answers.
+        let rows: [MedicationDoseHistoryRow] = [
+            slotRow(daysAgo: 0, status: "taken_on_time"),
+            slotRow(daysAgo: 1, status: "missed"),
+            slotRow(daysAgo: 3, status: "taken_late"),
+            slotRow(daysAgo: 20, status: "taken_on_time")
+        ]
+        let reference = makeStore(doseHistory: envelope(rows: rows))
+        let stretched = makeStore(doseHistory: MedicationDoseHistoryEnvelope(
+            from: now.addingTimeInterval(-2 * 24 * 60 * 60),
+            to: now.addingTimeInterval(24 * 60 * 60),
+            family: "daily",
+            hasExpectedSlots: true,
+            rows: rows
+        ))
+        #expect(stretched.complianceKPIState() == reference.complianceKPIState())
+        #expect(stretched.verlaufGlyphs(days: 30, now: now) == reference.verlaufGlyphs(days: 30, now: now))
+    }
+
     @Test("Ledger glyph day-reduction: missed dominates, late beats on-time")
     func ledgerGlyphReduction() {
         let rows: [MedicationDoseHistoryRow] = [
@@ -97,50 +88,6 @@ struct MedicationDetailStoreLedgerTests {
     }
 
     // MARK: - Fallback (≤ v1.15.17 / standalone / fetch hiccup)
-
-    @Test("No ledger → legacy intake-derived compliance stays in charge")
-    func fallbackWithoutLedger() {
-        // Two intakes taken exactly on schedule — the legacy ±30 min local
-        // derivation grades both in-time. `doseHistory` nil simulates a 404
-        // from a ≤ v1.15.17 server (repo throw → store keeps nil).
-        let intakes = (1 ... 2).map { offset -> PaginatedIntakeEvent in
-            let scheduled = now.addingTimeInterval(Double(-offset) * 24 * 60 * 60)
-            return PaginatedIntakeEvent(
-                id: "evt-\(offset)",
-                takenAt: scheduled,
-                skipped: false,
-                scheduledFor: scheduled,
-                injectionSite: nil
-            )
-        }
-        let store = makeStore(intakes: intakes, doseHistory: nil)
-        let summary = store.complianceSummary(now: now)
-        #expect(summary.inTime == 2)
-        #expect(summary.total == 2)
-        let glyphs = store.verlaufGlyphs(days: 3, now: now)
-        #expect(glyphs[1] == .onTime, "legacy glyph path keeps rendering from intakes")
-    }
-
-    @Test("Ledger beats a divergent legacy derivation when both could answer")
-    func ledgerWinsOverLocal() {
-        // Local intakes say "all on time"; the era-aware ledger says one
-        // slot was missed (a schedule edit moved the slot the local math
-        // can't see). The KPI must repeat the ledger.
-        let scheduled = now.addingTimeInterval(-24 * 60 * 60)
-        let intakes = [PaginatedIntakeEvent(
-            id: "evt-1", takenAt: scheduled, skipped: false,
-            scheduledFor: scheduled, injectionSite: nil
-        )]
-        let ledger = envelope(rows: [
-            slotRow(daysAgo: 1, status: "taken_on_time"),
-            slotRow(daysAgo: 2, status: "missed")
-        ])
-        let store = makeStore(intakes: intakes, doseHistory: ledger)
-        let summary = store.complianceSummary(now: now)
-        #expect(summary.inTime == 1)
-        #expect(summary.total == 2)
-        #expect(summary.percentage == 50)
-    }
 
     // MARK: - takenAt cap / clamp (server 422s future instants, v1.15.19)
 

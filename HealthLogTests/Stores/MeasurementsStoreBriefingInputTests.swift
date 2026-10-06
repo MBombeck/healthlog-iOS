@@ -17,7 +17,7 @@ import Testing
 ///
 /// 3. Briefing-input consumers (anything reading `measurementsStore.recent`)
 ///    get the wider window post-load.
-@Suite("MeasurementsStore.load — briefing-input default limit", .serialized)
+@Suite("MeasurementsStore.load — briefing-input default limit", .serialized, .mockURLSession)
 struct MeasurementsStoreBriefingInputTests {
     @MainActor
     private func makeAPIClient() -> APIClient {
@@ -58,7 +58,7 @@ struct MeasurementsStoreBriefingInputTests {
         let store = MeasurementsStore(repo: repo)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         nonisolated(unsafe) var observedLimit: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -89,7 +89,7 @@ struct MeasurementsStoreBriefingInputTests {
         let repo = try MeasurementsRepository(api: api, outbox: OutboxQueue(inMemory: true))
         let store = MeasurementsStore(repo: repo)
         nonisolated(unsafe) var observedLimit: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -117,7 +117,7 @@ struct MeasurementsStoreBriefingInputTests {
         let store = MeasurementsStore(repo: repo)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let body = payload(rowCount: 25, now: now)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,

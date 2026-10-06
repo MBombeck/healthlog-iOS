@@ -139,8 +139,7 @@ struct MedicationsScreen: View {
                             onComplianceTap: { medication in compliancePushTarget = medication },
                             // 15-04 (E3) — long-press on Genommen opens the
                             // existing deviating-dose dialog for that med.
-                            onDeviatingDose: { target in siteCaptureTarget = .deviatingDose(target) },
-                            windowIntakes: store.derivedTodayIntakes
+                            onDeviatingDose: { target in siteCaptureTarget = .deviatingDose(target) }
                         )
 
                         if !store.archivedMedications.isEmpty {

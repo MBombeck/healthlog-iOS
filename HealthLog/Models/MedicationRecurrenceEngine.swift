@@ -180,7 +180,7 @@ public enum MedicationRecurrenceEngine {
            serverNext > after,
            isSingleSlotCadence(entry.cadence, oneShot: context.oneShot)
         {
-            if let endsOn = context.endsOn, serverNext > endOfUtcDay(endsOn, context.timeZone) {
+            if let courseEnd = endOfCourse(context), serverNext > courseEnd {
                 return nil
             }
             let time = entry.timesOfDay.first ?? entry.windowStart
@@ -188,8 +188,8 @@ public enum MedicationRecurrenceEngine {
         }
 
         let hardCap = after.addingTimeInterval(365 * 10 * dayInterval)
-        let limit: Date = if let endsOn = context.endsOn {
-            min(endOfUtcDay(endsOn, context.timeZone), hardCap)
+        let limit: Date = if let courseEnd = endOfCourse(context) {
+            min(courseEnd, hardCap)
         } else {
             hardCap
         }
@@ -247,10 +247,10 @@ public enum MedicationRecurrenceEngine {
         from: Date,
         to: Date
     ) -> [Occurrence] {
-        let anchor = context.startsOn ?? context.createdAt ?? from
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = context.timeZone
-        let day = calendar.startOfDay(for: anchor)
+        let calendar = profileCalendar(context)
+        // R1 (server 1.39.3) — `startsOn` is a calendar day, not an instant:
+        // read in New York, its UTC midnight is the evening before.
+        let day = anchorDay(context, calendar: calendar, fallback: from)
         var slots: [Occurrence] = []
         for time in entry.effectiveTimes {
             guard let at = applyTime(time, toDay: day, calendar: calendar) else { continue }
@@ -270,18 +270,26 @@ public enum MedicationRecurrenceEngine {
         to: Date
     ) -> [Occurrence] {
         guard intervalDays > 0 else { return [] }
-        let anchor = context.lastIntakeAt ?? context.startsOn ?? context.createdAt ?? from
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = context.timeZone
-        guard let nextDue = calendar.date(byAdding: .day, value: intervalDays, to: anchor) else {
-            return []
+        let calendar = profileCalendar(context)
+        // R1 (server 1.39.3) — N calendar days after the LOCAL day of the last
+        // intake, not N × 24 h after its instant: a late-evening dose across a
+        // DST change must not slide onto the neighbouring day. With no intake
+        // yet the first dose is due on the start day itself (server v1.8.5:
+        // "a rolling first dose is due on startsOn"), not N days after it.
+        let day: Date
+        if let lastIntakeAt = context.lastIntakeAt {
+            guard let next = calendar.date(
+                byAdding: .day, value: intervalDays, to: calendar.startOfDay(for: lastIntakeAt)
+            ) else { return [] }
+            day = calendar.startOfDay(for: next)
+        } else {
+            day = anchorDay(context, calendar: calendar, fallback: from)
         }
-        // endsOn cap.
-        if let endsOn = context.endsOn, nextDue > endOfUtcDay(endsOn, context.timeZone) {
+        // endsOn cap — both sides are calendar days.
+        if let endDay = courseEndDay(context, calendar: calendar), day > endDay {
             return []
         }
         let time = entry.timesOfDay.first ?? entry.windowStart
-        let day = calendar.startOfDay(for: nextDue)
         guard let at = applyTime(time, toDay: day, calendar: calendar) else { return [] }
         if at < from || at > to { return [] }
         return [makeOccurrence(at: at, time: time, entry: entry)]
@@ -295,12 +303,16 @@ public enum MedicationRecurrenceEngine {
         from: Date,
         to: Date
     ) -> [Occurrence] {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = context.timeZone
+        let calendar = profileCalendar(context)
 
-        let anchor = context.startsOn ?? context.createdAt ?? from
-        let startsOnFloor = context.startsOn.map { calendar.startOfDay(for: $0) }
-        let endsOnCap = context.endsOn.map { endOfUtcDay($0, context.timeZone) }
+        // R1 (server 1.39.3) — every bound below is a calendar DAY in the
+        // profile calendar. `startsOn` / `endsOn` arrive as UTC midnight of
+        // their date; flooring that instant in a zone west of UTC landed on the
+        // evening before, so a course starting on the 14th fired on the 13th in
+        // New York and every phase counted from a day early.
+        let anchor = anchorDay(context, calendar: calendar, fallback: from)
+        let startsOnFloor = context.startsOn.flatMap { courseDay($0, calendar: calendar) }
+        let endsOnDay = courseEndDay(context, calendar: calendar)
 
         // Iterate every user-local day in [from-1d, to+1d] so a time-of-day
         // that lands in [from, to] after applying HH:mm is still caught.
@@ -318,14 +330,13 @@ public enum MedicationRecurrenceEngine {
                 day = calendar.date(byAdding: .day, value: 1, to: day) ?? endDay.addingTimeInterval(dayInterval)
             }
             if let floor = startsOnFloor, day < floor { continue }
+            // endsOn cap — the whole `endsOn` day still doses, evening included
+            // (the old UTC end-of-day cut it off in the local afternoon).
+            if let endDay = endsOnDay, day > endDay { continue }
             guard dayMatches(day, cadence: entry.cadence, anchor: anchor, calendar: calendar) else { continue }
             for time in times {
                 guard let at = applyTime(time, toDay: day, calendar: calendar) else { continue }
                 if at < from || at > to { continue }
-                // endsOn cap — the occurrence instant must fall on/before the
-                // end of the endsOn day (UTC, matching the server `@db.Date`
-                // boundary).
-                if let cap = endsOnCap, at > cap { continue }
                 slots.append(makeOccurrence(at: at, time: time, entry: entry))
             }
         }
@@ -349,7 +360,12 @@ public enum MedicationRecurrenceEngine {
 
         case let .everyNWeeks(interval, days):
             if !days.isEmpty, !days.contains(weekday(of: day, calendar)) { return false }
-            return weekPhaseMatches(day, anchor: anchor, interval: max(1, interval), calendar: calendar)
+            // The server expands this through rrule.js, whose week starts on
+            // Monday (`WKST` default MO) — a Sunday dose belongs to the week of
+            // the Monday before it, not to the next one.
+            return weekPhaseMatches(
+                day, anchor: anchor, interval: max(1, interval), calendar: calendar, weekStartsOn: .mon
+            )
 
         case .monthly, .everyNMonths, .yearly:
             return monthlyClusterMatches(day, cadence: cadence, anchor: anchor, calendar: calendar)
@@ -357,7 +373,10 @@ public enum MedicationRecurrenceEngine {
         case let .legacy(days, intervalWeeks):
             if let days, !days.isEmpty, !days.contains(weekday(of: day, calendar)) { return false }
             guard intervalWeeks > 1 else { return true }
-            return weekPhaseMatches(day, anchor: anchor, interval: intervalWeeks, calendar: calendar)
+            // The server's legacy walker counts Sunday-rooted weeks.
+            return weekPhaseMatches(
+                day, anchor: anchor, interval: intervalWeeks, calendar: calendar, weekStartsOn: .sun
+            )
 
         case let .cyclic(weeksOn, weeksOff):
             // Fire every day inside an on-week, counting whole weeks from the
@@ -390,28 +409,32 @@ public enum MedicationRecurrenceEngine {
     ) -> Bool {
         switch cadence {
         case let .monthly(targetDay):
-            return calendar.component(.day, from: day) == clampedMonthDay(targetDay, in: day, calendar)
+            // R1 — no clamping: rrule.js SKIPS a month without that day
+            // (`BYMONTHDAY=31` → 31 July, 31 August, nothing in September), so
+            // a clamp to the 30th reminded on a day the server does not list.
+            return calendar.component(.day, from: day) == targetDay
         case let .everyNMonths(interval, targetDay):
-            guard calendar.component(.day, from: day) == clampedMonthDay(targetDay, in: day, calendar) else {
+            guard calendar.component(.day, from: day) == targetDay else {
                 return false
             }
             return monthPhaseMatches(day, anchor: anchor, interval: max(1, interval), calendar: calendar)
         case let .yearly(month, targetDay):
             return calendar.component(.month, from: day) == month
-                && calendar.component(.day, from: day) == clampedMonthDay(targetDay, in: day, calendar)
+                && calendar.component(.day, from: day) == targetDay
         default:
             return false
         }
     }
 
     /// Whether `day` falls inside an on-week of a cyclic on/off schedule.
-    /// Counts whole weeks from `anchor`'s Sunday-rooted week; the cycle period
-    /// is `weeksOn + weeksOff`. A `weeksOff ≤ 0` schedule is always on.
+    /// Counts seven-day blocks from the start DAY itself (R1, server 1.39.3
+    /// `isInCyclicOnWeek`): "three weeks on" starting on a Wednesday is 21
+    /// consecutive days, then the off weeks. The cycle period is
+    /// `weeksOn + weeksOff`. A `weeksOff ≤ 0` schedule is always on.
     ///
-    /// `anchor` is the medication's `startsOn ?? createdAt`. That is the only
-    /// anchor there is — the server counts the same phase from the same date
-    /// (`src/lib/medications/scheduling/recurrence.ts:246`) and publishes no
-    /// per-schedule anchor.
+    /// `anchor` is the local start of the medication's `startsOn ?? createdAt`
+    /// day. That is the only anchor there is — the server counts the same phase
+    /// from the same day and publishes no per-schedule anchor.
     private static func cyclicOnWeek(
         _ day: Date,
         weeksOn: Int,
@@ -422,9 +445,9 @@ public enum MedicationRecurrenceEngine {
         guard weeksOn > 0 else { return false }
         let period = weeksOn + weeksOff
         guard period > weeksOn else { return true } // no off-weeks → always on
-        let dayWeek = startOfSundayWeek(day, calendar)
-        let anchorWeek = startOfSundayWeek(calendar.startOfDay(for: anchor), calendar)
-        let weeks = Int((dayWeek.timeIntervalSince(anchorWeek) / (7 * dayInterval)).rounded())
+        let days = calendarDays(from: anchor, to: day, calendar: calendar)
+        // Floor division: a day before the anchor sits in block -1, not 0.
+        let weeks = days >= 0 ? days / 7 : -((-days + 6) / 7)
         let phase = ((weeks % period) + period) % period
         return phase < weeksOn
     }
@@ -435,18 +458,21 @@ public enum MedicationRecurrenceEngine {
 extension MedicationRecurrenceEngine {
     // MARK: - Phase helpers
 
-    /// Multi-week phase, anchored on the week containing `anchor`. The server
-    /// roots weeks on Sunday; mirror that with a Sunday-rooted week start so
-    /// the parity vectors line up.
+    /// Multi-week phase, anchored on the week containing `anchor` (a local
+    /// start of day). The server's legacy walker roots weeks on Sunday; its
+    /// rrule path (rrule.js, `WKST=MO`) on Monday — the caller says which.
+    /// Weeks are counted in calendar days, so a DST week (167 or 169 hours)
+    /// still counts as one.
     private static func weekPhaseMatches(
         _ day: Date,
         anchor: Date,
         interval: Int,
-        calendar: Calendar
+        calendar: Calendar,
+        weekStartsOn: Weekday
     ) -> Bool {
-        let dayWeek = startOfSundayWeek(day, calendar)
-        let anchorWeek = startOfSundayWeek(calendar.startOfDay(for: anchor), calendar)
-        let weeks = Int((dayWeek.timeIntervalSince(anchorWeek) / (7 * dayInterval)).rounded())
+        let dayWeek = startOfWeek(day, startsOn: weekStartsOn, calendar)
+        let anchorWeek = startOfWeek(anchor, startsOn: weekStartsOn, calendar)
+        let weeks = calendarDays(from: anchorWeek, to: dayWeek, calendar: calendar) / 7
         let phase = ((weeks % interval) + interval) % interval
         return phase == 0
     }
@@ -466,27 +492,24 @@ extension MedicationRecurrenceEngine {
         return phase == 0
     }
 
-    private static func startOfSundayWeek(_ day: Date, _ calendar: Calendar) -> Date {
+    private static func startOfWeek(_ day: Date, startsOn first: Weekday, _ calendar: Calendar) -> Date {
         let start = calendar.startOfDay(for: day)
-        // `.weekday` is 1=Sun…7=Sat; subtract (weekday-1) days to reach Sunday.
+        // `.weekday` is 1=Sun…7=Sat → our raw 0=Sun…6=Sat; step back to `first`.
         let weekdayIndex = calendar.component(.weekday, from: start) - 1
-        return calendar.date(byAdding: .day, value: -weekdayIndex, to: start) ?? start
+        let back = (weekdayIndex - first.rawValue + 7) % 7
+        return calendar.date(byAdding: .day, value: -back, to: start) ?? start
+    }
+
+    /// Whole calendar days from `start` to `end` (both local starts of day) —
+    /// immune to the 23/25-hour DST days an instant difference would round.
+    private static func calendarDays(from start: Date, to end: Date, calendar: Calendar) -> Int {
+        calendar.dateComponents([.day], from: start, to: end).day ?? 0
     }
 
     private static func weekday(of day: Date, _ calendar: Calendar) -> Weekday {
         // `.weekday` 1=Sun…7=Sat → our Weekday raw 0=Sun…6=Sat.
         let raw = calendar.component(.weekday, from: day) - 1
         return Weekday(rawValue: max(0, min(6, raw))) ?? .sun
-    }
-
-    /// Clamp a target day-of-month to the days the month actually has (so a
-    /// `BYMONTHDAY=31` schedule still fires on the 30th / 28th — matching the
-    /// rrule lib's behaviour of skipping non-existent days is the server's
-    /// choice, but for the wizard subset day ≤ 28 is the common case; clamping
-    /// here keeps short months sane without inventing extra fires).
-    private static func clampedMonthDay(_ target: Int, in day: Date, _ calendar: Calendar) -> Int {
-        guard let range = calendar.range(of: .day, in: .month, for: day) else { return target }
-        return min(target, range.count)
     }
 
     // MARK: - Time-of-day + grace
@@ -530,7 +553,7 @@ extension MedicationRecurrenceEngine {
     }
 
     /// A UTC-pinned calendar reused for the two-pass time-of-day solver.
-    private static let utcCalendar: Calendar = {
+    static let utcCalendar: Calendar = {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "UTC") ?? .gmt
         return c
@@ -556,16 +579,5 @@ extension MedicationRecurrenceEngine {
         if span < 0 { span += 24 * 60 } // overnight window
         if span == 0 { span = defaultGraceMinutes }
         return TimeInterval(span) * 60
-    }
-
-    // MARK: - UTC day boundary (endsOn cap)
-
-    /// End-of-day for the `endsOn` cap. The server uses `endOfUtcDay`; mirror
-    /// it so the cap aligns with the server's `@db.Date` UTC-midnight column.
-    private static func endOfUtcDay(_ date: Date, _: TimeZone) -> Date {
-        var utc = Calendar(identifier: .gregorian)
-        utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
-        let start = utc.startOfDay(for: date)
-        return start.addingTimeInterval(dayInterval - 0.001)
     }
 }

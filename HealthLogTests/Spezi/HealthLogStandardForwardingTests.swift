@@ -285,15 +285,15 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
 
-            // HK stores SpO2 as a 0..1 fraction; the wire converter
-            // scales by 100 so the server receives the % value.
+            // HK stores SpO2 as a 0..1 fraction and the wire carries it raw;
+            // the server scales it to percent (#113).
             let sample = makeQuantitySample(identifier: .oxygenSaturation, value: 0.97)
             await standard.handleNewSamples([sample], ofType: SampleType.bloodOxygen)
 
             #expect(api.entryCount == 1)
             let entry = try #require(api.batches.first?.entries.first)
             #expect(entry.hkIdentifier == HKQuantityTypeIdentifier.oxygenSaturation.rawValue)
-            #expect(entry.value == 97)
+            #expect(abs(entry.value - 0.97) < 0.000_001)
             #expect(entry.unit == "%")
         }
 
@@ -357,15 +357,15 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
 
-            // HK stores body-fat as a 0..1 fraction; converter scales by
-            // 100 so the server receives the % value.
+            // HK stores body-fat as a 0..1 fraction and the wire carries it
+            // raw; the server scales it to percent (#113).
             let sample = makeQuantitySample(identifier: .bodyFatPercentage, value: 0.21)
             await standard.handleNewSamples([sample], ofType: SampleType.bodyFatPercentage)
 
             #expect(api.entryCount == 1)
             let entry = try #require(api.batches.first?.entries.first)
             #expect(entry.hkIdentifier == HKQuantityTypeIdentifier.bodyFatPercentage.rawValue)
-            #expect(entry.value == 21)
+            #expect(abs(entry.value - 0.21) < 0.000_001)
             #expect(entry.unit == "%")
         }
 

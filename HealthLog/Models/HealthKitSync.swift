@@ -65,6 +65,27 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
         metricFreshness = try c.decodeIfPresent([MetricFreshness].self, forKey: .metricFreshness)
     }
 
+    /// #10 — das PATCH-Echo mit den Lesefeldern des vorigen GET.
+    ///
+    /// Die PATCH-Route antwortet mit `lastSyncedAt: null` und ohne die vier
+    /// CU-21-Felder: sie sagt damit nichts über den letzten Sync, sie kennt ihn
+    /// dort nur nicht. Übernähme der Store das Echo wörtlich, fiele nach jedem
+    /// Umschalten eines Datentyps der Server-Stempel weg, auf den
+    /// "Last synced" zurückfällt, und die Server-Sicht der Sync-Diagnose gleich
+    /// mit. Die Einträge kommen aus dem Echo, jedes Lesefeld, das das Echo
+    /// nicht trägt, aus `previous`.
+    public func keepingReadFields(of previous: HealthKitSyncConfig?) -> HealthKitSyncConfig {
+        guard let previous else { return self }
+        return HealthKitSyncConfig(
+            entries: entries,
+            lastSyncedAt: lastSyncedAt ?? previous.lastSyncedAt,
+            lastSyncTrigger: lastSyncTrigger ?? previous.lastSyncTrigger,
+            lastBackgroundSyncAt: lastBackgroundSyncAt ?? previous.lastBackgroundSyncAt,
+            syncHealth: syncHealth ?? previous.syncHealth,
+            metricFreshness: metricFreshness ?? previous.metricFreshness
+        )
+    }
+
     /// Schreibt ausschließlich die zwei Felder, die der PATCH-Body kennt.
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -86,12 +107,55 @@ public struct HealthKitSyncEntry: Codable, Sendable, Identifiable, Equatable {
     public let kind: String
     public let direction: SyncDirection
     public let enabled: Bool
+    /// #115 · 1.7 — the direction exactly as the server sent it. The whole
+    /// config is PATCHed back on every toggle, so an entry whose direction this
+    /// build does not know (``SyncDirection/unknown``) must go back with the
+    /// server's own word, not with `"unknown"`.
+    private let directionWire: String
 
     public init(id: String, kind: String, direction: SyncDirection, enabled: Bool) {
         self.id = id
         self.kind = kind
         self.direction = direction
         self.enabled = enabled
+        directionWire = direction.rawValue
+    }
+
+    private init(id: String, kind: String, directionWire: String, enabled: Bool) {
+        self.id = id
+        self.kind = kind
+        direction = SyncDirection(wireValue: directionWire)
+        self.enabled = enabled
+        self.directionWire = directionWire
+    }
+
+    /// The same entry with `enabled` flipped — keeps the server's direction
+    /// word verbatim, known or not.
+    public func withEnabled(_ enabled: Bool) -> HealthKitSyncEntry {
+        HealthKitSyncEntry(id: id, kind: kind, directionWire: directionWire, enabled: enabled)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, direction, enabled
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let wire = try c.decode(String.self, forKey: .direction)
+        try self.init(
+            id: c.decode(String.self, forKey: .id),
+            kind: c.decode(String.self, forKey: .kind),
+            directionWire: wire,
+            enabled: c.decode(Bool.self, forKey: .enabled)
+        )
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(directionWire, forKey: .direction)
+        try c.encode(enabled, forKey: .enabled)
     }
 }
 
@@ -115,7 +179,7 @@ public extension HealthKitSyncEntry {
     }
 }
 
-public enum SyncDirection: String, Codable, Sendable {
+public enum SyncDirection: String, Codable, Sendable, TolerantServerEnum {
     case readOnly
     case writeOnly
     case bidirectional
@@ -125,6 +189,12 @@ public enum SyncDirection: String, Codable, Sendable {
     /// when any row was disabled (A4-Audit row 6) — settings screen broke
     /// for every user who ever toggled an entry off.
     case disabled
+    /// #115 · 1.7 — the next such word. Displayed as unknown; the entry keeps
+    /// the server's own word for the PATCH round-trip (`HealthKitSyncEntry`).
+    case unknown
+
+    public static let unknownFallback = SyncDirection.unknown
+    public static let wireVocabulary: StaticString = "HealthKit sync direction"
 }
 
 /// APNs-Environment-Marker, den iOS pro Build-Config setzt + Server zur

@@ -21,8 +21,8 @@ import SwiftUI
 /// reserves glass for chrome, not content rows). The leading glyph is the mono
 /// `quote.bubble`; colour stays signal-only (none here).
 ///
-/// **Gating:** the call site already guards on `assistantCoach`; the in-view
-/// `@Environment(FeatureFlagsStore.self)` re-check is defence-in-depth so the
+/// **Gating:** the call site already guards on the `coach` capability; the
+/// in-view re-check (`appContainer.offersCoach`, #115 · 0.2) is defence-in-depth so the
 /// strip can never leak a Coach surface if a future caller mounts it outside
 /// that guard.
 struct InsightsSuggestedPromptsRow: View {
@@ -30,7 +30,7 @@ struct InsightsSuggestedPromptsRow: View {
     /// label. The overview seeds `AskCoachSheet(seed:)` with it and presents.
     let onPick: (String) -> Void
 
-    @Environment(FeatureFlagsStore.self) private var featureFlags
+    @Environment(\.appContainer) private var appContainer
     /// Reduce-motion aware entrance — opacity-only, never a slide, matching the
     /// `InsightsCorrelationsRow` / `MoodAnalysisScreen` stagger language.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,7 +50,7 @@ struct InsightsSuggestedPromptsRow: View {
         // Defence-in-depth gate — the call site already guards, this re-check
         // ensures the strip can never paint a Coach affordance when the
         // assistant is off.
-        if featureFlags.isEnabled(.assistantCoach) {
+        if appContainer.offersCoach {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 // #57 — Insights header language is the sentence-case
                 // `InsightsSectionHeader`, unifying every header in the tab.

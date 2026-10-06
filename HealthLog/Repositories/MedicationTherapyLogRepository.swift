@@ -123,10 +123,16 @@ public actor MedicationTherapyLogRepository {
 
     /// GET the inventory list for one medication (SWR read).
     public func inventory(medicationID: String) async throws -> [MedicationInventoryItemDTO] {
+        try await inventoryList(medicationID: medicationID).items
+    }
+
+    /// #25 / #115 · 1.3 — the same GET with the server's `summary` kept. One
+    /// request; the list callers that only want items use ``inventory(medicationID:)``.
+    public func inventoryList(medicationID: String) async throws -> MedicationInventoryListDTO {
         let req: APIRequest<MedicationInventoryListDTO> = .get(
             "/api/medications/\(medicationID)/inventory"
         )
-        return try await api.send(req).items
+        return try await api.send(req)
     }
 
     /// POST a new pen/vial. Optimistic-write + Outbox-on-retriable.

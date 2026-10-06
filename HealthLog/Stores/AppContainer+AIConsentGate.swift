@@ -158,7 +158,7 @@ public extension AppContainer {
         return (gate, asyncGate)
     }
 
-    /// Applies the AI-consent gates to the insights + briefing stores, wires the
+    /// Applies the AI-consent gate to the briefing store, wires the
     /// tolerant dashboard-snapshot briefing fetch, and binds the
     /// personal-records snapshot box to the live `PersonalRecordsStore`. Pure
     /// move of the inline init block (same closures); returns the async gate so
@@ -173,7 +173,6 @@ public extension AppContainer {
     internal static func configureInsightsConsentAndPRBox(
         personalRecordsSnapshotBox: PersonalRecordsSnapshotBox,
         personalRecordsStore: PersonalRecordsStore,
-        insightsStore: InsightsStore,
         dailyBriefingStore: DailyBriefingStore,
         dashboardRepo: DashboardRepository,
         consentStore: AIConsentStore,
@@ -186,14 +185,14 @@ public extension AppContainer {
         personalRecordsSnapshotBox.read = { [weak personalRecordsStore] in
             personalRecordsStore?.enrichedRecords ?? []
         }
-        // S7 / QA3 BLOCKER 2 — paired consent gates (sync + async). v0.5.0+
-        // F5/PA9 RC5 — the sync gate is mirrored on DailyBriefingStore so the
-        // /api/insights/generate POST also respects consent (Guideline 5.1.2(i)).
+        // S7 / QA3 BLOCKER 2 — paired consent gates (sync + async). The sync
+        // gate sits on DailyBriefingStore so the /api/insights/generate POST
+        // respects consent (Guideline 5.1.2(i)). #115 · 0.2 — it no longer sits
+        // on InsightsStore: `insights/comprehensive` is deterministic data.
         let consentGates = makeInsightsConsentGates(
             consentStore: consentStore,
             providerStore: providerStore
         )
-        insightsStore.consentGate = consentGates.sync
         dailyBriefingStore.consentGate = consentGates.sync
         // v1.16.x (GH issue #15) — tolerant briefing slot off
         // `GET /api/dashboard/snapshot`. Read-only lift, no LLM server-side →
@@ -393,10 +392,37 @@ public extension AppContainer {
     /// consent act; the receipt re-asserts it server-side for the audit
     /// trail). No-op when no device grant exists or no server is reachable
     /// (best-effort; the next launch retries).
-    func syncServerAIConsentReceipt() async {
+    ///
+    /// `repository` is a test seam only (J1): the container's own client
+    /// talks to the network, a test hands in one on the mock transport.
+    func syncServerAIConsentReceipt(repository: ConsentReceiptRepository? = nil) async {
         guard aiConsentStore.isAnyProviderGranted() else { return }
-        let repo = makeConsentReceiptRepository()
+        let repo = repository ?? makeConsentReceiptRepository()
         await repo.ensureFullConsentReceipt(artefact: aiConsentArtefact())
+    }
+
+    /// J1 — the shell consent sheet's **Accept**, as one step instead of a
+    /// closure body in the view. Grants the scope the request names.
+    ///
+    /// The receipt is best-effort by design: a refused or failed
+    /// `POST /api/consent/ai` (rate limit, a demo edge allowlist, offline)
+    /// leaves the device grant standing, so the sheet does not come back —
+    /// the next launch retries the receipt, never the question.
+    ///
+    /// Bug 2 (v0.14.8) — a stray `.unconfigured` never grants: the live config
+    /// is re-read (it may have arrived since the sheet opened) and only a real
+    /// provider is granted; otherwise ``AIConsentAcceptOutcome/noProvider``
+    /// tells the sheet to stay up.
+    internal func acceptAIConsent(_ request: AIConsentRequest) -> AIConsentAcceptOutcome {
+        if request.serverManaged {
+            aiConsentStore.grantServerManaged()
+            return aiConsentStore.hasServerManagedConsent() ? .granted : .notPersisted
+        }
+        let resolved = aiProviderStore.config?.resolvedProvider ?? .unconfigured
+        let provider = resolved == .unconfigured ? request.provider : resolved
+        guard provider != .unconfigured else { return .noProvider }
+        aiConsentStore.grant(for: provider)
+        return aiConsentStore.hasConsent(for: provider) ? .granted : .notPersisted
     }
 
     /// Fires the best-effort server-side master revoke when a mutation dropped
@@ -428,4 +454,15 @@ public extension AppContainer {
         "appVersion":"\(environment.appVersion)","build":"\(environment.buildNumber)"}
         """
     }
+}
+
+/// J1 — what ``AppContainer/acceptAIConsent(_:)`` did.
+enum AIConsentAcceptOutcome: Equatable {
+    /// The grant is on file; the sheet closes and the receipt sync runs.
+    case granted
+    /// The Keychain refused the write (logged by the store). The sheet closes
+    /// like before; nothing leaves the device because no grant exists.
+    case notPersisted
+    /// No provider to grant against yet — the sheet stays up.
+    case noProvider
 }

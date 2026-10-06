@@ -193,6 +193,7 @@ struct EditProfileScreen: View {
             timeFormatSection
             dateFormatSection
 
+            ProfileRejectedFieldsSection(fields: settings.rejectedProfileFields) // #97 partial save
             if let error = settings.error {
                 Section {
                     Label(error.userFacingDescription, systemImage: "exclamationmark.triangle.fill")

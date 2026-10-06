@@ -138,7 +138,7 @@ public extension MedicationsStore {
         guard derivedIntakeSynthesisEnabledProvider() else {
             let startOfToday = calendar.startOfDay(for: .now)
             let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday
-            return todayIntakes
+            return MedicationsStore.excludingUntrackedMedications(todayIntakes, medications: medications)
                 .filter { $0.scheduledAt >= startOfToday && $0.scheduledAt < endOfToday }
                 .sorted { $0.scheduledAt < $1.scheduledAt }
         }
@@ -188,8 +188,10 @@ public extension MedicationsStore {
             return serverIntakes
         }
 
-        // Step 1 — server-emitted today's intakes, preserved.
-        let serverToday = serverIntakes.filter { intake in
+        // Step 1 — server-emitted today's intakes, preserved. v1.39.1 (#1033):
+        // a row of a medication kept as a record is not a dose that is due —
+        // the server's today list leaves it out, and so does a stale cached one.
+        let serverToday = excludingUntrackedMedications(serverIntakes, medications: medications).filter { intake in
             intake.scheduledAt >= startOfToday && intake.scheduledAt < endOfToday
         }
 
@@ -211,7 +213,9 @@ public extension MedicationsStore {
         let timeZone = calendar.timeZone
 
         var synthesised: [MedicationIntake] = []
-        for medication in medications where medication.active {
+        // v1.39.4 (#1040) — no placeholder for a medication the server calls
+        // not actionable today: the server's today list has none either.
+        for medication in medications where medication.active && medication.offersIntakeActions {
             let context = MedicationRecurrenceEngine.Context(
                 medication: medication,
                 timeZone: timeZone,
@@ -281,6 +285,14 @@ public extension MedicationsStore {
             // operator's earliest-actioned dose surfaces first.
             return !lhs.isSynthesizedPlaceholder && rhs.isSynthesizedPlaceholder
         }
+    }
+
+    /// See ``MedicationIntake/excludingUntrackedMedications(_:medications:)``.
+    nonisolated static func excludingUntrackedMedications(
+        _ intakes: [MedicationIntake],
+        medications: [Medication]
+    ) -> [MedicationIntake] {
+        MedicationIntake.excludingUntrackedMedications(intakes, medications: medications)
     }
 
     // MARK: - Synth-placeholder id parsing

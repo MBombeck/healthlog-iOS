@@ -13,7 +13,7 @@ import Testing
 /// - 404/422 → nil (route absent) → card hidden, never an error
 /// - the card self-suppresses to EmptyView on empty
 /// - the regulatory disclaimer + verdict copy is present + verbatim
-@Suite("RhythmEvents — wire contract + card self-suppression", .serialized)
+@Suite("RhythmEvents — wire contract + card self-suppression", .serialized, .mockURLSession)
 struct RhythmEventsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -28,7 +28,7 @@ struct RhythmEventsRepositoryTests {
     @Test("fetch — decodes the full event timeline (classification verbatim)")
     func fetchFullEnvelope() async throws {
         let repo = RhythmEventsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "events":[
@@ -60,7 +60,7 @@ struct RhythmEventsRepositoryTests {
     @Test("fetch — empty hasEvents:false decodes; store yields no events")
     func fetchEmpty() async throws {
         let repo = RhythmEventsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":{"events":[],"hasEvents":false},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -72,7 +72,7 @@ struct RhythmEventsRepositoryTests {
     @Test("fetch — 404 (route not deployed) → nil → card hidden, no error")
     func fetch404IsNil() async throws {
         let repo = RhythmEventsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         let dto = try await repo.fetch()
@@ -82,7 +82,7 @@ struct RhythmEventsRepositoryTests {
     @Test("fetch — 422 → nil (never an error)")
     func fetch422IsNil() async throws {
         let repo = RhythmEventsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch() == nil)
@@ -93,7 +93,7 @@ struct RhythmEventsRepositoryTests {
     func storeLoadAndSuppress() async {
         let repo = RhythmEventsRepository(api: makeAPI())
         let store = RhythmEventsStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":{"events":[],"hasEvents":false},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }

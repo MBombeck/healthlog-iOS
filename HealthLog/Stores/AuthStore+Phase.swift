@@ -285,9 +285,9 @@ extension AuthStore {
                 HLLog.auth.error("Auth-Fehler: \(err.localizedDescription, privacy: .private)")
             }
         } catch {
-            // `lastError` is delivered towards UI / telemetry — redact explicitly
-            // so the raw string never lands in the interface.
-            failAttempt(.unknown(LogSanitizer.redact(String(describing: error))), for: attempt)
+            // `lastError` is delivered towards UI (L1: `signInFacingDescription`
+            // shows `.unknown` verbatim), so it carries catalog copy, never the error.
+            failAttempt(.unknown(String(localized: "Something went wrong. Please try again.")), for: attempt)
             HLLog.auth.error("Unbekannter Auth-Fehler: \(String(describing: error), privacy: .private)")
         }
     }

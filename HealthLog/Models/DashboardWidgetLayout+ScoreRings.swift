@@ -33,14 +33,31 @@ public extension DashboardWidgetLayout {
         let deduped = Array(
             selected.filter { seen.insert($0).inserted }.prefix(ScoreRingID.maxSelected)
         )
+        // #115 B6 — a ring id this build cannot name (a newer server's ring) is
+        // carried back verbatim while the cap leaves room, instead of being
+        // silently deselected by an edit that never showed it. The person's own
+        // choice among the rings they can see comes first.
+        let unknownKept = Array(
+            unknownRawValues(selectedScoreRings) { ScoreRingID(rawValue: $0) != nil }
+                .prefix(max(0, ScoreRingID.maxSelected - deduped.count))
+        )
         return DashboardWidgetLayout(
             version: version,
             widgets: widgets,
-            selectedScoreRings: deduped.map(\.rawValue),
+            selectedScoreRings: deduped.map(\.rawValue) + unknownKept,
             heroRingOrder: heroOrder.map { order in
-                HeroRingID.resolved(order: order, selected: deduped).map(\.rawValue)
+                let known = HeroRingID.resolved(order: order, selected: deduped).map(\.rawValue)
+                let storedUnknown = (heroRingOrder ?? []).filter(unknownKept.contains)
+                let unknownOrder = storedUnknown + unknownKept.filter { !storedUnknown.contains($0) }
+                return Array((known + unknownOrder).prefix(HeroRingID.maxOrderLength))
             }
         )
+    }
+
+    /// The raw tokens in `raw` that `known` cannot parse, deduped, in order.
+    internal func unknownRawValues(_ raw: [String]?, isKnown: (String) -> Bool) -> [String] {
+        var seen = Set<String>()
+        return (raw ?? []).filter { !isKnown($0) && seen.insert($0).inserted }
     }
 
     /// The current hero ring order, reconciled against the current selection —

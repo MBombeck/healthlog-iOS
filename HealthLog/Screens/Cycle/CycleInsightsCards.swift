@@ -50,13 +50,15 @@ struct CycleInsightsSection: View {
 
 private struct CycleInsightHeadlineCard: View {
     let row: CyclePhaseMetricRow
+    /// #115 P2 — weight, temperature and glucose averages in the account's unit.
+    @Environment(\.unitPreferences) private var units
 
     var body: some View {
         HLSettingsCard(icon: "sparkles", title: "cycle.insights.headline.title") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 Text(CycleInsightFormatting.metricLabel(row.metricKey))
                     .font(.hlHeadline)
-                Text(CycleInsightFormatting.comparison(row))
+                Text(CycleInsightFormatting.comparison(row, units: units))
                     .font(.hlBody)
                     .foregroundStyle(HLText.secondary)
                 Text(CycleInsightFormatting.evidence(row))
@@ -70,6 +72,8 @@ private struct CycleInsightHeadlineCard: View {
 
 private struct CyclePhaseVitalRows: View {
     let rows: [CyclePhaseMetricRow]
+    /// #115 P2 — weight, temperature and glucose averages in the account's unit.
+    @Environment(\.unitPreferences) private var units
 
     var body: some View {
         HLSettingsCard(icon: "waveform.path.ecg", title: "cycle.insights.vitals.title") {
@@ -80,10 +84,10 @@ private struct CyclePhaseVitalRows: View {
                             Text(CycleInsightFormatting.metricLabel(row.metricKey))
                                 .font(.hlSubhead)
                             Spacer()
-                            Text(CycleInsightFormatting.delta(row))
+                            Text(CycleInsightFormatting.delta(row, units: units))
                                 .font(.hlSubhead.monospacedDigit())
                         }
-                        Text(CycleInsightFormatting.comparison(row))
+                        Text(CycleInsightFormatting.comparison(row, units: units))
                             .font(.hlCaption)
                             .foregroundStyle(HLText.secondary)
                         Text(CycleInsightFormatting.evidence(row))
@@ -177,7 +181,7 @@ private struct CycleSymptomPatternCard: View {
     }
 }
 
-private enum CycleInsightFormatting {
+enum CycleInsightFormatting {
     static func metricLabel(_ key: String) -> String {
         let localizationKey = "cycle.insights.metric.\(key)"
         let value = String(localized: String.LocalizationValue(localizationKey))
@@ -187,17 +191,30 @@ private enum CycleInsightFormatting {
             .capitalized
     }
 
-    static func comparison(_ row: CyclePhaseMetricRow) -> String {
+    static func comparison(_ row: CyclePhaseMetricRow, units: UnitPreferences) -> String {
         String(
             format: String(localized: "cycle.insights.comparison"),
-            formatted(row.lutealAvg, display: row.displayValue),
-            formatted(row.follicularAvg, display: row.displayValue)
+            formatted(row.lutealAvg, display: row.displayValue, units: units, isDelta: false),
+            formatted(row.follicularAvg, display: row.displayValue, units: units, isDelta: false)
         )
     }
 
-    static func delta(_ row: CyclePhaseMetricRow) -> String {
+    static func delta(_ row: CyclePhaseMetricRow, units: UnitPreferences) -> String {
         let sign = row.delta > 0 ? "+" : ""
-        return sign + formatted(row.delta, display: row.displayValue)
+        return sign + formatted(row.delta, display: row.displayValue, units: units, isDelta: true)
+    }
+
+    /// #115 P2 — the displays whose canonical values follow the account's
+    /// unit, mapped to the kind carrying the transform (web parity:
+    /// `cycle-phase-crosstab.tsx` `DISPLAY_TO_TYPE`, plus glucose, which
+    /// follows the account's glucose unit here as everywhere else in the app).
+    static func kind(for display: CycleInsightDisplay) -> MetricKind? {
+        switch display {
+        case .kilograms: .weight
+        case .celsius: .bodyTemperature
+        case .glucose: .glucose
+        default: nil
+        }
     }
 
     static func evidence(_ row: CyclePhaseMetricRow) -> String {
@@ -209,7 +226,20 @@ private enum CycleInsightFormatting {
         )
     }
 
-    private static func formatted(_ value: Double, display: CycleInsightDisplay) -> String {
+    static func formatted(
+        _ value: Double,
+        display: CycleInsightDisplay,
+        units: UnitPreferences,
+        isDelta: Bool
+    ) -> String {
+        // A phase average converts as a level; a phase DELTA by the factor
+        // alone (a 0.3 °C shift is 0.54 °F, never 32.54 °F).
+        if let kind = kind(for: display), units.transform(for: kind).rescales,
+           let suffix = units.transform(for: kind).suffix
+        {
+            let converted = isDelta ? units.displayDelta(value, kind: kind) : units.displayValue(value, kind: kind)
+            return "\(converted.formatted(.number.precision(.fractionLength(1)))) \(suffix)"
+        }
         let number = value.formatted(.number.precision(.fractionLength(1)))
         switch display {
         case .hours: return String(format: String(localized: "cycle.insights.unit.hours"), number)

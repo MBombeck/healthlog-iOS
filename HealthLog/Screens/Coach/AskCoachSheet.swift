@@ -198,7 +198,14 @@ struct AskCoachSheet: View {
             // the kill-card. If the fallback is available but consent is
             // pending, surface a consent CTA. Only when neither path can
             // run do we fall back to the legacy unavailable surfaces.
-            if store.shouldUseBYO {
+            if let blocked = Self.coachEntryRefusal(container.aiCapabilityGate) {
+                // #115 · 0.2 — a decision (operator, record, module, the person's
+                // own switch) closed the Coach: say which, offer nothing to send.
+                unavailableSurface(
+                    title: String(localized: "Coach unavailable"),
+                    message: Self.coachRefusalCopy(blocked)
+                )
+            } else if store.shouldUseBYO {
                 // v0.13 W4 — the user chose "Own key": run the conversation
                 // through their provider directly, regardless of operating mode
                 // or on-device capability. This is the standalone path that the

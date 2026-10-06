@@ -8,7 +8,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-@Suite("Server v1.37 sharing compatibility", .serialized)
+@Suite("Server v1.37 sharing compatibility", .serialized, .mockURLSession)
 struct SharingContractCompatibilityTests {
     @Test("pinned /auth/me fixture decodes shared and managed access without widening")
     func pinnedFixtureDecodes() throws {
@@ -76,7 +76,7 @@ struct SharingContractCompatibilityTests {
     func selectedHeaderIsSurfaceScoped() async throws {
         let (api, entry) = try Self.makeSelectedAPI()
         let spy = RequestSpy()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             spy.record(request)
             let body = request.url?.path == "/api/auth/me"
                 ? #"{"data":{"id":"owner"},"error":null}"#
@@ -112,7 +112,7 @@ struct SharingContractCompatibilityTests {
         }
 
         let requests = RequestSpy()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             requests.record(request)
             if request.url?.path == "/api/auth/me" {
                 return Self.response(request, status: 200, body: #"{"data":{"id":"owner"},"error":null}"#)
@@ -152,7 +152,7 @@ struct SharingContractCompatibilityTests {
     func sessionChangeRecoveryIsBounded() async throws {
         let (api, entry) = try Self.makeSelectedAPI()
         let requests = RequestSpy()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             requests.record(request)
             if request.url?.path == "/api/auth/me" {
                 return Self.response(request, status: 200, body: #"{"data":{"id":"owner"},"error":null}"#)

@@ -68,6 +68,41 @@ enum HealthScorePresentation {
         String(localized: String.LocalizationValue(labelKey(for: pillar)))
     }
 
+    // MARK: - Score basis (#103 / #115 · 1.3)
+
+    /// "Based on N of M areas" — the server's `scoreBasis`, rendered verbatim.
+    /// A one-area score and a full one share the arithmetic; this line is what
+    /// tells them apart, so it rides every surface that shows the number.
+    static func basisLine(_ basis: HealthScoreBasis) -> String {
+        String(
+            localized: "healthScore.basis \(basis.domains) \(basis.recommended)",
+            comment: "Health Score — how many distinct areas the score rests on, of the recommended number"
+        )
+    }
+
+    /// Scope statement when no physiological measurement counted.
+    static var basisWithoutPhysiology: String {
+        String(
+            localized: "healthScore.basis.noPhysiological",
+            comment: "Health Score — the score rests on activity/wellbeing only"
+        )
+    }
+
+    /// Lines for a composition notice the server still reports as open.
+    static func noticeLines(_ notice: HealthScoreCompositionNotice) -> [String] {
+        guard notice.isShowable else { return [] }
+        var lines: [String] = []
+        if !notice.joined.isEmpty {
+            let names = notice.joined.map(label(for:)).formatted(.list(type: .and))
+            lines.append(String(localized: "healthScore.notice.joined \(names)", comment: "Health Score — pillars that joined"))
+        }
+        if !notice.left.isEmpty {
+            let names = notice.left.map(label(for:)).formatted(.list(type: .and))
+            lines.append(String(localized: "healthScore.notice.left \(names)", comment: "Health Score — pillars that left"))
+        }
+        return lines
+    }
+
     // MARK: - Chosen composition (v1.35.0 / GH #83)
 
     // 25-02 (E-2026-08-29 #3) — the painted provenance mark („Eigene

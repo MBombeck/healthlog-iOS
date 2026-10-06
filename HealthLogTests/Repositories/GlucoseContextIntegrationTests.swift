@@ -20,7 +20,7 @@ import Testing
 /// 3. **Outbox-replay-round-trip:** an offline-edit of a glucose row
 ///    persists `glucoseContext` on the payload + replay re-applies the
 ///    intent on the rehydrated patch.
-@Suite("Glucose-context integration (T-2)", .serialized)
+@Suite("Glucose-context integration (T-2)", .serialized, .mockURLSession)
 struct GlucoseContextIntegrationTests {
     // Helpers — local to this suite (the project keeps each suite self-
     // contained; no shared test-helpers module yet).
@@ -116,7 +116,7 @@ struct GlucoseContextIntegrationTests {
     func createCarriesGlucoseContextOnWire() async throws {
         let repo = try makeRepo()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             recorder.record(req)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -151,7 +151,7 @@ struct GlucoseContextIntegrationTests {
     func createOmitsGlucoseContextWhenNil() async throws {
         let repo = try makeRepo()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             recorder.record(req)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -179,7 +179,7 @@ struct GlucoseContextIntegrationTests {
     func editKeepsWireShapeMinimal() async throws {
         let repo = try makeRepo()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             recorder.record(req)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -239,7 +239,7 @@ struct GlucoseContextIntegrationTests {
             createdAt: .now
         ))
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             recorder.record(req)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -289,7 +289,7 @@ struct GlucoseContextIntegrationTests {
         // seeder, so use a captured publisher via repo.recent. For brevity
         // here we test the picker→patch wiring purely by issuing
         // `store.update` after seeding the recent array via `load()`.
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             let path = req.url?.path ?? ""
             if req.httpMethod == "GET", path == "/api/measurements" {
                 let item = wireListItemJSON(

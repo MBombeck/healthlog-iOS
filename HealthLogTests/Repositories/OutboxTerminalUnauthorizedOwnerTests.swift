@@ -17,7 +17,7 @@ import Testing
 /// enqueue the write. The enqueue chokepoint read the live keychain, found no
 /// user, and stamped `nil`; after re-login the replay quarantined the row as
 /// `.unownedRow` forever while `pendingOutboxCount` kept counting it.
-@Suite("Outbox — terminal 401 keeps the previous owner (A2)", .serialized)
+@Suite("Outbox — terminal 401 keeps the previous owner (A2)", .serialized, .mockURLSession)
 struct OutboxTerminalUnauthorizedOwnerTests {
     private func makeAPI(
         keychain: KeychainStoring,
@@ -112,7 +112,7 @@ struct OutboxTerminalUnauthorizedOwnerTests {
             onUnauthorized: { _ = try? await wiper.invalidateAndWipeSessionCredentials() }
         )
         let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: OutboxQueue.ownerProvider(keychain: keychain))
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, nil)
         }
         let repo = MeasurementsRepository(api: api, outbox: outbox)

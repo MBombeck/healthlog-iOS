@@ -40,22 +40,22 @@ public extension MedicationsStore {
         currentTimeZone: @escaping @Sendable @MainActor () -> TimeZone = { .current }
     ) -> any NSObjectProtocol {
         let memo = SystemTimeZoneMemo(currentTimeZone())
+        // 1.0.4 (INT-A) — delivered on the main queue. A post from the main
+        // thread runs the handler inline, in the run loop the change arrived
+        // in; a post from any other thread is handed to the main queue by the
+        // notification centre itself. The handler therefore never needs a
+        // fire-and-forget `Task` hop — the Phase-06 effect census treats an
+        // unowned task in a store as a lifetime the store cannot cancel, and
+        // this one had nothing to own: its body is synchronous and reads the
+        // store's live state, so it can never apply a stale account's data.
         return center.addObserver(
             forName: .NSSystemTimeZoneDidChange,
             object: nil,
-            queue: nil
+            queue: .main
         ) { [weak self] _ in
-            let handle: @Sendable @MainActor () -> Void = {
+            MainActor.assumeIsolated {
                 guard let store = self, memo.isChange(to: currentTimeZone()) else { return }
                 store.reconcileSpeziSchedulerIfAvailable()
-            }
-            // The notification is delivered on whichever thread posted it. Stay
-            // synchronous when that is already the main thread — the reconcile
-            // then lands in the same run loop the change arrived in.
-            if Thread.isMainThread {
-                MainActor.assumeIsolated(handle)
-            } else {
-                _Concurrency.Task { @MainActor in handle() }
             }
         }
     }

@@ -140,28 +140,23 @@ struct OnDeviceBriefingTests {
         #expect(MDRSafetyFilter.patternCount >= 15)
     }
 
-    // MARK: - Feature flag short-circuit
+    // MARK: - Capability short-circuit (#115 · 0.2)
 
-    @Test("OnDeviceBriefingService — feature flag off short-circuits to fallback")
-    func featureFlagOffShortCircuits() async throws {
-        let defaults = try #require(UserDefaults(suiteName: "test.flag.off.\(UUID().uuidString)"))
-        let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-        flags.setEnabled(.assistantBriefing, value: false)
-        let service = OnDeviceBriefingService(featureFlags: flags)
+    @Test("OnDeviceBriefingService — briefing onDeviceAllowed=false short-circuits to fallback")
+    func featureFlagOffShortCircuits() async {
+        let service = OnDeviceBriefingService(aiCapabilities: AICaps.reader([.briefing: AICaps.operatorDisabled]))
         let outcome = await service.generate(
             measurements: [],
             healthScore: nil,
             locale: Locale(identifier: "de_DE")
         )
         #expect(outcome.briefing == nil)
-        #expect(outcome.fallbackReason == .featureFlagDisabled)
+        #expect(outcome.fallbackReason == .capabilityNotAllowed)
     }
 
-    @Test("OnDeviceBriefingService — defaults to enabled when key absent")
-    func featureFlagDefaultsToEnabled() throws {
-        let defaults = try #require(UserDefaults(suiteName: "test.flag.default.\(UUID().uuidString)"))
-        let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-        #expect(flags.isEnabled(.assistantBriefing) == true)
+    @Test("OnDeviceBriefingService — defaults to the legacy reading (allowed) without an ai block")
+    func featureFlagDefaultsToEnabled() {
+        #expect(LegacyAICapabilities().allowsOnDevice(.briefing))
     }
 
     // MARK: - Locale switching in prompt template
@@ -192,10 +187,8 @@ struct OnDeviceBriefingTests {
 
     #if !canImport(FoundationModels)
         @Test("OnDeviceBriefingService — framework-unavailable returns fallback")
-        func frameworkUnavailableFallsBack() async throws {
-            let defaults = try #require(UserDefaults(suiteName: "test.fw.\(UUID().uuidString)"))
-            let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-            let service = OnDeviceBriefingService(featureFlags: flags)
+        func frameworkUnavailableFallsBack() async {
+            let service = OnDeviceBriefingService(aiCapabilities: LegacyAICapabilities())
             let outcome = await service.generate(
                 measurements: [],
                 healthScore: nil,

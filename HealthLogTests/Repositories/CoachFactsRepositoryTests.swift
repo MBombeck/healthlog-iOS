@@ -13,8 +13,8 @@ import Testing
 ///   - idempotent single-delete mapping (`{ deleted: true/false }`, no 404),
 ///   - forget-all (`{ cleared: N }`),
 ///   - the disabled-surface mapping (403 + `assistant.disabled.coach`
-///     → `HLError.assistantDisabled(.assistantCoach)`).
-@Suite("CoachFactsRepository", .serialized)
+///     → `HLError.aiUnavailable`).
+@Suite("CoachFactsRepository", .serialized, .mockURLSession)
 struct CoachFactsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -35,7 +35,7 @@ struct CoachFactsRepositoryTests {
         let api = makeAPI()
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let payload = """
@@ -62,7 +62,7 @@ struct CoachFactsRepositoryTests {
     @Test("list tolerates an empty facts array")
     func listEmpty() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":{"facts":[]},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -79,7 +79,7 @@ struct CoachFactsRepositoryTests {
         let api = makeAPI()
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let payload = #"{"data":{"deleted":true},"error":null}"#
@@ -96,7 +96,7 @@ struct CoachFactsRepositoryTests {
     @Test("forget(id:) maps an unknown/already-deleted id to deleted=false (no 404, idempotent)")
     func forgetFalseIdempotent() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // B4: the existence channel never leaks — unknown id is still 200.
             let payload = #"{"data":{"deleted":false},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -113,7 +113,7 @@ struct CoachFactsRepositoryTests {
     func forgetAll() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             let payload = #"{"data":{"cleared":3},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -127,16 +127,18 @@ struct CoachFactsRepositoryTests {
 
     // MARK: - Disabled-surface mapping (coach kill-switch)
 
-    @Test("a disabled Coach surface (403 assistant.disabled.coach) maps to HLError.assistantDisabled(.assistantCoach)")
+    @Test("a disabled Coach surface (403 meta.errorCode assistant.disabled.coach) maps to HLError.aiUnavailable")
     func disabledSurface() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
-            let payload = #"{"data":null,"error":"Coach is disabled","errorCode":"assistant.disabled.coach"}"#
+        MockURLProtocol.install { req in
+            // Server v1.39 refusal envelope (`refusal.ts`): the code lives in `meta`.
+            let payload = #"{"data":null,"error":"Coach is disabled","meta":{"errorCode":"assistant.disabled.coach","capability":"coach","reason":"operator_disabled"}}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
         }
         let repo = CoachFactsRepository(api: api)
-        await #expect(throws: HLError.assistantDisabled(.assistantCoach)) {
+        let expected = AIRefusal(errorCode: "assistant.disabled.coach", capability: .coach, reason: .operatorDisabled)
+        await #expect(throws: HLError.aiUnavailable(expected)) {
             _ = try await repo.list()
         }
     }

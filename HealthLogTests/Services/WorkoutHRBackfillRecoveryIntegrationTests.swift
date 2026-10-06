@@ -11,7 +11,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    @Suite("Workout HR backfill recovery integration", .serialized)
+    @Suite("Workout HR backfill recovery integration", .serialized, .mockURLSession)
     struct WorkoutHRBackfillRecoveryIntegrationTests {
         @Test("Accepted 11-workout direct page rearms history before its one processing chunk")
         func acceptedSeriesFreePageRearmsHistory() async throws {
@@ -443,7 +443,7 @@ import Testing
             )
             repo = try WorkoutsRepository(api: api, outbox: OutboxQueue(inMemory: true))
 
-            MockURLProtocol.handler = { request in
+            MockURLProtocol.install { request in
                 let body = Self.body(of: request)
                 let containsSamples = String(data: body, encoding: .utf8)?.contains(#""samples""#) == true
                 let externalIDs = Self.externalIDs(in: body)

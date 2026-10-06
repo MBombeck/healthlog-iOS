@@ -119,7 +119,7 @@ struct TodayHeroHost: View {
         case "sync.reconnect":
             router.requestSettingsIntegrations()
         case "checkup.view":
-            openVorsorge()
+            openVorsorge(for: item)
         case "ecg.view":
             router.requestInsightsOverview()
         case "milestone.view", "pulse.view":
@@ -142,9 +142,14 @@ struct TodayHeroHost: View {
     /// straight to DOING it"). Resolves the soonest due reminder and branches on
     /// the SHARED `VorsorgeCard.primaryAction` seam — prefilled measure sheet /
     /// mental-wellbeing check-in — falling back to the manage list only when the
-    /// reminder is free-text / uncapturable (or nothing is due).
-    private func openVorsorge() {
-        guard let due = VorsorgeNextDue.nextDueNow(from: remindersStore.reminders) else {
+    /// reminder is free-text / uncapturable (or nothing is due). v1.39.2 — an
+    /// `upcoming_visit` item carries the same intent and always opens the list
+    /// (``VorsorgeNextDue/frontDoorReminder(forRailKind:reminders:now:calendar:)``).
+    private func openVorsorge(for item: DailyPriorityItem) {
+        guard let due = VorsorgeNextDue.frontDoorReminder(
+            forRailKind: item.kind,
+            reminders: remindersStore.reminders
+        ) else {
             onOpenVorsorge()
             return
         }
@@ -225,9 +230,9 @@ struct TodayHeroCard: View {
             // something to carry: the signal text, the ring, or both. With
             // zero available inputs (no score) and no signal there is no
             // half-empty band reserving space.
-            if digest.topSignal?.headline.isEmpty == false || Self.availableScore(digest) != nil {
+            if digest.visibleTopSignal?.headline.isEmpty == false || Self.availableScore(digest) != nil {
                 HStack(alignment: .center, spacing: HLSpace.lg) {
-                    if let signal = digest.topSignal, !signal.headline.isEmpty {
+                    if let signal = digest.visibleTopSignal, !signal.headline.isEmpty {
                         Text(verbatim: topSignalText(signal))
                             .font(.hlSubhead)
                             .foregroundStyle(HLText.secondary)

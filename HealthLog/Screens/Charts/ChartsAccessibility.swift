@@ -31,15 +31,20 @@ enum ChartsAccessibility {
     ///   - kind: the metric the series belongs to — drives series naming + summary unit.
     /// - Returns: descriptor with a populated x-axis (dates) and one or two series
     ///   (two for blood pressure, one otherwise).
-    static func makeDescriptor(for series: MeasurementSeries, kind: MetricKind) -> AXChartDescriptor {
+    ///
+    /// `unit` — **#115 P2** — the label the plotted values are in (the chart
+    /// detail passes the account's unit together with converted points).
+    /// `nil` → the series' own server unit, else the kind's canonical unit.
+    static func makeDescriptor(for series: MeasurementSeries, kind: MetricKind, unit: String? = nil) -> AXChartDescriptor {
+        let unit = unit ?? series.resolvedUnit(for: kind)
         let points = series.points
         let xAxis = makeXAxis(for: points)
-        let yAxis = makeYAxis(for: series, kind: kind)
+        let yAxis = makeYAxis(for: series, unit: unit)
         let dataSeries = makeSeries(for: series, kind: kind)
 
         return AXChartDescriptor(
             title: chartTitle(for: kind),
-            summary: chartSummary(for: series.stats, kind: kind),
+            summary: chartSummary(for: series.stats, unit: unit),
             xAxis: xAxis,
             yAxis: yAxis,
             additionalAxes: [],
@@ -68,14 +73,14 @@ enum ChartsAccessibility {
         )
     }
 
-    private static func makeYAxis(for series: MeasurementSeries, kind: MetricKind) -> AXNumericDataAxisDescriptor {
+    private static func makeYAxis(for series: MeasurementSeries, unit: String) -> AXNumericDataAxisDescriptor {
         // Guard against a degenerate min == max range (single value or all-equal points)
         // — `AXNumericDataAxisDescriptor.range` requires lower <= upper, so we widen by 1
         // when needed to keep the descriptor valid.
         let lower = series.stats.min
         let upper = series.stats.max > series.stats.min ? series.stats.max : series.stats.min + 1
         return AXNumericDataAxisDescriptor(
-            title: kind.unit,
+            title: unit,
             range: lower ... upper,
             gridlinePositions: [],
             valueDescriptionProvider: { "\(Int($0))" }
@@ -131,11 +136,10 @@ enum ChartsAccessibility {
         String(localized: "\(kind.displayName) trend")
     }
 
-    private static func chartSummary(for stats: SeriesStats, kind: MetricKind) -> String {
+    private static func chartSummary(for stats: SeriesStats, unit: String) -> String {
         let mean = Int(stats.mean.rounded())
         let lo = Int(stats.min)
         let hi = Int(stats.max)
-        let unit = kind.unit
         return String(
             localized: "Mean \(mean) \(unit), min \(lo), max \(hi)"
         )

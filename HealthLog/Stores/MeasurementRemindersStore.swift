@@ -156,8 +156,17 @@ public final class MeasurementRemindersStore {
     /// The server recomputes `nextDueAt` after the cadence merge, so we reload
     /// rather than optimistically mutate (the new due date is server-authoritative
     /// and must never be predicted client-side). Returns `true` on success.
+    ///
+    /// **v1.39.2 — an edit that changed nothing sends nothing.** An older server
+    /// recomputes `nextDueAt` from now on any PATCH, so saving an untouched sheet
+    /// would roll an overdue check-up to its next slot. There is nothing to
+    /// write, so the call succeeds without a request.
     @discardableResult
     public func update(id: String, patch: MeasurementReminderUpdate) async -> Bool {
+        guard !patch.isEmpty else {
+            error = nil
+            return true
+        }
         do {
             _ = try await repo.update(id: id, patch: patch)
             await reload()

@@ -122,8 +122,9 @@ import Foundation
             guard !writes.isEmpty else { return Self.emptyPage }
             var classifications = [HealthSyncAcceptanceClass?](repeating: nil, count: writes.count)
             var transportThrew = false
+            var moduleOff = false
 
-            for start in stride(from: 0, to: writes.count, by: CycleRepository.bulkCap) {
+            for start in stride(from: 0, to: writes.count, by: CycleRepository.bulkCap) where !moduleOff {
                 let end = min(start + CycleRepository.bulkCap, writes.count)
                 let slice = Array(writes[start ..< end])
                 do {
@@ -139,6 +140,12 @@ import Foundation
                     // M-7: both interpolations are pure row counts — operator-grade, no PII.
                     HLLog.healthKit
                         .debug("cycle HK import drained \(imported, privacy: .public)/\(slice.count, privacy: .public) rows") // swiftlint:disable:this hllog_public_privacy_interpolation
+                } catch where Self.isModuleOff(error) {
+                    // #115 / 0.3 — cycle tracking is off for this account. The
+                    // server stored nothing, and a queued row would only wait
+                    // for the same answer, so the rest of the page is not sent.
+                    moduleOff = true
+                    HLLog.healthKit.info("cycle HK bulk refused — cycle module off, anchor holds")
                 } catch {
                     // A raised transport says nothing about individual rows: the
                     // request may never have been seen at all.
@@ -157,6 +164,9 @@ import Foundation
                 )
             }
             let held = writes.indices.filter { classifications[$0] != .terminalAccepted }
+            if moduleOff {
+                return Self.moduleOffPage(postedCount: writes.count, entries: entries, lease: lease)
+            }
             guard !held.isEmpty else {
                 return HealthSyncPageOutcome(
                     postedCount: writes.count,
@@ -175,6 +185,38 @@ import Foundation
                 transportThrew: transportThrew,
                 durableRetryPersisted: persisted,
                 durableRetryFailed: !persisted,
+                leaseIsCurrent: lease.isCurrent,
+                wasCancelled: Task.isCancelled
+            )
+        }
+
+        /// `true` for the route's module-off refusal: 403 `cycle.disabled` (what
+        /// `day-logs/bulk` answers at v1.39.0, `requireCycleEnabled`) or the
+        /// generic 403 `module.disabled`. Both are read from `meta.errorCode`.
+        static func isModuleOff(_ error: Error) -> Bool {
+            CycleRepository.isCycleDisabled(error) || (error as? HLError)?.isModuleDisabled == true
+        }
+
+        /// #115 / 0.3 — the page when the cycle module is off. Nothing is queued
+        /// and nothing claims a durable retry, so the shared rule holds the
+        /// anchor (`nonterminalEntry`) for every row the server did not store.
+        /// The next sweep after the module is back on reads the same window
+        /// again and imports it; the date-keyed upsert makes any row that did
+        /// land before the refusal a harmless repeat.
+        ///
+        /// Queueing instead (the old path) committed the anchor behind rows the
+        /// server had refused, and the replay then deleted them.
+        static func moduleOffPage(
+            postedCount: Int,
+            entries: [HealthSyncEntryOutcome],
+            lease: HealthSyncAuthenticatedLease
+        ) -> HealthSyncPageOutcome {
+            HealthSyncPageOutcome(
+                postedCount: postedCount,
+                entries: entries,
+                transportThrew: false,
+                durableRetryPersisted: false,
+                durableRetryFailed: false,
                 leaseIsCurrent: lease.isCurrent,
                 wasCancelled: Task.isCancelled
             )

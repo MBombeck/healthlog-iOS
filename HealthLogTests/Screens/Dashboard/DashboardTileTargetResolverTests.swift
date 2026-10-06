@@ -92,7 +92,7 @@ struct DashboardTileTargetResolverTests {
 
     @Test("targetBand builds a RangeBand with the server in-range percentage")
     func targetBandFromTargets() {
-        let band = DashboardTileTargetResolver.targetBand(for: .weight, targets: weightTarget())
+        let band = DashboardTileTargetResolver.targetBand(for: .weight, targets: weightTarget(), units: .standard)
         // 23 / 30 → 77 %.
         #expect(band?.pctInRange == 77)
         #expect(band?.unit == "kg")
@@ -102,24 +102,24 @@ struct DashboardTileTargetResolverTests {
 
     @Test("targetBand is nil when the window is insufficient")
     func targetBandNilWhenInsufficient() {
-        #expect(DashboardTileTargetResolver.targetBand(for: .weight, targets: weightTarget(insufficient: true)) == nil)
+        #expect(DashboardTileTargetResolver.targetBand(for: .weight, targets: weightTarget(insufficient: true), units: .standard) == nil)
     }
 
     @Test("targetBand is nil when nothing logged in the window")
     func targetBandNilWhenNothingLogged() {
-        #expect(DashboardTileTargetResolver.targetBand(for: .weight, targets: weightTarget(inRange: 0, logged: 0)) == nil)
+        #expect(DashboardTileTargetResolver.targetBand(for: .weight, targets: weightTarget(inRange: 0, logged: 0), units: .standard) == nil)
     }
 
     @Test("targetBand is nil for a kind the user has no target for")
     func targetBandNilForUnconfiguredKind() {
-        #expect(DashboardTileTargetResolver.targetBand(for: .pulse, targets: weightTarget()) == nil)
-        #expect(DashboardTileTargetResolver.targetBand(for: .weight, targets: nil) == nil)
+        #expect(DashboardTileTargetResolver.targetBand(for: .pulse, targets: weightTarget(), units: .standard) == nil)
+        #expect(DashboardTileTargetResolver.targetBand(for: .weight, targets: nil, units: .standard) == nil)
     }
 
     @Test("targetBand is nil for the composite blood-pressure tile")
     func targetBandNilForBloodPressure() {
         // A WEIGHT-only targets payload has nothing for BP anyway, but the guard
         // is explicit so a future BP target row can't surface a systolic-only band.
-        #expect(DashboardTileTargetResolver.targetBand(for: .bloodPressure, targets: weightTarget()) == nil)
+        #expect(DashboardTileTargetResolver.targetBand(for: .bloodPressure, targets: weightTarget(), units: .standard) == nil)
     }
 }

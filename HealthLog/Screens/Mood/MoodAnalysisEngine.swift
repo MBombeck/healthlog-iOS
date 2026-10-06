@@ -35,7 +35,8 @@ struct MoodAnalysisEngine: Sendable {
                 entries: $0.entries,
                 now: $0.now,
                 calendar: $0.calendar,
-                enrichment: $0.enrichment
+                enrichment: $0.enrichment,
+                windowDays: $0.windowDays
             )
         }
     )
@@ -89,18 +90,23 @@ struct MoodAnalysisRequest: Sendable {
     let calendar: Calendar
     /// The authoritative `/api/mood/analytics` override, when the caller has one.
     let enrichment: MoodAnalyticsEnrichment?
+    /// #115 · 1.3 — the period window, so the server's day means are cut to
+    /// the same slice as the entries. `nil` = full history.
+    let windowDays: Int?
 
     init(
         entries: [MoodEntry],
         scope: Scope,
         now: Date = .now,
         calendar: Calendar = .current,
-        enrichment: MoodAnalyticsEnrichment? = nil
+        enrichment: MoodAnalyticsEnrichment? = nil,
+        windowDays: Int? = nil
     ) {
         self.entries = entries
         self.scope = scope
         self.now = now
         self.calendar = calendar
         self.enrichment = enrichment
+        self.windowDays = windowDays
     }
 }

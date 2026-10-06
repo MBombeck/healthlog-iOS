@@ -14,7 +14,7 @@ import Testing
 /// model:
 ///
 ///   * empty-input short-circuit
-///   * feature-flag short-circuit (uses `.assistantTrend`, per dispatch)
+///   * capability short-circuit (`statusText`, #115 · 0.2)
 ///   * MDRSafetyFilter integration via `MoodTagsExtraction: BriefingTextProvider`
 ///   * sanitise(_:existingTags:): trim, dedupe, length-cap, count-cap,
 ///     existing-tag dedupe
@@ -38,16 +38,16 @@ struct MoodTagExtractionServiceTests {
         #expect(outcome.fallbackReason == .emptyInput)
     }
 
-    @Test("suggestTags — assistantTrend off short-circuits before any FM work")
+    @Test("suggestTags — statusText disallows on-device → short-circuits before any FM work")
     func featureFlagOffShortCircuit() async {
-        let flags = StubFeatureFlagsService(assistantTrend: false)
-        let service = MoodTagExtractionService(featureFlags: flags)
+        let flags = AICaps.reader([.statusText: AICaps.operatorDisabled])
+        let service = MoodTagExtractionService(aiCapabilities: flags)
         let outcome = await service.suggestTags(forNote: "schlecht geschlafen")
         #expect(outcome.suggestions == nil)
-        #expect(outcome.fallbackReason == .featureFlagDisabled)
+        #expect(outcome.fallbackReason == .capabilityNotAllowed)
     }
 
-    @Test("suggestTags — assistantTrend on but framework unavailable returns the right fallback")
+    @Test("suggestTags — statusText allowed but framework unavailable returns the right fallback")
     func frameworkAvailabilityFallback() async {
         // On the CI runner (which has FoundationModels.framework available
         // but the model is not reachable), the outcome SHOULD be one of
@@ -56,8 +56,8 @@ struct MoodTagExtractionServiceTests {
         // pin a single value because the runner state isn't deterministic,
         // but we can require that the outcome is a fallback and not a
         // false-positive success.
-        let flags = StubFeatureFlagsService(assistantTrend: true)
-        let service = MoodTagExtractionService(featureFlags: flags)
+        let flags = AICaps.reader()
+        let service = MoodTagExtractionService(aiCapabilities: flags)
         let outcome = await service.suggestTags(forNote: "Tag voller Stress.")
         // Either we got a success (extremely unlikely in CI) or we got a
         // fallback. Both shapes are well-defined; we only insist on the
@@ -153,32 +153,11 @@ struct MoodTagExtractionServiceTests {
     func fallbackReasonRoundTrip() {
         let cases: [MoodTagSuggestionOutcome.FallbackReason] = [
             .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady,
-            .featureFlagDisabled, .safetyRefused, .generationFailed,
+            .capabilityNotAllowed, .safetyRefused, .generationFailed,
             .frameworkUnavailable, .emptyInput
         ]
         for c in cases {
             #expect(MoodTagSuggestionOutcome.FallbackReason(rawValue: c.rawValue) == c)
-        }
-    }
-}
-
-/// Minimal stub for the feature-flag service so the extraction-service
-/// tests can force-disable the `.assistantTrend` flag.
-private struct StubFeatureFlagsService: FeatureFlagsServicing {
-    let assistantTrend: Bool
-
-    func isEnabled(_ flag: FeatureFlag) -> Bool {
-        switch flag {
-        case .assistantTrend:
-            assistantTrend
-        case .assistantBriefing,
-             .assistantCoach,
-             .assistantInsights,
-             .enableDailyStats,
-             .enableHRBuckets:
-            true
-        case .cycleTracking:
-            false
         }
     }
 }

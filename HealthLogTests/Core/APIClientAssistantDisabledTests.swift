@@ -4,24 +4,29 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// Locks the F-1 APIClient interception of the
-/// `403 + errorCode: "assistant.disabled.<surface>"` envelope
-/// (server brief v1.4.31 §5 + cross-coordination audit §c.1).
+/// #114 / #115 · 0.2 — locks how `APIClient` reads an AI refusal.
+///
+/// Server v1.39 answers every refused AI action with
+/// `{ data: null, error, meta: { errorCode, capability, reason, module? } }`
+/// (`src/lib/ai/capabilities/refusal.ts` `aiRefusal()`; the envelope schema is
+/// OpenAPI `ErrorResponse.meta`). The fixtures below are that function's
+/// output, one per reason. Before this build the client read only the
+/// TOP-LEVEL `errorCode` and only four invented surface names
+/// (`briefing`/`coach`/`trend`/`insights`), so not one v1.39 refusal was
+/// recognised: an operator-disabled Coach surfaced as a plain 403, which the
+/// Coach sheet worded as "needs your consent".
 ///
 /// The contract:
-/// - 403 + `errorCode: "assistant.disabled.briefing"` →
-///   `HLError.assistantDisabled(.assistantBriefing)`
-/// - 403 without `errorCode` or with a non-assistant code →
-///   generic `HLError.server(status: 403, ...)` (no over-eager
-///   typing)
-/// - any other status with an `assistant.disabled.*` code →
-///   generic `HLError.server(...)` (status discriminator gates the
-///   typed branch so future server-surfaces can't accidentally
-///   collide)
-/// - the typed error wraps the matching ``FeatureFlag`` so the
-///   caller can mirror state into ``FeatureFlagsStore`` without
-///   parsing the wire string twice.
-@Suite("APIClient — assistant-disabled envelope", .serialized)
+/// - `assistant.disabled.<switch>` on a 403 → `HLError.aiUnavailable`, any
+///   switch (incl. the overall `enabled` and names this build does not know);
+/// - `ai.record.notPermitted` / `ai.provider.none` / `ai.unavailable` →
+///   `HLError.aiUnavailable` on their own statuses (403 / 422 or 503 / 503);
+/// - `meta.capability` + `meta.reason` travel with it, tolerant;
+/// - `consent.ai.required` and plain 403s stay `HLError.server` with the
+///   `meta` code; `module.disabled` stays `HLError.moduleDisabled`;
+/// - an `assistant.disabled.*` code on a non-403 is not the refusal shape;
+/// - the pre-v1.39 top-level `errorCode` is still read as a fallback.
+@Suite("APIClient — AI refusal envelope (v1.39 meta)", .serialized, .mockURLSession)
 struct APIClientAssistantDisabledTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -34,201 +39,231 @@ struct APIClientAssistantDisabledTests {
         return APIClient(environment: env, keychain: kc, sessionConfiguration: .mock())
     }
 
-    @Test("403 + assistant.disabled.briefing → HLError.assistantDisabled(.briefing)")
-    func briefingSurfacesTypedError() async throws {
-        let api = makeClient()
-        MockURLProtocol.handler = { req in
-            let body = Data(#"""
-            {"data":null,"error":"Briefing disabled by operator","errorCode":"assistant.disabled.briefing"}
-            """#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let req: APIRequest<EmptyPayload> = .get("/api/insights/generate")
-        do {
-            _ = try await api.send(req)
-            Issue.record("expected assistantDisabled")
-        } catch let HLError.assistantDisabled(flag) {
-            #expect(flag == .assistantBriefing)
-        } catch {
-            Issue.record("unexpected error: \(error)")
+    private func respond(status: Int, body: String) {
+        MockURLProtocol.install { req in
+            (HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
         }
     }
 
-    @Test("403 + assistant.disabled.coach → HLError.assistantDisabled(.coach)")
-    func coachSurfacesTypedError() async throws {
-        let api = makeClient()
-        MockURLProtocol.handler = { req in
-            let body = Data(#"""
-            {"data":null,"error":"Coach disabled","errorCode":"assistant.disabled.coach"}
-            """#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let req: APIRequest<EmptyPayload> = .get("/api/insights/chat")
+    private func thrown(_ api: APIClient, path: String = "/api/insights/generate") async -> HLError? {
+        let req: APIRequest<EmptyPayload> = .get(path)
         do {
             _ = try await api.send(req)
-            Issue.record("expected assistantDisabled")
-        } catch let HLError.assistantDisabled(flag) {
-            #expect(flag == .assistantCoach)
+            return nil
         } catch {
-            Issue.record("unexpected error: \(error)")
+            return error as? HLError
         }
     }
 
-    @Test("403 + assistant.disabled.insights → HLError.assistantDisabled(.insights)")
-    func insightsSurfacesTypedError() async throws {
-        let api = makeClient()
-        MockURLProtocol.handler = { req in
-            let body = Data(#"""
-            {"data":null,"error":"Insights disabled","errorCode":"assistant.disabled.insights"}
-            """#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let req: APIRequest<EmptyPayload> = .get("/api/insights/comprehensive")
-        do {
-            _ = try await api.send(req)
-            Issue.record("expected assistantDisabled")
-        } catch let HLError.assistantDisabled(flag) {
-            #expect(flag == .assistantInsights)
-        } catch {
-            Issue.record("unexpected error: \(error)")
-        }
+    private func refusal(_ error: HLError?) -> AIRefusal? {
+        if case let .aiUnavailable(refusal)? = error { return refusal }
+        return nil
     }
 
-    @Test("403 + assistant.disabled.trend → HLError.assistantDisabled(.trend)")
-    func trendSurfacesTypedError() async throws {
+    // MARK: - Operator switches
+
+    @Test(
+        "403 meta assistant.disabled.<switch> → aiUnavailable with capability + reason",
+        arguments: [
+            ("briefing", "briefing"),
+            ("coach", "coach"),
+            ("insightStatus", "statusText"),
+            ("documentAi", "documentAi"),
+            ("enabled", "coach")
+        ]
+    )
+    func operatorSwitch(operatorSwitch: String, capability: String) async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
-            let body = Data(#"""
-            {"data":null,"error":"Trend disabled","errorCode":"assistant.disabled.trend"}
-            """#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let req: APIRequest<EmptyPayload> = .get("/api/insights/blood-pressure-status")
-        do {
-            _ = try await api.send(req)
-            Issue.record("expected assistantDisabled")
-        } catch let HLError.assistantDisabled(flag) {
-            #expect(flag == .assistantTrend)
-        } catch {
-            Issue.record("unexpected error: \(error)")
-        }
+        respond(status: 403, body: #"""
+        {"data":null,"error":"This AI feature is turned off on this server",
+         "meta":{"errorCode":"assistant.disabled.\#(operatorSwitch)","capability":"\#(capability)","reason":"operator_disabled"}}
+        """#)
+        let got = try #require(await refusal(thrown(api)))
+        #expect(got.errorCode == "assistant.disabled.\(operatorSwitch)")
+        #expect(got.capability == AICapabilityKey(rawValue: capability))
+        #expect(got.reason == .operatorDisabled)
+        #expect(got.kind == .operatorDisabled(operatorSwitch: operatorSwitch))
+        #expect(got.httpStatus == 403)
     }
 
-    @Test("403 without errorCode → generic HLError.server (no false-positive typing)")
-    func plain403StaysGenericServerError() async throws {
+    @Test("The overall switch `enabled` without meta.capability covers every capability")
+    func overallSwitchCoversAll() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
-            let body = Data(#"{"data":null,"error":"Forbidden"}"#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let req: APIRequest<EmptyPayload> = .get("/api/restricted")
-        do {
-            _ = try await api.send(req)
-            Issue.record("expected server error")
-        } catch let HLError.server(status, code, _) {
-            #expect(status == 403)
-            #expect(code == nil)
-        } catch {
-            Issue.record("unexpected error: \(error)")
-        }
+        respond(status: 403, body: #"{"data":null,"error":"off","meta":{"errorCode":"assistant.disabled.enabled"}}"#)
+        let got = try #require(await refusal(thrown(api)))
+        #expect(Set(got.affectedCapabilities) == Set(AICapabilityKey.allCases))
     }
 
-    @Test("403 with non-assistant errorCode → generic HLError.server (passes code through)")
-    func nonAssistantErrorCodeStaysGeneric() async throws {
+    @Test("An operator switch this build does not know is still typed (tolerant), affecting nothing it cannot name")
+    func unknownSwitchTyped() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
-            let body = Data(#"""
-            {"data":null,"error":"Plan disabled","errorCode":"plan.disabled.premium"}
-            """#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let req: APIRequest<EmptyPayload> = .get("/api/premium-only")
-        do {
-            _ = try await api.send(req)
-            Issue.record("expected server error")
-        } catch let HLError.server(status, code, _) {
-            #expect(status == 403)
-            #expect(code == "plan.disabled.premium")
-        } catch {
-            Issue.record("unexpected error: \(error)")
-        }
+        respond(status: 403, body: #"{"data":null,"error":"off","meta":{"errorCode":"assistant.disabled.futureSwitch"}}"#)
+        let got = try #require(await refusal(thrown(api, path: "/api/insights/future")))
+        #expect(got.kind == .operatorDisabled(operatorSwitch: "futureSwitch"))
+        #expect(got.affectedCapabilities.isEmpty)
     }
 
-    @Test("Non-403 with assistant.disabled.* code → generic HLError.server (status gates typing)")
-    func nonForbiddenStaysGeneric() async throws {
+    // MARK: - The three new v1.39 codes
+
+    @Test("403 ai.record.notPermitted → aiUnavailable(.recordNotPermitted)")
+    func recordNotPermitted() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
-            // 422 with assistant.disabled.briefing — should NOT promote
-            // to assistantDisabled. Status is the discriminator.
-            let body = Data(#"""
-            {"data":null,"error":"Validation failed","errorCode":"assistant.disabled.briefing"}
-            """#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let req: APIRequest<EmptyPayload> = .get("/api/insights/generate")
-        do {
-            _ = try await api.send(req)
-            Issue.record("expected server error")
-        } catch let HLError.server(status, code, _) {
-            #expect(status == 422)
-            #expect(code == "assistant.disabled.briefing")
-        } catch HLError.assistantDisabled {
-            Issue.record("must not surface assistantDisabled for non-403")
-        } catch {
-            Issue.record("unexpected error: \(error)")
-        }
+        respond(status: 403, body: #"""
+        {"data":null,"error":"AI work is not available for this record",
+         "meta":{"errorCode":"ai.record.notPermitted","capability":"coach","reason":"not_permitted_for_record"}}
+        """#)
+        let got = try #require(await refusal(thrown(api, path: "/api/insights/chat")))
+        #expect(got.kind == .recordNotPermitted)
+        #expect(got.reason == .notPermittedForRecord)
+        #expect(got.impliedState.allowsOnDevice == false)
     }
 
-    @Test("403 + assistant.disabled.* fires the assistant-disabled mirror handler")
-    func mirrorHandlerFiresOnTypedSurface() async throws {
+    @Test("422 ai.provider.none → aiUnavailable(.noProvider), device still allowed")
+    func providerNone() async throws {
         let api = makeClient()
-        // Capture the flag passed to the mirror handler.
-        let received = SendableSlot<FeatureFlag>()
-        await api.setAssistantDisabledHandler { @Sendable flag in
-            await received.set(flag)
-        }
-        MockURLProtocol.handler = { req in
-            let body = Data(#"""
-            {"data":null,"error":"Briefing disabled","errorCode":"assistant.disabled.briefing"}
-            """#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let req: APIRequest<EmptyPayload> = .get("/api/insights/generate")
-        do {
-            _ = try await api.send(req)
-            Issue.record("expected assistantDisabled")
-        } catch HLError.assistantDisabled {
-            // Wait briefly for the detached mirror task to land —
-            // the handler runs fire-and-forget so we poll the slot
-            // up to a short ceiling rather than blocking the throw.
-            let captured = await received.waitFor(timeoutMs: 500)
-            #expect(captured == .assistantBriefing)
-        } catch {
-            Issue.record("unexpected error: \(error)")
-        }
+        respond(status: 422, body: #"""
+        {"data":null,"error":"No AI provider is set up for this feature",
+         "meta":{"errorCode":"ai.provider.none","capability":"documentAi","reason":"no_provider"}}
+        """#)
+        let got = try #require(await refusal(thrown(api, path: "/api/documents/inbound/d1/summary")))
+        #expect(got.kind == .noProvider)
+        #expect(got.httpStatus == 422)
+        #expect(got.impliedState.allowsOnDevice)
     }
 
-    @Test("403 with unknown surface suffix → generic HLError.server (no silent typing)")
-    func unknownSurfaceStaysGeneric() async throws {
+    @Test("medications/extract keeps 503 but carries meta ai.provider.none (#114 addendum) → aiUnavailable")
+    func medicationExtract503ProviderNone() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
-            let body = Data(#"""
-            {"data":null,"error":"Disabled","errorCode":"assistant.disabled.futureSurface"}
-            """#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
+        respond(status: 503, body: #"""
+        {"data":null,"error":"No AI provider configured",
+         "meta":{"errorCode":"ai.provider.none","capability":"medicationExtract","reason":"no_provider"}}
+        """#)
+        let got = try #require(await refusal(thrown(api, path: "/api/medications/extract")))
+        #expect(got.kind == .noProvider)
+        #expect(got.capability == .medicationExtract)
+        #expect(got.httpStatus == 503)
+    }
+
+    @Test("503 ai.unavailable → aiUnavailable(.unavailable) (check_failed)")
+    func checkFailed() async throws {
+        let api = makeClient()
+        respond(status: 503, body: #"""
+        {"data":null,"error":"AI is unavailable right now",
+         "meta":{"errorCode":"ai.unavailable","capability":"briefing","reason":"check_failed"}}
+        """#)
+        let got = try #require(await refusal(thrown(api)))
+        #expect(got.kind == .unavailable)
+        #expect(got.reason == .checkFailed)
+    }
+
+    // MARK: - Tolerance
+
+    @Test("Unknown meta.reason / meta.capability decode tolerantly")
+    func unknownReasonAndCapability() async throws {
+        let api = makeClient()
+        respond(status: 403, body: #"""
+        {"data":null,"error":"off",
+         "meta":{"errorCode":"assistant.disabled.coach","capability":"futureCapability","reason":"zz_from_the_future"}}
+        """#)
+        let got = try #require(await refusal(thrown(api)))
+        #expect(got.capability == nil)
+        #expect(got.reason == .unknown)
+        // No capability named → the switch's capabilities are affected.
+        #expect(Set(got.affectedCapabilities) == [.coach, .aboutMeQuestions])
+    }
+
+    @Test("Pre-v1.39 top-level errorCode is still read as a fallback")
+    func legacyTopLevelCode() async throws {
+        let api = makeClient()
+        respond(status: 403, body: #"{"data":null,"error":"Briefing disabled by operator","errorCode":"assistant.disabled.briefing"}"#)
+        let got = try #require(await refusal(thrown(api)))
+        #expect(got == AIRefusal(errorCode: "assistant.disabled.briefing"))
+    }
+
+    // MARK: - What stays untyped
+
+    @Test("403 meta consent.ai.required stays HLError.server with the meta code")
+    func consentStaysServer() async {
+        let api = makeClient()
+        respond(status: 403, body: #"""
+        {"data":null,"error":"AI consent is required for this feature",
+         "meta":{"errorCode":"consent.ai.required","capability":"coach","reason":"consent_required"}}
+        """#)
+        let error = await thrown(api, path: "/api/insights/chat")
+        guard case let .server(status, code, _)? = error else {
+            Issue.record("expected HLError.server, got \(String(describing: error))")
+            return
         }
-        let req: APIRequest<EmptyPayload> = .get("/api/insights/future")
-        do {
-            _ = try await api.send(req)
-            Issue.record("expected server error")
-        } catch HLError.assistantDisabled {
-            Issue.record("must not surface assistantDisabled for unknown surface suffix")
-        } catch let HLError.server(status, code, _) {
-            #expect(status == 403)
-            #expect(code == "assistant.disabled.futureSurface")
-        } catch {
-            Issue.record("unexpected error: \(error)")
+        #expect(status == 403)
+        #expect(code == "consent.ai.required")
+    }
+
+    @Test("assistant.disabled.* on a non-403 is not the refusal shape")
+    func nonForbiddenStaysServer() async {
+        let api = makeClient()
+        respond(status: 422, body: #"{"data":null,"error":"Validation failed","meta":{"errorCode":"assistant.disabled.briefing"}}"#)
+        let error = await thrown(api)
+        guard case let .server(status, code, _)? = error else {
+            Issue.record("expected HLError.server, got \(String(describing: error))")
+            return
         }
+        #expect(status == 422)
+        #expect(code == "assistant.disabled.briefing")
+    }
+
+    @Test("403 without any code stays a generic HLError.server")
+    func plainForbiddenStaysServer() async {
+        let api = makeClient()
+        respond(status: 403, body: #"{"data":null,"error":"Forbidden"}"#)
+        let error = await thrown(api)
+        guard case let .server(status, code, _)? = error else {
+            Issue.record("expected HLError.server, got \(String(describing: error))")
+            return
+        }
+        #expect(status == 403)
+        #expect(code == nil)
+    }
+
+    // MARK: - Mirrors
+
+    @Test("A refusal fires the AI-refusal mirror handler with the parsed refusal")
+    func mirrorHandlerFiresOnTypedSurface() async {
+        let api = makeClient()
+        let received = SendableSlot<AIRefusal>()
+        await api.setAIRefusalHandler { @Sendable refusal in
+            await received.set(refusal)
+        }
+        respond(status: 403, body: #"""
+        {"data":null,"error":"off","meta":{"errorCode":"assistant.disabled.briefing","capability":"briefing","reason":"operator_disabled"}}
+        """#)
+        #expect(await refusal(thrown(api)) != nil)
+        let captured = await received.waitFor(timeoutMs: 500)
+        #expect(captured?.capability == .briefing)
+        #expect(captured?.reason == .operatorDisabled)
+    }
+
+    @Test("module.disabled beside an AI refusal stays moduleDisabled AND reaches the AI mirror with its reason")
+    func moduleDisabledAIRefusal() async {
+        let api = makeClient()
+        let received = SendableSlot<AIRefusal>()
+        await api.setAIRefusalHandler { @Sendable refusal in
+            await received.set(refusal)
+        }
+        // `aiRefusal("coach", "user_disabled", "coach")` — the person's own
+        // "Hide Coach" switch.
+        respond(status: 403, body: #"""
+        {"data":null,"error":"This AI feature is turned off in your settings",
+         "meta":{"errorCode":"module.disabled","capability":"coach","reason":"user_disabled","module":"coach"}}
+        """#)
+        let error = await thrown(api, path: "/api/insights/chat")
+        guard case let .moduleDisabled(module)? = error else {
+            Issue.record("expected moduleDisabled, got \(String(describing: error))")
+            return
+        }
+        #expect(module == "coach")
+        let captured = await received.waitFor(timeoutMs: 500)
+        #expect(captured?.capability == .coach)
+        #expect(captured?.reason == .userDisabled)
     }
 }
 

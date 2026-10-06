@@ -37,7 +37,8 @@ enum InsightsMetricStatusDescriptor {
         digest: ComprehensiveDigest?,
         target: InsightsTargetsResponseDTO.TargetItem?,
         latestValue: Double?,
-        sparklineValues: [Double]? = nil
+        sparklineValues: [Double]? = nil,
+        units: UnitPreferences = .standard
     ) -> InsightsMetricStatusCard.Descriptor {
         switch kind {
         case .bloodPressure:
@@ -50,7 +51,8 @@ enum InsightsMetricStatusDescriptor {
                 digest: digest,
                 target: target,
                 latestValue: latestValue,
-                sparklineValues: sparklineValues
+                sparklineValues: sparklineValues,
+                units: units
             )
         }
     }
@@ -89,7 +91,7 @@ enum InsightsMetricStatusDescriptor {
             // share (ESH-2023 band, comprehensive route). Label it "90 T" so the
             // figure isn't read as the 30-day window the non-BP bars use.
             inTargetWindowLabel: digest?.bpPctInTarget != nil ? String(localized: "90d") : nil,
-            targetBandCaption: digest?.bpTargets.map(bpTargetBandCaption),
+            targetBandCaption: digest?.bpTargets.flatMap(bpTargetBandCaption),
             // BP keeps its full chip+band+bar anatomy — no target-less Verlauf here.
             sparklineValues: nil,
             identifierSuffix: kind.rawValue
@@ -128,11 +130,13 @@ enum InsightsMetricStatusDescriptor {
         }
     }
 
-    private static func bpTargetBandCaption(_ t: BPTargets) -> String {
-        let sysLow = t.sysLow ?? 120
-        let sysHigh = t.sysHigh ?? 129
-        let diaLow = t.diaLow ?? 70
-        let diaHigh = t.diaHigh ?? 79
+    /// #115 · 1.3 — the band caption states only the band the server sent.
+    /// It used to fill a missing edge with an invented 120–129 / 70–79, so an
+    /// account whose target the server did not resolve read a band nobody set.
+    /// Any missing edge → no caption.
+    static func bpTargetBandCaption(_ t: BPTargets) -> String? {
+        guard let sysLow = t.sysLow, let sysHigh = t.sysHigh,
+              let diaLow = t.diaLow, let diaHigh = t.diaHigh else { return nil }
         return String(localized: "insights.digest.bp.targetBand \(sysLow) \(sysHigh) \(diaLow) \(diaHigh)")
     }
 
@@ -222,21 +226,21 @@ enum InsightsMetricStatusDescriptor {
         digest: ComprehensiveDigest?,
         target: InsightsTargetsResponseDTO.TargetItem?,
         latestValue: Double?,
-        sparklineValues: [Double]?
+        sparklineValues: [Double]?,
+        units: UnitPreferences
     ) -> InsightsMetricStatusCard.Descriptor {
         // Honest headline: the 30-day average from the digest summaries, falling
         // back to the latest charted reading so a fresh metric still shows a
         // number rather than an empty card.
         let avg30 = kind.availabilitySummaryKey.flatMap { digest?.summaries?[$0]?.avg30 }
-        let value = avg30 ?? latestValue
-        let headline = value.map { $0.formatted(.number.precision(.fractionLength(0 ... 1))) }
+        let headline = headlineText(kind: kind, avg30: avg30, latestValue: latestValue, units: units)
 
         // Chip + Zielband + in-target pct from the TARGETS payload — the only
         // honest per-metric classification source for non-BP/BMI metrics. All
         // self-suppress when the user has no target / sparse window.
         let chip = classificationChip(from: target)
         let pct = pctInTarget(from: target)
-        let band = targetBandCaption(from: target)
+        let band = targetBandCaption(from: target, units: units)
         // v0.14.4 D1 — when there is NO clinical band/bar (a non-targeted kind such
         // as Aktive Energie + the ~25 other no-target kinds), still give the card a
         // **Verlauf** sparkline so it reads like Gewicht/Puls minus the band. We do
@@ -249,7 +253,7 @@ enum InsightsMetricStatusDescriptor {
             chipLabel: chip?.label,
             chipTone: chip?.tone ?? .neutral,
             headlineValue: headline,
-            unitCaption: kind.unit,
+            unitCaption: units.unitLabel(for: kind),
             pctInTarget: pct,
             // b183 coherence — the non-BP share rides the local 30-day day-count
             // window (`daysInRange30d / daysLogged30d`). Label it "30 T" so each
@@ -278,6 +282,7 @@ enum InsightsMetricStatusDescriptor {
             case .inBand: tone = .success
             case .nearBand: tone = .warning
             case .outBand: tone = .critical
+            case .unknown: tone = .neutral
             }
             break
         }
@@ -298,15 +303,39 @@ enum InsightsMetricStatusDescriptor {
         return Int(share.rounded())
     }
 
+    /// **#115 P2** — the card's headline in the account's unit. The digest's
+    /// 30-day average is canonical SI (glucose too); the fallback is the latest
+    /// CHART point, which the series endpoint already converted for glucose.
+    /// A kind whose transform is the identity keeps the prior 0…1-dp text.
+    private static func headlineText(
+        kind: MetricKind,
+        avg30: Double?,
+        latestValue: Double?,
+        units: UnitPreferences
+    ) -> String? {
+        let identity: (Double) -> String = { $0.formatted(.number.precision(.fractionLength(0 ... 1))) }
+        let rescales = units.transform(for: kind).rescales
+        if let avg30 {
+            return rescales ? MetricValueFormatter.account(avg30, kind: kind, units: units, identity: identity) : identity(avg30)
+        }
+        guard let latestValue else { return nil }
+        return rescales
+            ? MetricValueFormatter.account(latestValue, kind: kind, units: units, glucose: .seriesPreConvertedGlucose, identity: identity)
+            : identity(latestValue)
+    }
+
     /// The Zielband caption from the target row's range. `nil` when the user has
-    /// no target band configured.
+    /// no target band configured. **#115 P2** — the canonical bounds convert
+    /// into the account's unit (``TargetUnitDisplay``), the label follows.
     private static func targetBandCaption(
-        from target: InsightsTargetsResponseDTO.TargetItem?
+        from target: InsightsTargetsResponseDTO.TargetItem?,
+        units: UnitPreferences
     ) -> String? {
         guard let target, let range = target.range else { return nil }
-        let unit = target.unit
-        let lo = fmt(range.min)
-        let hi = fmt(range.max)
+        let display = TargetUnitDisplay(type: target.type, serverUnit: target.unit, units: units)
+        let unit = display.unit
+        let lo = fmt(display.value(range.min))
+        let hi = fmt(display.value(range.max))
         if unit.isEmpty {
             return String(localized: "Target: \(lo)–\(hi)")
         }

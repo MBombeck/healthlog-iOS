@@ -29,7 +29,7 @@ private enum IllnessTestJSON {
 /// flag, and the `403 illness.disabled` → `isDisabled` branch. Real `APIClient`
 /// + stub `URLProtocol`.
 @MainActor
-@Suite("IllnessStore (v1.18.1 W-B)", .serialized)
+@Suite("IllnessStore (v1.18.1 W-B)", .serialized, .mockURLSession)
 struct IllnessStoreTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -54,7 +54,7 @@ struct IllnessStoreTests {
             IllnessTestJSON.episode(id: "a"),
             IllnessTestJSON.episode(id: "b", resolvedAt: "2026-06-09T08:00:00.000Z")
         ]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, IllnessTestJSON.episodes(rows))
         }
         let store = try makeStore()
@@ -68,7 +68,7 @@ struct IllnessStoreTests {
     @Test("no active episode → hasActiveEpisode false (rest-mode off)")
     func restModeOff() async throws {
         let rows = [IllnessTestJSON.episode(id: "b", resolvedAt: "2026-06-09T08:00:00.000Z")]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, IllnessTestJSON.episodes(rows))
         }
         let store = try makeStore()
@@ -79,7 +79,7 @@ struct IllnessStoreTests {
     @Test("optimistic delete removes the row + enqueues an undo action")
     func optimisticDelete() async throws {
         let rows = [IllnessTestJSON.episode(id: "a")]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body: Data = req.httpMethod == "DELETE"
                 ? Data(#"{"data":{"deleted":true},"error":null}"#.utf8)
                 : IllnessTestJSON.episodes(rows)
@@ -99,7 +99,7 @@ struct IllnessStoreTests {
     func deleteRollback() async throws {
         let rows = [IllnessTestJSON.episode(id: "a")]
         nonisolated(unsafe) var firstLoadDone = false
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.httpMethod == "DELETE" {
                 // Server rejects the delete (500 → no outbox path yet → rollback).
                 let body = Data(#"{"data":null,"error":"boom"}"#.utf8)
@@ -122,7 +122,7 @@ struct IllnessStoreTests {
 
     @Test("select loads the full day-log list (v1.18.3) into dayLogsByDate")
     func selectLoadsDayLogList() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             if path.hasSuffix("/day-logs"), req.httpMethod == "GET" {
                 let body = Data(#"""
@@ -154,7 +154,7 @@ struct IllnessStoreTests {
 
     @Test("Day-log list failure remains an error instead of becoming empty")
     func dayLogFailureHasDistinctTimelineState() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path.hasSuffix("/day-logs") == true {
                 let body = Data(#"{"data":null,"error":"temporarily unavailable"}"#.utf8)
                 return (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, body)
@@ -172,7 +172,7 @@ struct IllnessStoreTests {
 
     @Test("select clears the previous episode's day-logs (cross-episode isolation)")
     func selectClearsAcrossEpisodes() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             if path.hasSuffix("/day-logs"), req.httpMethod == "GET" {
                 // Episode "a" has one day-log; episode "b" has none (keyed off the
@@ -205,7 +205,7 @@ struct IllnessStoreTests {
     @Test("undo of a deleted episode restores it (lossless, v1.18.3)")
     func undoRestores() async throws {
         nonisolated(unsafe) var restoreHit = false
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             if path.hasSuffix("/restore"), req.httpMethod == "POST" {
                 restoreHit = true
@@ -237,7 +237,7 @@ struct IllnessStoreTests {
     @Test("resolve chronic 422 surfaces lastErrorWasChronicNoResolve")
     func resolveChronic() async throws {
         let rows = [IllnessTestJSON.episode(id: "a", lifecycle: "CHRONIC_ONGOING")]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path.hasSuffix("/resolve") == true {
                 let body = Data(#"""
                 {"data":null,"error":"Ongoing condition cannot be resolved",
@@ -256,7 +256,7 @@ struct IllnessStoreTests {
 
     @Test("correlation status=ok is rendered by the store")
     func correlationOK() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path.hasSuffix("/correlation") == true {
                 let body = Data(#"""
                 {"data":{"episodeId":"a","status":"ok",
@@ -284,7 +284,7 @@ struct IllnessStoreTests {
 
     @Test("correlation 404 degrades to nil, not an error (defensive)")
     func correlationNotFoundDegrades() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path.hasSuffix("/correlation") == true {
                 let body = Data(#"{"data":null,"error":"Not found"}"#.utf8)
                 return (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, body)
@@ -304,7 +304,7 @@ struct IllnessStoreTests {
 
     @Test("403 illness.disabled flips isDisabled + clears data")
     func illnessDisabled() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Illness journal is not enabled",
              "meta":{"errorCode":"illness.disabled","module":"illness"}}

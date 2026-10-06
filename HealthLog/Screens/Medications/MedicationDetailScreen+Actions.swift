@@ -31,10 +31,14 @@ extension MedicationDetailScreen {
         guard let notifications = appContainer?.notifications else { return }
         guard items != nil else { return }
         let medication = store.medication
-        let runway = MedicationInventorySection.runwayWithinThreshold(
-            medication.runwayDays,
-            threshold: LowStockRunwayPrefStore.days()
-        )
+        // v1.39.1 (#1033) — the server's low-stock pass skips a medication kept
+        // as a record; `nil` here clears any alert armed before the switch.
+        let runway = medication.tracksIntake
+            ? MedicationInventorySection.runwayWithinThreshold(
+                medication.runwayDays,
+                threshold: LowStockRunwayPrefStore.days()
+            )
+            : nil
         Task {
             await notifications.reconcileLowSupplyAlert(
                 medicationID: medication.id,

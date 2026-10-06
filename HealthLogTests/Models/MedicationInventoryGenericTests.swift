@@ -174,19 +174,6 @@ struct MedicationInventoryGenericTests {
         #expect(decoded == unknown)
     }
 
-    @Test("#31: an UNKNOWN remaining collapses the validated summary sum to nil (—)")
-    func unknownRemainingCollapsesSum() {
-        let good = MedicationInventoryItemDTO(
-            id: "g", userId: "u", medicationId: "m", state: "ACTIVE",
-            unitsTotal: 30, unitsRemaining: 30
-        )
-        let unknown = MedicationInventoryItemDTO(
-            id: "u", userId: "u", medicationId: "m", state: "ACTIVE",
-            unitsTotal: nil, unitsRemaining: nil
-        )
-        #expect(MedicationInventorySection.validatedSum([good, unknown], \.unitsRemaining) == nil)
-    }
-
     @Test("#31: editor pre-fill seeds an EMPTY field for an UNKNOWN (nil) count")
     func unitStringEmptyForUnknown() {
         let unknown: Double? = nil
@@ -252,22 +239,6 @@ struct MedicationInventoryGenericTests {
         // A nil sum (pre-validated invalid) renders —.
         #expect(MedicationInventorySection.doseString(Double?.none, unitsPerDose: 1)
             == InventorySanity.placeholder)
-    }
-
-    @Test("W-INVENTORY: a single corrupt row poisons neither the summary nor a sibling row")
-    func corruptRowDoesNotHideInSummarySum() {
-        let good = MedicationInventoryItemDTO(
-            id: "g", userId: "u", medicationId: "m", state: "ACTIVE",
-            unitsTotal: 30, unitsRemaining: 30
-        )
-        let bad = MedicationInventoryItemDTO(
-            id: "b", userId: "u", medicationId: "m", state: "ACTIVE",
-            unitsTotal: 30, unitsRemaining: -5 // would silently net to 25 if summed naively
-        )
-        // Validated sum bails to nil when ANY contributing row is corrupt.
-        #expect(MedicationInventorySection.validatedSum([good, bad], \.unitsRemaining) == nil)
-        // All-good rows still sum normally.
-        #expect(MedicationInventorySection.validatedSum([good, good], \.unitsRemaining) == 60)
     }
 
     @Test("W-INVENTORY: editor pre-fill seeds an EMPTY field (not a fake 0) for corrupt input")

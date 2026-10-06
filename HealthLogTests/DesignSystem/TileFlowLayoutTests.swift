@@ -106,66 +106,6 @@ struct TileFlowLayoutTests {
         #expect(slots.allSatisfy { $0.column == 0 })
     }
 
-    // MARK: - Insights span resolution + mood-pair packing
-
-    @Test("mood halves resolve to half span, every other target to full")
-    func insightsSpanResolution() {
-        #expect(InsightsTargetTileGrid.span(forType: "MOOD_SCORE") == .half)
-        #expect(InsightsTargetTileGrid.span(forType: "MOOD_STABILITY") == .half)
-        #expect(InsightsTargetTileGrid.span(forType: "WEIGHT") == .full)
-        #expect(InsightsTargetTileGrid.span(forType: "ACTIVITY_STEPS") == .full)
-    }
-
-    @Test("the Insights mood pair packs as two halves side-by-side in one row")
-    func insightsMoodPairSideBySide() {
-        // Layout order weight(full), mood-score(half), mood-stability(half),
-        // steps(full) → row0 weight, row1 the two mood halves, row2 steps.
-        let spans = [
-            InsightsTargetTileGrid.span(forType: "WEIGHT"),
-            InsightsTargetTileGrid.span(forType: "MOOD_SCORE"),
-            InsightsTargetTileGrid.span(forType: "MOOD_STABILITY"),
-            InsightsTargetTileGrid.span(forType: "ACTIVITY_STEPS")
-        ]
-        let slots = TileReorderMath.packFlow(spans: spans, columns: 2)
-        #expect(slots.map(\.row) == [0, 1, 1, 2])
-        // The two mood halves share row1, columns 0 and 1.
-        #expect(slots[1].column == 0)
-        #expect(slots[2].column == 1)
-    }
-
-    // MARK: - A3 regression — known full Insights layout yields mixed spans
-
-    /// Guards the operator's "only full-width tiles render; half tiles gone"
-    /// regression: a realistic default-order Insights target set must resolve
-    /// to a MIXED span sequence (the mood pair `.half`, everything else
-    /// `.full`) and pack with the two mood halves side-by-side. If a future
-    /// refactor ever flattens every tile to `.full`, this fails.
-    @Test("a known Insights layout resolves to mixed half/full spans")
-    func knownLayoutYieldsMixedSpans() {
-        // Default visible order: Gewicht, Ruhepuls, Stimmung pair, Schritte,
-        // Compliance — mirrors InsightsLayout.default after the mood-pair
-        // expansion in orderedVisibleItems.
-        let orderedTypes = [
-            "WEIGHT", "RESTING_HR", "MOOD_SCORE", "MOOD_STABILITY",
-            "ACTIVITY_STEPS", "MEDICATION_COMPLIANCE"
-        ]
-        let spans = orderedTypes.map { InsightsTargetTileGrid.span(forType: $0) }
-
-        // The span sequence is genuinely mixed — NOT all `.full`.
-        #expect(spans == [.full, .full, .half, .half, .full, .full])
-        #expect(spans.contains(.half))
-        #expect(spans.filter { $0 == .half }.count == 2)
-
-        let slots = TileReorderMath.packFlow(spans: spans, columns: 2)
-        // row0 Gewicht, row1 Ruhepuls, row2 the two mood halves side-by-side,
-        // row3 Schritte, row4 Compliance.
-        #expect(slots.map(\.row) == [0, 1, 2, 2, 3, 4])
-        #expect(slots[2].column == 0)
-        #expect(slots[3].column == 1)
-        #expect(slots[2].columnSpan == 1)
-        #expect(slots[3].columnSpan == 1)
-    }
-
     // MARK: - W-REORDER — row-item-counts (compositional layout group mapping)
 
     // The `ReorderableTileCollection` compositional layout builds one
@@ -218,7 +158,8 @@ struct TileFlowLayoutTests {
         let committed = TileReorderMath.move(ids, from: 3, to: 0)
         #expect(committed == ["ACTIVITY_STEPS", "WEIGHT", "MOOD_SCORE", "MOOD_STABILITY"])
         // The mood pair stays adjacent → still packs as a side-by-side row.
-        let spans = committed.map { InsightsTargetTileGrid.span(forType: $0) }
+        let halves: Set = ["MOOD_SCORE", "MOOD_STABILITY"]
+        let spans: [TileSpan] = committed.map { halves.contains($0) ? .half : .full }
         #expect(TileReorderMath.rowItemCounts(spans: spans, columns: 2) == [1, 1, 2])
     }
 }

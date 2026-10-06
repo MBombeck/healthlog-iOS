@@ -19,7 +19,7 @@ import Testing
 /// guarded by `src/__tests__/moodlog-removal-guard.test.ts`, which forbids
 /// every moodLog surface but explicitly not this value). Nothing mints new
 /// `MOODLOG` rows.
-@Suite("moodLog retirement — provenance survives the bridge (CU-14)", .serialized)
+@Suite("moodLog retirement — provenance survives the bridge (CU-14)", .serialized, .mockURLSession)
 struct MoodLogRetirementTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -84,7 +84,7 @@ struct MoodLogRetirementTests {
         let repo = MoodRepository(api: api, outbox: outbox)
 
         let recorder = URLRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.url)
             let body = #"""
             {"data":{"entries":[{"id":"srv-mood-legacy-1","mood":"GUT","tags":[],
@@ -101,7 +101,6 @@ struct MoodLogRetirementTests {
                 Data(body.utf8)
             )
         }
-        defer { MockURLProtocol.handler = nil }
 
         let response = try await repo.history(query: MoodHistoryQuery(source: .moodlog))
 
@@ -141,7 +140,7 @@ struct MoodLogRetirementTests {
 /// the property that actually matters: a status payload carrying nothing but
 /// the required `connected` flag decodes, and every richer field staying absent
 /// is silence rather than a special case.
-@Suite("Provider status — absence is a legal state (CU-14)")
+@Suite("Provider status — absence is a legal state (CU-14)", .mockURLSession)
 struct ProviderStatusAbsenceTests {
     @Test("a minimal status payload decodes with every optional absent")
     func minimalStatusDecodes() throws {

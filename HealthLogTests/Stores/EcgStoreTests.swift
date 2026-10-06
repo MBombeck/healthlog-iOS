@@ -13,7 +13,7 @@ import Testing
 /// - a row without a waveform is NOT openable (no push into an empty screen)
 /// - the clinician note fires only for a NON-NORMAL DEVICE verdict
 /// - the disclaimer + result copy exist verbatim (copy contract with the web)
-@Suite("EcgStore — surface gate + device-verdict framing", .serialized)
+@Suite("EcgStore — surface gate + device-verdict framing", .serialized, .mockURLSession)
 @MainActor
 struct EcgStoreTests {
     private func makeStore() -> EcgStore {
@@ -29,7 +29,7 @@ struct EcgStoreTests {
 
     private func respond(_ json: String, status: Int = 200) {
         let body = Data(json.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, body)
         }
     }

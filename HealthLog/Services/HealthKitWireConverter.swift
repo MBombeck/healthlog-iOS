@@ -9,8 +9,8 @@ import Foundation
     /// Wire-Konventionen die in `06-ios-responsibilities.md` und der A1-Audit-Tabelle
     /// festgehalten sind:
     ///
-    /// - **×100-Konversion** für `oxygenSaturation` und `bodyFatPercentage` (HK liefert
-    ///   0..1-Fraktionen, Server erwartet 0..100-Prozente).
+    /// - **Keine ×100-Konversion** (#113): Prozent-Typen (SpO2, Body-Fat, Gait) gehen als
+    ///   rohe HK-Fraktion 0..1 auf die Leitung, der Server skaliert (`percentFromFraction`).
     /// - **Sleep-Stage-Decoder** — `HKCategorySample` mit `sleepAnalysis` wird zu einer
     ///   Row mit `sleepStage = categorySample.value` (Codepoint 0..5) und
     ///   `value = (endDate - startDate) / 60` Minuten.
@@ -132,9 +132,14 @@ import Foundation
             case HKQuantityTypeIdentifier.bodyMass.rawValue:
                 return WireUnit(hkUnit: .gramUnit(with: .kilo), wireSymbol: "kg", scale: 1)
 
-            // % — Body-Fat (HK liefert 0..1, Server will 0..100)
+            // % — Body-Fat. #113: HK liefert die Fraktion 0..1 und die geht roh
+            // auf die Leitung (`scale: 1`), wie bei Gait und Steadiness. Der
+            // Server skaliert selbst (`percentFromFraction`, v1.39.0): `0.25`
+            // wird als `25` gespeichert. Das frühere `scale: 100` ließ ältere
+            // Server zweimal skalieren (`2500`), die Range-Prüfung verwarf die
+            // Zeile als `value_out_of_range`, und der Anker lief darüber hinweg.
             case HKQuantityTypeIdentifier.bodyFatPercentage.rawValue:
-                return WireUnit(hkUnit: .percent(), wireSymbol: "%", scale: 100)
+                return WireUnit(hkUnit: .percent(), wireSymbol: "%", scale: 1)
 
             // °C — Body-Temperature
             case HKQuantityTypeIdentifier.bodyTemperature.rawValue:
@@ -160,9 +165,11 @@ import Foundation
             case HKQuantityTypeIdentifier.respiratoryRate.rawValue:
                 return WireUnit(hkUnit: HKUnit.count().unitDivided(by: .minute()), wireSymbol: "br/min", scale: 1)
 
-            // % — Oxygen Saturation (HK liefert 0..1, Server will 0..100)
+            // % — Oxygen Saturation. #113: die rohe HK-Fraktion (`0.97`) geht auf
+            // die Leitung, der Server speichert `97` (OpenAPI v1.39.0: „an oxygen
+            // saturation sent as `0.98` in `fraction` is stored as `98`").
             case HKQuantityTypeIdentifier.oxygenSaturation.rawValue:
-                return WireUnit(hkUnit: .percent(), wireSymbol: "%", scale: 100)
+                return WireUnit(hkUnit: .percent(), wireSymbol: "%", scale: 1)
 
             // mg/dL — Blood Glucose
             case HKQuantityTypeIdentifier.bloodGlucose.rawValue:

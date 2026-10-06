@@ -82,7 +82,7 @@ struct MarkMedicationTakenIntent: AppIntent {
             )
         } catch let error as HLError where error.shouldPersistToOutbox {
             // Durably enqueued (incl. a transient-refresh 401) — saved, not lost.
-            return .result(dialog: IntentCopy.queuedOffline)
+            return .result(dialog: IntentCopy.queued(after: error))
         } catch {
             return .result(dialog: IntentCopy.writeFailed)
         }
@@ -130,7 +130,10 @@ struct MedicationEntityQuery: EntityQuery {
     private func fetchAll() async throws -> [MedicationEntity] {
         let deps = IntentDependencies.resolve()
         guard IntentDependencies.isSignedIn(deps) else { return [] }
-        let medications = try await deps.medicationsRepo.list()
+        // v1.39.1 (#1033) — Siri offers no intake for a medication kept as a
+        // record (intake tracking off); v1.39.4 (#1040) — nor for one the server
+        // calls not actionable today (an ended or not yet started course).
+        let medications = try await deps.medicationsRepo.list().filter(\.offersIntakeActions)
         return medications.map { MedicationEntity(id: $0.id, name: $0.name) }
     }
 }

@@ -22,7 +22,7 @@
     /// Zustand oder mit gesetztem Schluesselbund. Genau diese Luecke schliesst
     /// diese Datei — der Ausgangszustand ist ueberall „angemeldet, aber ohne
     /// Adresse".
-    @Suite("R1 — Installation ohne Serveradresse")
+    @Suite("R1 — Installation ohne Serveradresse", .mockURLSession)
     struct NoServerRecoveryTests {
         // MARK: - Erkennen (R1 §1)
 

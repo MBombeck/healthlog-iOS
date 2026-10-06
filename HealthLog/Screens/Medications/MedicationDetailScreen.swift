@@ -297,7 +297,13 @@ public struct MedicationDetailScreen: View {
                     )
                 }
 
-                ScheduleSection(schedule: store.medication.schedule)
+                // v1.39.1 (#1033) — a medication kept as a record shows its
+                // stored schedule as information, with a line saying nothing
+                // falls due from it.
+                ScheduleSection(
+                    schedule: store.medication.displaySchedule,
+                    isRecordOnly: !store.medication.tracksIntake
+                )
 
                 // W-COMPLIANCE-INV Task 2 — generic per-medication inventory
                 // for ALL treatment classes (web "Bestand" tab parity). The
@@ -313,6 +319,7 @@ public struct MedicationDetailScreen: View {
                     MedicationInventorySection(
                         medication: store.medication,
                         items: items,
+                        summary: store.inventorySummary,
                         // MED-4 / C3 / ROUTE-06 — the runway is the SERVER's
                         // (v1.37.19 `runwayDays`, from the same slot-aware burn
                         // rate its low-stock push evaluates). Nothing is
@@ -373,6 +380,9 @@ public struct MedicationDetailScreen: View {
         .onChange(of: store.inventoryItems) { _, items in
             reconcileLowSupplyAlert(items: items)
         }
+        // K1 — the banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing (H2).
+        .hlReserveErrorBannerSpace(store.error)
         .overlay(alignment: .top) {
             VStack(spacing: HLSpace.sm) {
                 if let error = store.error {

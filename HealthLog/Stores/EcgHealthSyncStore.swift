@@ -15,8 +15,8 @@ import Observation
 /// only way to find it (J1).
 ///
 /// The second reason still holds, and shapes the adoption rather than the type
-/// set: the upload is a *server* act — `POST /api/insights/ecg`, gated on the
-/// `insights` module — so ``FirstSheetSyncAdoption`` activates it only where a
+/// set: the upload is a *server* act — `POST /api/insights/ecg` (no module gate
+/// since server v1.39) — so ``FirstSheetSyncAdoption`` activates it only where a
 /// paired, authenticated server exists. A standalone install is asked for the
 /// permission with everything else, and simply does not start a transfer that
 /// has no destination.

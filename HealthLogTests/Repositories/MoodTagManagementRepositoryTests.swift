@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 
     @MainActor
-    @Suite("Mood tag management repository v1.17", .serialized)
+    @Suite("Mood tag management repository v1.17", .serialized, .mockURLSession)
     struct MoodTagManagementRepositoryTests {
         private func makeAPI() -> APIClient {
             let environment = AppEnvironment(
@@ -27,7 +27,7 @@ import Testing
         @Test("Management GET requests hidden, archived, and usage metadata")
         func managementReadIncludesCompleteManageSet() async throws {
             let request = RequestCapture()
-            MockURLProtocol.handler = { urlRequest in
+            MockURLProtocol.install { urlRequest in
                 request.capture(urlRequest)
                 return Self.response(for: urlRequest, body: Self.catalogJSON)
             }
@@ -74,7 +74,7 @@ import Testing
         @Test("PATCH custom carries categoryKey and percent-encodes the opaque key")
         func patchCustomCategoryAndSafePath() async throws {
             let request = RequestCapture()
-            MockURLProtocol.handler = { urlRequest in
+            MockURLProtocol.install { urlRequest in
                 request.capture(urlRequest)
                 return Self.response(
                     for: urlRequest,
@@ -103,7 +103,7 @@ import Testing
         @Test("Archive and restore PATCH the custom tag isActive flag")
         func archiveRestoreRequestShape() async throws {
             let request = RequestCapture()
-            MockURLProtocol.handler = { urlRequest in
+            MockURLProtocol.install { urlRequest in
                 request.capture(urlRequest)
                 return Self.response(
                     for: urlRequest,
@@ -133,7 +133,7 @@ import Testing
         func groupCRUDRequestShapes() async throws {
             let request = RequestCapture()
             let calls = Counter()
-            MockURLProtocol.handler = { urlRequest in
+            MockURLProtocol.install { urlRequest in
                 let call = calls.increment()
                 request.capture(urlRequest)
                 switch call {
@@ -189,7 +189,7 @@ import Testing
         func groupOrderWritePreservesPlacements() async throws {
             let request = RequestCapture()
             let calls = Counter()
-            MockURLProtocol.handler = { urlRequest in
+            MockURLProtocol.install { urlRequest in
                 _ = calls.increment()
                 request.capture(urlRequest)
                 return Self.response(for: urlRequest, body: Self.layoutJSON)
@@ -208,7 +208,7 @@ import Testing
         @Test("Placement PUT preserves group order and sends the full visible map")
         func placementWritePreservesGroupOrderAndUsesFullMap() async throws {
             let request = RequestCapture()
-            MockURLProtocol.handler = { urlRequest in
+            MockURLProtocol.install { urlRequest in
                 request.capture(urlRequest)
                 return Self.response(for: urlRequest, body: Self.layoutJSON)
             }

@@ -15,6 +15,9 @@
 //   - v0.14.1 W-REGFIX — v1.17.1 source-fixed render-only signals
 //     (ANS-charge / cardio-load / sleep-score / body-temp deviation) carry
 //     a custom HealthLog CodeSystem code so the FHIR export stays complete.
+//   - #115 R3 — VO2 max + walking speed / asymmetry / step length, moved here
+//     when they switched from (invalid) LOINC codes to HealthKit identifiers,
+//     byte-aligned with the server's v1.39.3 FHIR table.
 //
 
 import Foundation
@@ -234,6 +237,59 @@ extension MetricFHIRMapper {
                     system: .healthKit
                 ),
                 ucum: UCUMUnit(unit: "1")
+            )
+
+        // #115 R3 — server v1.39.3 FHIR table (`expected-measurement-loinc.json`).
+        // 96402-2 and 91557-1 do not exist, and 41957-2 / 41955-6 name other
+        // gait measurements, so the HL7 validator rejected or misread all four.
+        // Like the server, they now carry their HealthKit identifier on the shared
+        // healthkit CodeSystem; VO2 max says it is Apple's estimate.
+        case .vo2Max:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKQuantityTypeIdentifierVO2Max",
+                    display: "VO2 max (estimated)",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "mL/min/kg")
+            )
+
+        case .walkingSpeed:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKQuantityTypeIdentifierWalkingSpeed",
+                    display: "Walking speed",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "m/s")
+            )
+
+        case .walkingAsymmetry:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKQuantityTypeIdentifierWalkingAsymmetryPercentage",
+                    display: "Walking asymmetry percentage",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "%")
+            )
+
+        case .walkingStepLength:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKQuantityTypeIdentifierWalkingStepLength",
+                    display: "Walking step length",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "m")
             )
 
         default:

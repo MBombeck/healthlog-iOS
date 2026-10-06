@@ -19,7 +19,7 @@
     /// Set `SYNCPROG_RENDER_DIR=/tmp/syncprog` to export the rendered PNGs for
     /// visual review (used by the W-SYNCPROGRESS report).
     @MainActor
-    @Suite("SyncStatusCaption — sync-progress render verification", .serialized)
+    @Suite("SyncStatusCaption — sync-progress render verification", .serialized, .mockURLSession)
     struct SyncProgressRenderTests {
         // MARK: - Fixtures
 
@@ -42,7 +42,7 @@
                 minimumSyncingHold: .zero,
                 doneHold: .zero
             )
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = Data(#"""
                 {"data":{
                   "userId":"usr_render","timezone":"Europe/Berlin",

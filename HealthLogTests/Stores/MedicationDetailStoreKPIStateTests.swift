@@ -2,165 +2,101 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-COMPLIANCE-INV — KPI paint-state sequence pins.**
+/// **#115 · 1.3 — the detail KPI is the server's `compliance30`, verbatim.**
 ///
-/// The operator-reported flicker (compliance % jumping 100 → 60 → 50 on
-/// screen-open) was the detail KPI painting THREE different sources during a
-/// single `load()`:
-///
-///   1. paint 1 — empty `intakes` → `ComplianceSummary(0, 0)` → ratio 1.0 →
-///      **100 %** (pure client artefact),
-///   2. paints 2..N — the ±30-min in-time derivation re-ran against every
-///      partially-drained intake page,
-///   3. final paint — the server dose-history ledger landed last.
-///
-/// `complianceKPIState()` pins the fixed sequence: `.pending` until the load
-/// settles (placeholder, no number at all), then exactly ONE number — the
-/// server-canonical value when any server payload exists, or the clearly
-/// marked `.localFallback` when the load settled without one (offline / old
-/// server). No intermediate client value can ever paint.
+/// Until 1.0.3 the KPI tallied "on time" on the client (ledger rows, else the
+/// drained intake table with a ±30 min rule) and ranked that above the
+/// server's `compliance30`. These tests pin that only the server number
+/// paints, that `applicable: false` never paints its zero placeholders, and
+/// that a settled load without a server payload reads "unknown" rather than a
+/// local estimate. Fixture shapes follow `MedicationComplianceResponse` in
+/// `docs/api/openapi.yaml` at `v1.39.0`.
 @MainActor
-@Suite("MedicationDetailStore — W-COMPLIANCE-INV KPI paint state")
+@Suite("MedicationDetailStore — KPI is the server's compliance30 (#115 1.3)")
 struct MedicationDetailStoreKPIStateTests {
-    @Test("Pre-settle: empty store paints .pending, never the 100% artefact")
+    private static func payload(
+        rate30: Int = 75, taken30: Int = 3, missed30: Int = 1, skipped30: Int = 0,
+        applicable: Bool? = true
+    ) -> MedicationCompliancePayload {
+        MedicationCompliancePayload(
+            compliance7: ComplianceWindowResult(totalExpected: 1, taken: 1, skipped: 0, missed: 0, rate: 100, streak: 1),
+            compliance30: ComplianceWindowResult(
+                totalExpected: taken30 + missed30 + skipped30, taken: taken30, skipped: skipped30,
+                missed: missed30, rate: rate30, streak: 0
+            ),
+            applicable: applicable
+        )
+    }
+
+    @Test("pre-settle without a payload paints .pending, never a number")
     func pendingBeforeAnyData() {
         let store = makeStore()
         store._testInject(intakes: [], settled: false)
         #expect(store.complianceKPIState() == .pending)
     }
 
-    @Test("Pre-settle: partially-drained intakes still paint .pending (no interim repaint)")
-    func pendingWhileIntakesDrain() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
+    @Test("the server's compliance30 paints verbatim: rate, taken, taken + missed")
+    func serverWindowVerbatim() {
         let store = makeStore()
-        // Simulate the mid-load state: one intake page landed, server
-        // compliance + ledger have not. The old code painted the client
-        // in-time derivation here (the "60" of 100→60→50).
-        store._testInject(intakes: makeWindow(days: 10, now: now), settled: false)
-        #expect(store.complianceKPIState(now: now) == .pending)
+        store._testInject(intakes: [], compliance: Self.payload(rate30: 75, taken30: 3, missed30: 1, skipped30: 2))
+        #expect(store.complianceKPIState() == .server(.init(rate: 75, taken: 3, expected: 4)))
     }
 
-    @Test("Settled with ledger: paints .server with the ledger numbers")
-    func serverFromLedger() {
+    @Test("a client on-time tally no longer outranks the server (ledger + drained intakes present)")
+    func clientTallyNeverWins() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let rows: [MedicationDoseHistoryRow] = [
-            makeLedgerRow(id: "r1", status: .takenOnTime, at: now.addingTimeInterval(-1 * 86400)),
-            makeLedgerRow(id: "r2", status: .missed, at: now.addingTimeInterval(-2 * 86400))
-        ]
-        let store = makeStore()
-        store._testInject(
-            intakes: [],
-            doseHistory: makeEnvelope(rows: rows, now: now)
-        )
-        let state = store.complianceKPIState(now: now)
-        #expect(state == .server(.init(inTime: 1, total: 2)))
-    }
-
-    @Test("Ledger wins even before settle (server value may paint early, client may not)")
-    func ledgerPaintsImmediately() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let rows = [makeLedgerRow(id: "r1", status: .takenOnTime, at: now.addingTimeInterval(-86400))]
-        let store = makeStore()
-        store._testInject(
-            intakes: [],
-            doseHistory: makeEnvelope(rows: rows, now: now),
-            settled: false
-        )
-        #expect(store.complianceKPIState(now: now) == .server(.init(inTime: 1, total: 1)))
-    }
-
-    @Test("Settled without any server payload: clearly-marked .localFallback")
-    func localFallbackAfterSettleWithoutServer() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let store = makeStore()
-        store._testInject(intakes: makeWindow(days: 10, now: now), settled: true)
-        guard case let .localFallback(summary) = store.complianceKPIState(now: now) else {
-            Issue.record("expected .localFallback when the load settled offline")
-            return
-        }
-        #expect(summary.total == 10)
-    }
-
-    @Test("Settled with server window (old server, no ledger, no drained intakes): .server")
-    func serverWindowWithoutLedger() {
-        let payload = MedicationCompliancePayload(
-            compliance7: ComplianceWindowResult(
-                totalExpected: 1, taken: 1, skipped: 0, missed: 0, rate: 100, streak: 1
-            ),
-            compliance30: ComplianceWindowResult(
-                totalExpected: 4, taken: 3, skipped: 0, missed: 1, rate: 75, streak: 0
-            ),
-            dailyCompliance: [
-                "2026-05-13": DailyComplianceBucket(
-                    expected: 1, taken: 1, skipped: 0, onTime: 1, late: 0, veryLate: 0,
-                    due: true, expectedCount: 1
-                )
-            ]
-        )
-        let store = makeStore()
-        store._testInject(intakes: [], compliance: payload)
-        #expect(store.complianceKPIState() == .server(.init(inTime: 3, total: 4)))
-    }
-
-    @Test("W-MEDVERIFY — capable server window paints .server even with drained intakes (never 'Offline – lokale Schätzung' while online)")
-    func capableServerWindowBeatsDrainedIntakes() {
-        // Demo-walkthrough regression (v0.14.8): ledger-less server, online,
-        // `/compliance` landed AND the intake table drained — the old ordering
-        // painted `.localFallback` ("Offline – lokale Schätzung") with a
-        // re-derived 0 % while the med card showed the server 75 %. A
-        // v1.7.0-capable payload must paint `.server` with its verbatim window.
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let payload = MedicationCompliancePayload(
-            compliance7: ComplianceWindowResult(
-                totalExpected: 1, taken: 0, skipped: 0, missed: 1, rate: 0, streak: 0
-            ),
-            compliance30: ComplianceWindowResult(
-                totalExpected: 4, taken: 3, skipped: 0, missed: 1, rate: 75, streak: 5
-            ),
-            dailyCompliance: [
-                "2026-06-07": DailyComplianceBucket(
-                    expected: 1, taken: 0, skipped: 0, onTime: 0, late: 0, veryLate: 0,
-                    due: true, expectedCount: 1
-                )
-            ]
-        )
-        #expect(payload.isV170Capable)
-        // Drained history present (10 in-window slots) — must NOT flip the
-        // paint to the local estimate anymore.
-        let store = makeStore()
-        store._testInject(intakes: makeWindow(days: 10, now: now), compliance: payload)
-        #expect(store.complianceKPIState(now: now) == .server(.init(inTime: 3, total: 4)))
-    }
-
-    @Test("State sequence over a simulated load: pending → pending → server (no value jump)")
-    func paintSequenceHasNoValueJump() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let store = makeStore()
-        var painted: [MedicationDetailStore.ComplianceKPIState] = []
-
-        // t0 — screen pushed, nothing loaded.
-        store._testInject(intakes: [], settled: false)
-        painted.append(store.complianceKPIState(now: now))
-        // t1 — first intake page drained.
-        store._testInject(intakes: makeWindow(days: 5, now: now), settled: false)
-        painted.append(store.complianceKPIState(now: now))
-        // t2 — load settles with the server ledger.
+        // Ledger says 1 of 2 on time (50 %), the drained table 10 of 10 (100 %);
+        // the server says 75 %. Only the server number may paint.
         let rows = [
             makeLedgerRow(id: "r1", status: .takenOnTime, at: now.addingTimeInterval(-86400)),
             makeLedgerRow(id: "r2", status: .takenLate, at: now.addingTimeInterval(-2 * 86400))
         ]
+        let store = makeStore()
         store._testInject(
-            intakes: makeWindow(days: 5, now: now),
+            intakes: makeWindow(days: 10, now: now),
+            compliance: Self.payload(),
             doseHistory: makeEnvelope(rows: rows, now: now)
         )
-        painted.append(store.complianceKPIState(now: now))
+        #expect(store.complianceKPIState() == .server(.init(rate: 75, taken: 3, expected: 4)))
+    }
 
-        // Exactly one numeric paint, and it is the server value.
-        #expect(painted == [
-            .pending,
-            .pending,
-            .server(.init(inTime: 1, total: 2))
-        ])
+    @Test("applicable: false (NO_LOCAL_SCHEDULE) never paints its zero placeholders as 0 %")
+    func notApplicable() {
+        let store = makeStore()
+        store._testInject(intakes: [], compliance: Self.payload(rate30: 0, taken30: 0, missed30: 0, applicable: false))
+        #expect(store.complianceKPIState() == .notApplicable)
+    }
+
+    @Test("an older server without `applicable` keeps its percentage")
+    func olderServerStillApplicable() {
+        let store = makeStore()
+        store._testInject(intakes: [], compliance: Self.payload(applicable: nil))
+        #expect(store.complianceKPIState() == .server(.init(rate: 75, taken: 3, expected: 4)))
+    }
+
+    @Test("settled offline (no payload) reads unknown, not a local estimate from the drained history")
+    func unavailableAfterSettleWithoutServer() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let rows = [makeLedgerRow(id: "r1", status: .takenOnTime, at: now.addingTimeInterval(-86400))]
+        let store = makeStore()
+        store._testInject(
+            intakes: makeWindow(days: 10, now: now),
+            doseHistory: makeEnvelope(rows: rows, now: now),
+            settled: true
+        )
+        #expect(store.complianceKPIState() == .unavailable)
+    }
+
+    @Test("applicable decodes from the v1.39 wire shape")
+    func decodesApplicable() throws {
+        let json = #"""
+        {"applicable":false,"notApplicableReason":"NO_LOCAL_SCHEDULE",
+         "compliance7":{"totalExpected":0,"taken":0,"skipped":0,"missed":0,"rate":0,"streak":0},
+         "compliance30":{"totalExpected":0,"taken":0,"skipped":0,"missed":0,"rate":0,"streak":0},
+         "dailyCompliance":{},"complianceDisplay":null}
+        """#
+        let payload = try JSONDecoder.hlDefault.decode(MedicationCompliancePayload.self, from: Data(json.utf8))
+        #expect(payload.isApplicable == false)
     }
 
     // MARK: - Fixtures

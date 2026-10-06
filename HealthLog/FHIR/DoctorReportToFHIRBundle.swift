@@ -28,15 +28,15 @@
 //
 //  Cross-reference resolution
 //  --------------------------
-//  Every Bundle entry sets `fullUrl = "urn:uuid:<resource.id>"`. Per
-//  FHIR R4 §3.2.0.6 ("Bundle - Resolving References in Bundles"), a
-//  Reference of the form `"Patient/<id>"` resolves to the entry whose
-//  `Resource.id` matches — both forms (relative + urn:uuid) are
-//  accepted by every spec-conformant FHIR consumer (HAPI, Microsoft
-//  FHIR server, Apple Health Records). We keep the existing H.2 / H.3
-//  mappers' `Reference("Patient/<patientID>")` convention and add the
-//  `urn:uuid:` fullUrl so a future Bundle-aware consumer can resolve
-//  either way.
+//  Every Bundle entry sets `fullUrl = "urn:uuid:<resource.id>"`, and
+//  every reference to another entry is that entry's `urn:uuid:<id>`
+//  (#115 R4, `entryReference`). A relative `"Patient/<id>"` would
+//  resolve against the RESTful base of its fullUrl (FHIR R4 bdl-7,
+//  §2.36.4), and a urn:uuid has none: the HL7 validator rejected each
+//  one as unresolvable. Same form as the server's exporter (v1.39.6).
+//  Contained `#…` refs (the Coverage payor) stay local. Coverage and
+//  both DiagnosticReports are reached from Composition sections, see
+//  `linkUnsectionedEntries`.
 //
 //  Composition sections layout
 //  ---------------------------
@@ -166,22 +166,22 @@ enum DoctorReportToFHIRBundle {
         let compositionFullURL = "urn:uuid:\(compositionID)"
 
         let observationRefs = observations.map { obs in
-            Reference(reference: FHIRString("Observation/\(obs.id?.value?.string ?? "")").asPrimitive())
+            entryReference(obs.id)
         }
         let medicationRefs = medicationStatements.map { stmt in
-            Reference(reference: FHIRString("MedicationStatement/\(stmt.id?.value?.string ?? "")").asPrimitive())
+            entryReference(stmt.id)
         }
         let labRefs = labObservations.map { obs in
-            Reference(reference: FHIRString("Observation/\(obs.id?.value?.string ?? "")").asPrimitive())
+            entryReference(obs.id)
         }
         // The Conditions section routes the Condition refs; the supporting
         // day-log Observations also sit under it so a clinician sees the whole
         // episode in one place.
         let conditionRefs = conditions.map { cond in
-            Reference(reference: FHIRString("Condition/\(cond.id?.value?.string ?? "")").asPrimitive())
+            entryReference(cond.id)
         }
         let illnessObservationRefs = illnessObservations.map { obs in
-            Reference(reference: FHIRString("Observation/\(obs.id?.value?.string ?? "")").asPrimitive())
+            entryReference(obs.id)
         }
 
         let composition = makeComposition(
@@ -239,7 +239,7 @@ enum DoctorReportToFHIRBundle {
             labObservations: labObservations,
             conditions: conditions,
             illnessObservations: illnessObservations,
-            vitalsReport: (diagnosticReportID, diagnosticReport),
+            vitalsReport: observations.isEmpty ? nil : (diagnosticReportID, diagnosticReport),
             labReport: labDiagnosticReport.map { (labReportID, $0) }
         )
         return bundle
@@ -375,7 +375,7 @@ enum DoctorReportToFHIRBundle {
         }
 
         // ---- Coverage ---------------------------------------------------
-        let beneficiary = Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+        let beneficiary = entryReference(patientID)
         // Local reference to the contained Organization (`#org`).
         let payorRef = Reference(reference: FHIRString("#\(orgID)").asPrimitive())
 
@@ -418,7 +418,7 @@ enum DoctorReportToFHIRBundle {
         let observation = Observation(code: code, status: status)
         observation.id = FHIRString(UUID().uuidString.lowercased()).asPrimitive()
         observation.category = [makeCategoryConcept(MetricFHIRMapper.category(for: row.kind))]
-        observation.subject = Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+        observation.subject = entryReference(patientID)
 
         // Aggregate over the report window → effectivePeriod.
         let period = Period()
@@ -482,7 +482,7 @@ enum DoctorReportToFHIRBundle {
         let observation = Observation(code: code, status: status)
         observation.id = FHIRString(UUID().uuidString.lowercased()).asPrimitive()
         observation.category = [makeCategoryConcept(MetricFHIRMapper.category(for: kind))]
-        observation.subject = Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+        observation.subject = entryReference(patientID)
         observation.effective = .dateTime(FHIRPrimitiveFactory.dateTime(from: point.at))
 
         if kind == .bloodPressure {
@@ -522,7 +522,7 @@ enum DoctorReportToFHIRBundle {
         let statement = MedicationStatement(
             medication: .codeableConcept(concept),
             status: status.asPrimitive(),
-            subject: Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+            subject: entryReference(patientID)
         )
         statement.id = FHIRString(UUID().uuidString.lowercased()).asPrimitive()
 
@@ -562,7 +562,7 @@ enum DoctorReportToFHIRBundle {
         typeConcept.coding = [typeCoding]
         typeConcept.text = FHIRString("HealthLog Doctor Report").asPrimitive()
 
-        let patientRef = Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+        let patientRef = entryReference(patientID)
 
         let composition = Composition(
             author: [patientRef], // self-reported snapshot
@@ -676,7 +676,7 @@ enum DoctorReportToFHIRBundle {
             status: DiagnosticReportStatus.final.asPrimitive()
         )
         report.id = FHIRString(reportID).asPrimitive()
-        report.subject = Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+        report.subject = entryReference(patientID)
 
         let period = Period()
         period.start = FHIRPrimitiveFactory.dateTime(from: spec.cover.periodStart)
@@ -709,7 +709,7 @@ enum DoctorReportToFHIRBundle {
         coding.code = FHIRString(loinc.code).asPrimitive()
         coding.display = FHIRString(loinc.display).asPrimitive()
         let concept = CodeableConcept()
-        concept.coding = [coding]
+        concept.coding = [coding] + companionCodings(for: loinc) // #115 R3 — R4 vital-signs magic code
         concept.text = FHIRString(loinc.display).asPrimitive()
         return concept
     }

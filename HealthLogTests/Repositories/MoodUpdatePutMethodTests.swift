@@ -11,7 +11,7 @@ import Testing
 /// editing a day's mood). These tests pin that both the live update path and the
 /// outbox-replay path issue **PUT** against the item route, through the real
 /// `MoodRepository` + real `APIClient` (`MockURLProtocol` driving HTTP).
-@Suite("Mood update uses PUT (B8 405 fix)", .serialized)
+@Suite("Mood update uses PUT (B8 405 fix)", .serialized, .mockURLSession)
 struct MoodUpdatePutMethodTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -52,7 +52,7 @@ struct MoodUpdatePutMethodTests {
         let repo = MoodRepository(api: api, outbox: outbox)
 
         let captured = MoodMethodRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return okResponse(req)
         }
@@ -71,7 +71,7 @@ struct MoodUpdatePutMethodTests {
         let repo = MoodRepository(api: api, outbox: outbox)
 
         let captured = MoodMethodRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return okResponse(req)
         }

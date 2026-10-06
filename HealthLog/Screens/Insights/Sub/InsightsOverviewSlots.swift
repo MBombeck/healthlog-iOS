@@ -21,10 +21,10 @@ import SwiftUI
 // `InsightsContainerScreen` / `InsightsPagerModel` decomposition already in the
 // tree (the View stays thin, the leaves own their reads).
 
-// MARK: - Header slot (InsightsTargetsStore + FeatureFlags + Backend + gates)
+// MARK: - Header slot (InsightsTargetsStore + AI capability + Backend + gates)
 
 /// Owns the inline Insights header (large title + trailing action circles). Reads
-/// `InsightsTargetsStore.targets` (customise-button gate), `FeatureFlagsStore`,
+/// `InsightsTargetsStore.targets` (customise-button gate), the `coach` AI capability,
 /// `BackendAvailability`, and the `AppContainer` gates here so a targets refresh
 /// / consent change invalidates ONLY the header, not the whole overview.
 struct InsightsOverviewHeader: View {
@@ -35,7 +35,6 @@ struct InsightsOverviewHeader: View {
     let onAskCoach: () -> Void
 
     @Environment(InsightsTargetsStore.self) private var insightsTargetsStore
-    @Environment(FeatureFlagsStore.self) private var featureFlags
     @Environment(BackendAvailability.self) private var backend
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -62,7 +61,9 @@ struct InsightsOverviewHeader: View {
             // DRIFT-3 — the Coach affordance is the SAME monochrome, STATIC
             // `InsightsHeaderActionCircle(sparkles)` used on every other Insights
             // header. Task #53 — shown in `.onDevice` + `.online`.
-            if aiSurfacesVisible, featureFlags.isEnabled(.assistantCoach) {
+            // #115 · 0.2 — and only while the server's `coach` capability
+            // offers an entry point (`appContainer.offersCoach`).
+            if aiSurfacesVisible, appContainer.offersCoach {
                 InsightsHeaderActionCircle(
                     systemImage: "sparkles",
                     accessibilityLabelText: String(localized: "Ask the coach"),
@@ -103,7 +104,8 @@ struct InsightsOverviewHeader: View {
         let provider = container.resolvedAIProvider
         return InsightsScreen.isCoachReengageAvailable(
             aiMode: container.aiMode,
-            coachFlagEnabled: featureFlags.isEnabled(.assistantCoach),
+            coachCapability: container.aiCapabilityGate.reportsCapabilities
+                ? container.aiCapabilityGate.state(.coach) : nil,
             hasServer: backend.hasServer,
             resolvedProvider: provider,
             hasConsentForProvider: container.aiConsentStore.hasConsent(for: provider),
@@ -118,17 +120,16 @@ struct InsightsOverviewHeader: View {
     }
 }
 
-// MARK: - Coach slot (FeatureFlags + Settings + Backend + module gates)
+// MARK: - Coach slot (AI capability + Settings + Backend + module gates)
 
 /// Owns the quiet Coach re-engage card + proactive cadence suggestions. Reads
-/// `FeatureFlagsStore`, `SettingsStore.coachHeroDismissed`,
+/// the `coach` AI capability, `SettingsStore.coachHeroDismissed`,
 /// `BackendAvailability`, and the (non-`@Observable`) `AppContainer` gates here
 /// so a feature-flag / dismissal / consent change invalidates ONLY this slot,
 /// not the whole overview.
 struct InsightsCoachSlot: View {
     let appContainer: AppContainer?
 
-    @Environment(FeatureFlagsStore.self) private var featureFlags
     @Environment(SettingsStore.self) private var settings
     @Environment(BackendAvailability.self) private var backend
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -144,7 +145,7 @@ struct InsightsCoachSlot: View {
         // ── COACH CADENCE SUGGESTIONS — proactive accept/dismiss cards (#30). ──
         // Calm cards (NOT the colourful hero); the store owns opt-in + module +
         // online gating and self-suppresses when there is nothing to offer.
-        if coachModuleEnabled, let cadenceStore = appContainer?.coachCadenceSuggestionsStore {
+        if coachModuleEnabled, appContainer.offersCoach, let cadenceStore = appContainer?.coachCadenceSuggestionsStore {
             CoachCadenceSuggestionsSection(store: cadenceStore)
                 .transition(reduceMotion ? .identity : .opacity)
         }
@@ -169,7 +170,8 @@ struct InsightsCoachSlot: View {
         let provider = container.resolvedAIProvider
         return InsightsScreen.isCoachReengageAvailable(
             aiMode: container.aiMode,
-            coachFlagEnabled: featureFlags.isEnabled(.assistantCoach),
+            coachCapability: container.aiCapabilityGate.reportsCapabilities
+                ? container.aiCapabilityGate.state(.coach) : nil,
             hasServer: backend.hasServer,
             resolvedProvider: provider,
             hasConsentForProvider: container.aiConsentStore.hasConsent(for: provider),
@@ -185,12 +187,12 @@ struct InsightsCoachSlot: View {
     }
 }
 
-// MARK: - Wellness + Signals slot (DerivedInsightsStore + Backend + module gate)
+// MARK: - Wellness + Signals slot (DerivedInsightsStore + Backend)
 
 /// Owns the DEINE GESUNDHEITSWERTE wellness-score rings + the warm-in-flight
 /// placeholder + the Tagesbriefing-adjacent SIGNALE DES TAGES section. Reads
 /// `DerivedInsightsStore` (`presentable` / `metrics` / `warming`) + `Backend` +
-/// the `insights` module gate here so a derived-metrics refresh — which fires
+/// ``InsightsOverviewGate`` here so a derived-metrics refresh — which fires
 /// repeatedly across the pull-to-refresh fan-out — invalidates ONLY this slot.
 ///
 /// The `generalHealthReportSlot` (Tagesbriefing prose) renders BETWEEN the
@@ -208,7 +210,7 @@ struct InsightsWellnessScoresSlot: View {
     @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, insightsModuleEnabled {
+        if backend.hasServer, InsightsOverviewGate.isVisible(.wellnessScores, appContainer) {
             InsightsServerDerivedOverview(
                 derivedMetrics: derivedInsightsStore.presentable,
                 // I-2 — full list (incl. insufficient arms) for the score-ring gate.
@@ -237,16 +239,10 @@ struct InsightsWellnessScoresSlot: View {
             }
         }
     }
-
-    /// #30 — the `insights` module gates the AI/derived overview block. Fail-open
-    /// when the map is absent.
-    private var insightsModuleEnabled: Bool {
-        InsightsOverviewGate.insightsModuleEnabled(appContainer)
-    }
 }
 
 /// Owns the SIGNALE DES TAGES section (honest coincident-deviation count). Reads
-/// `DerivedInsightsStore.metrics` + `Backend` + the `insights` module gate.
+/// `DerivedInsightsStore.metrics` + `Backend` + ``InsightsOverviewGate``.
 struct InsightsSignalsSlot: View {
     let appContainer: AppContainer?
 
@@ -254,7 +250,7 @@ struct InsightsSignalsSlot: View {
     @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.insightsModuleEnabled(appContainer) {
+        if backend.hasServer, InsightsOverviewGate.isVisible(.signals, appContainer) {
             InsightsSignalsOfTheDaySection(metrics: derivedInsightsStore.metrics)
         }
     }
@@ -265,7 +261,8 @@ struct InsightsSignalsSlot: View {
 /// Owns the TAGESBRIEFING heading + flowing-grey prose (the overall
 /// health-status narrative: AI briefing summary, else the deterministic period
 /// narrative fallback). Reads `DailyBriefingStore.summary` + `NarrativeStore` +
-/// the `insights` module gate here, so a briefing/narrative warm invalidates
+/// the `insights` module gate here (the one AI-text slot that keeps it until the
+/// `ai` capability model lands), so a briefing/narrative warm invalidates
 /// ONLY this slot.
 struct InsightsDailyBriefingSlot: View {
     let appContainer: AppContainer?
@@ -319,6 +316,8 @@ struct InsightsTrendsSlot: View {
 
     @Environment(DailyBriefingStore.self) private var briefingStore
     @Environment(MeasurementsStore.self) private var measurementsStore
+    /// #115 · 1.3 — the digest's slope directions feed the annotation.
+    @Environment(InsightsStore.self) private var insightsStore
 
     var body: some View {
         InsightsTrendsRow(
@@ -326,6 +325,7 @@ struct InsightsTrendsSlot: View {
                 keyFindings: briefingStore.briefing?.keyFindings ?? []
             ),
             measurements: measurementsStore.recent,
+            digest: insightsStore.comprehensive?.digest,
             isLoading: isLoading,
             onSelect: onSelect
         )
@@ -338,9 +338,13 @@ struct InsightsTrendsSlot: View {
 /// Reads `InsightsStore` + `Backend` (+ `AuthStore` for the connect CTA) here so
 /// a digest refresh invalidates ONLY this slot.
 struct InsightsEmptyErrorSlot: View {
+    /// F1 — the AI capability that names the reason for an empty overview.
+    let appContainer: AppContainer?
+
     @Environment(InsightsStore.self) private var store
     @Environment(BackendAvailability.self) private var backend
     @Environment(AuthStore.self) private var authStore
+    @Environment(MeasurementsStore.self) private var measurementsStore
 
     var body: some View {
         // Standalone: the server-generated insight layer has no on-device
@@ -355,12 +359,8 @@ struct InsightsEmptyErrorSlot: View {
         // Empty + Error states. Server-derived → paired only; in standalone the
         // placeholder already represents the absent server layer.
         if backend.canShowCloudInsights {
-            if store.comprehensive == nil,
-               store.cards.isEmpty,
-               !store.isLoading,
-               store.error == nil
-            {
-                InsightsEmptyStateCard()
+            if let emptyState {
+                InsightsEmptyStateCard(state: emptyState)
             }
             if let error = store.error {
                 InsightsErrorCard(error: error) {
@@ -368,6 +368,21 @@ struct InsightsEmptyErrorSlot: View {
                 }
             }
         }
+    }
+
+    /// F1 — empty only when the server has answered with no cards; the
+    /// sentence follows the real reason (see ``InsightsEmptyState``).
+    private var emptyState: InsightsEmptyState? {
+        let serverCount = store.comprehensive?.digest?.totalMeasurements ?? 0
+        return InsightsEmptyState.resolve(
+            hasServer: backend.canShowCloudInsights,
+            hasDeliveredCards: store.hasDeliveredCards,
+            cardsEmpty: store.cards.isEmpty,
+            isLoading: store.isLoading,
+            hasError: store.error != nil,
+            hasRecordedData: serverCount > 0 || !measurementsStore.recent.isEmpty,
+            briefing: appContainer?.aiCapabilityGate.state(.briefing) ?? .legacy
+        )
     }
 }
 
@@ -448,7 +463,7 @@ struct InsightsOverviewBody: View {
         InsightsCorrelationsSlot(appContainer: appContainer, onSelectMetric: onSelectMetric)
 
         // ── Standalone placeholder + empty / error states (anchored last). ──
-        InsightsEmptyErrorSlot()
+        InsightsEmptyErrorSlot(appContainer: appContainer)
     }
 
     /// One overview section by its server id. The case order below is the
@@ -515,11 +530,64 @@ struct InsightsOverviewBody: View {
 
 // MARK: - Shared module gate
 
-/// The `insights` module gate, shared by the slots above. Pure read over the
-/// (non-`@Observable`) `AppContainer.moduleGate` (`moduleGate` IS `@Observable`,
-/// so reading `.modules` inside a slot's `body` tracks it on THAT slot).
+/// The overview slots that render server DATA (scores, statistics, device
+/// records, lab deltas). Each one follows the module that owns its data, exactly
+/// as the server route that feeds it does.
+enum InsightsOverviewDataSlot: CaseIterable {
+    case wellnessScores
+    case signals
+    case rhythmEvents
+    case healthStatus
+    case breathing
+    case labsChanges
+    case correlations
+
+    /// The module that owns this slot's data, or `nil` when the data belongs to
+    /// no toggleable module.
+    ///
+    /// **Server v1.39 (migration 0343).** `insights` means "AI analysis" and
+    /// nothing else, and it is off for every account that had "Hide Coach" on.
+    /// None of these slots is AI-written, so none of them may hang on it. The
+    /// mapping mirrors the v1.39.0 routes one by one:
+    /// - `breathing-screening` → `requireModuleEnabled(…, "sleep")`
+    /// - `labs-changes` → `requireModuleEnabled(…, "labs")`
+    /// - `rhythm-events`, `health-status` → no module gate
+    /// - `derived/batch` (scores, signals) → no slot-level gate; per-metric
+    ///   ownership is applied server-side through `DERIVED_MODULE`
+    /// - `correlations` → no slot-level gate; channels whose module is off are
+    ///   filtered server-side
+    var owningModule: ModuleKey? {
+        switch self {
+        case .breathing: .sleep
+        case .labsChanges: .labs
+        case .wellnessScores, .signals, .rhythmEvents, .healthStatus, .correlations: nil
+        }
+    }
+}
+
+/// Module gates for the overview slots. Pure reads over the (non-`@Observable`)
+/// `AppContainer.moduleGate` (`moduleGate` IS `@Observable`, so reading
+/// `.modules` inside a slot's `body` tracks it on THAT slot).
 enum InsightsOverviewGate {
-    /// #30 — fail-open when the map is absent.
+    /// Whether a data slot may render: its owning module is on, or it has none.
+    /// Fail-open when no gate is wired or the map is absent (#30).
+    @MainActor
+    static func isVisible(_ slot: InsightsOverviewDataSlot, gate: ModuleGate?) -> Bool {
+        guard let key = slot.owningModule, let gate else { return true }
+        _ = gate.modules
+        return gate.isEnabled(key)
+    }
+
+    @MainActor
+    static func isVisible(_ slot: InsightsOverviewDataSlot, _ appContainer: AppContainer?) -> Bool {
+        isVisible(slot, gate: appContainer?.moduleGate)
+    }
+
+    /// The `insights` module, read ONLY by the Tagesbriefing slot — the one
+    /// overview slot that shows AI-written text. It keeps its 1.0.3 gate until
+    /// the `ai` capability model (`/api/auth/me` `ai.capabilities.briefing`)
+    /// replaces it. Never gate a data slot on this; use ``isVisible(_:gate:)``.
+    /// Fail-open when the map is absent (#30).
     @MainActor
     static func insightsModuleEnabled(_ appContainer: AppContainer?) -> Bool {
         guard let gate = appContainer?.moduleGate else { return true }

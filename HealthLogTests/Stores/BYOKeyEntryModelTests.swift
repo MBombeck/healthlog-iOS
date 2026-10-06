@@ -9,7 +9,7 @@ import Testing
 /// a stubbed `URLSession` (`MockURLProtocol`, never a mock server); the keychain
 /// + consent store are in-memory doubles.
 @MainActor
-@Suite("BYOKeyEntryModel — validate/save/grant", .serialized)
+@Suite("BYOKeyEntryModel — validate/save/grant", .serialized, .mockURLSession)
 struct BYOKeyEntryModelTests {
     private func makeSession() -> URLSession {
         URLSession(configuration: .mock())
@@ -30,11 +30,10 @@ struct BYOKeyEntryModelTests {
         model.provider = .openAI
         model.keyDraft = "sk-good"
 
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data(#"{"data":[]}"#.utf8))
         }
-        defer { MockURLProtocol.handler = nil }
 
         await model.validateAndSave()
 
@@ -58,11 +57,10 @@ struct BYOKeyEntryModelTests {
         model.provider = .openAI
         model.keyDraft = "sk-bad"
 
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!
             return (response, Data("{}".utf8))
         }
-        defer { MockURLProtocol.handler = nil }
 
         await model.validateAndSave()
 
@@ -80,11 +78,10 @@ struct BYOKeyEntryModelTests {
         let (model, consent, keyStore) = makeModel(keychain: keychain)
         model.provider = .openAI
         model.keyDraft = "sk-good"
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data(#"{"data":[]}"#.utf8))
         }
-        defer { MockURLProtocol.handler = nil }
 
         await model.validateAndSave()
         model.cancelConsent()

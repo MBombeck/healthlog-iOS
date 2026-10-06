@@ -11,7 +11,7 @@ import Testing
 ///
 /// `@MainActor` (the store is main-actor isolated) + `.serialized` (the shared
 /// `MockURLProtocol.handler`).
-@Suite("EnvironmentStore — load, module gate, attribution, logout", .serialized)
+@Suite("EnvironmentStore — load, module gate, attribution, logout", .serialized, .mockURLSession)
 @MainActor
 struct EnvironmentStoreTests {
     private func makeClient() -> APIClient {
@@ -51,7 +51,7 @@ struct EnvironmentStoreTests {
     @Test("A successful load populates the snapshot and keeps the attribution")
     func successfulLoad() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let home = #"{"lat":51.48,"lon":7.22,"label":"Bochum","timezone":"Europe/Berlin","since":"2026-01-01T00:00:00Z"}"#
             let trip = #"{"id":"t1","startDate":"2026-06-01","endDate":"2026-06-08","lat":48.1,"lon":11.6,"label":"Munich"}"#
             let ctx = #"{"days":9,"latestDate":"2026-07-20","latestFetchedAt":"2026-07-21T03:00:00Z"}"#
@@ -77,7 +77,7 @@ struct EnvironmentStoreTests {
     @Test("A 403 module.disabled flips isDisabled — sinnvoll leer, no error, attribution intact")
     func moduleDisabledIsSensiblyEmpty() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in Self.moduleDisabled(url: req.url!) }
+        MockURLProtocol.install { req in Self.moduleDisabled(url: req.url!) }
 
         await store.load()
 
@@ -95,7 +95,7 @@ struct EnvironmentStoreTests {
     @Test("clearOnLogout wipes the snapshot but keeps the canonical attribution")
     func logoutWipes() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let ctx = #"{"days":5,"latestDate":"2026-07-20"}"#
             return Self.ok(
                 #"{"home":{"lat":1,"lon":2,"label":"X"},"travel":[],"context":\#(ctx),"attribution":"Weather data by Open-Meteo.com"}"#,

@@ -21,7 +21,7 @@ import Testing
     /// Lives in its own file rather than in `MoodTagCatalogTests` because that
     /// suite is already over the `type_body_length` budget.
     @MainActor
-    @Suite("Mood tag usage count (parity 1.1)", .serialized)
+    @Suite("Mood tag usage count (parity 1.1)", .serialized, .mockURLSession)
     struct MoodTagUsageCountTests {
         private func makeAPI() -> APIClient {
             let env = AppEnvironment(
@@ -93,7 +93,7 @@ import Testing
         func managementReadRequestsUsage() async throws {
             let repo = MoodTagCatalogRepository(api: makeAPI())
             let query = QueryBox()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 query.set(req.url?.query)
                 return (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -112,7 +112,7 @@ import Testing
         @Test("usageCount decodes per tag when the server serves it")
         func usageCountDecodes() async throws {
             let repo = MoodTagCatalogRepository(api: makeAPI())
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     Self.usageCatalogJSON
@@ -134,7 +134,7 @@ import Testing
         @Test("Absent usageCount decodes as nil, never 0")
         func absentUsageCountStaysNil() async throws {
             let repo = MoodTagCatalogRepository(api: makeAPI())
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     Self.usageCatalogJSON

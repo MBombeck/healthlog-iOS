@@ -67,39 +67,52 @@ public enum AllergyType: String, Codable, Sendable, CaseIterable, Equatable, Ide
 // MARK: - AllergySeverity
 
 /// `{ MILD | MODERATE | SEVERE }` — optional/nullable on the wire (no default).
-/// Tolerant decode → ``mild`` for an unknown member (only reached when a value is
-/// present; the field itself stays optional on the DTO).
-public enum AllergySeverity: String, Codable, Sendable, CaseIterable, Equatable, Identifiable {
+/// `nil` on the DTO means "no severity recorded"; a value this build does not
+/// know decodes to ``unknown`` (#115 · 1.7 / C1). It used to fall back to
+/// ``mild``, which told the person their reaction was mild when the server had
+/// said something else entirely. ``unknown`` is never offered in a picker
+/// (``allCases`` lists the three real grades) and an editor never sends it:
+/// the tri-state PATCH leaves an untouched field out.
+public enum AllergySeverity: String, Codable, Sendable, CaseIterable, Equatable, Identifiable, TolerantServerEnum {
     case mild = "MILD"
     case moderate = "MODERATE"
     case severe = "SEVERE"
+    /// A grade this build does not know. Asserts nothing; rendered neutrally.
+    case unknown = "UNKNOWN"
+
+    public static let unknownFallback: AllergySeverity = .unknown
+    public static let wireVocabulary: StaticString = "AllergySeverity"
+
+    /// The grades a person can pick. Excludes ``unknown``.
+    public static let allCases: [AllergySeverity] = [.mild, .moderate, .severe]
 
     public var id: String {
         rawValue
-    }
-
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = AllergySeverity(rawValue: raw) ?? .mild
     }
 }
 
 // MARK: - AllergyStatus
 
-/// `{ ACTIVE | INACTIVE | RESOLVED }` (server default `ACTIVE`). Tolerant →
-/// ``active``.
-public enum AllergyStatus: String, Codable, Sendable, CaseIterable, Equatable, Identifiable {
+/// `{ ACTIVE | INACTIVE | RESOLVED }` (server default `ACTIVE`, always sent).
+/// A value this build does not know, or a missing one, decodes to ``unknown``
+/// (#115 · 1.7 / C1) — it used to become ``active``, which claimed an allergy
+/// was current that the server may have marked otherwise. Never offered in a
+/// picker, never sent by an editor.
+public enum AllergyStatus: String, Codable, Sendable, CaseIterable, Equatable, Identifiable, TolerantServerEnum {
     case active = "ACTIVE"
     case inactive = "INACTIVE"
     case resolved = "RESOLVED"
+    /// A status this build does not know. Asserts nothing; rendered neutrally.
+    case unknown = "UNKNOWN"
+
+    public static let unknownFallback: AllergyStatus = .unknown
+    public static let wireVocabulary: StaticString = "AllergyStatus"
+
+    /// The statuses a person can pick. Excludes ``unknown``.
+    public static let allCases: [AllergyStatus] = [.active, .inactive, .resolved]
 
     public var id: String {
         rawValue
-    }
-
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = AllergyStatus(rawValue: raw) ?? .active
     }
 }
 
@@ -158,7 +171,7 @@ public struct AllergyDTO: Codable, Sendable, Equatable, Identifiable, Hashable {
         category = try c.decodeIfPresent(AllergyCategory.self, forKey: .category) ?? .other
         type = try c.decodeIfPresent(AllergyType.self, forKey: .type) ?? .allergy
         severity = try c.decodeIfPresent(AllergySeverity.self, forKey: .severity)
-        status = try c.decodeIfPresent(AllergyStatus.self, forKey: .status) ?? .active
+        status = try c.decodeIfPresent(AllergyStatus.self, forKey: .status) ?? .unknown
         onsetAt = try c.decodeIfPresent(String.self, forKey: .onsetAt)
         reaction = try c.decodeIfPresent(String.self, forKey: .reaction)
         note = try c.decodeIfPresent(String.self, forKey: .note)

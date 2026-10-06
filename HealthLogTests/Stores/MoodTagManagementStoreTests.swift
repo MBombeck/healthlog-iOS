@@ -5,11 +5,11 @@ import Testing
 #if !SWIFT_PACKAGE
 
     @MainActor
-    @Suite("Mood tag management v1.17", .serialized)
+    @Suite("Mood tag management v1.17", .serialized, .mockURLSession)
     struct MoodTagManagementStoreTests {
         @Test("Custom tags project from their resolved group, archived tags stay separate")
         func customProjectionUsesResolvedTree() async throws {
-            MockURLProtocol.handler = { request in
+            MockURLProtocol.install { request in
                 let body = request.url?.path.hasSuffix("/layout") == true
                     ? Self.projectionLayout
                     : Self.projectionCatalog
@@ -33,7 +33,7 @@ import Testing
         @Test("A custom move reloads authoritative state when its layout PUT fails")
         func movePartialFailureReloadsAuthoritativeState() async throws {
             let sequence = RequestSequence()
-            MockURLProtocol.handler = { request in
+            MockURLProtocol.install { request in
                 let call = sequence.next()
                 let response: (Int, String)
                 switch call {

@@ -11,7 +11,7 @@ import Testing
 ///   - GET decode (nullable fields, pendingQuestions, server caps),
 ///   - PUT body (all four fields explicit, empty = clear) + Idempotency-Key,
 ///   - PUT echo decode (effective state + derived questions).
-@Suite("CoachAboutMeRepository", .serialized)
+@Suite("CoachAboutMeRepository", .serialized, .mockURLSession)
 struct CoachAboutMeRepositoryTests {
     private func makeRepo() -> CoachAboutMeRepository {
         let env = AppEnvironment(
@@ -45,7 +45,7 @@ struct CoachAboutMeRepositoryTests {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let payload = """
@@ -71,7 +71,7 @@ struct CoachAboutMeRepositoryTests {
     @Test("get tolerates the empty (never-saved) state")
     func getEmptyState() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":{"aboutMe":null,"conditions":null,"allergies":null,"coachFocus":null,\
             "pendingQuestions":[],"updatedAt":null,"maxChars":4000,"fieldMaxChars":500},"error":null}
@@ -92,7 +92,7 @@ struct CoachAboutMeRepositoryTests {
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
         nonisolated(unsafe) var capturedIdempotencyKey: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -133,7 +133,7 @@ struct CoachAboutMeRepositoryTests {
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
         nonisolated(unsafe) var capturedKey: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -161,7 +161,7 @@ struct CoachAboutMeRepositoryTests {
     func adoptRememberOmitsQuestion() async throws {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
             let payload = #"{"data":{"adopted":true,"field":"coachFocus"},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -184,7 +184,7 @@ struct CoachAboutMeRepositoryTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -208,7 +208,7 @@ struct CoachAboutMeRepositoryTests {
     func dismissAllOmitsQuestion() async throws {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
             let payload = #"{"data":{"questions":[]},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -227,7 +227,7 @@ struct CoachAboutMeRepositoryTests {
 /// stubbed `URLSession`: adopt round-trips into the about-me fields (via the
 /// post-adopt re-GET), dismiss removes the question, remember appends context.
 @MainActor
-@Suite("CoachAboutMeStore — clarifying-question loop", .serialized)
+@Suite("CoachAboutMeStore — clarifying-question loop", .serialized, .mockURLSession)
 struct CoachAboutMeStoreLoopTests {
     private func makeStore() -> CoachAboutMeStore {
         let env = AppEnvironment(
@@ -246,7 +246,7 @@ struct CoachAboutMeStoreLoopTests {
     func adoptRoundTrips() async {
         let store = makeStore()
         // Seed: one pending question, no allergies yet.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":{"aboutMe":null,"conditions":null,"allergies":null,"coachFocus":null,\
             "pendingQuestions":["Any allergies?"],"updatedAt":null,"maxChars":4000,"fieldMaxChars":500},"error":null}
@@ -259,7 +259,7 @@ struct CoachAboutMeStoreLoopTests {
 
         // Adopt → POST /adopt then a re-GET that now returns the appended field.
         nonisolated(unsafe) var sawAdoptPost = false
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/coach/about-me/adopt" {
                 sawAdoptPost = true
                 let payload = #"{"data":{"adopted":true,"field":"allergies"},"error":null}"#
@@ -285,7 +285,7 @@ struct CoachAboutMeStoreLoopTests {
     @Test("dismiss removes the question from the pending set")
     func dismissRemovesQuestion() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":{"aboutMe":null,"conditions":null,"allergies":null,"coachFocus":null,\
             "pendingQuestions":["Drop me","Keep me"],"updatedAt":null,"maxChars":4000,"fieldMaxChars":500},"error":null}
@@ -296,7 +296,7 @@ struct CoachAboutMeStoreLoopTests {
         await store.load()
         #expect(store.pendingQuestions == ["Drop me", "Keep me"])
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":{"questions":["Keep me"]},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -311,7 +311,7 @@ struct CoachAboutMeStoreLoopTests {
     func rememberAddsContext() async {
         let store = makeStore()
         nonisolated(unsafe) var sawNoQuestion = false
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/coach/about-me/adopt" {
                 let body = req.httpBody ?? CoachAboutMeRepositoryTests.consumeStream(req.httpBodyStream!)
                 if let body, let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {

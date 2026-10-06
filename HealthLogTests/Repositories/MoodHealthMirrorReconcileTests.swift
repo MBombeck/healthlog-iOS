@@ -18,7 +18,7 @@ import Testing
 ///
 /// Real `APIClient` + `MockURLProtocol` for the replay round-trip (per
 /// PROJECT_GUIDE.md anti-pattern guidance — mock servers hide schema drift).
-@Suite("W10 — mood ↔ Apple Health mirror reconcile", .serialized)
+@Suite("W10 — mood ↔ Apple Health mirror reconcile", .serialized, .mockURLSession)
 struct MoodHealthMirrorReconcileTests {
     // MARK: - Helpers
 
@@ -67,7 +67,7 @@ struct MoodHealthMirrorReconcileTests {
         try await outbox.enqueue(op)
 
         let recorder = MirrorRecorder()
-        MockURLProtocol.handler = { [resp = moodPostResponse] req in
+        MockURLProtocol.install { [resp = moodPostResponse] req in
             #expect(req.httpMethod == "POST")
             #expect(req.url?.path == "/api/mood-entries")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(resp.utf8))
@@ -101,7 +101,7 @@ struct MoodHealthMirrorReconcileTests {
         try await outbox.enqueue(op)
 
         let recorder = MirrorRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }
 

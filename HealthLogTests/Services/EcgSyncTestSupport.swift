@@ -49,26 +49,28 @@ enum EcgSyncTestSupport {
 
     /// The per-user anchor key the coordinator writes for the fixture user.
     static let anchorKey = "hl.ecg.hk.anchor.user-123"
+    /// The confirmed-recording ledger key for the fixture user (S2).
+    static let confirmedKey = "hl.ecg.hk.confirmed.user-123"
 
     static func makeCoordinator(
         api: APIClient,
         keychain: InMemoryKeychain,
         source: FakeEcgSource,
         optedIn: Bool = true,
-        moduleEnabled: Bool = true,
         defaultsProvider: (@Sendable () -> UserDefaults)? = nil,
         anchorPersistenceOverride: (@Sendable (Data, String) -> Bool)? = nil,
-        admission: HealthSyncImporterAdmission? = nil
+        admission: HealthSyncImporterAdmission? = nil,
+        clock: (@Sendable () -> Date)? = nil
     ) -> EcgSyncCoordinator {
         EcgSyncCoordinator(
             source: source,
             repo: EcgRepository(api: api),
             keychain: keychain,
             isOptedIn: { optedIn },
-            isModuleEnabled: { moduleEnabled },
             defaultsProvider: defaultsProvider ?? isolatedDefaults(),
             anchorPersistenceOverride: anchorPersistenceOverride,
-            admission: admission
+            admission: admission,
+            clock: clock ?? { Date() }
         )
     }
 

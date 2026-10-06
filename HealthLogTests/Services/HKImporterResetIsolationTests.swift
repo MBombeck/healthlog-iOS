@@ -30,7 +30,7 @@ import Testing
     /// the suite name; seeding + assertions use SEPARATE handles to the same
     /// suite, so no non-`Sendable` `UserDefaults` instance is both sent across
     /// the actor boundary and used afterwards.
-    @Suite("HealthKit importer reset — pre-wipe partition isolation (M4)", .serialized)
+    @Suite("HealthKit importer reset — pre-wipe partition isolation (M4)", .serialized, .mockURLSession)
     struct HKImporterResetIsolationTests {
         private static let userA = "user-A-12345"
 

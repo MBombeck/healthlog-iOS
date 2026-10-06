@@ -81,6 +81,7 @@ public extension MeasurementsRepository {
     /// the calling UI is responsible for the HK-side `delete` *before*
     /// invoking this method (so HK-mirror stays in lockstep with server).
     func delete(id: String) async throws {
+        try Self.refuseSyntheticRowID(id)
         if isStandalone, let standalone {
             // The list's row id is the mirror's externalId (see
             // `LocalMeasurementSnapshot.toDomainMeasurement`).
@@ -109,6 +110,18 @@ public extension MeasurementsRepository {
             }
             throw err
         }
+    }
+
+    /// #115 R3 — a `day:` / `hour:` / `sleep:` key is a bucket the server
+    /// synthesised, not a row (`Measurement+SyntheticRow.swift`): `PUT` and
+    /// `DELETE` on it answer 404. The UI already offers no edit for such a row;
+    /// this refuses it before the wire (and before the Outbox), so no path can
+    /// queue a write that can only ever fail. Answered as the 404 the server
+    /// would give, which is non-retriable, so the store rolls its optimistic
+    /// change back.
+    static func refuseSyntheticRowID(_ id: String) throws {
+        guard Measurement.isSyntheticServerRowID(id) else { return }
+        throw HLError.server(status: 404, code: "measurement.syntheticId", message: "Not a stored measurement")
     }
 
     /// Outbox-replay path for `deleteMeasurement`. Same semantics as `delete`
@@ -144,6 +157,7 @@ public extension MeasurementsRepository {
         kind: MetricKind,
         diastolicId: String? = nil
     ) async throws -> Measurement {
+        try Self.refuseSyntheticRowID(id)
         if isStandalone, let standalone {
             try await standalone.local.standaloneUpdateMeasurement(
                 externalId: id,
@@ -438,25 +452,44 @@ public extension MeasurementsRepository {
                 )
             )
         }
-        // Bei BP zwei sequentielle POSTs mit demselben Idempotency-Key + externalId.
-        // Server-Idempotency-Cache verhindert doppelte Records bei Retries.
-        var lastWire: MeasurementWireDTO?
-        for dto in dtos {
+        // BP is two sequential POSTs to the same path. T3 / public #15 — the
+        // server's replay cache is keyed on (user, key, method, path), never on
+        // the body, so a key shared by both halves made the diastolic POST
+        // replay the systolic response and the diastolic row was never written.
+        // Each half gets its own cell: the first keeps the caller's key (an
+        // outbox entry queued by an older build still replays its systolic
+        // half instead of writing it twice), every further half a key derived
+        // from it, stable across retries.
+        var wires: [MeasurementWireDTO] = []
+        for (index, dto) in dtos.enumerated() {
             let req: APIRequest<MeasurementWireDTO> = try .post(
                 "/api/measurements",
                 body: dto,
-                idempotencyKey: idempotencyKey
+                idempotencyKey: idempotencyKey.part(index)
             )
-            lastWire = try await api.send(req)
+            let wire = try await api.send(req)
+            wires.append(wire)
         }
         // Aggregiere zurück zu Domain — für BP merge sys+dia auf demselben Timestamp.
-        return measurement.refreshed(idFromServer: lastWire?.id ?? measurement.id)
+        //
+        // S1 / public #11 — the returned id is the id the LIST will carry for
+        // this row, because the create-time Apple-Health write stamps it into
+        // `HKMetadataKeyExternalUUID` and the server→Health mirror dedups on it.
+        // For BP the list merges the pair under the SYSTOLIC id
+        // (`MeasurementAggregator.mergeBloodPressure`); this used to return the
+        // id of the last POST (the diastolic row), so the sample never matched
+        // its own list row. The diastolic id now rides along as the peer, the
+        // same shape a list row has (the paired edit path needs it too).
+        if measurement.kind == .bloodPressure, wires.count == 2 {
+            return measurement.refreshed(idFromServer: wires[0].id, diastolicIdFromServer: wires[1].id)
+        }
+        return measurement.refreshed(idFromServer: wires.last?.id ?? measurement.id)
     }
 }
 
 private extension Measurement {
     /// Tauscht die client-lokale ID gegen die server-zugewiesene aus, behält sonst alles.
-    func refreshed(idFromServer: String) -> Measurement {
+    func refreshed(idFromServer: String, diastolicIdFromServer: String? = nil) -> Measurement {
         Measurement(
             id: idFromServer,
             kind: kind,
@@ -465,7 +498,7 @@ private extension Measurement {
             note: note,
             source: source,
             externalUUID: externalUUID,
-            bloodPressureDiastolicId: bloodPressureDiastolicId,
+            bloodPressureDiastolicId: diastolicIdFromServer ?? bloodPressureDiastolicId,
             glucoseContext: glucoseContext
         )
     }

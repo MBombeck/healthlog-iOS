@@ -128,6 +128,12 @@ extension AppContainer {
             backgroundSync: bgSync,
             medicationsStore: medicationsStore
         )
+        // R5 — extend the local medication reminders on every background wake,
+        // from the cached list, before any other work of that wake.
+        Self.wireReminderTopUpHook(
+            backgroundSync: bgSync,
+            medicationsStore: medicationsStore
+        )
         // Reliability M1 (audit-v0162) — drain the encrypted Outbox from the
         // guaranteed-sync BGTask so an offline-logged user write replays on a BG
         // wake instead of waiting for the next app foreground. Probe-gated on
@@ -161,6 +167,20 @@ extension AppContainer {
         // resolves the plan.
         hkReadinessStore.attachHealthSyncRoute { [weak self] trigger in
             await self?.runHealthSyncPass(trigger)
+        }
+        // #10 — "Last synced" in Settings → Apple Health. Until 1.1.0 (284) the
+        // uploader's notifier existed and was tested, and nothing here set it.
+        // Both HealthKit measurement delivery paths stamp through one fenced
+        // sink: the live batch POST (every importer, the daily statistics, the
+        // background wake all share this one uploader) and the outbox replay of
+        // a persisted HealthKit batch.
+        let syncStamp = Self.makeMeasurementSyncStamp(
+            readiness: hkReadinessStore,
+            registry: authenticatedSessionRegistry
+        )
+        healthKitUploader.setSuccessNotifier(syncStamp)
+        outboxReplay.setHealthKitDeliveryNotifier { deliveredAt, ownerUserID in
+            await syncStamp(deliveredAt, ownerUserID)
         }
         // v0.10.0 W-Mood-B — refresh the mood widget glance on every entry change.
         Self.wireMoodWidgetSnapshot(
@@ -219,12 +239,25 @@ extension AppContainer {
                 guard let measurementRemindersStore else { return false }
                 return await measurementRemindersStore.complete(id: id)
             }
+            // v1.39.2 — re-read the reminders after a check-up push, so a
+            // check-up that stays due (or a weekly one that rolled on) shows the
+            // server's current `nextDueAt` rather than a cached row.
+            notifications.measurementReminderRefresher = { [weak measurementRemindersStore] in
+                await measurementRemindersStore?.load(force: true)
+            }
             // LOGOUT-NOTIF — default the logout notification-clear seam to the
             // real NotificationService purge (delivered + pending + badge).
             notificationClearOnLogoutHook = { [weak notifications] in
                 await notifications?.clearAllNotificationsOnLogout()
             }
         #endif
+        // #115 B5 — account zone + glucose unit for the widget extension (App
+        // Group, per account) and the glucose unit for the wrist.
+        Self.wireSharedAccountPrefs(
+            settingsStore: settingsStore,
+            profileTimeZoneBox: profileTimeZoneBox,
+            onGlucoseUnitChange: { [weak watchSession] in watchSession?.pushCurrentCoalesced() }
+        )
         // v0.14 DATA + v0.14.8 dashboard-summary day-anchor
         Self.wireMedicationDueTimeZone(
             medicationsStore: medicationsStore,
@@ -294,10 +327,14 @@ extension AppContainer {
             // becomes a durable owner-bound row rather than a stalled anchor,
             // and the app-owned collector admits through the Phase-06 registry.
             retryQueue: outbox,
-            authenticatedSessionRegistry: authenticatedSessionRegistry
+            authenticatedSessionRegistry: authenticatedSessionRegistry,
+            hrBucketSync: healthKitHRBucketSync
         )
-        Self.wireAssistantDisabledMirror(apiClient: apiClient, store: featureFlagsStore)
+        Self.wireAIRefusalMirror(apiClient: apiClient, gate: aiCapabilityGate, moduleGate: moduleGate) // #115 0.2
+        Self.wireAICapabilityGates(gate: aiCapabilityGate, dailyBriefing: dailyBriefingStore, narrative: serverStatsStores.narrative)
         Self.wireModuleDisabledMirror(apiClient: apiClient, gate: moduleGate) // #30
+        // N1 — last, so it wraps the final `onMedicationsDidChange` chain.
+        wireMedicationReminderDelivery()
     }
 
     // swiftlint:enable function_body_length

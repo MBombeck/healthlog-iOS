@@ -14,7 +14,7 @@ import SwiftUI
 /// screen gates on `BackendAvailability.hasServer` (standalone → the calm
 /// `HLCloudDerivedPlaceholder`, never a dead list). When paired but the operator
 /// disabled the Coach surface, the store flips `isCoachDisabled` (from the typed
-/// `HLError.assistantDisabled`) and we render the disabled-surface placeholder.
+/// `HLError.aiUnavailable`) and we render the disabled-surface placeholder.
 ///
 /// **Read + forget (#30, v1.18.0).** Beyond re-hydration, a native swipe-to-delete
 /// (with a destructive confirmation) forgets a conversation server-side

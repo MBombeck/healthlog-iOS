@@ -430,8 +430,8 @@ public extension AppContainer {
         // the paired watch's own App Group container, which the store-object
         // reflection cascade cannot reach; push a PHI-free placeholder so the
         // watch app + complications clear on the next tick. Best-effort on every
-        // logout reason.
-        resetWatchSnapshotOnLogout()
+        // logout reason. #115 B5 — plus the App-Group account prefs (zone, unit).
+        resetDeviceMirrorsOnLogout()
         // W-B187 QOL-2 — tear down the CoreSpotlight index so the previous
         // user's medication names never surface in system search after sign-
         // out (PHI residue). Fire-and-forget off the main actor.
@@ -511,6 +511,7 @@ public extension AppContainer {
         OnDeviceBriefingCache.shared.clearOnLogout()
         TrendObservationCache.shared.clearOnLogout()
         HKSyncDiagnostics.shared.reset()
+        await HealthKitSkippedRowRegister.shared.clearOnLogout()
         await AvatarCache.shared.clearAll()
 
         // 6. Coach chat transcript hygiene (v0.5.7 G.5). See helper

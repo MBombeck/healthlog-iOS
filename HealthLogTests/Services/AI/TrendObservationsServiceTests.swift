@@ -169,54 +169,48 @@ struct TrendObservationsServiceTests {
         #expect(pulse == [70, 75, 80])
     }
 
-    // MARK: - Feature-flag short-circuit (both flags AND-gate)
+    // MARK: - Capability short-circuit (#115 · 0.2 — `statusText`)
 
-    @Test("observe — both flags required: briefing OFF blocks")
-    func briefingFlagOffBlocks() async throws {
-        let defaults = try #require(UserDefaults(suiteName: "test.trendflag.brief.\(UUID().uuidString)"))
-        let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-        flags.setEnabled(.assistantBriefing, value: false)
-        flags.setEnabled(.assistantTrend, value: true)
-        let service = TrendObservationsService(featureFlags: flags)
+    @Test("observe — statusText closed by the operator blocks")
+    func briefingFlagOffBlocks() async {
+        let service = TrendObservationsService(aiCapabilities: AICaps.reader([.statusText: AICaps.operatorDisabled]))
         let outcome = await service.observe(
             metric: .pulse,
             series: pulseSeries(count: 30),
             locale: Locale(identifier: "de_DE")
         )
         #expect(outcome.observation == nil)
-        #expect(outcome.fallbackReason == .featureFlagDisabled)
+        #expect(outcome.fallbackReason == .capabilityNotAllowed)
     }
 
-    @Test("observe — both flags required: trend sub-flag OFF blocks")
-    func trendSubFlagOffBlocks() async throws {
-        let defaults = try #require(UserDefaults(suiteName: "test.trendflag.sub.\(UUID().uuidString)"))
-        let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-        flags.setEnabled(.assistantBriefing, value: true)
-        flags.setEnabled(.assistantTrend, value: false)
-        let service = TrendObservationsService(featureFlags: flags)
+    @Test("observe — statusText switched off by the person (insights module) blocks")
+    func trendSubFlagOffBlocks() async {
+        let service = TrendObservationsService(aiCapabilities: AICaps.reader([.statusText: AICaps.userDisabled]))
         let outcome = await service.observe(
             metric: .pulse,
             series: pulseSeries(count: 30),
             locale: Locale(identifier: "de_DE")
         )
         #expect(outcome.observation == nil)
-        #expect(outcome.fallbackReason == .featureFlagDisabled)
+        #expect(outcome.fallbackReason == .capabilityNotAllowed)
     }
 
-    @Test("FeatureFlag.assistantTrend defaults ON")
-    func trendFlagDefaultsOn() throws {
-        let defaults = try #require(UserDefaults(suiteName: "test.trendflag.default.\(UUID().uuidString)"))
-        let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-        #expect(flags.isEnabled(.assistantTrend) == true)
+    @Test("A closed briefing does not block trend observations (they follow statusText)")
+    func trendFlagDefaultsOn() async {
+        let service = TrendObservationsService(aiCapabilities: AICaps.reader([.briefing: AICaps.operatorDisabled]))
+        let outcome = await service.observe(
+            metric: .pulse,
+            series: pulseSeries(count: 3),
+            locale: Locale(identifier: "de_DE")
+        )
+        #expect(outcome.fallbackReason == .insufficientData)
     }
 
     // MARK: - Insufficient-data fallback
 
     @Test("observe — fewer than 5 samples returns insufficientData")
-    func insufficientDataFallsBack() async throws {
-        let defaults = try #require(UserDefaults(suiteName: "test.trend.insuff.\(UUID().uuidString)"))
-        let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-        let service = TrendObservationsService(featureFlags: flags)
+    func insufficientDataFallsBack() async {
+        let service = TrendObservationsService(aiCapabilities: LegacyAICapabilities())
         let outcome = await service.observe(
             metric: .pulse,
             series: pulseSeries(count: 3),
@@ -293,10 +287,8 @@ struct TrendObservationsServiceTests {
 
     #if !canImport(FoundationModels)
         @Test("observe — framework-unavailable returns fallback")
-        func frameworkUnavailableFallsBack() async throws {
-            let defaults = try #require(UserDefaults(suiteName: "test.trend.fw.\(UUID().uuidString)"))
-            let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-            let service = TrendObservationsService(featureFlags: flags)
+        func frameworkUnavailableFallsBack() async {
+            let service = TrendObservationsService(aiCapabilities: LegacyAICapabilities())
             let outcome = await service.observe(
                 metric: .pulse,
                 series: pulseSeries(count: 30),

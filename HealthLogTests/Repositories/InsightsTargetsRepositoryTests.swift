@@ -12,7 +12,7 @@ import Testing
 /// - empty `targets[]` decodes cleanly
 /// - SWR cache fresh → no second network call
 /// - SWR stale-on-error returns last-known snapshot
-@Suite("InsightsTargetsRepository — wire contract", .serialized)
+@Suite("InsightsTargetsRepository — wire contract", .serialized, .mockURLSession)
 struct InsightsTargetsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -28,7 +28,7 @@ struct InsightsTargetsRepositoryTests {
     @Test("fetch — decodes the full envelope (targets + pageSummary + bpDiastolic)")
     func fetchFullEnvelope() async throws {
         let repo = InsightsTargetsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "targets":[{
@@ -70,7 +70,7 @@ struct InsightsTargetsRepositoryTests {
     @Test("fetch — empty targets[] decodes cleanly")
     func fetchEmptyTargets() async throws {
         let repo = InsightsTargetsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "targets":[],
@@ -90,7 +90,7 @@ struct InsightsTargetsRepositoryTests {
     func cacheFresh() async throws {
         let repo = InsightsTargetsRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — only OUR route counts.
             if req.targets("/api/insights/targets") { calls += 1 }
             let body = Data(#"""
@@ -116,7 +116,7 @@ struct InsightsTargetsRepositoryTests {
             clock: { clockBox.now }
         )
         nonisolated(unsafe) var phase = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: only OUR route advances the phase machine.
             if req.targets("/api/insights/targets") { phase += 1 }
             if phase == 1 {
@@ -154,7 +154,7 @@ struct InsightsTargetsRepositoryTests {
         // the next user never sees the previous user's targets payload.
         let repo = InsightsTargetsRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — only OUR route counts.
             if req.targets("/api/insights/targets") { calls += 1 }
             let body = Data(#"""
@@ -179,7 +179,7 @@ struct InsightsTargetsRepositoryTests {
     func storeLoadAndLookup() async {
         let repo = InsightsTargetsRepository(api: makeAPI())
         let store = InsightsTargetsStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "targets":[{

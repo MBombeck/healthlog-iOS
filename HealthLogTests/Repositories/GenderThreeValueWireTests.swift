@@ -34,7 +34,7 @@ private func profilePayload(gender: String) -> Data {
 ///
 /// Uses the real `APIClient` over `MockURLProtocol` (no mock server) so a
 /// spelling drift is caught at the wire boundary, not in a helper.
-@Suite("gender — three-valued wire contract (#71)", .serialized)
+@Suite("gender — three-valued wire contract (#71)", .serialized, .mockURLSession)
 struct GenderThreeValueWireTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -61,7 +61,7 @@ struct GenderThreeValueWireTests {
         nonisolated(unsafe) var method: String?
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var bodyJSON: [String: Any]?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             method = req.httpMethod
             path = req.url?.path
             if let data = req.profileBodyOrStream() {
@@ -73,7 +73,7 @@ struct GenderThreeValueWireTests {
             )
         }
 
-        let updated = try await repo.patchProfile(ProfilePatch(gender: .some(option.serverValue)))
+        let updated = try await repo.patchProfile(ProfilePatch(gender: .some(option.serverValue))).profile
 
         #expect(method == "PATCH")
         #expect(path == "/api/user/profile")
@@ -89,7 +89,7 @@ struct GenderThreeValueWireTests {
     func unspecifiedSendsNull() async throws {
         let repo = SettingsRepository(api: makeAPI())
         nonisolated(unsafe) var bodyJSON: [String: Any]?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if let data = req.profileBodyOrStream() {
                 bodyJSON = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             }
@@ -102,7 +102,7 @@ struct GenderThreeValueWireTests {
         // This is what `EditProfileScreen.buildPatch()` builds for `.unspecified`.
         let updated = try await repo.patchProfile(
             ProfilePatch(gender: .some(GenderOption.unspecified.serverValue))
-        )
+        ).profile
 
         #expect(bodyJSON?.keys.contains("gender") == true)
         // Explicit null, never the empty string — the server folds `""` to null
@@ -125,7 +125,7 @@ struct GenderThreeValueWireTests {
     @Test("GET /api/user/profile decodes gender: \"OTHER\" and maps to .other")
     func profileGetDecodesOther() async throws {
         let repo = SettingsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 profilePayload(gender: "\"OTHER\"")
@@ -139,7 +139,7 @@ struct GenderThreeValueWireTests {
     @Test("Insights-targets profile block decodes gender: \"OTHER\"")
     func insightsTargetsDecodesOther() async throws {
         let repo = InsightsTargetsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "targets":[],

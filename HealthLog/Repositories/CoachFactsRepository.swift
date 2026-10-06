@@ -12,9 +12,9 @@ import Foundation
 ///   returns `{ cleared: <count> }`.
 ///
 /// **Coach kill-switch (B4).** If the operator disabled the Coach surface every
-/// handler 403s with `errorCode: "assistant.disabled.coach"`. ``APIClient`` already
-/// maps that pair to ``HLError/assistantDisabled(.assistantCoach)`` and mirrors the
-/// flag into `FeatureFlagsStore` — so this repository surfaces the **same** typed
+/// handler 403s with `meta.errorCode: "assistant.disabled.coach"`. ``APIClient``
+/// maps that to ``HLError/aiUnavailable(_:)`` and mirrors it into
+/// `AICapabilityGate` — so this repository surfaces the **same** typed
 /// error the rest of the Coach stack handles. Callers branch on it to render the
 /// calm disabled-surface placeholder rather than a transport error.
 ///
@@ -29,7 +29,7 @@ public actor CoachFactsRepository {
     }
 
     /// List the caller's active coach facts. Server order (confidence desc, then
-    /// createdAt desc) is preserved. Throws ``HLError/assistantDisabled(_:)`` when
+    /// createdAt desc) is preserved. Throws ``HLError/aiUnavailable(_:)`` when
     /// the Coach surface is disabled.
     public func list() async throws -> [CoachFactDTO] {
         let req: APIRequest<CoachFactsListResponse> = .get("/api/insights/coach/facts")

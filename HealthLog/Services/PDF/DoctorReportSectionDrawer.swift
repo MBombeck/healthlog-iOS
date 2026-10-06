@@ -129,8 +129,11 @@ import Foundation
             )
             y += 20
 
+            // #115 B5 / P2 — glucose, weight, temperature and waist print in
+            // the account's unit.
+            let units = spec.printUnits
             for row in vitals.rows {
-                let primaryMean = ValueFormatter.format(row.mean, kind: row.kind)
+                let primaryMean = ValueFormatter.format(row.mean, kind: row.kind, units: units)
                 let displayMean = row.kind == .bloodPressure
                     ? "\(primaryMean)/\(ValueFormatter.format(row.secondaryMean ?? 0, kind: row.kind))"
                     : primaryMean
@@ -139,9 +142,9 @@ import Foundation
                         row.kind.displayName,
                         String(row.count),
                         displayMean,
-                        ValueFormatter.format(row.median, kind: row.kind),
-                        ValueFormatter.format(row.min, kind: row.kind),
-                        ValueFormatter.format(row.max, kind: row.kind)
+                        ValueFormatter.format(row.median, kind: row.kind, units: units),
+                        ValueFormatter.format(row.min, kind: row.kind, units: units),
+                        ValueFormatter.format(row.max, kind: row.kind, units: units)
                     ],
                     widths: columns.map(\.width),
                     y: y,
@@ -245,17 +248,17 @@ import Foundation
             drawSectionHeader(LocaleText.adherenceTitle(for: spec.cover.locale), at: pageBounds)
             var y: CGFloat = 80
             let labelFont = UIFont.systemFont(ofSize: 12, weight: .regular)
-            let overall = Int((adherence.overall * 100).rounded())
-            draw(
-                text: "\(LocaleText.adherenceOverall(for: spec.cover.locale)): \(HLNumberFormat.percent(overall, locale: Locale(identifier: spec.cover.locale.foundationIdentifier)))",
-                at: CGPoint(x: PDFPage.margin, y: y),
-                font: UIFont.systemFont(ofSize: 14, weight: .semibold),
-                color: .label
-            )
-            y += 28
+            let noteFont = UIFont.systemFont(ofSize: 11, weight: .regular)
+            let locale = spec.cover.locale
+            // #115 · 1.2 — every line below is the server's; the notes say
+            // which window the figures cover, or why there are none.
+            for note in LocaleText.adherenceNotes(for: adherence, locale: locale) {
+                draw(text: note, at: CGPoint(x: PDFPage.margin, y: y), font: noteFont, color: .secondaryLabel)
+                y += 18
+            }
+            if !adherence.perMedication.isEmpty { y += 8 }
             for row in adherence.perMedication {
-                let rate = Int((row.rate * 100).rounded())
-                let line = "\(row.medicationName): \(row.taken)/\(row.scheduled) (\(rate) %)"
+                let line = LocaleText.adherenceRow(row, windowDays: adherence.windowDays, locale: locale)
                 draw(text: line, at: CGPoint(x: PDFPage.margin, y: y), font: labelFont, color: .label)
                 y += 18
             }
@@ -468,13 +471,6 @@ enum LocaleText {
         }
     }
 
-    static func adherenceOverall(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Gesamt-Einnahmetreue"
-        case .en: "Overall adherence"
-        }
-    }
-
     static func moodTitle(for locale: ReportLocale) -> String {
         switch locale {
         case .de: "Stimmung"
@@ -500,13 +496,23 @@ enum LocaleText {
 // MARK: - Formatters
 
 enum ValueFormatter {
-    static func format(_ value: Double, kind: MetricKind) -> String {
+    /// `value` is canonical; glucose is converted into `glucoseUnit` and
+    /// labelled with it (#115 B5 — it was always mg/dL). Every other kind prints
+    /// in its canonical unit, as before.
+    static func format(_ value: Double, kind: MetricKind, glucoseUnit: GlucoseUnit = .mgdL) -> String {
+        format(value, kind: kind, units: UnitPreferences(glucose: glucoseUnit))
+    }
+
+    /// #115 P2 — `value` is canonical; converted families print in `units`.
+    static func format(_ value: Double, kind: MetricKind, units: UnitPreferences) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = digits(for: kind)
+        formatter.maximumFractionDigits = DoctorReportGlucoseDisplay.fractionDigits(for: kind, units: units)
+            ?? digits(for: kind)
         formatter.minimumFractionDigits = 0
-        let raw = formatter.string(from: NSNumber(value: value)) ?? String(value)
-        let unit = kind.unit
+        let shown = DoctorReportGlucoseDisplay.value(value, kind: kind, units: units)
+        let raw = formatter.string(from: NSNumber(value: shown)) ?? String(shown)
+        let unit = DoctorReportGlucoseDisplay.unit(for: kind, units: units)
         return unit.isEmpty ? raw : "\(raw) \(unit)"
     }
 

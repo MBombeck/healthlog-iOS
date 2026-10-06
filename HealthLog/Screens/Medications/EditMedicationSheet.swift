@@ -26,28 +26,20 @@ struct EditMedicationSheet: View {
     @State private var name: String = ""
     @State private var dose: String = ""
     @State private var times: [ScheduleTimeRow] = []
-    @State private var category: MedicationCategoryOption = .other
+    /// `nil` = a stored category this build has no row for (shown as itself, never rewritten).
+    @State private var category: MedicationCategoryOption? = .other
     @State private var treatmentClass: MedicationTreatmentClassOption = .generic
     @State private var dosesPerUnitText: String = ""
-    /// **H1/H2** — units one dose consumes (whole / curated fraction).
+    /// **H1/H2** — units one dose consumes (whole / curated fraction / any other server value, kept as is).
     @State private var unitsPerDose: MedicationUnitsPerDose = .whole(1)
-    /// Snapshot of `unitsPerDose` at prefill. The PUT sends `unitsPerDose` only
-    /// when the user actually changed it (RMW-safety) — otherwise a server value
-    /// outside the curated picker set (e.g. a web-set 15) could be silently
-    /// rewritten by an unrelated edit. See `save()`.
-    @State private var unitsPerDoseBaseline: MedicationUnitsPerDose = .whole(1)
     /// **#219 — the RAW per-slot overrides the server sent**, keyed by `HH:mm`.
     /// The rebuild echoes these for every slot the user did not touch; without
     /// the echo a `schedules` REPLACE recreates each row with `unitsPerDose`
     /// NULL and every explicit ½-tablet slot silently falls back to inheritance.
     @State private var slotDoseBaseline: [String: Double] = [:]
-    /// The user's per-slot edit intent since prefill. Absent = untouched,
-    /// `.clear` = "inherit", `.set` = an explicit override — three states, and
-    /// the middle one is why this is not a `[String: Double?]`.
+    /// Per-slot edit intent since prefill: absent = untouched, `.clear` = "inherit", `.set` = an override.
     @State private var slotDoseIntents: MedicationCadenceLogic.SlotDoseIntents = [:]
-    /// **v1.37.19 — the server-EFFECTIVE per-slot dose**, read verbatim from
-    /// `ScheduleEntry.resolvedUnitsPerDose` and displayed, never written and
-    /// never re-derived from the raw map above.
+    /// **v1.37.19 — the server-EFFECTIVE per-slot dose**, displayed verbatim, never written or re-derived.
     @State private var serverEffectiveDose: [String: Double] = [:]
     @State private var notificationsEnabled: Bool = true
     @State private var deliveryForm: MedicationDeliveryFormOption = .unspecified
@@ -61,11 +53,13 @@ struct EditMedicationSheet: View {
     @State private var startsOn: Date?
     @State private var endsOn: Date?
     @State private var isOneShot: Bool = false
+    /// v1.39.1 (#1033) — the intake-tracking switch and the server's own value.
+    @State private var intake = MedicationTrackIntakeFormValue()
     @State private var graceEnabled: Bool = false
     @State private var graceMinutes: Int = 60
-    /// Snapshot of the schedule-shaping state at prefill so we can detect
-    /// whether the user touched the schedule (RMW-safety — see save()).
-    @State private var scheduleBaseline: MedicationCadenceLogic.ScheduleSnapshot?
+    /// The form as it opened — the baseline every RMW decision of the PUT is
+    /// taken against (``MedicationEditDraft``).
+    @State private var prefill: EditMedicationFormState?
 
     /// v0.9.0 RA3 — per-medication Live-Activity opt-in + scope.
     @State private var liveActivityEnabled = DeliveryChannel.liveActivity.hardcodedDefault
@@ -118,6 +112,8 @@ struct EditMedicationSheet: View {
                         .submitLabel(.done)
                 }
 
+                if intake.server != nil { MedicationTrackIntakeSection(isOn: $intake.tracked) }
+
                 Section {
                     CadencePicker(kind: $cadenceKind, sub: $cadenceSub)
                         .onChange(of: cadenceKind) { _, newKind in
@@ -152,8 +148,9 @@ struct EditMedicationSheet: View {
 
                 Section("Properties") {
                     Picker("Category", selection: $category) {
+                        if let label = prefill?.unknownCategoryLabel { Text(label).tag(MedicationCategoryOption?.none) }
                         ForEach(MedicationCategoryOption.allCases) { option in
-                            Text(option.displayName).tag(option)
+                            Text(option.displayName).tag(Optional(option))
                         }
                     }
                     Picker("Class", selection: $treatmentClass) {
@@ -293,7 +290,7 @@ struct EditMedicationSheet: View {
             intents: $slotDoseIntents,
             baseline: slotDoseBaseline,
             serverEffective: serverEffectiveDose,
-            medicationDoseChanged: unitsPerDose != unitsPerDoseBaseline
+            medicationDoseChanged: unitsPerDose != (prefill?.unitsPerDose ?? unitsPerDose)
         )
     }
 
@@ -393,7 +390,6 @@ struct EditMedicationSheet: View {
         treatmentClass = state.treatmentClass
         dosesPerUnitText = state.dosesPerUnitText
         unitsPerDose = state.unitsPerDose
-        unitsPerDoseBaseline = state.unitsPerDose
         slotDoseBaseline = state.slotUnitsPerDose
         slotDoseIntents = [:]
         serverEffectiveDose = state.serverEffectiveUnitsPerDose
@@ -406,18 +402,10 @@ struct EditMedicationSheet: View {
         startsOn = state.startsOn
         endsOn = state.endsOn
         isOneShot = state.isOneShot
+        intake = MedicationTrackIntakeFormValue(tracked: state.trackIntake, server: state.serverTrackIntake)
         graceEnabled = state.graceMinutes != nil
         graceMinutes = state.graceMinutes ?? 60
-        scheduleBaseline = MedicationCadenceLogic.ScheduleSnapshot(
-            cadenceKind: state.cadenceKind,
-            cadenceSub: state.cadenceSub,
-            times: state.times,
-            startsOn: state.startsOn, // baseline keeps the server `[TimeOfDay]`
-            endsOn: state.endsOn,
-            isOneShot: state.isOneShot,
-            graceMinutes: state.graceMinutes,
-            slotUnitsPerDose: state.slotUnitsPerDose
-        )
+        prefill = state
         let la = deliveryPreferences.effective(medicationId: medication.id, channel: .liveActivity)
         liveActivityEnabled = la.enabled
         liveActivityScope = la.scope
@@ -462,23 +450,35 @@ extension EditMedicationSheet {
         )
     }
 
-    /// Did the user touch any schedule-shaping field since prefill? When false
-    /// the PUT omits `schedules` so the server keeps its decoded
-    /// rrule/rolling/asNeeded/cyclic untouched (RMW-safety, R1 risk 5).
-    private var scheduleDidChange: Bool {
-        MedicationCadenceLogic.scheduleDidChange(
-            baseline: scheduleBaseline,
-            current: MedicationCadenceLogic.ScheduleSnapshot(
-                cadenceKind: cadenceKind,
-                cadenceSub: cadenceSub,
-                times: ScheduleTimeRow.times(times),
-                startsOn: startsOn,
-                endsOn: endsOn,
-                isOneShot: isOneShot,
-                graceMinutes: graceEnabled ? graceMinutes : nil,
-                slotUnitsPerDose: resolvedSlotDoses
-            )
-        )
+    /// The editor's current state as a ``MedicationEditDraft`` over the prefill
+    /// baseline; `nil` before prefill.
+    private var draft: MedicationEditDraft? {
+        guard let prefill else { return nil }
+        var draft = MedicationEditDraft(prefill: prefill)
+        draft.name = name
+        draft.dose = dose
+        draft.times = ScheduleTimeRow.times(times)
+        draft.category = category
+        draft.treatmentClass = treatmentClass
+        draft.dosesPerUnitText = dosesPerUnitText
+        draft.unitsPerDose = unitsPerDose
+        draft.notificationsEnabled = notificationsEnabled
+        draft.deliveryForm = deliveryForm
+        draft.trackInjectionSites = trackInjectionSites
+        draft.allowedInjectionSites = allowedInjectionSites
+        draft.cadenceKind = cadenceKind
+        draft.cadenceSub = cadenceSub
+        draft.startsOn = startsOn
+        draft.endsOn = endsOn
+        draft.isOneShot = isOneShot
+        draft.graceMinutes = graceEnabled ? graceMinutes : nil
+        draft.slotUnitsPerDose = resolvedSlotDoses
+        draft.intake = intake
+        // The medication-level booleans ARE the user-level roaming default:
+        // sent only for "Alle Geräte"; "Dieses Gerät" stays a local override.
+        draft.liveActivityEnabled = liveActivityScope == .allDevices ? liveActivityEnabled : nil
+        draft.criticalAlarmEnabled = criticalAlarmScope == .allDevices ? criticalAlarmEnabled : nil
+        return draft
     }
 
     // MARK: - Save
@@ -510,63 +510,9 @@ extension EditMedicationSheet {
 
         deliveryDidDegrade = await persistDeliveryPreferences()
 
-        let value = MedicationCadenceLogic.encode(cadenceKind, cadenceSub)
-        // RMW: only rebuild schedules when the user touched the schedule.
-        // W3-MEDCONTRACT (v0.14.8) — a rebuild must echo the decoded
-        // per-dose on-time windows (v1.15.18) for every surviving dose
-        // time: the server's schedules REPLACE resets omitted windows to
-        // NULL, which would wipe bands configured on the web. #219 — the
-        // raw per-slot `unitsPerDose` is echoed for exactly the same reason,
-        // with an explicit clear expressed by dropping the slot from the map.
-        // 09-14 — `schedules` and the medication-level `asNeeded` flag travel as
-        // one value; the route 422s either half without the other.
-        let write = scheduleDidChange
-            ? MedicationCadenceLogic.scheduleWrite(
-                value: value,
-                times: cadenceKind == .asNeeded ? [] : ScheduleTimeRow.times(times),
-                graceMinutes: graceEnabled ? graceMinutes : nil,
-                existingDoseWindows: medication.schedule.entries
-                    .compactMap(\.doseWindows)
-                    .flatMap { $0 },
-                slotUnitsPerDose: resolvedSlotDoses
-            )
-            : nil
-
-        let patch = MedicationsRepository.MedicationPatch(
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            dose: dose.trimmingCharacters(in: .whitespacesAndNewlines),
-            treatmentClass: treatmentClass.wireValue,
-            dosesPerUnit: MedicationFormLogic.parseDosesPerUnit(dosesPerUnitText),
-            // RMW: send unitsPerDose only when the user actually changed it, so an
-            // unrelated edit can never overwrite a valid server value (H-1).
-            unitsPerDose: unitsPerDose != unitsPerDoseBaseline ? unitsPerDose.decimalValue : nil,
-            category: category.wireValue,
-            active: medication.active,
-            notificationsEnabled: notificationsEnabled,
-            schedules: write?.schedules,
-            oneShot: scheduleDidChange ? value.oneShot : nil,
-            startsOn: scheduleDidChange ? startsOn.map { MedicationCadenceLogic.isoDay($0) } : nil,
-            endsOn: scheduleDidChange && !value.oneShot
-                ? endsOn.map { MedicationCadenceLogic.isoDay($0) }
-                : nil,
-            deliveryForm: deliveryForm.wireValue,
-            // v0.10 — the medication-level booleans ARE the user-level roaming
-            // default. Send them on the PUT only when the user chose "Alle
-            // Geräte" for that channel (a "Dieses Gerät" choice stays a local
-            // override via DeliveryPreferencesStore and must NOT change the
-            // server default). Omitted (nil) → server keeps its value (RMW).
-            liveActivityEnabled: liveActivityScope == .allDevices ? liveActivityEnabled : nil,
-            criticalAlarmEnabled: criticalAlarmScope == .allDevices ? criticalAlarmEnabled : nil,
-            // v0.11 — only send injection-site fields for an INJECTION med
-            // (otherwise leave nil so the server keeps its value, RMW-safe).
-            trackInjectionSites: deliveryForm == .injection ? trackInjectionSites : nil,
-            allowedInjectionSites: deliveryForm == .injection && trackInjectionSites
-                ? allowedInjectionSites.compactMap(\.serverRawValue).sorted()
-                : nil,
-            // A real boolean whenever the schedule was rebuilt, never nil: an
-            // omitted key would leave a once-PRN medication PRN forever.
-            asNeeded: write?.asNeeded
-        )
+        // RMW rules (schedules, unitsPerDose, category, treatmentClass,
+        // trackIntake) live in `MedicationEditDraft.patch(for:)`.
+        guard let patch = draft?.patch(for: medication) else { return }
 
         let outcome = await store.update(id: medication.id, patch: patch)
         switch outcome {

@@ -25,14 +25,15 @@ public enum IllnessDerivedStatus: String, Codable, Sendable, Equatable {
 }
 
 /// `{ above | below }` — the direction of a vital's deviation from baseline.
-public enum IllnessDeviationDirection: String, Codable, Sendable, Equatable {
+public enum IllnessDeviationDirection: String, Codable, Sendable, Equatable, TolerantServerEnum {
     case above
     case below
+    /// #115 · 1.7 — an unrecognised direction. Used to decode to `.above`,
+    /// which stated a rise nobody had read; now rendered without a side.
+    case unknown
 
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = IllnessDeviationDirection(rawValue: raw) ?? .above
-    }
+    public static let unknownFallback = IllnessDeviationDirection.unknown
+    public static let wireVocabulary: StaticString = "illness deviation direction"
 }
 
 /// One vital's deviation finding on a day: signed deviation in robust-SD units
@@ -81,7 +82,7 @@ public struct IllnessVitalDeviation: Codable, Sendable, Equatable, Identifiable,
         value = try c.decodeIfPresent(Double.self, forKey: .value) ?? 0
         baselineCenter = try c.decodeIfPresent(Double.self, forKey: .baselineCenter) ?? 0
         deviationSd = try c.decodeIfPresent(Double.self, forKey: .deviationSd) ?? 0
-        direction = try c.decodeIfPresent(IllnessDeviationDirection.self, forKey: .direction) ?? .above
+        direction = try c.decodeIfPresent(IllnessDeviationDirection.self, forKey: .direction) ?? .unknown
         adverse = try c.decodeIfPresent(Bool.self, forKey: .adverse) ?? false
     }
 }

@@ -18,7 +18,7 @@ import Testing
 /// `DashboardStoreSeriesFallbackTests` + `MeasurementsStoreBriefingInputTests`
 /// against a single shared `MockURLProtocol` to mirror the real cold-launch
 /// HTTP traffic the operator's iPhone produces.
-@Suite("DASHBOARD-BUG-FIX-2 — integration", .serialized)
+@Suite("DASHBOARD-BUG-FIX-2 — integration", .serialized, .mockURLSession)
 struct DashboardBugFix2IntegrationTests {
     @MainActor
     private func makeAPIClient() -> APIClient {
@@ -67,7 +67,7 @@ struct DashboardBugFix2IntegrationTests {
             "{\"data\":{\"kind\":\"weight\",\"points\":[],\"stats\":{\"mean\":0,\"min\":0,\"max\":0,\"stdDev\":0,\"count\":0}}}"
                 .utf8
         )
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -132,7 +132,7 @@ struct DashboardBugFix2IntegrationTests {
             return "{\"id\":\"m\(i)\",\"type\":\"WEIGHT\",\"value\":\(72 + Double(i) * 0.01),\"measuredAt\":\"\(at)\"}"
         }
         let payload = Data(("{\"data\":{\"measurements\":[" + rows.joined(separator: ",") + "]}}").utf8)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,

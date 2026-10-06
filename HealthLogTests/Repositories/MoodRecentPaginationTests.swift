@@ -14,7 +14,7 @@ import Testing
 /// (or a short page arrives). These tests drive the real `MoodRepository`
 /// over the real `APIClient` (`MockURLProtocol` HTTP) and assert that a
 /// multi-page response is fully aggregated.
-@Suite("Mood recent() paginates full history (B16)", .serialized)
+@Suite("Mood recent() paginates full history (B16)", .serialized, .mockURLSession)
 struct MoodRecentPaginationTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -61,7 +61,7 @@ struct MoodRecentPaginationTests {
         let total = 712 // 500 (page 1) + 212 (page 2)
         let recorder = OffsetRecorder()
 
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             let offset = Int(
                 URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?
                     .queryItems?.first(where: { $0.name == "offset" })?.value ?? "0"
@@ -91,7 +91,7 @@ struct MoodRecentPaginationTests {
         let repo = MoodRepository(api: api, outbox: outbox)
 
         let recorder = OffsetRecorder()
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             let offset = Int(
                 URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?
                     .queryItems?.first(where: { $0.name == "offset" })?.value ?? "0"
@@ -112,7 +112,7 @@ struct MoodRecentPaginationTests {
         let outbox = try OutboxQueue(inMemory: true)
         let repo = MoodRepository(api: api, outbox: outbox)
         let recorder = QueryRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let body = #"{"data":{"entries":[],"meta":{"total":42,"limit":25,"offset":25}}}"#
             return (
@@ -191,7 +191,7 @@ struct MoodRecentPaginationTests {
         let api = makeAPI()
         let repo = try MoodRepository(api: api, outbox: OutboxQueue(inMemory: true))
         let store = MoodStore(repo: repo)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let body = """
             {"data":{"entries":[{
               "id":"analytics","mood":"SUPER_GUT","tags":[],
@@ -207,7 +207,7 @@ struct MoodRecentPaginationTests {
         let analyticsEntries = store.entries
         #expect(analyticsEntries.map(\.id) == ["analytics"])
 
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let body = """
             {"data":{"entries":[\(Self.row(1))],"meta":{"total":1,"limit":25,"offset":0}}}
             """

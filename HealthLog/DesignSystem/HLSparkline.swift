@@ -171,7 +171,7 @@ public struct HLSparkline: View {
             }
             if let first = values.first, let last = values.last {
                 let trend = last >= first ? String(localized: "rising") : String(localized: "falling")
-                return "\(values.count) Werte, \(trend) von \(format(first)) auf \(format(last))"
+                return String(localized: "chart.sparkline.summary \(values.count) \(trend) \(format(first)) \(format(last))")
             }
             return String(localized: "chart.series.sparkline")
         }()

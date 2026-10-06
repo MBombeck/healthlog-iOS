@@ -40,6 +40,14 @@ public final class NarrativeStore {
 
     private let repo: NarrativeRepository
 
+    /// **#114 / #115 · 0.2 — the `periodNarrative` capability.** The narrative
+    /// read is mixed: the deterministic narrative is data and always served,
+    /// the model-written one is nulled by the server while the capability is
+    /// unavailable. A model-written narrative this device cached while it WAS
+    /// available must not outlive that, so while `false` every read skips the
+    /// local cache. `nil` (unit tests) reads as available.
+    public var modelNarrativeAvailable: (@MainActor () -> Bool)?
+
     public init(repo: NarrativeRepository) {
         self.repo = repo
     }
@@ -112,7 +120,11 @@ public final class NarrativeStore {
         errored.remove(period)
         defer { loading.remove(period) }
         do {
-            let dto = try await repo.fetch(period: period, locale: locale)
+            let dto = try await repo.fetch(
+                period: period,
+                locale: locale,
+                bypassCache: !(modelNarrativeAvailable?() ?? true)
+            )
             // B5 — warm in flight + still empty → don't settle; re-poll soon.
             if let dto, dto.narrative == nil, dto.revalidating == true,
                (revalidatePolls[period] ?? 0) < Self.maxRevalidatePolls

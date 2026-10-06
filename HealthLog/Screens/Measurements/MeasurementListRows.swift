@@ -65,7 +65,7 @@ struct MeasurementRow: View {
 
     private var sourceLabel: String {
         switch measurement.source {
-        case .manual: "Manuell"
+        case .manual: String(localized: "Manual")
         case .appleHealth: "Apple Health"
         case .withings: "Withings"
         case .whoop: "WHOOP"
@@ -149,7 +149,13 @@ struct MeasurementSwipeRow: View {
                 // of silently withholding actions.
                 if measurement.isServerDerivedReadOnly {
                     Label {
-                        Text("measurement.readOnly.explain")
+                        // #115 R3 — an hourly/daily mean or a sleep night is a
+                        // summary, not a row from a connected source.
+                        if measurement.isSyntheticServerRow {
+                            Text("measurement.readOnly.aggregate")
+                        } else {
+                            Text("measurement.readOnly.explain")
+                        }
                     } icon: {
                         Image(systemName: "lock")
                     }
@@ -261,8 +267,9 @@ struct MeasurementSummaryRow: View {
         guard let mean = stats.mean, let min = stats.min, let max = stats.max else {
             return Text("\(period), \(items.count) entries")
         }
+        let average = formatMean(mean, secondaryMean: stats.secondaryMean)
         return Text(
-            "\(period), Ø \(formatMean(mean, secondaryMean: stats.secondaryMean)) \(unitSuffix), \(items.count) Einträge, Min \(format(min)), Max \(format(max))"
+            "measurements.bucket.a11y \(period) \(average) \(unitSuffix) \(items.count) \(format(min)) \(format(max))"
         )
     }
 

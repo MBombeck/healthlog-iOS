@@ -82,6 +82,15 @@
         /// `UserDefaults.standard`.
         private var hrCutoverGate: (@Sendable (Date) -> Bool)?
 
+        /// #12 — asks the HR-bucket coordinator for a sweep. Called after every
+        /// page that handed heart rate to the bucket path, so dropping a raw
+        /// sample and scheduling the sweep that replaces it are one step. Until
+        /// 1.1.0 (289) the sweep ran only inside orchestrated passes, and the
+        /// foreground pass is cancelled at its 250 ms deadline before it gets
+        /// there. nil until ``attachUploader`` runs (and in tests that do not
+        /// exercise the hand-off).
+        private var hrBucketKick: (@Sendable () -> Void)?
+
         /// Composition-root-injected durable-retry queue (Phase 07 Wave 2). nil
         /// until ``attachUploader`` runs and in unit tests that do not exercise
         /// the retry path.
@@ -98,6 +107,11 @@
         /// row, which survives a restart and carries its own derived idempotency
         /// key, so that is what this slot now holds.
         private var retryQueue: (any HealthSyncBatchRetryEnqueuing)?
+
+        /// #113 — where a row the server refused (`value_out_of_range`, …) is
+        /// remembered before the cursor passes it. nil until ``attachUploader``
+        /// runs; a refused row with nowhere to go holds the page.
+        private var skipRegister: HealthKitSkippedRowRegister?
 
         /// Composition-root-injected server-deletion reconciler (A360-5 M-1).
         /// nil until ``attachDeletionReconciler(_:)`` runs (and in unit tests
@@ -127,11 +141,15 @@
             featureFlags: (any FeatureFlagsServicing)?,
             userIDProvider: (@Sendable () -> String?)? = nil,
             hrCutoverGate: (@Sendable (Date) -> Bool)? = nil,
-            retryQueue: (any HealthSyncBatchRetryEnqueuing)? = nil
+            retryQueue: (any HealthSyncBatchRetryEnqueuing)? = nil,
+            skipRegister: HealthKitSkippedRowRegister? = nil,
+            hrBucketKick: (@Sendable () -> Void)? = nil
         ) {
             self.uploader = uploader
             self.featureFlags = featureFlags
             self.retryQueue = retryQueue
+            self.skipRegister = skipRegister
+            self.hrBucketKick = hrBucketKick
             if let uploader {
                 let waiters = uploaderWaiters
                 uploaderWaiters.removeAll()
@@ -140,11 +158,13 @@
             if let hrCutoverGate {
                 self.hrCutoverGate = hrCutoverGate
             } else if let userIDProvider {
-                // Production default — the live per-User upload-mode schedule.
-                // `.buckets` ⇒ the bucket sweep owns this sample; `.raw` ⇒ it
-                // stays on the per-sample path.
+                // Production default — the live per-User upload-mode schedule,
+                // and since #12 the bucket path's own record: a bucket-regime
+                // sample is dropped only while the bucket path is healthy or
+                // its day already carries accepted buckets; otherwise it stays
+                // on the per-sample path (``HRBucketRawGate``).
                 self.hrCutoverGate = { date in
-                    HRUploadModeSchedule.mode(at: date, userId: userIDProvider()) == .buckets
+                    HRBucketRawGate.shouldDrop(sampleDate: date, userId: userIDProvider())
                 }
             } else {
                 self.hrCutoverGate = nil
@@ -204,6 +224,9 @@
         ) async -> HealthSyncPageOutcome {
             let gate = wireGate
             let mapping = gate.map(samples)
+            if mapping.heartRateHandedOff > 0 {
+                hrBucketKick?()
+            }
 
             guard !mapping.entries.isEmpty else {
                 // Distinguish "dropped SOLELY by a gate" from "genuinely nothing
@@ -217,10 +240,15 @@
                     .info(
                         "Spezi HK \(typeID, privacy: .public) — \(mapping.readCount, privacy: .public) foreign samples, 0 entries after gate"
                     )
+                // #113 — rows handed to the daily-statistics or HR-bucket path are
+                // not "uploaded" by this path; the server has not answered for
+                // them here. They are counted as handed off, and that path
+                // records its own server actions.
                 await recordObservation(
                     identifier: typeID,
                     samplesRead: mapping.readCount,
-                    samplesUploaded: mapping.handedToAggregatePath ? mapping.readCount : 0,
+                    tally: HealthSampleServerTally(),
+                    handedOff: mapping.handedToAggregatePath ? mapping.readCount : 0,
                     anchorAdvanced: true
                 )
                 return HealthSyncPageOutcome(
@@ -237,7 +265,8 @@
             let consumption = await HealthSampleConsumption(
                 uploader: resolvedUploader(logging: typeID),
                 gate: gate,
-                retry: retryQueue
+                retry: retryQueue,
+                skipRegister: skipRegister
             )
 
             // CU-21 (1) — a delivery that arrives WHILE the app is backgrounded IS
@@ -245,21 +274,24 @@
             // before the upload so the wire field is set in time. In the
             // foreground no window is opened, so an enclosing BGTask window is not
             // overwritten.
-            let outcome: HealthSyncPageOutcome = if await Self.isApplicationBackgrounded() {
+            let (outcome, tally) = if await Self.isApplicationBackgrounded() {
                 await SyncTriggerContext.shared.withTrigger(.background) {
-                    await consumption.transmit(mapping, admitted: lease)
+                    await consumption.transmitReporting(mapping, admitted: lease)
                 }
             } else {
-                await consumption.transmit(mapping, admitted: lease)
+                await consumption.transmitReporting(mapping, admitted: lease)
             }
 
             // The single decision point. `installed` is the rule production runs;
             // it is compared against `required` by the Wave-0 matrix.
             let advanced = HealthSyncCursorPolicy.installed.decide(outcome) == .commit
+            // #113 — the honest counts: only rows the server stored are
+            // uploaded, and a held page claims nothing (it is read again).
             await recordObservation(
                 identifier: typeID,
                 samplesRead: mapping.readCount,
-                samplesUploaded: advanced ? mapping.entries.count : 0,
+                tally: advanced ? tally : HealthSampleServerTally(),
+                handedOff: 0,
                 anchorAdvanced: advanced
             )
             return outcome
@@ -314,14 +346,18 @@
         private func recordObservation(
             identifier: String,
             samplesRead: Int,
-            samplesUploaded: Int,
+            tally: HealthSampleServerTally,
+            handedOff: Int,
             anchorAdvanced: Bool
         ) async {
             await MainActor.run {
                 HKSyncDiagnostics.shared.recordObservation(
                     identifier: identifier,
                     samplesRead: samplesRead,
-                    samplesUploaded: samplesUploaded,
+                    samplesUploaded: tally.accepted,
+                    samplesSkipped: tally.skipped,
+                    samplesParked: tally.parked,
+                    samplesHandedOff: handedOff,
                     anchorAdvanced: anchorAdvanced
                 )
                 // #66 P0.1 (Baustein 4) — a delivery while backgrounded is the
@@ -410,7 +446,8 @@
                 // cross the boundary here.
                 Self.rewriteMedicationNotificationContent(
                     taskID: task.id,
-                    content: content
+                    content: content,
+                    isRunwayTail: task.tags.contains(MedicationsSchedulerModule.runwayTailTag)
                 )
             }
 
@@ -447,7 +484,8 @@
             @MainActor
             static func rewriteMedicationNotificationContent(
                 taskID: String,
-                content: UNMutableNotificationContent
+                content: UNMutableNotificationContent,
+                isRunwayTail: Bool = false
             ) {
                 // W-B188 (AUDIT-SEC-b187 High) — when the user opted in to
                 // "hide medication name on lock screen", redact the visible
@@ -461,6 +499,15 @@
                 if LockScreenPrivacy.hideMedicationName() {
                     content.title = String(localized: "Medication reminder")
                     content.body = ""
+                }
+
+                // R5 — the last armed dose of a course that goes on. If no
+                // reconcile extends the runway before it fires, this is the last
+                // local reminder; say so instead of falling silent. The line names
+                // no medication, so it stays under the lock-screen redaction.
+                if isRunwayTail {
+                    let hint = String(localized: "notif.med.runwayTail.hint")
+                    content.body = content.body.isEmpty ? hint : "\(content.body)\n\(hint)"
                 }
 
                 // Promote the banner to time-sensitive so it breaks

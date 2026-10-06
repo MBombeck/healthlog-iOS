@@ -148,18 +148,15 @@ struct MiniCoachSafetyAndHistoryTests {
 
     // MARK: - MiniCoachService — gating
 
-    @Test("Service short-circuits when feature flag off")
-    func serviceFeatureFlagOff() async throws {
-        let defaults = try #require(UserDefaults(suiteName: "test.coach.flag.off.\(UUID().uuidString)"))
-        let flags = UserDefaultsFeatureFlagsService(defaults: defaults)
-        flags.setEnabled(.assistantCoach, value: false)
-        let service = MiniCoachService(featureFlags: flags)
+    @Test("Service short-circuits when the coach capability disallows on-device work")
+    func serviceFeatureFlagOff() async {
+        let service = MiniCoachService(aiCapabilities: AICaps.reader([.coach: AICaps.userDisabled]))
         let outcome = await service.respond(
             to: "Was ist mein letztes Gewicht?",
             context: MiniCoachContext(),
             locale: Locale(identifier: "de_DE")
         )
-        #expect(outcome.disposition == .featureFlagDisabled)
+        #expect(outcome.disposition == .capabilityNotAllowed)
     }
 
     @Test("Service refuses classifier-blocked ask without invoking model")

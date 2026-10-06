@@ -89,11 +89,21 @@ public actor SessionsRepository {
     /// off a lost phone, since a native session is a `RefreshToken` and never
     /// appears in the `Session` list.
     ///
-    /// - Returns: the number of **`Session` rows** deleted. Revoked refresh
-    ///   tokens are not counted, so this is not a device count.
+    /// R2 / #115 A7 — from server v1.39.3 the same call also ends AI-assistant
+    /// connections, API tokens and clinician share links; `keepShareLinks`
+    /// sends `?keepShareLinks=1`, which spares the share links (an older server
+    /// ignores the query). The answer carries what was ended and the accepted
+    /// access grants that were kept.
+    ///
+    /// - Returns: the decoded answer. `sessionsRevoked` counts only **`Session`
+    ///   rows**; revoked device logins are not in it, so it is not a device count.
     @discardableResult
-    public func revokeOthers() async throws -> Int {
-        let req: APIRequest<SessionRevokeOthersResponse> = .delete("/api/auth/me/sessions")
-        return try await api.send(req).sessionsRevoked
+    public func revokeOthers(keepShareLinks: Bool = false) async throws -> SessionRevokeOthersResponse {
+        let req = APIRequest<SessionRevokeOthersResponse>(
+            method: .delete,
+            path: "/api/auth/me/sessions",
+            query: keepShareLinks ? [("keepShareLinks", "1")] : []
+        )
+        return try await api.send(req)
     }
 }

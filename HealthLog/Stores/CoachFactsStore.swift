@@ -6,7 +6,7 @@ import Observation
 ///
 /// **State machine.** `facts` is the authoritative active list (server order
 /// preserved). `isLoading` drives the initial spinner. `isCoachDisabled` is set
-/// when the server reports the Coach surface is off (`HLError.assistantDisabled`)
+/// when the server reports the Coach surface is off (`HLError.aiUnavailable`)
 /// so the screen can render the calm disabled-surface placeholder instead of an
 /// error banner — mirroring how the rest of the Coach stack honours the
 /// kill-switch. `error` carries a user-facing string for genuine failures.
@@ -62,7 +62,7 @@ public final class CoachFactsStore {
         do {
             facts = try await repo.list()
             isCoachDisabled = false
-        } catch HLError.assistantDisabled {
+        } catch HLError.aiUnavailable {
             // Operator turned the Coach surface off — render the calm placeholder,
             // not an error. Same kill-switch the rest of the Coach stack honours.
             isCoachDisabled = true
@@ -82,7 +82,7 @@ public final class CoachFactsStore {
         do {
             _ = try await repo.forget(id: fact.id)
             facts.removeAll { $0.id == fact.id }
-        } catch HLError.assistantDisabled {
+        } catch HLError.aiUnavailable {
             isCoachDisabled = true
             facts = []
         } catch let err as HLError {
@@ -98,7 +98,7 @@ public final class CoachFactsStore {
         do {
             _ = try await repo.forgetAll()
             facts = []
-        } catch HLError.assistantDisabled {
+        } catch HLError.aiUnavailable {
             isCoachDisabled = true
             facts = []
         } catch let err as HLError {

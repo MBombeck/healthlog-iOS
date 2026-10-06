@@ -29,7 +29,7 @@ private final class CapturedHeaders: @unchecked Sendable {
 }
 
 /// `.serialized` — `MockURLProtocol.handler` is process-global state.
-@Suite("BYOLLMService", .serialized)
+@Suite("BYOLLMService", .serialized, .mockURLSession)
 struct BYOLLMServiceTests {
     private func makeSession() -> URLSession {
         URLSession(configuration: .mock())
@@ -68,13 +68,12 @@ struct BYOLLMServiceTests {
         let service = BYOLLMService(keyStore: keyStore, session: makeSession())
 
         let captured = CapturedHeaders()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             captured.set(request.value(forHTTPHeaderField: "Authorization"))
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             let json = #"{"choices":[{"message":{"content":"Hallo!"},"finish_reason":"stop"}]}"#
             return (response, Data(json.utf8))
         }
-        defer { MockURLProtocol.handler = nil }
 
         let text = try await service.generate(prompt: "Frage", provider: .openAI)
         #expect(text == "Hallo!")
@@ -104,12 +103,11 @@ struct BYOLLMServiceTests {
             consentGate: { _ in false } // consent denied
         )
         let requestFired = CapturedHeaders()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             requestFired.set("FIRED")
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, Data(#"{"choices":[{"message":{"content":"x"}}]}"#.utf8))
         }
-        defer { MockURLProtocol.handler = nil }
 
         await #expect(throws: BYOLLMError.self) {
             _ = try await service.generate(prompt: "leak?", provider: .openAI)
@@ -128,8 +126,7 @@ struct BYOLLMServiceTests {
             session: makeSession(),
             consentGate: { _ in true }
         )
-        MockURLProtocol.handler = ok(#"{"choices":[{"message":{"content":"Hi"}}]}"#)
-        defer { MockURLProtocol.handler = nil }
+        MockURLProtocol.install(ok(#"{"choices":[{"message":{"content":"Hi"}}]}"#))
 
         let text = try await service.generate(prompt: "ok", provider: .openAI)
         #expect(text == "Hi")
@@ -141,8 +138,7 @@ struct BYOLLMServiceTests {
         let keyStore = BYOKeyStore(keychain: keychain)
         try keyStore.setKey("sk-bad", for: .openAI)
         let service = BYOLLMService(keyStore: keyStore, session: makeSession())
-        MockURLProtocol.handler = fail(401)
-        defer { MockURLProtocol.handler = nil }
+        MockURLProtocol.install(fail(401))
 
         await #expect(throws: BYOLLMError.invalidKey) {
             _ = try await service.generate(prompt: "x", provider: .openAI)
@@ -152,8 +148,7 @@ struct BYOLLMServiceTests {
     @Test("generate maps 429 to rateLimited")
     func generate429() async throws {
         let service = makeService()
-        MockURLProtocol.handler = fail(429)
-        defer { MockURLProtocol.handler = nil }
+        MockURLProtocol.install(fail(429))
         await #expect(throws: BYOLLMError.rateLimited) {
             _ = try await service.generate(prompt: "Q", provider: .gemini, key: "AIza", model: nil, baseURL: nil)
         }
@@ -162,8 +157,7 @@ struct BYOLLMServiceTests {
     @Test("generate maps malformed 200 body to decode error")
     func generateMalformed() async {
         let service = makeService()
-        MockURLProtocol.handler = ok("not json at all")
-        defer { MockURLProtocol.handler = nil }
+        MockURLProtocol.install(ok("not json at all"))
         await #expect(throws: BYOLLMError.self) {
             _ = try await service.generate(prompt: "Q", provider: .openAI, key: "sk-x", model: nil, baseURL: nil)
         }
@@ -172,8 +166,7 @@ struct BYOLLMServiceTests {
     @Test("validate returns success on 200")
     func validateSuccess() async {
         let service = makeService()
-        MockURLProtocol.handler = ok(#"{"data":[]}"#)
-        defer { MockURLProtocol.handler = nil }
+        MockURLProtocol.install(ok(#"{"data":[]}"#))
         let result = await service.validate(provider: .openAI, key: "sk-good", model: nil, baseURL: nil)
         if case .success = result {
             // expected
@@ -185,8 +178,7 @@ struct BYOLLMServiceTests {
     @Test("validate returns invalidKey on 401")
     func validateInvalid() async {
         let service = makeService()
-        MockURLProtocol.handler = fail(401)
-        defer { MockURLProtocol.handler = nil }
+        MockURLProtocol.install(fail(401))
         let result = await service.validate(provider: .anthropic, key: "sk-ant-bad", model: nil, baseURL: nil)
         if case .failure(.invalidKey) = result {
             // expected

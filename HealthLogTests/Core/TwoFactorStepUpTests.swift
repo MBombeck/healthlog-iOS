@@ -18,7 +18,7 @@
         import AuthenticationServices
     #endif
 
-    @Suite("Native 2FA — step-up elevation wire contract", .serialized)
+    @Suite("Native 2FA — step-up elevation wire contract", .serialized, .mockURLSession)
     struct TwoFactorStepUpTests {
         // MARK: - Fixtures + helpers
 
@@ -128,7 +128,7 @@
             let repo = makeRepo()
             nonisolated(unsafe) var captured = ""
             nonisolated(unsafe) var path = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured = Self.body(of: req)
                 path = req.url?.path ?? ""
                 return Self.ok(
@@ -148,7 +148,7 @@
             let repo = makeRepo()
             nonisolated(unsafe) var header: String?
             nonisolated(unsafe) var path = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 header = req.value(forHTTPHeaderField: "X-Step-Up")
                 path = req.url?.path ?? ""
                 return Self.ok(req, #"{"data":{"otpauthUri":"otpauth://totp/HealthLog?secret=ABC","totpSecret":"ABCDEFGH"},"error":null}"#)
@@ -163,7 +163,7 @@
         func allManagementRoutesForwardElevation() async throws {
             let repo = makeRepo()
             nonisolated(unsafe) var seen: [String: String] = [:]
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 seen[req.url?.path ?? ""] = req.value(forHTTPHeaderField: "X-Step-Up")
                 return Self.ok(req, #"{"data":{"recoveryCodes":["a-b"],"recoveryCodesRemaining":1},"error":null}"#)
             }
@@ -182,7 +182,7 @@
         func confirmBody() async throws {
             let repo = makeRepo()
             nonisolated(unsafe) var captured = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured = Self.body(of: req)
                 return Self.ok(req, #"{"data":{"enabled":true,"recoveryCodes":["x-y","z-w"],"recoveryCodesRemaining":2},"error":null}"#)
             }
@@ -196,7 +196,7 @@
         func disableBody() async throws {
             let repo = makeRepo()
             nonisolated(unsafe) var captured = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured = Self.body(of: req)
                 return Self.ok(req, #"{"data":{"enabled":false},"error":null}"#)
             }
@@ -253,7 +253,7 @@
             let repo = makeRepo()
             nonisolated(unsafe) var method = ""
             nonisolated(unsafe) var header: String?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 method = req.httpMethod ?? ""
                 header = req.value(forHTTPHeaderField: "X-Step-Up")
                 return Self.ok(
@@ -272,7 +272,7 @@
         @Test("A step-up-required 401 on a management route surfaces its errorCode")
         func stepUpRequired401Surfaces() async throws {
             let repo = makeRepo()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 Self.status(
                     req,
                     401,
@@ -293,7 +293,7 @@
         @Test("A generic 401 from the step-up mint surfaces verbatim, not as a logout")
         func mintGeneric401Surfaces() async throws {
             let repo = makeRepo()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 Self.status(req, 401, #"{"data":null,"error":"Verification failed","meta":{}}"#)
             }
             do {
@@ -312,7 +312,7 @@
 
     // MARK: - Version gate
 
-    @Suite("2FA version gate")
+    @Suite("2FA version gate", .mockURLSession)
     struct TwoFactorVersionGateTests {
         struct VersionCase {
             let version: String
@@ -348,7 +348,7 @@
 
     // MARK: - Single-use elevation + redaction
 
-    @Suite("Elevation single-use + log hygiene")
+    @Suite("Elevation single-use + log hygiene", .mockURLSession)
     struct ElevationHygieneTests {
         @Test("A ConsumableElevation yields its value exactly once")
         func singleUse() {
@@ -378,7 +378,7 @@
 
     #if canImport(AuthenticationServices)
 
-        @Suite("Step-up passkey ceremony wiring", .serialized)
+        @Suite("Step-up passkey ceremony wiring", .serialized, .mockURLSession)
         struct StepUpCeremonyTests {
             /// Fake passkey that returns a canned assertion — the TOTP/password
             /// arms never touch it, and this arm needs no real system sheet.
@@ -428,7 +428,7 @@
             func passkeyCeremonyWiring() async throws {
                 let (service, _) = makeService()
                 nonisolated(unsafe) var mintBody = ""
-                MockURLProtocol.handler = { req in
+                MockURLProtocol.install { req in
                     let path = req.url?.path ?? ""
                     if path == "/api/auth/step-up/options" {
                         return (

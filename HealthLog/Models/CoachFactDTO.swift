@@ -13,7 +13,7 @@ import Foundation
 // **Auth + gate (B4):** every handler is `requireAuth()` (cookie OR Bearer) then
 // `await requireAssistantSurface("coach")`. If the operator disabled the Coach
 // surface the gate throws `403 + errorCode: "assistant.disabled.coach"`, which
-// `APIClient` already maps to ``HLError/assistantDisabled(.assistantCoach)`` — the
+// `APIClient` already maps to ``HLError/aiUnavailable(_:)`` — the
 // same kill-switch the rest of the Coach stack honours. No new client gate needed.
 
 // MARK: - CoachFactDTO (server row projection)

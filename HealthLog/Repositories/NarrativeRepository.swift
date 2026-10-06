@@ -30,7 +30,15 @@ public actor NarrativeRepository {
     /// Fetches the period narrative, or `nil` on a `404`/`422`. `locale` is the
     /// query override (`de`/`en`); the server still narrows from the session
     /// when omitted, but passing it keeps the cache key + prose locale aligned.
-    public func fetch(period: NarrativeDTO.Period, locale: String) async throws -> NarrativeDTO? {
+    ///
+    /// `bypassCache` (#115 · 0.2): read the network directly and write nothing
+    /// back — used while the `periodNarrative` capability is unavailable, so a
+    /// cached model-written narrative cannot be painted.
+    public func fetch(
+        period: NarrativeDTO.Period,
+        locale: String,
+        bypassCache: Bool = false
+    ) async throws -> NarrativeDTO? {
         let api = api
         let periodValue = period.rawValue
         @Sendable func networkFetch() async throws -> NarrativeDTO {
@@ -41,7 +49,7 @@ public actor NarrativeRepository {
             return try await api.send(req)
         }
         do {
-            if let swr {
+            if let swr, !bypassCache {
                 return try await swr.fetchCachingFirst(
                     .insightsNarrative(period: periodValue, locale: locale, day: BerlinDayKey.string()),
                     decoding: NarrativeDTO.self,
@@ -56,9 +64,9 @@ public actor NarrativeRepository {
             // v0.14.3 B5: a provider-less account previously landed in the
             // card's error arm and showed nothing; a 403 now maps to nil.
             return nil
-        } catch HLError.assistantDisabled {
+        } catch HLError.aiUnavailable {
             // The APIClient intercepts a 403 + `assistant.disabled.<surface>`
-            // and re-throws it as `HLError.assistantDisabled(flag)` BEFORE the
+            // and re-throws it as `HLError.aiUnavailable(refusal)` BEFORE the
             // `.server(403,…)` arm above can see it — so map that surfaced shape
             // to nil too (v0.14.3 B5). Provider-less ⇒ calm empty, not error.
             return nil

@@ -24,8 +24,8 @@ struct MoodStabilitySection: View {
     }
 
     var body: some View {
-        // Stability gate: omit the whole section if < 7 daily-avg days
-        // (computed upstream → `stability == nil`). The entry-count tile still
+        // Stability gate: the server sends `null` below its day floor
+        // (#115 · 1.3 — no client computation any more). The entry-count tile still
         // shows when there is at least one entry.
         if stability == nil, entryCount == 0 {
             EmptyView()
@@ -93,6 +93,10 @@ struct MoodStabilitySection: View {
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                // #115 · 1.3 — the server's own window, not the period control.
+                Text(String(format: String(localized: "mood.stability.days"), stability.days))
+                    .font(.hlCaption2)
+                    .foregroundStyle(HLText.tertiary)
             }
             .frame(
                 maxWidth: .infinity,
@@ -178,8 +182,8 @@ struct MoodStabilitySection: View {
         case .verySteady: String(localized: "Very steady")
         case .steady: String(localized: "Steady")
         case .variable: String(localized: "Variable")
-        case .unsettled: String(localized: "Unsettled")
-        case .veryUnsettled: String(localized: "Very unsettled")
+        case .veryVariable: String(localized: "mood.stability.band.veryVariable")
+        case .unknown: String(localized: "mood.stability.band.unknown")
         }
     }
 
@@ -188,8 +192,8 @@ struct MoodStabilitySection: View {
         case .verySteady: String(localized: "Your mood is very steady.")
         case .steady: String(localized: "Your mood is mostly steady.")
         case .variable: String(localized: "Your mood varies noticeably.")
-        case .unsettled: String(localized: "Your mood is fairly changeable.")
-        case .veryUnsettled: String(localized: "Your mood swings a lot.")
+        case .veryVariable: String(localized: "Your mood swings a lot.")
+        case .unknown: String(localized: "mood.stability.sentence.unknown")
         }
     }
 }

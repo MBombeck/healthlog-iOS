@@ -48,6 +48,8 @@ struct AddMedicationSheet: View {
     // v0.11 — injection-site tracking (only meaningful for INJECTION route).
     @State private var trackInjectionSites: Bool = false
     @State private var allowedInjectionSites: Set<InjectionSite> = []
+    /// v1.39.1 (#1033) — the intake-tracking switch, offered when the server knows it (E1).
+    @State private var trackIntake: Bool = true
 
     // UI state
     @State private var isSaving: Bool = false
@@ -70,6 +72,7 @@ struct AddMedicationSheet: View {
             Form {
                 photoOfMedSection
                 requiredSection
+                if Medication.serverKnowsTrackIntake(store.medications) { MedicationTrackIntakeSection(isOn: $trackIntake) }
                 cadenceSection
                 if cadenceKind != .asNeeded {
                     scheduleSection.simultaneousGesture(scheduleEngagement, including: .all)
@@ -360,15 +363,16 @@ struct AddMedicationSheet: View {
             notificationsEnabled: notificationsEnabled,
             schedules: write.schedules,
             oneShot: value.oneShot ? true : nil,
-            startsOn: startsOn.map { MedicationCadenceLogic.isoDay($0) },
-            endsOn: value.oneShot ? nil : endsOn.map { MedicationCadenceLogic.isoDay($0) },
+            startsOn: startsOn.map { MedicationCadenceLogic.courseDay($0) },
+            endsOn: value.oneShot ? nil : endsOn.map { MedicationCadenceLogic.courseDay($0) },
             deliveryForm: deliveryForm.wireValue,
             // v0.11 — only send injection-site fields for an INJECTION med.
             trackInjectionSites: deliveryForm == .injection ? trackInjectionSites : nil,
             allowedInjectionSites: deliveryForm == .injection && trackInjectionSites
                 ? allowedInjectionSites.compactMap(\.serverRawValue).sorted()
                 : nil,
-            asNeeded: write.asNeeded
+            asNeeded: write.asNeeded,
+            trackIntake: MedicationTrackIntakeWrite.create(switchOn: trackIntake, served: store.medications)
         )
 
         let outcome = await store.create(body)
@@ -511,6 +515,11 @@ enum MedicationCategoryOption: String, CaseIterable, Identifiable {
     case hormone = "HORMONE"
     case skin = "SKIN"
     case sleepAid = "SLEEP_AID"
+    // Server v1.39.4 (#1041) — the three the picker lacked; editing such a
+    // medication used to store OTHER.
+    case diabetes = "DIABETES"
+    case antibiotic = "ANTIBIOTIC"
+    case mentalHealth = "MENTAL_HEALTH"
     case other = "OTHER"
 
     var id: String {
@@ -521,19 +530,26 @@ enum MedicationCategoryOption: String, CaseIterable, Identifiable {
         rawValue
     }
 
+    /// J1 / F2 — the picker rendered these as plain `String`s, i.e. never
+    /// through the catalog: an English build showed "Nahrungsergänzung", a
+    /// German one "Blood pressure". The catalog already carries the
+    /// `medications.category*` family (en + de); the picker now reads it.
     var displayName: String {
         switch self {
-        case .bloodPressure: "Blood pressure"
-        case .vitamin: "Vitamin"
-        case .supplement: "Nahrungsergänzung"
-        case .painRelief: "Schmerzmittel"
-        case .allergy: "Allergie"
-        case .digestive: "Verdauung"
-        case .thyroid: "Schilddrüse"
-        case .hormone: "Hormon"
-        case .skin: "Haut"
-        case .sleepAid: "Schlafmittel"
-        case .other: "Sonstiges"
+        case .bloodPressure: String(localized: "medications.categoryBloodPressure")
+        case .vitamin: String(localized: "medications.categoryVitamin")
+        case .supplement: String(localized: "medications.categorySupplement")
+        case .painRelief: String(localized: "medications.categoryPainRelief")
+        case .allergy: String(localized: "medications.categoryAllergy")
+        case .digestive: String(localized: "medications.categoryDigestive")
+        case .thyroid: String(localized: "medications.categoryThyroid")
+        case .hormone: String(localized: "medications.categoryHormone")
+        case .skin: String(localized: "medications.categorySkin")
+        case .sleepAid: String(localized: "medications.categorySleepAid")
+        case .diabetes: String(localized: "medications.categoryDiabetes")
+        case .antibiotic: String(localized: "medications.categoryAntibiotic")
+        case .mentalHealth: String(localized: "medications.categoryMentalHealth")
+        case .other: String(localized: "medications.categoryOther")
         }
     }
 }
@@ -553,47 +569,8 @@ enum MedicationTreatmentClassOption: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .generic: "Allgemein"
-        case .glp1: "GLP-1"
+        case .generic: String(localized: "med.treatmentClass.generic")
+        case .glp1: "GLP-1" // drug-class name, identical in every locale
         }
-    }
-}
-
-/// Picker-friendly enumeration of the server's `deliveryForm`
-/// (`ORAL | INJECTION | OTHER`). The `.unspecified` case maps to `nil` on the
-/// wire so a medication that never set a route stays unset.
-enum MedicationDeliveryFormOption: String, CaseIterable, Identifiable {
-    case unspecified
-    case oral = "ORAL"
-    case injection = "INJECTION"
-    case other = "OTHER"
-
-    var id: String {
-        rawValue
-    }
-
-    /// `nil` for `.unspecified`; the raw server enum string otherwise.
-    var wireValue: String? {
-        switch self {
-        case .unspecified: nil
-        case .oral, .injection, .other: rawValue
-        }
-    }
-
-    var labelKey: LocalizedStringKey {
-        switch self {
-        case .unspecified: "—"
-        case .oral: "med.schedule.deliveryForm.oral"
-        case .injection: "med.schedule.deliveryForm.injection"
-        case .other: "med.schedule.deliveryForm.other"
-        }
-    }
-
-    /// Decode from the wire string; `.unspecified` for nil / unknown.
-    static func from(wire: String?) -> MedicationDeliveryFormOption {
-        guard let wire, let opt = MedicationDeliveryFormOption(rawValue: wire) else {
-            return .unspecified
-        }
-        return opt
     }
 }

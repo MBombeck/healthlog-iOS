@@ -268,15 +268,15 @@ struct AIProviderModelTests {
     }
 }
 
-/// Locks `Insight.providerLabel` mapping continues to surface friendly labels
+/// Locks `AIInsightResponse.providerFamilyLabel` mapping continues to surface friendly labels
 /// for every wire vocabulary the server might emit, even after the iOS
 /// `AIProvider` enum pivoted to the server's provider vocabulary. The label is
 /// what shows in the briefing badge — we must not
 /// regress it during the B2 refactor.
-@Suite("Insight.providerLabel after AIProvider B2 pivot")
+@Suite("Provider family label after AIProvider B2 pivot")
 struct InsightProviderLabelAfterPivotTests {
-    private func insight(provider: String) -> Insight {
-        Insight(id: "i", title: "T", summary: "S", severity: .info, generatedAt: Date(), provider: provider)
+    private func label(_ provider: String) -> String {
+        AIInsightResponse.providerFamilyLabel(provider)
     }
 
     @Test(
@@ -291,12 +291,12 @@ struct InsightProviderLabelAfterPivotTests {
         ]
     )
     func familyLabels(raw: String, expected: String) {
-        #expect(insight(provider: raw).providerLabel == expected)
+        #expect(label(raw) == expected)
     }
 
     @Test("Unknown providers tidy underscores + dashes")
     func unknownProviderTidied() {
-        let label = insight(provider: "future-model_2027").providerLabel
+        let label = label("future-model_2027")
         #expect(label.contains("Future"))
         #expect(label.contains("Model"))
         #expect(!label.contains("_"))

@@ -28,6 +28,8 @@ struct CelebrationOverlay: View {
     let onDismiss: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// #115 P2 — the record figure reads in the account's unit.
+    @Environment(\.unitPreferences) private var unitPreferences
     @State private var t: Double = 0
     @State private var particles: [Particle] = []
     // Haptic triggers — `.sensoryFeedback` fires once per value change.
@@ -72,7 +74,7 @@ struct CelebrationOverlay: View {
         // `.combine`: an explicit label replaces combined children anyway, and
         // saying so is the honest form.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(Self.spokenAchievement(for: record.base)))
+        .accessibilityLabel(Text(Self.spokenAchievement(for: record.base, units: unitPreferences)))
         // The scrim's tap-to-dismiss is a child gesture, so collapsing the
         // subtree into one element would otherwise leave a VoiceOver user with
         // no way to end the moment early.
@@ -87,11 +89,14 @@ struct CelebrationOverlay: View {
     /// Locale-aware through ``HLNumberFormat`` (never a hard-coded separator), a
     /// whole number drops its fraction, and a non-finite server value prints the
     /// em dash the rest of the app uses rather than `inf`.
-    nonisolated static func valueText(for dto: PersonalRecordDTO) -> String {
-        guard dto.value.isFinite else { return "—" }
-        let digits = dto.value == dto.value.rounded() ? 0 : 1
-        let number = HLNumberFormat.decimal(dto.value, fractionDigits: digits)
-        let unit = dto.unit.trimmingCharacters(in: .whitespaces)
+    ///
+    /// #115 P2 — in the account's unit (`units`); the row itself is canonical.
+    nonisolated static func valueText(for dto: PersonalRecordDTO, units: UnitPreferences = .standard) -> String {
+        let value = dto.displayValue(units)
+        guard value.isFinite else { return "—" }
+        let digits = value == value.rounded() ? 0 : 1
+        let number = HLNumberFormat.decimal(value, fractionDigits: digits)
+        let unit = dto.displayUnit(units).trimmingCharacters(in: .whitespaces)
         return unit.isEmpty ? number : "\(number) \(unit)"
     }
 
@@ -101,9 +106,9 @@ struct CelebrationOverlay: View {
     /// Pure and `nonisolated` so the contract is checkable without a view tree —
     /// the previous label was a `private` English literal inside `body`, which
     /// is exactly why nothing but a human could check it.
-    nonisolated static func spokenAchievement(for dto: PersonalRecordDTO) -> String {
+    nonisolated static func spokenAchievement(for dto: PersonalRecordDTO, units: UnitPreferences = .standard) -> String {
         let metric = MetricTypeLocalisation.label(forType: dto.metricType)
-        let value = valueText(for: dto)
+        let value = valueText(for: dto, units: units)
         // Both placeholders are Strings by construction (a localized label and a
         // formatted figure), so the catalogue key is `%@ %@` — the same trap
         // `med.inventory.summary` documents.
@@ -173,7 +178,7 @@ struct CelebrationOverlay: View {
             // the share image but never in the moment itself, so the spoken
             // label had nothing visible to match; now both read the one
             // `valueText` above.
-            Text(Self.valueText(for: record.base))
+            Text(Self.valueText(for: record.base, units: unitPreferences))
                 .font(.hlTitle3.monospacedDigit())
                 .foregroundStyle(HLColor.recordHeroInk)
                 .multilineTextAlignment(.center)

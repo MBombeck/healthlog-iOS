@@ -10,7 +10,7 @@ import Testing
 /// Schritte habe ich keinen Graphen drin". The hydration loop in
 /// `refreshMetricStates` post-commit fans across all `.ready` kinds
 /// regardless of category (cumulative-stats, per-sample, BP composite).
-@Suite("DashboardStore — V053-D2 universal sparkline hydration", .serialized)
+@Suite("DashboardStore — V053-D2 universal sparkline hydration", .serialized, .mockURLSession)
 @MainActor
 struct DashboardStoreUniversalSparklineTests {
     private func makeAPIClient() -> APIClient {
@@ -68,7 +68,7 @@ struct DashboardStoreUniversalSparklineTests {
         let r2 = "{\"id\":\"w2\",\"type\":\"WEIGHT\",\"value\":73.8,\"measuredAt\":\"\(iso(now.addingTimeInterval(-86400)))\"}"
         let r3 = "{\"id\":\"w3\",\"type\":\"WEIGHT\",\"value\":73.6,\"measuredAt\":\"\(iso(now.addingTimeInterval(-3600)))\"}"
         let payload = "{\"data\":{\"measurements\":[\(r1),\(r2),\(r3)]}}"
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -105,7 +105,7 @@ struct DashboardStoreUniversalSparklineTests {
         let r1 = "{\"id\":\"g1\",\"type\":\"BLOOD_GLUCOSE\",\"value\":98,\"measuredAt\":\"\(iso(now.addingTimeInterval(-3600)))\"}"
         let r2 = "{\"id\":\"g2\",\"type\":\"BLOOD_GLUCOSE\",\"value\":102,\"measuredAt\":\"\(iso(now.addingTimeInterval(-1800)))\"}"
         let payload = "{\"data\":{\"measurements\":[\(r1),\(r2)]}}"
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -138,7 +138,7 @@ struct DashboardStoreUniversalSparklineTests {
         let r1 = "{\"id\":\"bf1\",\"type\":\"BODY_FAT\",\"value\":22.1,\"measuredAt\":\"\(iso(now.addingTimeInterval(-86400 * 5)))\"}"
         let r2 = "{\"id\":\"bf2\",\"type\":\"BODY_FAT\",\"value\":21.8,\"measuredAt\":\"\(iso(now.addingTimeInterval(-86400)))\"}"
         let payload = "{\"data\":{\"measurements\":[\(r1),\(r2)]}}"
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,

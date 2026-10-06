@@ -31,6 +31,21 @@ public final class SessionsStore {
     /// not keep. Resolved on every ``load()``.
     public private(set) var sparesThisDevice: Bool = false
 
+    /// R2 / #115 A7 — whether the running server (≥ v1.39.3) also ends AI
+    /// assistants, API tokens and doctor share links on "sign out everywhere"
+    /// (``SignOutEverywhereElse/endsConnectionsAndLinks(on:)``). Picks the
+    /// consequence text and shows the keep-links switch. Resolved on ``load()``.
+    public private(set) var endsConnectionsAndLinks: Bool = false
+
+    /// R2 / #115 A7 — the "keep doctor share links" switch (`?keepShareLinks=1`).
+    /// Off by default, like the server: a person signing out everywhere after
+    /// losing a device usually wants links made on it to stop too.
+    public var keepShareLinks: Bool = false
+
+    /// R2 / #115 A7 — the full answer of the last "sign out everywhere": what
+    /// ended, and the access grants that were kept (`grantsKept`).
+    public private(set) var lastRevokeOthersResult: SessionRevokeOthersResponse?
+
     private let repo: SessionsRepository
     private let serverVersion: @Sendable () async throws -> ServerVersionInfo
 
@@ -55,7 +70,7 @@ public final class SessionsStore {
         isLoading = true
         error = nil
         defer { isLoading = false }
-        async let verdict = resolvedSparesThisDevice()
+        async let verdict = resolvedVerdict()
         do {
             sessions = try await repo.list()
         } catch let err as HLError {
@@ -63,17 +78,22 @@ public final class SessionsStore {
         } catch {
             self.error = .unknown(String(describing: error))
         }
-        sparesThisDevice = await verdict
+        let resolved = await verdict
+        sparesThisDevice = resolved.sparesThisDevice
+        endsConnectionsAndLinks = resolved.endsConnectionsAndLinks
     }
 
     /// v1.38.11 — best-effort version read. A miss is deliberately silent and
-    /// answers `false`: the verdict only picks between two truthful texts, so
+    /// answers `false` twice: the verdict only picks between truthful texts, so
     /// surfacing it as an error would put a red alert in front of a user whose
     /// session list loaded perfectly well. `nonisolated` so `load()` can run it
     /// alongside the list rather than in front of it.
-    private nonisolated func resolvedSparesThisDevice() async -> Bool {
-        guard let version = try? await serverVersion() else { return false }
-        return SignOutEverywhereElse.sparesThisDevice(on: version)
+    private nonisolated func resolvedVerdict() async -> (sparesThisDevice: Bool, endsConnectionsAndLinks: Bool) {
+        guard let version = try? await serverVersion() else { return (false, false) }
+        return (
+            SignOutEverywhereElse.sparesThisDevice(on: version),
+            SignOutEverywhereElse.endsConnectionsAndLinks(on: version)
+        )
     }
 
     /// Revokes a single session, then re-loads so the list reflects server
@@ -104,7 +124,10 @@ public final class SessionsStore {
         error = nil
         defer { isRevokingOthers = false }
         do {
-            lastRevokedOthersCount = try await repo.revokeOthers()
+            // The switch only means something on a server that ends links at all.
+            let result = try await repo.revokeOthers(keepShareLinks: endsConnectionsAndLinks && keepShareLinks)
+            lastRevokeOthersResult = result
+            lastRevokedOthersCount = result.sessionsRevoked
             await load()
         } catch let err as HLError {
             error = err
@@ -119,6 +142,15 @@ public final class SessionsStore {
 
     public func clearRevokedOthersConfirmation() {
         lastRevokedOthersCount = nil
+        lastRevokeOthersResult = nil
+    }
+
+    /// R2 / #115 A7 — who can still read the record after "sign out
+    /// everywhere": the kept grants' names, deduplicated, in server order.
+    /// Empty when nothing was kept or the server does not report it.
+    public var keptGrantNames: [String] {
+        var seen = Set<String>()
+        return (lastRevokeOthersResult?.grantsKept ?? []).compactMap(\.label).filter { seen.insert($0).inserted }
     }
 
     public func clearOnLogout() {
@@ -126,9 +158,12 @@ public final class SessionsStore {
         revokingID = nil
         isRevokingOthers = false
         lastRevokedOthersCount = nil
+        lastRevokeOthersResult = nil
+        keepShareLinks = false
         // v1.38.11 — the next account may sit on a different server, so the
         // copy verdict must not outlive the sign-out that produced it.
         sparesThisDevice = false
+        endsConnectionsAndLinks = false
         error = nil
     }
 }

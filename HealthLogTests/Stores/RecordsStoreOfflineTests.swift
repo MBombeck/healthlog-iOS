@@ -11,7 +11,7 @@ import Testing
 /// `URLProtocol` (per the no-mock-server doctrine): a retriable 503 routes the
 /// write into the encrypted outbox, and the store reports success.
 @MainActor
-@Suite("Records store offline create/update (H3)", .serialized)
+@Suite("Records store offline create/update (H3)", .serialized, .mockURLSession)
 struct RecordsStoreOfflineTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -27,7 +27,7 @@ struct RecordsStoreOfflineTests {
 
     /// 503 on every request → retriable → the repo enqueues + re-throws.
     private func install503() {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }
     }

@@ -103,8 +103,8 @@ extension InsightsContainerScreen {
         // explicitly (`insights-tab-strip.tsx:588`) because ECG has no
         // `MeasurementType` to hang the availability model on, and an account
         // with no strips must see no pill and no page rather than a dead
-        // surface. The `insights` module gate still applies downstream in
-        // `availableSpecials`.
+        // surface. ECG has no owning module (server v1.39), so nothing
+        // downstream in `availableSpecials` removes it again.
         if ecgStore.hasRecordings { specials.insert(.ecg) }
         return specials
     }
@@ -117,9 +117,6 @@ extension InsightsContainerScreen {
         // recovery). Medications is core (`moduleKey == nil`) → never dropped.
         guard let gate = appContainer?.moduleGate else { return union }
         _ = gate.modules // @Observable tracking
-        return union.filter { page in
-            guard let key = page.moduleKey else { return true }
-            return gate.isEnabled(key)
-        }
+        return union.filter { $0.isModuleEnabled(in: gate) }
     }
 }

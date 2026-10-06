@@ -23,7 +23,6 @@ public extension AppContainer {
     struct RepositoriesBundle: Sendable {
         public let measurements: MeasurementsRepository
         public let medications: MedicationsRepository
-        public let featureFlags: FeatureFlagsRepository
         public let glp1Local: GLP1LocalRepository
         /// v0.12 SP3+SP4 — server round-trip for the GLP-1 side-effect logbook
         /// + pen/vial inventory CRUD (Outbox-backed optimistic writes). Used in
@@ -129,7 +128,6 @@ public extension AppContainer {
             // MeasurementsRepository). Without it the repo-held `swr` is nil and
             // `invalidateAfterIntakeReplay()` silently no-ops.
             medications: MedicationsRepository(api: apiClient, outbox: outbox, standalone: standalone, swr: swr),
-            featureFlags: FeatureFlagsRepository(api: apiClient),
             // T-5 GLP-1 Detail Stack — local SwiftData store, recovery-wrapped
             // the same way as the Outbox (`OutboxQueue.makeWithRecovery`).
             // audit P-1 — the SwiftData open is DEFERRED (`makeWithRecoveryTask`):

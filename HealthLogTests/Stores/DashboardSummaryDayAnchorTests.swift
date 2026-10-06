@@ -24,7 +24,7 @@ import Testing
 /// 3. `ComplianceSnapshot.reconciled` prefers the empty day-anchored local view
 ///    over a stale server count once meds are loaded, but still uses the server
 ///    snapshot on a genuine cold start (meds not yet loaded).
-@Suite("DashboardSummary day-anchor — INV-home-compliance-slot", .serialized)
+@Suite("DashboardSummary day-anchor — INV-home-compliance-slot", .serialized, .mockURLSession)
 struct DashboardSummaryDayAnchorTests {
     // MARK: - 1. Key day-anchoring
 
@@ -130,7 +130,7 @@ struct DashboardSummaryDayAnchorTests {
 
         // The store's key resolves to TODAY in Berlin. The server returns the
         // fresh 0/0 (nothing taken today).
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -167,7 +167,7 @@ struct DashboardSummaryDayAnchorTests {
             payload: summaryCacheBytes(scheduled: 1, taken: 1),
             at: Date().addingTimeInterval(-1)
         )
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -180,38 +180,6 @@ struct DashboardSummaryDayAnchorTests {
         let compliance = try #require(store.summary?.compliance)
         #expect(compliance.scheduledToday == 1)
         #expect(compliance.takenToday == 1)
-    }
-
-    // MARK: - 3. Reconciler cold-start-vs-loaded distinction
-
-    @Test("reconciler prefers empty local over stale server when meds are loaded")
-    func reconcilerPrefersEmptyLocalWhenLoaded() {
-        // Server carries a stale 2/2 (the leaked prior-day snapshot). Local view
-        // has 0 today-slots and meds ARE loaded → the calm empty 0/0 must win.
-        let reconciled = ComplianceSnapshot.reconciled(
-            server: ComplianceSnapshot(scheduledToday: 2, takenToday: 2),
-            todayIntakes: [],
-            activeMedicationIDs: ["med-A"],
-            medicationsLoaded: true
-        )
-        #expect(reconciled.scheduledToday == 0)
-        #expect(reconciled.takenToday == 0)
-        #expect(reconciled.hasSchedule == false)
-    }
-
-    @Test("reconciler still uses server on a genuine cold start (meds not loaded)")
-    func reconcilerUsesServerOnColdStart() {
-        // Meds not loaded yet → the empty local view is empty only because there
-        // is no data → trust the server snapshot so the cold-cache first-paint
-        // still renders.
-        let reconciled = ComplianceSnapshot.reconciled(
-            server: ComplianceSnapshot(scheduledToday: 2, takenToday: 1),
-            todayIntakes: [],
-            activeMedicationIDs: ["med-A"],
-            medicationsLoaded: false
-        )
-        #expect(reconciled.scheduledToday == 2)
-        #expect(reconciled.takenToday == 1)
     }
 }
 

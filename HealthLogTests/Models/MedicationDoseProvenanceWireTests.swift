@@ -18,7 +18,7 @@ import Testing
 /// und sichert die Render-Entscheidung des Provenienz-Chips in
 /// `LedgerHistoryRow` ab: der Chip hängt an ``MedicationDoseHistoryRow/provenance``,
 /// also genügt dieser Wert als Beleg dafür, was gerendert wird.
-@Suite("CU-18 — Dosis-Provenienz (#64)", .serialized)
+@Suite("CU-18 — Dosis-Provenienz (#64)", .serialized, .mockURLSession)
 struct MedicationDoseProvenanceWireTests {
     private func makeRepo() throws -> MedicationsRepository {
         let env = AppEnvironment(
@@ -51,7 +51,7 @@ struct MedicationDoseProvenanceWireTests {
         {"data":{"from":"2026-07-01T00:00:00.000Z","to":"2026-07-31T00:00:00.000Z",
         "family":"daily","hasExpectedSlots":true,"rows":[\#(rows.joined(separator: ","))]}}
         """#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(body.utf8)

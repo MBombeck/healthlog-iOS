@@ -73,16 +73,19 @@ public enum HLJSONValue: Codable, Sendable, Equatable, Hashable {
 // MARK: - ExtractedFactType
 
 /// `{ CONDITION | OBSERVATION | MEDICATION_STATEMENT }` — the staged fact's FHIR
-/// resource class. Tolerant decode falls back to ``observation``.
-public enum ExtractedFactType: String, Codable, Sendable, Equatable, Hashable {
+/// resource class. A class this build does not know, or a missing one, decodes
+/// to ``unknown`` (#115 · 1.7 / C1). It used to become ``observation``, so a
+/// new kind of fact was counted as a lab value in the document's "N lab values"
+/// link.
+public enum ExtractedFactType: String, Codable, Sendable, Equatable, Hashable, TolerantServerEnum {
     case condition = "CONDITION"
     case observation = "OBSERVATION"
     case medicationStatement = "MEDICATION_STATEMENT"
+    /// A resource class this build does not know. Counted as nothing.
+    case unknown = "UNKNOWN"
 
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = ExtractedFactType(rawValue: raw) ?? .observation
-    }
+    public static let unknownFallback: ExtractedFactType = .unknown
+    public static let wireVocabulary: StaticString = "ExtractedFactType"
 }
 
 // MARK: - ExtractedFactStatus
@@ -177,7 +180,7 @@ public struct ExtractedFact: Codable, Sendable, Equatable, Identifiable, Hashabl
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
-        factType = try c.decodeIfPresent(ExtractedFactType.self, forKey: .factType) ?? .observation
+        factType = try c.decodeIfPresent(ExtractedFactType.self, forKey: .factType) ?? .unknown
         status = try c.decodeIfPresent(ExtractedFactStatus.self, forKey: .status) ?? .pending
         confidence = try c.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
         needsReview = try c.decodeIfPresent(Bool.self, forKey: .needsReview) ?? false

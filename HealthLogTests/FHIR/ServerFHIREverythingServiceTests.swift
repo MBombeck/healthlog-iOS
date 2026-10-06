@@ -17,7 +17,7 @@ import Testing
 /// **CU-13 (server v1.34.2)** adds: the request goes to the type-level
 /// `/api/fhir/Patient/$everything` (the bare `/api/fhir/$everything` 404s), and
 /// a zero-entry Bundle is reported as such instead of passing for an export.
-@Suite("ServerFHIREverythingService", .serialized)
+@Suite("ServerFHIREverythingService", .serialized, .mockURLSession)
 struct ServerFHIREverythingServiceTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -77,7 +77,7 @@ struct ServerFHIREverythingServiceTests {
         // Two pages: page1 has a next link → page2 (offset 1) has no next.
         nonisolated(unsafe) var requestCount = 0
         nonisolated(unsafe) var capturedAccept: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — only the FHIR route counts.
             if req.targets("/api/fhir/Patient/$everything") {
                 capturedAccept = req.value(forHTTPHeaderField: "Accept")
@@ -134,7 +134,7 @@ struct ServerFHIREverythingServiceTests {
     func requestsTypeLevelPatientRoute() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var paths: [String] = []
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: scoped to the FHIR namespace, NOT to the new route — the
             // assertions below must still be able to see a hit on the deleted
             // `/api/fhir/$everything` path if the follower ever regressed there.
@@ -175,7 +175,7 @@ struct ServerFHIREverythingServiceTests {
     @Test("a zero-entry bundle reports itself empty (scoped to the saved selection)")
     func emptyBundleIsReportedEmpty() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Server v1.34.2 scopes the bundle to the owner's saved report
             // selection — never saved one → a healthy 200 with no entries.
             let body = #"{"resourceType":"Bundle","type":"searchset","total":0}"#
@@ -192,7 +192,7 @@ struct ServerFHIREverythingServiceTests {
     func singlePageStops() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/fhir/Patient/$everything") { requestCount += 1 }
             let body = """
             {"resourceType":"Bundle","type":"searchset","total":1,\
@@ -214,7 +214,7 @@ struct ServerFHIREverythingServiceTests {
     @Test("a 429 throttle surfaces as an error (caller falls back to local)")
     func throttleThrows() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Server B3: 429 is a FHIR OperationOutcome; APIClient maps it to
             // HLError.rateLimited, which propagates so the export falls back local.
             let body = #"{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"throttled"}]}"#

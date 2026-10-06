@@ -301,32 +301,30 @@ struct MedicationCardLayoutTests {
 
     /// **MED-11.** A PRN / as-needed medication has no schedule → no compliance
     /// rate, so `displayRows` is empty. The card therefore needs a dedicated
-    /// "as needed" slot (`AsNeededComplianceNote`) to stay structurally
-    /// identical to a scheduled card (which paints two bars). This pins the
-    /// empty-rows fact the structural slot is built on.
+    /// "as needed" slot (`ComplianceSlotNote`) to stay structurally identical
+    /// to a scheduled card (which paints two bars). This pins the empty-rows
+    /// fact the structural slot is built on.
     @Test("PRN snapshot yields no compliance rows — the as-needed slot fills the gap")
     func prnHasNoComplianceRows() {
-        let prn = MedicationsStore.complianceSnapshot(
-            for: Self.med(schedule: MedicationSchedule(times: [])),
-            windowIntakes: []
-        )
+        let prn = MedicationsStore.offlineSnapshot(for: Self.med(schedule: MedicationSchedule(times: [])))
         #expect(prn.rate30 == nil)
         #expect(prn.displayRows.isEmpty)
+        #expect(prn.serverUnavailable == false)
         // The as-needed slot copy resolves (so the card never renders a blank).
         #expect(String(localized: "med.card.compliance.as_needed") == "Nach Bedarf")
     }
 
-    /// **MED-11.** A scheduled medication DOES produce compliance rows, so the
-    /// scheduled card paints bars while the PRN card paints the as-needed note —
-    /// same slot, value-driven content, identical structure. This proves the two
-    /// branches are mutually exclusive (never both, never neither).
-    @Test("Scheduled snapshot yields compliance rows — same slot, different content")
-    func scheduledHasComplianceRows() {
-        let scheduled = MedicationsStore.complianceSnapshot(
-            for: Self.med(schedule: MedicationSchedule(times: [TimeOfDay(hour: 8, minute: 0)])),
-            windowIntakes: []
+    /// **#115 B7.** A scheduled medication without a server answer paints NO
+    /// bars: the same slot says "adherence unknown" instead of a rate the
+    /// device worked out from the intakes it happens to hold.
+    @Test("Scheduled medication without a server answer reads unknown — same slot, no bars")
+    func scheduledWithoutServerIsUnknown() {
+        let scheduled = MedicationsStore.offlineSnapshot(
+            for: Self.med(schedule: MedicationSchedule(times: [TimeOfDay(hour: 8, minute: 0)]))
         )
-        #expect(scheduled.rate30 != nil)
-        #expect(!scheduled.displayRows.isEmpty)
+        #expect(scheduled.serverUnavailable)
+        #expect(scheduled.rate30 == nil)
+        #expect(scheduled.displayRows.isEmpty)
+        #expect(!String(localized: "med.compliance.unavailable").isEmpty)
     }
 }

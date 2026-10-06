@@ -384,8 +384,11 @@ struct CycleScreen: View {
         monthFormatter.string(from: date)
     }
 
+    /// #115 1.5 — midnight of the key's day in the ACCOUNT zone: the instant
+    /// the capture sheet's profile-zone picker shows as that day, so a grid tap
+    /// opens the editor on the tapped day wherever the phone is.
     static func date(from key: String) -> Date? {
-        dayFormatter.date(from: key)
+        ProfileDay.startOfDay(forKey: key)
     }
 
     /// "Stand: Gestern, 14:20". Relative where the system offers it, so a
@@ -409,15 +412,6 @@ struct CycleScreen: View {
         f.calendar = Calendar(identifier: .gregorian)
         f.timeZone = .current
         f.setLocalizedDateFormatFromTemplate("yMMMM")
-        return f
-    }()
-
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
         return f
     }()
 }

@@ -12,7 +12,7 @@ import Foundation
 /// **Coach kill-switch.** Both handlers are `requireAuth()` then
 /// `await requireAssistantSurface("coach")`; a disabled surface 403s with
 /// `errorCode: "assistant.disabled.coach"`, which ``APIClient`` maps to
-/// ``HLError/assistantDisabled(.assistantCoach)``. Callers branch on that typed
+/// ``HLError/aiUnavailable(_:)``. Callers branch on that typed
 /// error to render the calm disabled placeholder rather than a transport error —
 /// identical to ``CoachFactsRepository``.
 ///
@@ -40,7 +40,7 @@ public actor CoachConversationHistoryRepository {
     /// List the caller's conversations for the rail. `cursor` is the id of the
     /// last row of the previous page (`nil` for the first page); `limit` defaults
     /// server-side (20, hard cap 50). Server order (`updatedAt` desc) preserved.
-    /// Throws ``HLError/assistantDisabled(_:)`` when the Coach surface is disabled.
+    /// Throws ``HLError/aiUnavailable(_:)`` when the Coach surface is disabled.
     public func list(cursor: String? = nil, limit: Int? = nil) async throws -> CoachConversationsPageDTO {
         var query: [(String, String)] = []
         if let cursor { query.append(("cursor", cursor)) }
@@ -63,7 +63,7 @@ public actor CoachConversationHistoryRepository {
     /// ``EmptyResponse``. Carries an idempotency key (like every other mutation)
     /// so an in-request retry can't double-act.
     ///
-    /// Throws ``HLError/assistantDisabled(_:)`` when the Coach surface is disabled
+    /// Throws ``HLError/aiUnavailable(_:)`` when the Coach surface is disabled
     /// and ``HLError/moduleDisabled(_:)`` when the whole module is off (both
     /// already mapped by ``APIClient``). A `404`/`405` — a foreign/unknown id, an
     /// already-deleted row, or a not-yet-deployed route (live ≤ v1.17.1) —

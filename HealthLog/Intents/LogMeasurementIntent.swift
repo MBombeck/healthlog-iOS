@@ -42,7 +42,7 @@ struct LogMeasurementIntent: AppIntent {
 
     @Parameter(
         title: "Value",
-        description: "The measured value, in the kind's standard unit."
+        description: "The measured value, in your account's unit (weight, temperature and blood glucose follow your unit settings)."
     )
     var value: Double
 
@@ -57,10 +57,17 @@ struct LogMeasurementIntent: AppIntent {
             return .result(dialog: IntentCopy.signInRequired)
         }
 
+        // #115 B5 / P2 — glucose, weight and temperature are spoken in the
+        // account's unit and stored canonical (mg/dL, kg, °C); every other
+        // kind is already canonical.
+        let units = deps.units()
+        let canonical = kind.canonicalValue(value, units: units)
+
         // Reject a non-finite / out-of-range scalar before persisting a
         // nonsensical row. The per-kind range mirrors the in-app sheet's
-        // sanity bounds; outside it we surface a dialog rather than write.
-        guard kind.isPlausible(value) else {
+        // sanity bounds (canonical units); outside it we surface a dialog
+        // rather than write.
+        guard kind.isPlausible(canonical) else {
             return .result(dialog: IntentDialog(IntentCopy.measurementOutOfRange))
         }
 
@@ -68,7 +75,7 @@ struct LogMeasurementIntent: AppIntent {
             id: UUID().uuidString,
             kind: kind.domainKind,
             recordedAt: Date(),
-            value: .scalar(value),
+            value: .scalar(canonical),
             source: .manual
         )
 
@@ -79,7 +86,7 @@ struct LogMeasurementIntent: AppIntent {
                 dialog: IntentDialog(
                     LocalizedStringResource(
                         "intents.logMeasurement.confirmed",
-                        defaultValue: "Logged \(shaped) \(kind.spokenUnit) \(kind.spokenName).",
+                        defaultValue: "Logged \(shaped) \(kind.spokenUnit(units: units)) \(kind.spokenName).",
                         comment: "AppIntents — generic measurement logged confirmation; %1$@ value, %2$@ unit, %3$@ kind"
                     )
                 )
@@ -88,7 +95,7 @@ struct LogMeasurementIntent: AppIntent {
             // Optimistic-write contract: the value is on the Outbox and will
             // sync on the next app foreground (incl. a transient-refresh 401
             // the repo durably enqueued). Tell the user it's saved, not lost.
-            return .result(dialog: IntentCopy.queuedOffline)
+            return .result(dialog: IntentCopy.queued(after: error))
         } catch {
             return .result(dialog: IntentCopy.writeFailed)
         }
@@ -168,20 +175,48 @@ enum MeasurableKindAppEnum: String, AppEnum, CaseIterable {
         }
     }
 
-    /// The unit spoken back in the confirmation. Server-canonical base unit
-    /// per kind (kg / bpm / mg/dL / °C / % / br/min) — the intent writes the
-    /// base unit, matching the repository's wire contract.
-    var spokenUnit: LocalizedStringResource {
+    /// #115 B5 / P2 — the spoken value in the unit the repository writes:
+    /// glucose from the account's unit into mg/dL (the B5 arithmetic), weight
+    /// from lb into kg and temperature from °F into °C on an imperial account
+    /// (the central transform, inverted). Every other kind unchanged.
+    func canonicalValue(_ value: Double, units: UnitPreferences) -> Double {
         switch self {
+        case .glucose: units.glucose.canonicalMgdL(fromDisplayed: value)
+        case .weight, .bodyTemperature: units.canonicalValue(fromDisplayed: value, kind: domainKind)
+        case .pulse, .spo2, .respiratoryRate, .bodyFat: value
+        }
+    }
+
+    /// The unit spoken back in the confirmation — the unit the value was said
+    /// in: the account's for glucose (#115 B5), weight and temperature (P2),
+    /// the server-canonical base unit for the rest (bpm / % / br/min).
+    func spokenUnit(units: UnitPreferences) -> LocalizedStringResource {
+        let glucoseUnit = units.glucose
+        return switch self {
+        case .weight where units.weight == .lb: LocalizedStringResource(
+                "intents.unit.lb",
+                defaultValue: "pounds",
+                comment: "AppIntents — spoken unit"
+            )
         case .weight: LocalizedStringResource("intents.unit.kg", defaultValue: "kilograms", comment: "AppIntents — spoken unit")
         case .pulse, .respiratoryRate: LocalizedStringResource(
                 "intents.unit.perMinute",
                 defaultValue: "per minute",
                 comment: "AppIntents — spoken unit"
             )
+        case .glucose where glucoseUnit == .mmolL: LocalizedStringResource(
+                "intents.unit.mmoll",
+                defaultValue: "millimoles per liter",
+                comment: "AppIntents — spoken unit"
+            )
         case .glucose: LocalizedStringResource(
                 "intents.unit.mgdl",
                 defaultValue: "milligrams per deciliter",
+                comment: "AppIntents — spoken unit"
+            )
+        case .bodyTemperature where units.system == .imperial: LocalizedStringResource(
+                "intents.unit.fahrenheit",
+                defaultValue: "degrees Fahrenheit",
                 comment: "AppIntents — spoken unit"
             )
         case .bodyTemperature: LocalizedStringResource(
@@ -193,7 +228,8 @@ enum MeasurableKindAppEnum: String, AppEnum, CaseIterable {
         }
     }
 
-    /// Per-kind plausibility bounds (inclusive). Pure + testable — rejects a
+    /// Per-kind plausibility bounds (inclusive), in the canonical unit (take
+    /// the value through ``canonicalValue(_:units:)`` first). Pure + testable — rejects a
     /// transposed / fat-fingered value before it reaches the server. Mirrors
     /// the sanity ranges the in-app entry sheet enforces.
     func isPlausible(_ value: Double) -> Bool {

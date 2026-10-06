@@ -199,7 +199,7 @@ struct InsightsScreenCompositionTests {
         let moduleBody = try codeBody(of: loadInsightsModuleSource())
         let sectionLoop = overviewBody.range(of: "ForEach(layoutStore.layout.visibleSectionIds")
         let correlations = overviewBody.range(of: "InsightsCorrelationsSlot(")
-        let trailingState = overviewBody.range(of: "InsightsEmptyErrorSlot()")
+        let trailingState = overviewBody.range(of: "InsightsEmptyErrorSlot(")
         #expect(sectionLoop != nil, "The server-owned overview section loop must remain mounted.")
         #expect(correlations != nil, "Correlations must remain available on the overview.")
         #expect(trailingState != nil, "The anchored empty/error state must remain last.")

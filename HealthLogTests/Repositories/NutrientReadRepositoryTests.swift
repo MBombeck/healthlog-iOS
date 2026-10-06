@@ -12,7 +12,7 @@ import Testing
 /// replay under the same key).
 ///
 /// `.serialized` — the suite installs a process-global `MockURLProtocol.handler`.
-@Suite("NutrientReadRepository — read + water quick-add contract", .serialized)
+@Suite("NutrientReadRepository — read + water quick-add contract", .serialized, .mockURLSession)
 struct NutrientReadRepositoryTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -44,7 +44,7 @@ struct NutrientReadRepositoryTests {
         let api = makeClient()
         let (repo, _) = try makeRepo(api: api)
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let rows = #"{"nutrient":"water","unit":"ml","latestDay":"2026-07-06","latestAmount":1500,"daysWithData":3}"#
             return Self.ok(#"{"windowDays":14,"nutrients":[\#(rows)]}"#, url: req.url!)
@@ -64,7 +64,7 @@ struct NutrientReadRepositoryTests {
         let api = makeClient()
         let (repo, _) = try makeRepo(api: api)
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let days = #"[{"day":"2026-07-05","amount":0},{"day":"2026-07-06","amount":88}]"#
             let ref = #"{"kind":"PRI","direction":"target","value":95,"source":"EFSA DRV 2013 (adults)"}"#
@@ -87,7 +87,7 @@ struct NutrientReadRepositoryTests {
         let api = makeClient()
         let (repo, _) = try makeRepo(api: api)
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return Self.ok(
                 #"{"day":"2026-07-06","nutrient":"water","source":"MANUAL","amount":300,"unit":"ml"}"#,
@@ -105,15 +105,76 @@ struct NutrientReadRepositoryTests {
         let body = try #require(recorder.decodeLastWaterBody())
         #expect(body.amountMl == 300)
         #expect(body.mode == .add)
-        #expect(body.day == nil)
+        // #115 B6 — the tap's profile day travels with the write.
+        #expect(body.day == ProfileDay.key())
         #expect(row.source == "MANUAL")
+    }
+
+    @Test("#115 B6 — a quick-add queued before midnight replays with the day it was tapped on")
+    func waterQueuedBeforeMidnightKeepsItsDay() async throws {
+        let api = makeClient()
+        let (repo, outbox) = try makeRepo(api: api)
+        MockURLProtocol.install { req in
+            (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
+        }
+        // 23:50 on 20 Sep in the profile zone, whatever zone the test host runs in.
+        let zone = ProfileDay.timeZone
+        let midnight = try #require(ProfileDay.startOfDay(forKey: "2026-09-21", timeZone: zone))
+        let tappedAt = midnight.addingTimeInterval(-10 * 60)
+
+        await #expect(throws: (any Error).self) {
+            _ = try await repo.quickAddWater(amountMl: 250, mode: .add, capturedAt: tappedAt)
+        }
+
+        let op = try #require(await outbox.snapshot.first { $0.kind == .logNutrientWater })
+        let payload = try JSONDecoder.hlDefault.decode(OutboxQueue.Payloads.LogNutrientWater.self, from: op.payload)
+        #expect(payload.body.day == "2026-09-20")
+    }
+
+    @Test("#115 B6 update path — an outbox row queued by 279 without `day` still replays, without a day")
+    func legacyWaterRowWithoutDayReplays() async throws {
+        let api = makeClient()
+        let (repo, outbox) = try makeRepo(api: api)
+        let recorder = RequestRecorder()
+        MockURLProtocol.install { req in
+            recorder.record(req)
+            return Self.ok(
+                #"{"day":"2026-09-21","nutrient":"water","source":"MANUAL","amount":250,"unit":"ml"}"#,
+                url: req.url!
+            )
+        }
+        // The exact payload 279 persisted: the synthesized encoder left `day` out.
+        let legacy = Data(#"{"body":{"amountMl":250,"mode":"add"}}"#.utf8)
+        try await outbox.enqueue(OutboxQueue.Operation(
+            kind: .logNutrientWater,
+            payload: legacy,
+            idempotencyKey: "legacy-water-key",
+            ownerUserID: "user-123"
+        ))
+        let replay = OutboxReplayService(
+            outbox: outbox,
+            measurementsRepo: MeasurementsRepository(api: api, outbox: outbox),
+            moodRepo: MoodRepository(api: api, outbox: outbox),
+            medicationsRepo: MedicationsRepository(api: api, outbox: outbox),
+            nutrientReadRepo: repo,
+            currentUserProvider: { "user-123" }
+        )
+
+        await replay.runOnce()
+
+        #expect(recorder.lastPath == "/api/nutrients/water")
+        #expect(recorder.lastIdempotencyKey == "legacy-water-key")
+        let sent = try #require(recorder.lastBodyObject())
+        #expect(sent["day"] == nil, "no day is invented for a row that never had one")
+        #expect(sent["amountMl"] as? Double == 250)
+        #expect(await outbox.snapshot.filter { $0.kind == .logNutrientWater && !$0.delivered }.isEmpty)
     }
 
     @Test("A retriable failure queues the water quick-add to the outbox and re-throws")
     func waterFailureQueues() async throws {
         let api = makeClient()
         let (repo, outbox) = try makeRepo(api: api)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }
 
@@ -135,7 +196,7 @@ struct NutrientReadRepositoryTests {
         let api = makeClient()
         let (repo, _) = try makeRepo(api: api)
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return Self.ok(
                 #"{"day":"2026-07-06","nutrient":"water","source":"MANUAL","amount":700,"unit":"ml"}"#,
@@ -192,6 +253,14 @@ private final class RequestRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return requests.last?.value(forHTTPHeaderField: "Idempotency-Key")
+    }
+
+    func lastBodyObject() -> [String: Any]? {
+        lock.lock()
+        let data = bodies.last
+        lock.unlock()
+        guard let data else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
     func decodeLastWaterBody() -> NutrientWaterWriteRequestDTO? {

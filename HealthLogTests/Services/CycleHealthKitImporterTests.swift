@@ -23,7 +23,7 @@ import Testing
     /// THIRD-PARTY (different source) and is correctly imported. The own-echo
     /// skip path is unit-tested at the predicate level in
     /// ``HealthKitSampleOwnershipTests``.
-    @Suite("Cycle — HealthKit importer buildWrites", .serialized)
+    @Suite("Cycle — HealthKit importer buildWrites", .serialized, .mockURLSession)
     struct CycleHealthKitImporterTests {
         /// `buildWrites` is a pure transform that never touches the network, so a
         /// real `APIClient` (mock session) + in-memory outbox is enough to

@@ -258,9 +258,9 @@ public struct HLScoreRing: View {
             parts.append(signal.accessibilityWord)
         }
         if parts.isEmpty {
-            // Catalog key `%lld percent` (EN + DE present) — the no-value /
-            // compact ring fallback. Explicit comment so the key resolves.
-            return String(localized: "\(Int(fraction * 100)) percent", comment: "Ring a11y value fallback, e.g. \"60 percent\"")
+            // Catalog key `%lld percent` (EN + DE), rounded (F1) — no-value fallback.
+            let percent = HLNumberFormat.percentValue(ofFraction: fraction)
+            return String(localized: "\(percent) percent", comment: "Ring a11y value fallback, e.g. \"60 percent\"")
         }
         return parts.joined(separator: ", ")
     }

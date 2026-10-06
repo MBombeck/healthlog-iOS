@@ -21,7 +21,7 @@ import Testing
 ///   4. 422 unknown-id → non-retriable, NOT enqueued, re-throws.
 ///   5. Retriable network failure → enqueued on the outbox, error re-thrown.
 ///   6. Store-level optimistic write + rollback on failure.
-@Suite("InsightsLayoutRepository — server-first layout", .serialized)
+@Suite("InsightsLayoutRepository — server-first layout", .serialized, .mockURLSession)
 struct InsightsLayoutRepositoryTests {
     // MARK: - Helpers
 
@@ -108,7 +108,7 @@ struct InsightsLayoutRepositoryTests {
             InsightsLayoutTile(id: InsightsLayoutTileId.pulse, visible: false, order: 1)
         ])
         let data = try envelope(server)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/insights/layout")
             #expect(req.httpMethod == "GET")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, data)
@@ -130,7 +130,7 @@ struct InsightsLayoutRepositoryTests {
             InsightsLayoutTile(id: InsightsLayoutTileId.weight, visible: false, order: 1)
         ])
         let echoData = try envelope(toSave)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, echoData)
         }
@@ -153,7 +153,7 @@ struct InsightsLayoutRepositoryTests {
         let api = makeAPI()
         let recorder = Recorder()
         let echoData = try envelope(.default)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, echoData)
         }
@@ -171,7 +171,7 @@ struct InsightsLayoutRepositoryTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let body = try JSONSerialization.data(withJSONObject: ["error": "unknown tile id", "errorCode": "invalid_tile"])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, body)
         }
         let repo = InsightsLayoutRepository(api: api, outbox: outbox)
@@ -190,7 +190,7 @@ struct InsightsLayoutRepositoryTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let body = try JSONSerialization.data(withJSONObject: ["error": "upstream down"])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, body)
         }
         let repo = InsightsLayoutRepository(api: api, outbox: outbox)
@@ -210,7 +210,7 @@ struct InsightsLayoutRepositoryTests {
     func storeOptimisticSuccess() async throws {
         let api = makeAPI()
         // Echo whatever the client PUTs.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard let put = req.httpBody ?? req.httpBodyStream.flatMap(Recorder.consumeStream) else {
                 throw HLError.unknown("missing PUT body")
             }
@@ -234,7 +234,7 @@ struct InsightsLayoutRepositoryTests {
     func storeRollbackOnFailure() async throws {
         let api = makeAPI()
         let body = try JSONSerialization.data(withJSONObject: ["error": "bad"])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, body)
         }
         let repo = try InsightsLayoutRepository(api: api, outbox: OutboxQueue(inMemory: true))
@@ -249,7 +249,7 @@ struct InsightsLayoutRepositoryTests {
     @MainActor
     func storeToggleVisible() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard let put = req.httpBody ?? req.httpBodyStream.flatMap(Recorder.consumeStream) else {
                 throw HLError.unknown("missing PUT body")
             }
@@ -272,7 +272,7 @@ struct InsightsLayoutRepositoryTests {
     func storeReset() async throws {
         let api = makeAPI()
         let echoData = try envelope(.default)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, echoData)
         }
         let repo = try InsightsLayoutRepository(api: api, outbox: OutboxQueue(inMemory: true))
@@ -288,7 +288,7 @@ struct InsightsLayoutRepositoryTests {
     @MainActor
     func storeAddTileReEnablesHidden() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard let put = req.httpBody ?? req.httpBodyStream.flatMap(Recorder.consumeStream) else {
                 throw HLError.unknown("missing PUT body")
             }

@@ -14,7 +14,11 @@ extension OutboxReplayService {
     /// never deleted here, so the write stays recoverable. Inside the back-off
     /// window: rapid replay triggers (a foreground edge and a reachability edge
     /// seconds apart) must not burn several attempts within minutes.
+    ///
+    /// #110 — and while the server's rate-limit hold runs, no row is sent at
+    /// all: the bucket is shared, so every row would meet the same 429.
     func isOnHoldThisPass(_ op: OutboxQueue.Operation, now: Date) -> Bool {
+        if isRateLimitHeld(now: now) { return true }
         if op.attempts >= maxAttempts { return true }
         if let last = op.lastAttemptAt { return now.timeIntervalSince(last) < attemptBackoff }
         return false
@@ -102,7 +106,10 @@ extension OutboxReplayService {
     /// time (back-off) but do NOT burn the retry budget toward dead-lettering —
     /// the write did not fail on its own merits (audit-v0162 H1 Opt 3).
     func onRetriableFailure(_ op: OutboxQueue.Operation, err: HLError, degraded: Bool) async {
-        let sanitized = LogSanitizer.redact(err.localizedDescription)
+        // #110 — a 429 is never the write's fault: nothing counted, nothing
+        // stamped, the pass holds (see `OutboxReplayService+RateLimit`).
+        if case let .rateLimited(retryAfter) = err { return onRateLimited(op, retryAfter: retryAfter) }
+        let sanitized = Self.lastErrorKeepingUnconfirmed(op, LogSanitizer.redact(err.localizedDescription))
         if degraded, err.is5xxOrRateLimited {
             try? await outbox.touchAttempt(id: op.id, lastError: sanitized)
             // Kind is public operator state; even sanitized error text remains private.
@@ -118,19 +125,40 @@ extension OutboxReplayService {
         }
     }
 
-    /// A non-retriable failure (a permanent 4xx, an unroutable kind): drop the
-    /// row so it can't block the queue — but **audit B-3**: never in silence.
-    /// The pre-fix path left one log line behind, so a validation change on the
-    /// server or a resource deleted elsewhere ate offline edits with no trace on
-    /// any surface. Every drop now reaches the same honest failure count the
+    /// A non-retriable failure. **Audit B-3**: never in silence — every row the
+    /// replay stops carrying reaches the same honest failure count the
     /// dead-letter lane feeds, named by kind and machine reason.
-    func onNonRetriable(_ op: OutboxQueue.Operation, error: Error) async {
+    ///
+    /// **C4**: and never lost either. An unreadable 2xx is "sent, unconfirmed"
+    /// and stays; a refusal dead-letters the row (retained, recoverable) unless
+    /// dropping it loses nothing. Cancellation never gets here (`runOnce` ends
+    /// the pass first). Returns `true` when the row stays in the live queue, so
+    /// the pass can hold back its dependents.
+    @discardableResult
+    func onNonRetriable(_ op: OutboxQueue.Operation, error: Error, now: Date) async -> Bool {
+        // #115 / 0.3 — two answers that are not a refusal of the write: a
+        // replayed HealthKit batch whose rows the server still cannot map, and a
+        // module switched off for a kind HealthKit feeds. Both must never reach
+        // the delete (see `OutboxReplayService+HealthKit`).
+        if let parked = Self.parkReason(for: error, kind: op.kind) {
+            await onParked(op, parked)
+            return true
+        }
+        if case HLError.decoding = error {
+            await onUnconfirmed(op, now: now)
+            return true
+        }
         let sanitized = LogSanitizer.redact(String(describing: error))
+        guard Self.refusalLosesNothing(op, error: error) else {
+            await retainAsDeadLetter(op, reason: Self.discardReason(for: error), lastError: sanitized, now: now)
+            return false
+        }
         // Kind is public operator state; even sanitized error text remains private.
         // swiftlint:disable:next hllog_public_privacy_interpolation
         HLLog.outbox.warning("Op \(op.kind.rawValue, privacy: .public) verworfen: \(sanitized, privacy: .private)")
         try? await outbox.remove(id: op.id)
         await publishDiscard(.init(kind: op.kind.rawValue, reason: Self.discardReason(for: error)))
+        return false
     }
 
     /// **Audit B-3 — our own stored payload no longer decodes.** The CI run of

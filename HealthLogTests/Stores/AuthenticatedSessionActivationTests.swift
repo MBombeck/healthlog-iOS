@@ -31,7 +31,7 @@
     #endif
 
     @MainActor
-    @Suite("Authenticated session activation", .serialized)
+    @Suite("Authenticated session activation", .serialized, .mockURLSession)
     struct AuthenticatedSessionActivationTests {
         // MARK: - Harness
 
@@ -105,7 +105,7 @@
         }
 
         private static func serveSession(id: String = "usr_activation_1") {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     sessionBody(id: id)
@@ -210,7 +210,7 @@
             let lease = try #require(fixture.registry.capture(ownerID: "usr_activation_1"))
             #expect(lease.isCurrent)
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":{"ok":true},"error":null}"#.utf8)
@@ -276,7 +276,7 @@
             fixture.store.completeOnboarding()
             let leaseA = try #require(fixture.registry.capture(ownerID: "usr_A"))
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":{"ok":true},"error":null}"#.utf8)

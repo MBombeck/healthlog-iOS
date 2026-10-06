@@ -139,7 +139,8 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
         HLSettingsCard(
             icon: "key.horizontal.fill",
             title: "integration.byo.title",
-            subtitle: "integration.byo.subtitle"
+            subtitle: "integration.byo.subtitle",
+            subtitleWraps: true
         ) {
             if store.hasOwnCredentials == true {
                 HStack(spacing: HLSpace.md) {

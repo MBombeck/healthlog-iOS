@@ -45,6 +45,43 @@ public extension SettingsRepository {
     }
 }
 
+public extension SettingsRepository {
+    // MARK: - glucose-unit (#108)
+
+    /// `PATCH /api/auth/me/glucose-unit` with `{ "glucoseUnit": "mg/dL" | "mmol/L" }`
+    /// (server v1.39, `GlucoseUnitPatchRequest`). The route answers with the
+    /// resolved next unit, which the caller hard-sets. Presentation only on the
+    /// server: stored readings stay mg/dL.
+    @discardableResult
+    func setGlucoseUnit(_ value: String) async throws -> String {
+        let req: APIRequest<GlucoseUnitDTO> = try .patch(
+            "/api/auth/me/glucose-unit",
+            body: GlucoseUnitDTO(glucoseUnit: value)
+        )
+        return try await api.send(req).glucoseUnit
+    }
+}
+
+/// #108 — wire shape for `GET / PATCH /api/auth/me/glucose-unit`
+/// (`GlucoseUnitResponse` / `GlucoseUnitPatchRequest`, server v1.39.0). Tolerant
+/// decode: a missing field resolves to `"mg/dL"`, the server's own blend.
+public struct GlucoseUnitDTO: Codable, Sendable, Equatable {
+    public let glucoseUnit: String
+
+    public init(glucoseUnit: String) {
+        self.glucoseUnit = glucoseUnit
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        glucoseUnit = try c.decodeIfPresent(String.self, forKey: .glucoseUnit) ?? GlucoseUnit.mgdL.serverValue
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case glucoseUnit
+    }
+}
+
 /// **Build 9 (Server-Prefs)** — thin, tolerant projection of `GET /api/auth/me`
 /// carrying the server-owned preference inputs the settings mirrors adopt on
 /// hydration, plus `avatarUrl` (so one round-trip serves both the avatar splice
@@ -57,9 +94,21 @@ public struct AuthMeServerPrefs: Decodable, Sendable, Equatable {
     public let avatarUrl: String?
     /// `"metric" | "imperial"` — resolved binary (never the raw DB `null`).
     public let unitPreference: String?
-    /// `"mg/dL" | "mmol/L" | nil` — read-only context (its own server column;
-    /// no iOS write-path in Build 9, plan §0.3.2).
+    /// `"mg/dL" | "mmol/L" | nil` — the RAW account column (`/me` sends
+    /// `user.glucoseUnit ?? null`). #108: the app resolves it like the server
+    /// (``GlucoseUnit/resolvedServerValue(_:)``: `null` = mg/dL) and adopts it.
     public let glucoseUnit: String?
+    /// #108 — whether `/me` carried the `glucoseUnit` key at all. A `null` value
+    /// is a statement ("never set" = mg/dL, and the series is converted to
+    /// mg/dL); an ABSENT key is an old server that says nothing, and the app then
+    /// keeps its own mirror. `decodeIfPresent` folds both into `nil`, so the
+    /// distinction is kept here.
+    public let glucoseUnitPresent: Bool
+    /// #115 1.5 — the account zone the server cuts days in. From v1.39 `/me`
+    /// sends the RESOLVED zone (stored zone, or the instance default when the
+    /// stored one is unusable); `/api/user/profile` still returns the raw
+    /// column, so day keys follow this field, not the profile's.
+    public let timezone: String?
     /// Server-wide "coach unavailable" flag (default `false`).
     public let disableCoach: Bool?
     /// Server-**resolved** cycle-tracking flag (never `null` on the wire).
@@ -94,6 +143,13 @@ public struct AuthMeServerPrefs: Decodable, Sendable, Equatable {
     /// `nil` covers all three honest absences — key omitted (older server),
     /// explicit `null` (never generated a report), and an empty string.
     public let lastReportPracticeName: String?
+    /// **N1** — `notificationPrefs.medication.{clientManaged, deliveryDefault}`,
+    /// which `/me` carries from server v1.38.15 on (the same resolver as
+    /// `GET /api/auth/me/notification-prefs`). A free ride on the round-trip
+    /// the settings hydration already makes, so deciding whether the app has
+    /// to write `clientManaged` costs no extra request. `nil` when the block or
+    /// the boolean is missing (older server): the app then never writes it.
+    public let medicationReminderDelivery: MedicationReminderServerDelivery?
 
     public init(
         avatarUrl: String?,
@@ -102,15 +158,21 @@ public struct AuthMeServerPrefs: Decodable, Sendable, Equatable {
         disableCoach: Bool?,
         cycleTrackingEnabled: Bool?,
         reportSelection: SavedReportProfile? = nil,
-        lastReportPracticeName: String? = nil
+        lastReportPracticeName: String? = nil,
+        glucoseUnitPresent: Bool? = nil,
+        timezone: String? = nil,
+        medicationReminderDelivery: MedicationReminderServerDelivery? = nil
     ) {
         self.avatarUrl = avatarUrl
         self.unitPreference = unitPreference
         self.glucoseUnit = glucoseUnit
+        self.glucoseUnitPresent = glucoseUnitPresent ?? (glucoseUnit != nil)
+        self.timezone = timezone
         self.disableCoach = disableCoach
         self.cycleTrackingEnabled = cycleTrackingEnabled
         self.reportSelection = reportSelection
         self.lastReportPracticeName = lastReportPracticeName
+        self.medicationReminderDelivery = medicationReminderDelivery
     }
 
     public init(from decoder: Decoder) throws {
@@ -118,6 +180,9 @@ public struct AuthMeServerPrefs: Decodable, Sendable, Equatable {
         avatarUrl = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
         unitPreference = try c.decodeIfPresent(String.self, forKey: .unitPreference)
         glucoseUnit = try c.decodeIfPresent(String.self, forKey: .glucoseUnit)
+        glucoseUnitPresent = c.contains(.glucoseUnit)
+        // Tolerant: a malformed zone value must not take the settings load down.
+        timezone = try? c.decodeIfPresent(String.self, forKey: .timezone)
         disableCoach = try c.decodeIfPresent(Bool.self, forKey: .disableCoach)
         cycleTrackingEnabled = try c.decodeIfPresent(Bool.self, forKey: .cycleTrackingEnabled)
         reportSelection = try? c.decodeIfPresent(SavedReportProfile.self, forKey: .reportSelection)
@@ -126,11 +191,33 @@ public struct AuthMeServerPrefs: Decodable, Sendable, Equatable {
         let practice = try c.decodeIfPresent(String.self, forKey: .lastReportPracticeName)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         lastReportPracticeName = (practice?.isEmpty ?? true) ? nil : practice
+        // Tolerant: a drifted prefs block must not take the settings load down.
+        medicationReminderDelivery = (try? c.decodeIfPresent(NotificationPrefsProjection.self, forKey: .notificationPrefs))?
+            .medicationReminderDelivery
     }
 
     private enum CodingKeys: String, CodingKey {
         case avatarUrl, unitPreference, glucoseUnit, disableCoach, cycleTrackingEnabled
-        case reportSelection, lastReportPracticeName
+        case reportSelection, lastReportPracticeName, timezone, notificationPrefs
+    }
+
+    /// The two medication leaves of `/me`'s `notificationPrefs`; every other
+    /// category is ignored.
+    private struct NotificationPrefsProjection: Decodable {
+        struct Medication: Decodable {
+            let clientManaged: Bool?
+            let deliveryDefault: String?
+        }
+
+        let medication: Medication?
+
+        var medicationReminderDelivery: MedicationReminderServerDelivery? {
+            guard let clientManaged = medication?.clientManaged else { return nil }
+            return MedicationReminderServerDelivery(
+                clientManaged: clientManaged,
+                deliveryDefault: medication?.deliveryDefault
+            )
+        }
     }
 }
 

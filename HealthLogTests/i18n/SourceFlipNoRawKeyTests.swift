@@ -103,7 +103,6 @@ struct SourceFlipNoRawKeyTests {
         // Interpolation: %lld (Int)
         ("%lld of 5", "%lld von 5"),
         ("%lld-day streak", "%lld-Tage-Serie"),
-        ("%lld of 30 days in range", "%lld von 30 Tagen im Zielbereich"),
         // NOTE: "%lld entries" and "%@: Last measurement %lld days ago" USED to be
         // sampled here as flat interpolation, but audit-v0162 L10N-3 converted them
         // to plural `variations` / `substitutions` (one/other). Their compiled

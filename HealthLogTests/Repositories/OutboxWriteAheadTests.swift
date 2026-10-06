@@ -21,7 +21,7 @@ import Testing
 ///
 /// Reuses the project's outbox test patterns: real `APIClient` + stub
 /// `URLSession` (`MockURLProtocol`), no mock server (project rule).
-@Suite("Outbox write-ahead durability (G-1/G-2)", .serialized)
+@Suite("Outbox write-ahead durability (G-1/G-2)", .serialized, .mockURLSession)
 struct OutboxWriteAheadTests {
     private func makeAPI(keychain: InMemoryKeychain = InMemoryKeychain()) -> APIClient {
         let env = AppEnvironment(
@@ -158,7 +158,7 @@ struct OutboxWriteAheadTests {
         let outbox = try OutboxQueue(inMemory: true)
         let repo = MedicationsRepository(api: api, outbox: outbox)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         await #expect(throws: HLError.self) {
@@ -183,7 +183,7 @@ struct OutboxWriteAheadTests {
         await outbox.useCipher(OutboxPayloadCipher(keychain: ThrowingKeychain()))
         let repo = MedicationsRepository(api: api, outbox: outbox)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         var thrown: HLError?

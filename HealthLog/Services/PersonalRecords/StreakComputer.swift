@@ -195,7 +195,7 @@ public enum StreakComputer {
             id: "\(config.idPrefix).best",
             userId: userId,
             metricType: config.metricType,
-            metricSlot: "Bester Tag",
+            metricSlot: String(localized: "records.bestDay.slot"),
             direction: .max,
             value: best.value,
             unit: config.unit,
@@ -261,10 +261,15 @@ public enum StreakComputer {
             id: "\(config.idPrefix).streak",
             userId: userId,
             metricType: config.metricType,
-            metricSlot: "Längste Serie ≥ \(formatThreshold(config.streakThreshold)) (\(bestLength) Tage)",
+            // L1 — catalog copy. Both locales keep the word the streak
+            // classifiers match on ("Serie" / "streak",
+            // `PersonalRecordsStore.streakRecords`, `MilestoneStrip`).
+            metricSlot: String(
+                localized: "records.streak.slot \(formatThreshold(config.streakThreshold)) \(bestLength)"
+            ),
             direction: .max,
             value: Double(bestLength),
-            unit: "Tage",
+            unit: String(localized: "records.streak.unit"),
             achievedAt: bestEnd,
             sourceMeasurementId: nil,
             source: "HEALTHLOG_CLIENT",
@@ -276,11 +281,11 @@ public enum StreakComputer {
     // MARK: - Helpers
 
     /// Thousands-separated, locale-aware threshold label — `10000` →
-    /// `"10.000"` in German locale. Kept private so the screen never has
+    /// `"10.000"` in German, `"10,000"` in English. Kept private so the screen never has
     /// to round-trip through this code path.
     private static func formatThreshold(_ value: Double) -> String {
         let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "de_DE")
+        formatter.locale = Locale.current
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"

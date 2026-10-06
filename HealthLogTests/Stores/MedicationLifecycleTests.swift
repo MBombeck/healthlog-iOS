@@ -12,7 +12,7 @@ import Testing
 /// sends ONLY its own key (pause/reactivate flip `active`; end sets `endsOn`),
 /// never dropping an unrelated server field.
 @MainActor
-@Suite("Medication lifecycle — Build 6.2", .serialized)
+@Suite("Medication lifecycle — Build 6.2", .serialized, .mockURLSession)
 struct MedicationLifecycleTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -51,7 +51,7 @@ struct MedicationLifecycleTests {
         nonisolated(unsafe) var method: String?
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var raw: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             method = req.httpMethod
             path = req.url?.path
             raw = req.httpBody ?? Self.readStream(req.httpBodyStream)
@@ -96,9 +96,10 @@ struct MedicationLifecycleTests {
         }
         #expect(captured.method == "PUT")
         let endsOn = try #require(captured.body["endsOn"] as? String)
-        // `MedicationCadenceLogic.isoDay` emits a bare `YYYY-MM-DD`.
+        // A bare `YYYY-MM-DD`: the day `day` falls on in the account zone
+        // (#115 1.5, `ProfileDay`).
         #expect(endsOn.count == 10, "endsOn is a bare YYYY-MM-DD course-window day")
-        #expect(endsOn == MedicationCadenceLogic.isoDay(day))
+        #expect(endsOn == ProfileDay.key(for: day))
         #expect(captured.body["active"] == nil, "ending a course is a schedule edit, not an activity flip")
     }
 

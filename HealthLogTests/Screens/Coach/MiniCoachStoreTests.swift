@@ -166,7 +166,7 @@ struct MiniCoachStoreTests {
     private func makeStore(defaults: UserDefaults? = nil) -> MiniCoachStore {
         let defaults = defaults ?? makeIsolatedDefaults()
         return MiniCoachStore(
-            service: MiniCoachService(featureFlags: StubFlags(enabled: true)),
+            service: MiniCoachService(aiCapabilities: StubFlags(enabled: true)),
             defaults: defaults
         )
     }
@@ -178,16 +178,5 @@ struct MiniCoachStoreTests {
         }
         defaults.removePersistentDomain(forName: suite)
         return defaults
-    }
-}
-
-// MARK: - Helpers
-
-/// Minimal stub `FeatureFlagsServicing` for tests — defaults every flag
-/// to a single bool.
-struct StubFlags: FeatureFlagsServicing {
-    let enabled: Bool
-    func isEnabled(_: FeatureFlag) -> Bool {
-        enabled
     }
 }

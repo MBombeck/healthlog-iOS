@@ -58,8 +58,8 @@ jobs:
         # versions here so a silent brew upgrade cannot change what CI checks.
         run: |
           xcodegen --version
-          [[ "$(swiftformat --version)" == "0.62.1" ]] || { echo "swiftformat must be 0.62.1, is $(swiftformat --version)" >&2; exit 1; }
-          [[ "$(swiftlint version)" == "0.65.0" ]] || { echo "swiftlint must be 0.65.0, is $(swiftlint version)" >&2; exit 1; }
+          [[ "$(swiftformat --version)" == "0.63.0" ]] || { echo "swiftformat must be 0.63.0, is $(swiftformat --version)" >&2; exit 1; }
+          [[ "$(swiftlint version)" == "0.65.1" ]] || { echo "swiftlint must be 0.65.1, is $(swiftlint version)" >&2; exit 1; }
 
       - name: Verify pinned server contract
         # The pinned-contract evidence lives in `.planning/`, which the public

@@ -17,7 +17,7 @@ import Testing
 /// The `BYOLLMService` is the real actor driven through a stubbed `URLSession`
 /// (the repo's `MockURLProtocol`, never a mock server), per PROJECT_GUIDE.md.
 @MainActor
-@Suite("CoachConversationStore — BYO arm", .serialized)
+@Suite("CoachConversationStore — BYO arm", .serialized, .mockURLSession)
 struct CoachConversationStoreBYOTests {
     private func makeSession() -> URLSession {
         URLSession(configuration: .mock())
@@ -45,12 +45,11 @@ struct CoachConversationStoreBYOTests {
         try keyStore.setKey("sk-stored", for: .openAI)
         let store = makeStore(keychain: keychain)
 
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             let json = #"{"choices":[{"message":{"content":"Dein Blutdruck ist okay."}}]}"#
             return (response, Data(json.utf8))
         }
-        defer { MockURLProtocol.handler = nil }
 
         #expect(store.shouldUseBYO)
         await store.send("Wie ist mein Blutdruck?")
@@ -73,11 +72,10 @@ struct CoachConversationStoreBYOTests {
         try keyStore.setKey("sk-bad", for: .openAI)
         let store = makeStore(keychain: keychain)
 
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!
             return (response, Data("{}".utf8))
         }
-        defer { MockURLProtocol.handler = nil }
 
         await store.send("Frage")
 

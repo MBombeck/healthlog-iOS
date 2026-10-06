@@ -137,14 +137,41 @@ extension Phase8AccessibilityUITests {
     ) throws -> [String] {
         var mine: [String] = []
         var elsewhere: [String] = []
+        // **K1 — what sits behind the tab bar is not measured as the grid.**
+        // At AccessibilityXXXL the overview's title and description fill the
+        // first screen and the grid's heading starts at y=910.7 — below the fold
+        // of the iPhone 17 Pro this case was green on (874 pt, Phase 22/25),
+        // but straddling the floating tab bar of a 17 Pro Max (956 pt), where
+        // H2 ran it. The audit then read the heading's contrast through the
+        // glass and reported `Contrast failed [48#@910]`. Nothing in the app
+        // changed between green and red; the device did. A contrast finding on
+        // an element the tab bar overlaps is therefore printed, not asserted —
+        // every other finding type, and every contrast finding in the open,
+        // still fails the case.
+        let chrome = app.tabBars.firstMatch.exists ? app.tabBars.firstMatch.frame : .null
+        var underChrome: [String] = []
+        // The screen the audit actually looks at, recorded before it runs: a
+        // finding's coordinates only mean something against this picture.
+        let before = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        before.name = "\(screen)-audited-screen"
+        before.lifetime = .keepAlways
+        add(before)
+        print("PHASE8-DIAGNOSTIC audit start (\(screen)) owned=\(owned)")
+        var details: [String] = []
         try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .textClipped]) { issue in
             let frame = issue.element?.frame ?? .null
+            // K1 — a contrast reading taken through the tab bar's glass is a
+            // reading of the fold, not of the element (see `underChrome`).
+            let throughGlass = issue.auditType == .contrast && !frame.isNull && chrome.intersects(frame)
             // The element's IDENTIFIER and type, never its label: a label on
             // this screen carries a rendered figure, and a gate log is not a
             // place for one even when the figure is a fixture's invention.
             let element = issue.element.map { "\($0.elementType.rawValue)#\($0.identifier)@\(Int($0.frame.minY))" }
             let described = "\(screen): \(issue.compactDescription) [\(element ?? "no element")]"
-            if !frame.isNull, owned.intersects(frame) {
+            details.append("\(described) frame=\(frame) — \(issue.detailedDescription)")
+            if throughGlass {
+                underChrome.append(described)
+            } else if !frame.isNull, owned.intersects(frame) {
                 mine.append(described)
             } else {
                 elsewhere.append(described)
@@ -154,6 +181,13 @@ extension Phase8AccessibilityUITests {
             return true
         }
         print("PHASE8-DIAGNOSTIC audit outside the owned grid (\(screen)): \(elsewhere)")
+        print("PHASE8-DIAGNOSTIC contrast read through the tab bar \(chrome) (\(screen)): \(underChrome)")
+        if !details.isEmpty {
+            let attachment = XCTAttachment(string: details.joined(separator: "\n"))
+            attachment.name = "\(screen)-audit-details"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
         return mine
     }
 }

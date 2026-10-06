@@ -11,8 +11,8 @@ import Testing
 ///   - list decode (`data.{ conversations[], nextCursor }`, metadata only),
 ///   - list cursor forwarding (query param),
 ///   - detail decode (`data.{ …, messages[], summary }`, oldest-first + roles),
-///   - disabled-Coach 403 maps to the typed `HLError.assistantDisabled`.
-@Suite("CoachConversationHistoryRepository", .serialized)
+///   - disabled-Coach 403 maps to the typed `HLError.aiUnavailable`.
+@Suite("CoachConversationHistoryRepository", .serialized, .mockURLSession)
 struct CoachConversationHistoryRepositoryTests {
     private func makeRepo() -> CoachConversationHistoryRepository {
         let env = AppEnvironment(
@@ -32,7 +32,7 @@ struct CoachConversationHistoryRepositoryTests {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let payload = """
@@ -61,7 +61,7 @@ struct CoachConversationHistoryRepositoryTests {
     func listCursorAndEmpty() async throws {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedQuery: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedQuery = req.url?.query
             let payload = """
             {"data":{"conversations":[],"nextCursor":null},"error":null}
@@ -81,7 +81,7 @@ struct CoachConversationHistoryRepositoryTests {
     func detailDecodes() async throws {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             let payload = """
             {"data":{"id":"c1","title":"Sleep","createdAt":"2026-06-10T08:00:00.000Z",\
@@ -117,7 +117,7 @@ struct CoachConversationHistoryRepositoryTests {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             // Server replies 200 + `{}` — the canonical EmptyResponse path (a
@@ -134,7 +134,7 @@ struct CoachConversationHistoryRepositoryTests {
     @Test("deleteConversation surfaces a 404 (foreign id / route not deployed) as a typed HLError")
     func deleteNotFoundThrowsServerError() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":null,"error":"Not found"}
             """
@@ -146,32 +146,36 @@ struct CoachConversationHistoryRepositoryTests {
         }
     }
 
-    @Test("deleteConversation maps a disabled Coach surface to the typed assistantDisabled error")
+    @Test("deleteConversation maps a pre-v1.39 top-level assistant.disabled.coach to the typed aiUnavailable error")
     func deleteDisabledCoachThrowsTyped() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":null,"error":"Coach disabled","errorCode":"assistant.disabled.coach"}
             """
             let http = HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
         }
-        await #expect(throws: HLError.assistantDisabled(.assistantCoach)) {
+        await #expect(throws: HLError.aiUnavailable(AIRefusal(errorCode: "assistant.disabled.coach"))) {
             try await repo.deleteConversation(id: "c1")
         }
     }
 
-    @Test("disabled Coach surface maps to the typed assistantDisabled error")
+    @Test("v1.39 disabled Coach (meta.errorCode) maps to the typed aiUnavailable error")
     func disabledCoachThrowsTyped() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
+            // Server v1.39 `aiRefusal("coach", "operator_disabled")`
+            // (`src/lib/ai/capabilities/refusal.ts`).
             let payload = """
-            {"data":null,"error":"Coach disabled","errorCode":"assistant.disabled.coach"}
+            {"data":null,"error":"This AI feature is turned off on this server",\
+            "meta":{"errorCode":"assistant.disabled.coach","capability":"coach","reason":"operator_disabled"}}
             """
             let http = HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
         }
-        await #expect(throws: HLError.assistantDisabled(.assistantCoach)) {
+        let expected = AIRefusal(errorCode: "assistant.disabled.coach", capability: .coach, reason: .operatorDisabled)
+        await #expect(throws: HLError.aiUnavailable(expected)) {
             _ = try await repo.list()
         }
     }

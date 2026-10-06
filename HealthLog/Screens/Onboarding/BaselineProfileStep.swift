@@ -76,7 +76,11 @@ struct BaselineProfileStep: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("onboarding.baselineProfile.invalidHeight")
                 }
-                if saveFailed {
+                if saveFailed, let rejected = store?.rejectedProfileFields, !rejected.isEmpty {
+                    // #97 / #115 · 0.4 — partial save: name what did not land.
+                    ProfileRejectedFieldsNotice(fields: rejected)
+                        .multilineTextAlignment(.leading)
+                } else if saveFailed {
                     Text("onboarding.save.failed")
                         .font(.hlCaption)
                         .foregroundStyle(HLColor.statusBad)

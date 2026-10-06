@@ -16,7 +16,7 @@ import Testing
 /// discrimination contract using a real `MedicationsRepository` against
 /// a stubbed `URLSession`. The bulk endpoint returns the standard
 /// `{processed,inserted,duplicates,entries[...]}` envelope.
-@Suite("MedicationsStore — synthesised-placeholder mark routing (W-MED2)", .serialized)
+@Suite("MedicationsStore — synthesised-placeholder mark routing (W-MED2)", .serialized, .mockURLSession)
 struct MedicationsStoreSynthMarkTests {
     private static let now = Date(timeIntervalSince1970: 1_716_300_000) // 2026-05-21 fixed
 
@@ -73,7 +73,7 @@ struct MedicationsStoreSynthMarkTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let observer = RequestObserver()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             observer.record(path: req.url?.path, method: req.httpMethod)
             return (Self.ok(req), Self.bulkSuccessBody)
         }
@@ -102,7 +102,7 @@ struct MedicationsStoreSynthMarkTests {
     func synthMarkQueuedKeepsOptimistic() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let repo = MedicationsRepository(api: api, outbox: outbox)
@@ -130,7 +130,7 @@ struct MedicationsStoreSynthMarkTests {
     func synthMarkFailedRollsBack() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (Self.status(422, request: req), Data(#"{"error":"medication_not_found"}"#.utf8))
         }
         let repo = MedicationsRepository(api: api, outbox: outbox)
@@ -163,7 +163,7 @@ struct MedicationsStoreSynthMarkTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let observer = RequestObserver()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             observer.record(path: req.url?.path, method: req.httpMethod)
             return (Self.ok(req), Self.bulkSuccessBody)
         }
@@ -190,7 +190,7 @@ struct MedicationsStoreSynthMarkTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let observer = RequestObserver()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             observer.record(path: req.url?.path, method: req.httpMethod)
             return (Self.ok(req), Self.bulkSuccessBody)
         }

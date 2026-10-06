@@ -94,9 +94,9 @@ struct WorkoutsScreenTests {
         // sim's locale — production uses `.current`, so a de-DE device correctly
         // renders "1,5 km" (locale-aware separator, L10N-5).
         let posix = Locale(identifier: "en_US_POSIX")
-        #expect(WorkoutFormatter.distanceLabel(metres: 820, locale: posix) == "820 m")
-        #expect(WorkoutFormatter.distanceLabel(metres: 1500, locale: posix) == "1.5 km")
-        #expect(WorkoutFormatter.distanceLabel(metres: 12345, locale: posix) == "12.3 km")
+        #expect(WorkoutFormatter.distanceLabel(metres: 820, locale: posix, system: .metric) == "820 m")
+        #expect(WorkoutFormatter.distanceLabel(metres: 1500, locale: posix, system: .metric) == "1.5 km")
+        #expect(WorkoutFormatter.distanceLabel(metres: 12345, locale: posix, system: .metric) == "12.3 km")
     }
 
     // MARK: - Subtitle composition
@@ -117,7 +117,7 @@ struct WorkoutsScreenTests {
             source: "APPLE_HEALTH",
             externalId: nil
         )
-        let subtitle = WorkoutFormatter.subtitle(entry, locale: Locale(identifier: "en_US_POSIX"))
+        let subtitle = WorkoutFormatter.subtitle(entry, locale: Locale(identifier: "en_US_POSIX"), system: .metric)
         #expect(subtitle.contains("5.0 km"))
         #expect(subtitle.contains("350 kcal"))
     }

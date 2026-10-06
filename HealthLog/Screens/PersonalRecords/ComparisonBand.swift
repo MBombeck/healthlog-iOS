@@ -180,6 +180,10 @@ struct ComparisonBand: View {
     }
 
     private var summaryLine: String {
+        String(localized: summaryResource)
+    }
+
+    private var summaryResource: LocalizedStringResource {
         let region = benchmark.classify(record.base.value)
         switch (region, benchmark.favorability) {
         case (.insideBand, _):
@@ -205,14 +209,14 @@ struct ComparisonBand: View {
         let hi = Self.numberFormatter.string(from: NSNumber(value: benchmark.bandHigh)) ?? "\(benchmark.bandHigh)"
         let unit = record.base.unit
         let unitSuffix = unit.isEmpty ? "" : " \(unit)"
-        return Text(
-            "\(metricLabel) Vergleich. Dein Wert: \(userValue)\(unitSuffix). Typischer Bereich: \(lo) bis \(hi)\(unitSuffix). \(summaryLine)"
-        )
+        let yours = "\(userValue)\(unitSuffix)"
+        let high = "\(hi)\(unitSuffix)"
+        return Text("records.comparison.a11y \(metricLabel) \(yours) \(lo) \(high) \(summaryLine)")
     }
 
     private static let numberFormatter: NumberFormatter = {
         let f = NumberFormatter()
-        f.locale = Locale(identifier: "de_DE")
+        f.locale = Locale.current
         f.numberStyle = .decimal
         f.maximumFractionDigits = 1
         f.minimumFractionDigits = 0
@@ -225,16 +229,19 @@ extension ComparisonBand {
         static let trackHeight: CGFloat = 10
         static let tickWidth: CGFloat = 6
 
-        static let eyebrow = "Vergleichsbereich"
-        static let accessibilityHint = "Tippen, um Quellen und Hinweise zu öffnen."
+        // L1 — catalog keys. These were German sentences rendered verbatim
+        // (`Text(String)`) or as keys the catalog did not have, so the English
+        // UI and VoiceOver read German on the whole comparison section.
+        static let eyebrow = "benchmark.source.eyebrow"
+        static let accessibilityHint = "records.comparison.a11yHint"
 
-        static let summaryInsideBand = "Dein Bestwert liegt im typischen Bereich."
-        static let summaryBelowBetter = "Dein Bestwert liegt unter dem Durchschnitt — das ist günstig."
-        static let summaryBelowWorse = "Dein Bestwert liegt unter dem typischen Bereich."
-        static let summaryBelowCentered = "Dein Bestwert liegt unterhalb des typischen Bereichs."
-        static let summaryAboveWorse = "Dein Bestwert liegt über dem typischen Bereich."
-        static let summaryAboveBetter = "Dein Bestwert liegt über dem Durchschnitt — das ist günstig."
-        static let summaryAboveCentered = "Dein Bestwert liegt oberhalb des typischen Bereichs."
+        static let summaryInsideBand: LocalizedStringResource = "records.comparison.insideBand"
+        static let summaryBelowBetter: LocalizedStringResource = "records.comparison.belowBetter"
+        static let summaryBelowWorse: LocalizedStringResource = "records.comparison.belowWorse"
+        static let summaryBelowCentered: LocalizedStringResource = "records.comparison.belowCentered"
+        static let summaryAboveWorse: LocalizedStringResource = "records.comparison.aboveWorse"
+        static let summaryAboveBetter: LocalizedStringResource = "records.comparison.aboveBetter"
+        static let summaryAboveCentered: LocalizedStringResource = "records.comparison.aboveCentered"
     }
 }
 

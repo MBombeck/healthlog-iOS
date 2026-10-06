@@ -12,7 +12,7 @@ import Testing
 /// `Rückgängig` action on the coordinator, and the action must remove the
 /// just-logged entry on undo.
 @MainActor
-@Suite("MoodStore — quick-log undo", .serialized)
+@Suite("MoodStore — quick-log undo", .serialized, .mockURLSession)
 struct MoodStoreUndoLogTests {
     private func makeAPI() -> APIClient {
         let keychain = InMemoryKeychain()
@@ -43,7 +43,7 @@ struct MoodStoreUndoLogTests {
     func logUndoableInsertsAndEnqueues() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = """
             {"data":{"id":"mood-1","mood":"GUT","tags":[],\
             "moodLoggedAt":"2026-05-01T09:00:00Z","source":null,"note":null}}
@@ -66,7 +66,7 @@ struct MoodStoreUndoLogTests {
     func undoRemovesLoggedEntry() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // POST → 200 with the entry; DELETE → 204 No Content.
             if req.httpMethod == "DELETE" {
                 // 200 + `{}` so `EmptyResponse` decodes (empty Data() is not

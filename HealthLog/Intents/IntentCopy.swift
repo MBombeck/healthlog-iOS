@@ -17,15 +17,29 @@ enum IntentCopy {
         )
     }
 
-    /// Network error on a retriable write — the value is safely on the
-    /// Outbox and will sync on the next app foreground. Reassures the
-    /// user the entry is saved, not lost.
-    static var queuedOffline: IntentDialog {
-        IntentDialog(
-            LocalizedStringResource(
-                "Saved offline — it will sync the next time you open HealthLog.",
-                comment: "AppIntents — write queued on the outbox"
+    /// #110 — the dialog for a write the repository durably queued, chosen by
+    /// why it was queued. A 429 (the server's write ceiling, with or without
+    /// `record_write.rate_limited`) is not "offline": the phone is online and
+    /// the entry is saved, it just waits a moment. Everything else keeps
+    /// the offline dialog.
+    static func queued(after error: HLError) -> IntentDialog {
+        IntentDialog(queuedResource(after: error))
+    }
+
+    /// The string behind ``queued(after:)`` — split out so a test can read the key.
+    static func queuedResource(after error: HLError) -> LocalizedStringResource {
+        if case .rateLimited = error {
+            return LocalizedStringResource(
+                "intents.queued.rateLimited",
+                defaultValue: "Saved. The server is busy right now, so it will sync automatically in a moment.",
+                comment: "AppIntents — write queued because the server rate-limited it (HTTP 429); no action needed"
             )
+        }
+        // Network error on a retriable write — the value is safely on the
+        // Outbox and will sync on the next app foreground.
+        return LocalizedStringResource(
+            "Saved offline — it will sync the next time you open HealthLog.",
+            comment: "AppIntents — write queued on the outbox"
         )
     }
 

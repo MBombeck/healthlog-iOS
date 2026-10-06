@@ -9,7 +9,7 @@ import Testing
 /// only a document id, but that request authorizes the server to release the
 /// stored original to its external provider. These tests therefore assert the
 /// consent boundary at the repository wire choke point, not only in SwiftUI.
-@Suite("Document AI consent lease", .serialized)
+@Suite("Document AI consent lease", .serialized, .mockURLSession)
 struct DocumentAIConsentLeaseTests {
     private func makeAPI(authToken: String = "ambient-token") -> APIClient {
         let environment = AppEnvironment(
@@ -100,7 +100,7 @@ struct DocumentAIConsentLeaseTests {
     @Test("No consent lease blocks every document-body AI trigger before URLSession")
     func noConsentMeansNoWire() async {
         let wireCount = Mutex(0)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             wireCount.withLock { $0 += 1 }
             return response(request)
         }
@@ -134,7 +134,7 @@ struct DocumentAIConsentLeaseTests {
             makeLease(owner: "user-B", bearer: "token-B")
         ])
         let successorWireCount = Mutex(0)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.value(forHTTPHeaderField: "Authorization") == "Bearer token-B" {
                 successorWireCount.withLock { $0 += 1 }
             }
@@ -157,7 +157,7 @@ struct DocumentAIConsentLeaseTests {
     @Test("Chat pins the captured account bearer across ambient token rotation")
     func chatPinsCapturedBearerAndStreamsNormally() async throws {
         let seenAuthorization = Mutex<String?>(nil)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             seenAuthorization.withLock {
                 $0 = request.value(forHTTPHeaderField: "Authorization")
             }
@@ -212,7 +212,7 @@ struct DocumentAIConsentLeaseTests {
     func revocationDuringPreflightMeansNoWire() async {
         let state = SuspendedDocumentConsentState(lease: makeLease())
         let wireCount = Mutex(0)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             wireCount.withLock { $0 += 1 }
             return response(request)
         }
@@ -238,7 +238,7 @@ struct DocumentAIConsentLeaseTests {
     func accountBoundaryMeansNoWire() async {
         let state = SuspendedDocumentConsentState(lease: makeLease())
         let wireCount = Mutex(0)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             wireCount.withLock { $0 += 1 }
             return response(request)
         }
@@ -264,7 +264,7 @@ struct DocumentAIConsentLeaseTests {
     func revocationAfterWireDiscardsResponse() async {
         let currentLease = Mutex<DocumentAIConsentLease?>(makeLease())
         let wireCount = Mutex(0)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             wireCount.withLock { $0 += 1 }
             currentLease.withLock { $0 = nil }
             return response(request)
@@ -286,7 +286,7 @@ struct DocumentAIConsentLeaseTests {
     func currentLeasePermitsPinnedRequest() async throws {
         let lease = makeLease()
         let wireCount = Mutex(0)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             wireCount.withLock { $0 += 1 }
             #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token-A")
             return response(request)

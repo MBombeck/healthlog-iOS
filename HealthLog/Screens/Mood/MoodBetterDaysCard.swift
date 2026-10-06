@@ -81,6 +81,10 @@ struct MoodBetterDaysCard: View {
             return catalog.label(forTagKey: factor.key) ?? factor.key
         case .metric:
             return MoodBetterDayRowView.metricLabel(for: factor.key)
+        // #115 · 1.7 — an unrecognised source: the server's own label key if it
+        // sent one, else the raw key. Nothing is guessed about what it is.
+        case .unknown:
+            return factor.labelKey.map(MoodTagCatalogL10n.resolve) ?? factor.key
         }
     }
 
@@ -92,6 +96,8 @@ struct MoodBetterDaysCard: View {
             MoodTagSFSymbol.symbol(forLucide: factor.icon) ?? "tag"
         case .metric:
             MoodBetterDayRowView.metricSymbol(for: factor.key)
+        case .unknown:
+            "circle"
         }
     }
 }
@@ -124,7 +130,7 @@ struct MoodBetterDayRowView: View {
 
             Spacer(minLength: HLSpace.sm)
 
-            Image(systemName: factor.isPositive ? "arrow.up" : "arrow.down")
+            Image(systemName: Self.directionSymbol(for: factor))
                 .font(.hlSubhead.weight(factor.isPositive ? .semibold : .regular))
                 .foregroundStyle(factor.isPositive ? HLText.primary : HLText.secondary)
 
@@ -138,9 +144,24 @@ struct MoodBetterDayRowView: View {
     /// Descriptive direction caption — "with higher mood" / "with lower mood".
     /// Never causal.
     nonisolated static func directionCaption(for factor: BetterDayFactor) -> String {
-        factor.isPositive
-            ? String(localized: "Tends to go with higher mood", comment: "Better-days factor: positive association caption")
-            : String(localized: "Tends to go with lower mood", comment: "Better-days factor: negative association caption")
+        switch factor.direction {
+        case .up:
+            String(localized: "Tends to go with higher mood", comment: "Better-days factor: positive association caption")
+        case .down:
+            String(localized: "Tends to go with lower mood", comment: "Better-days factor: negative association caption")
+        // #115 · 1.7 — used to decode to `.up` and claim "higher mood".
+        case .unknown:
+            String(localized: "mood.betterDays.direction.unknown")
+        }
+    }
+
+    /// Direction glyph — neutral for a direction this build does not know.
+    nonisolated static func directionSymbol(for factor: BetterDayFactor) -> String {
+        switch factor.direction {
+        case .up: "arrow.up"
+        case .down: "arrow.down"
+        case .unknown: "minus"
+        }
     }
 
     /// VoiceOver value: direction + sample size + confidence, in words.

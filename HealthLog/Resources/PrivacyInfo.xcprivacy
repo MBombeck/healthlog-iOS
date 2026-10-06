@@ -203,7 +203,10 @@
         GH #74 adds the same two shapes for the Apple-Health ECG upload: the
         device-local opt-in switch (`hl.ecg.uploadFromAppleHealth`) and the
         per-user HealthKit cursor (`hl.ecg.hk.anchor.*`). A UI-pref and an
-        opaque sync cursor — CA92.1 unchanged, no new reason code. The ECG
+        opaque sync cursor — CA92.1 unchanged, no new reason code. S2 (#115)
+        adds the cursor's progress list (`hl.ecg.hk.confirmed.*`): the opaque
+        HealthKit sample ids the server already confirmed, nothing else, per
+        user and cleared with the cursor. Same shape, same CA92.1. The ECG
         WAVEFORM itself never touches UserDefaults, nor any other local store:
         it exists for the duration of the request that carries it and no
         longer, and is covered by the existing HealthFitness collected-data

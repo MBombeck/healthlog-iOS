@@ -16,8 +16,8 @@
     /// share-auth gate):
     /// - run-once gate (a second eligible call no-ops),
     /// - standalone suppression (no mirror, no flag flip),
-    /// - source-policy filter (only `.withings` / `.import_` history reaches the
-    ///   mirror; `.manual` / `.appleHealth` / `.whoop` / `.fitbit` never do),
+    /// - source-policy filter (only `.withings` / `.import_` / `.manual` history
+    ///   reaches the mirror; `.appleHealth` / `.whoop` / `.fitbit` never do),
     /// - that ALL eligible history (not just the latest page) is handed to the
     ///   mirror so its externalUUID probe can de-dup per sample.
     @Suite("MeasurementsStore — historical HealthKit backfill (W-HKBACKFILL)")
@@ -139,7 +139,7 @@
 
         // MARK: - Source policy filter
 
-        @Test("Only WITHINGS / IMPORT history reaches the mirror — never MANUAL/APPLE_HEALTH/WHOOP/FITBIT")
+        @Test("Only WITHINGS / IMPORT / MANUAL history reaches the mirror — never APPLE_HEALTH/WHOOP/FITBIT")
         func sourcePolicyFilter() async throws {
             // The repo fetch is source-scoped: the driver only ever asks for the
             // eligible sources, so the recorder is keyed on WITHINGS + IMPORT.
@@ -166,7 +166,7 @@
             }
             // The driver NEVER issues a fetch for an ineligible source: it only
             // walks `MeasurementSource.serverMirrorEligible`.
-            #expect(MeasurementSource.serverMirrorEligible == [.withings, .import_])
+            #expect(MeasurementSource.serverMirrorEligible == [.withings, .import_, .manual])
         }
 
         @Test("All eligible history (not just the latest page) is handed to the mirror")
@@ -192,6 +192,43 @@
             #expect(hk.mirrorCallCount == 1)
             let ids = Set(hk.mirroredMeasurements.map(\.id))
             #expect(ids.isSuperset(of: ["w-1", "w-2"]))
+        }
+
+        // MARK: - S1 / public #11 — manual rows typed on the web
+
+        @Test("Update path: a user whose v1 backfill completed re-runs once and the web MANUAL history reaches the mirror")
+        func completedV1BackfillReRunsForManualRows() async throws {
+            let webEntry = MeasurementWireDTO(
+                id: "web-weight-1",
+                type: .weight,
+                value: 81.2,
+                measuredAt: Date(timeIntervalSince1970: 1_759_250_940),
+                source: .manual
+            )
+            let recorder = HistoryRecorder(rowsForSource: [
+                ServerMeasurementSource.manual.rawValue: [webEntry]
+            ])
+            let hk = MockHealthKitWriter()
+            let defaults = try freshDefaults()
+            // What build 287 left behind: the one-shot marked complete at v1,
+            // which only ever fetched WITHINGS and IMPORT.
+            defaults.set(1, forKey: "hl.healthkit.historicalBackfill.v.user-a")
+            let store = try await makeStore(
+                recorder: recorder,
+                hk: hk,
+                defaults: defaults,
+                userID: "user-a",
+                standalone: false
+            )
+
+            await store.runHistoricalBackfillForTesting()
+
+            #expect(hk.mirroredMeasurements.map(\.id).contains("web-weight-1"))
+            #expect(defaults.integer(forKey: "hl.healthkit.historicalBackfill.v.user-a") == 2)
+            // Ran once — a second launch is gated again.
+            let requests = recorder.requestCount
+            await store.runHistoricalBackfillForTesting()
+            #expect(recorder.requestCount == requests)
         }
 
         // MARK: - Run-once gate
@@ -325,7 +362,7 @@
             registry.invalidate()
             _ = try #require(registry.activate(ownerID: "account-a"))
             await store.runHistoricalBackfillForTesting()
-            #expect(defaults.integer(forKey: prefix + "account-a") == 1)
+            #expect(defaults.integer(forKey: prefix + "account-a") == 2)
         }
     }
 

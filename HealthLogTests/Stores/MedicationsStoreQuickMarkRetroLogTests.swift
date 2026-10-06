@@ -14,7 +14,7 @@ import Testing
 /// These tests assert on the real `POST /api/medications/intake` wire body
 /// (real `APIClient` over `MockURLProtocol`, per PROJECT_GUIDE.md: no mock server on
 /// the write path), mirroring `MedicationsStoreQuickSiteForwardTests`.
-@Suite("MedicationsStore — quick-mark retro-logs a past scheduled slot (RCA b197)", .serialized)
+@Suite("MedicationsStore — quick-mark retro-logs a past scheduled slot (RCA b197)", .serialized, .mockURLSession)
 struct MedicationsStoreQuickMarkRetroLogTests {
     // 2024-05-01T08:00:00Z — the scheduled slot instant (ISO8601 wire form).
     private static let scheduled = Date(timeIntervalSince1970: 1_714_550_400)
@@ -89,7 +89,7 @@ struct MedicationsStoreQuickMarkRetroLogTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = Self.bodyData(req)
             return (Self.ok(req), Data(Self.takenResponseBody.utf8))
         }
@@ -124,7 +124,7 @@ struct MedicationsStoreQuickMarkRetroLogTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = Self.bodyData(req)
             // Server echoes the on-time take (takenAt == scheduledAt == now here).
             let body = """
@@ -159,7 +159,7 @@ struct MedicationsStoreQuickMarkRetroLogTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = Self.bodyData(req)
             let body = """
             {"data":{"id":"intake-1","medicationId":"med-1",\

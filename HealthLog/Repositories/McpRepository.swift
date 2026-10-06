@@ -60,9 +60,20 @@ public actor McpRepository {
     /// Mint a connector token. The response carries the raw `hlk_…` secret
     /// **once** — it is unrecoverable afterwards, so the caller must surface it
     /// immediately and must never persist or log it.
-    public func mintToken(name: String, scope: McpTokenScope) async throws -> ApiTokenMintResponse {
+    ///
+    /// R2 / #115 A3 — `elevation` rides as `X-Step-Up` (single use). Server
+    /// v1.39.3 still takes the token alone here and will require the
+    /// elevation later; on `401 auth.stepup.required` the store asks for proof
+    /// and retries with one.
+    public func mintToken(
+        name: String,
+        scope: McpTokenScope,
+        elevation: String? = nil
+    ) async throws -> ApiTokenMintResponse {
         let body = McpTokenMintBody(name: name, scope: scope)
-        let req: APIRequest<ApiTokenMintResponse> = try .post("/api/mcp/tokens", body: body)
+        let req: APIRequest<ApiTokenMintResponse> = try APIRequest<ApiTokenMintResponse>
+            .post("/api/mcp/tokens", body: body)
+            .withStepUpElevation(elevation)
         return try await api.send(req)
     }
 

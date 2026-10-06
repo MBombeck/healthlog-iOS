@@ -65,24 +65,20 @@ extension CycleCaptureSheet {
         )
     }
 
-    // MARK: - Date helpers (user-tz, POSIX)
+    // MARK: - Date helpers (profile zone, POSIX)
 
-    static func dayKey(_ date: Date) -> String {
-        dayFormatter.string(from: date)
+    /// #115 1.5 — the day `date` names in the ACCOUNT zone. The sheet's date
+    /// picker runs in the same zone (`.environment(\.timeZone, …)` on the
+    /// sheet), and "today" is the account's today, so the key the server
+    /// upserts on is the day the person saw. It used to be cut with a
+    /// formatter that froze the device zone at first use.
+    static func dayKey(_ date: Date, timeZone: TimeZone = ProfileDay.timeZone) -> String {
+        ProfileDay.key(for: date, timeZone: timeZone)
     }
 
     static func iso(_ date: Date) -> String {
         isoFormatter.string(from: date)
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
 
     private static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()

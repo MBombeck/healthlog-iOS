@@ -15,7 +15,7 @@ import Testing
 /// envelope. Uses the real `APIClient` over a `MockURLProtocol` session (per the
 /// PROJECT_GUIDE.md doctrine — never a hand-rolled mock server) so envelope-shape drift
 /// is caught.
-@Suite("MeasurementReminderRepository", .serialized)
+@Suite("MeasurementReminderRepository", .serialized, .mockURLSession)
 struct MeasurementReminderRepositoryTests {
     private struct RecordedCall {
         let method: String
@@ -63,7 +63,7 @@ struct MeasurementReminderRepositoryTests {
     func listRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(method: req.httpMethod ?? "?", path: req.url!.path)
             let payload = Data("{\"data\":[\(Self.rowJSON(id: "r1")),\(Self.rowJSON(id: "r2", origin: "COACH"))]}".utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
@@ -83,7 +83,7 @@ struct MeasurementReminderRepositoryTests {
     func createRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(method: req.httpMethod ?? "?", path: req.url!.path)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
@@ -105,7 +105,7 @@ struct MeasurementReminderRepositoryTests {
     func updateRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(method: req.httpMethod ?? "?", path: req.url!.path)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -124,7 +124,7 @@ struct MeasurementReminderRepositoryTests {
     func deleteRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(method: req.httpMethod ?? "?", path: req.url!.path)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -143,7 +143,7 @@ struct MeasurementReminderRepositoryTests {
     func satisfyRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(method: req.httpMethod ?? "?", path: req.url!.path)
             // Re-anchored row: lastSatisfiedAt now stamped, nextDueAt advanced.
             let payload = """
@@ -168,7 +168,7 @@ struct MeasurementReminderRepositoryTests {
     func completeRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(method: req.httpMethod ?? "?", path: req.url!.path)
             let payload = """
             {"data":{"completed":true,"reminder":{"id":"r1","label":"Annual blood test",
@@ -193,7 +193,7 @@ struct MeasurementReminderRepositoryTests {
     @Test("complete tolerates the idempotent no-op (completed=false)")
     func completeIdempotentNoOp() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":{"completed":false,"reminder":{"id":"r1","label":"Annual blood test",
              "measurementType":"WEIGHT","intervalDays":30,"rrule":null,"anchorDate":null,
@@ -297,7 +297,7 @@ extension MeasurementReminderRepositoryTests {
         let repo = makeRepo()
         let log = WireLog()
         let payload = try Self.frozenBytes("skipAppliedEnvelope")
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req)
             return Self.respond(req, 200, payload)
         }
@@ -331,7 +331,7 @@ extension MeasurementReminderRepositoryTests {
     func skipIdempotentNoOp() async throws {
         let repo = makeRepo()
         let payload = try Self.frozenBytes("skipNoOpEnvelope")
-        MockURLProtocol.handler = { req in Self.respond(req, 200, payload) }
+        MockURLProtocol.install { req in Self.respond(req, 200, payload) }
 
         let result = try await repo.skip(id: "rem_skipped_0003")
         #expect(result.skipped == false, "a concurrent skip or satisfy already advanced the row")
@@ -343,7 +343,7 @@ extension MeasurementReminderRepositoryTests {
         let repo = makeRepo()
         let log = WireLog()
         let payload = try Self.frozenBytes("snoozeAppliedEnvelope")
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req)
             return Self.respond(req, 200, payload)
         }
@@ -376,7 +376,7 @@ extension MeasurementReminderRepositoryTests {
 
         // A snooze body has no `skipped` flag, so it cannot answer a skip.
         let snoozeShaped = try Self.frozenBytes("snoozeAppliedEnvelope")
-        MockURLProtocol.handler = { req in Self.respond(req, 200, snoozeShaped) }
+        MockURLProtocol.install { req in Self.respond(req, 200, snoozeShaped) }
         await #expect(throws: (any Error).self) {
             _ = try await repo.skip(id: "rem_snoozed_0002")
         }
@@ -384,7 +384,7 @@ extension MeasurementReminderRepositoryTests {
         // And a bare reminder is not the snooze envelope: the accepted response
         // wraps the row in `{ reminder }`.
         let bareReminder = try Self.frozenBytes("reminderSnoozed")
-        MockURLProtocol.handler = { req in Self.respond(req, 200, bareReminder) }
+        MockURLProtocol.install { req in Self.respond(req, 200, bareReminder) }
         await #expect(throws: (any Error).self) {
             _ = try await repo.snooze(id: "rem_snoozed_0002", until: "2026-08-24")
         }
@@ -395,7 +395,7 @@ extension MeasurementReminderRepositoryTests {
         let repo = makeRepo()
         let log = WireLog()
         let payload = try Self.frozenBytes("historyFirstPage")
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req)
             return Self.respond(req, 200, payload)
         }
@@ -425,7 +425,7 @@ extension MeasurementReminderRepositoryTests {
         let repo = makeRepo()
         let log = WireLog()
         let payload = try Self.frozenBytes("historyEmptyLedger")
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req)
             return Self.respond(req, 200, payload)
         }
@@ -436,7 +436,7 @@ extension MeasurementReminderRepositoryTests {
 
         // Out of the published 1…100 bound. The contract gives that refusal to
         // the server (422); clamping here would hide it.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req)
             return Self.respond(req, 422, Data(#"{"data":null,"error":"limit out of range"}"#.utf8))
         }
@@ -451,7 +451,7 @@ extension MeasurementReminderRepositoryTests {
     func historyEmptyLedger() async throws {
         let repo = makeRepo()
         let payload = try Self.frozenBytes("historyEmptyLedger")
-        MockURLProtocol.handler = { req in Self.respond(req, 200, payload) }
+        MockURLProtocol.install { req in Self.respond(req, 200, payload) }
 
         let page = try await repo.history(id: "rem_legacy_0004")
         #expect(page.events.isEmpty)
@@ -467,7 +467,7 @@ extension MeasurementReminderRepositoryTests {
            "onTime":false,"source":"pharmacy_sync","createdAt":"2026-08-15T11:20:00Z"}],
          "meta":{"total":1,"limit":50,"offset":0}},"error":null}
         """.utf8)
-        MockURLProtocol.handler = { req in Self.respond(req, 200, payload) }
+        MockURLProtocol.install { req in Self.respond(req, 200, payload) }
 
         let page = try await repo.history(id: "r1")
         let event = try #require(page.events.first)
@@ -481,7 +481,7 @@ extension MeasurementReminderRepositoryTests {
     func publishedErrorStatuses() async throws {
         let repo = makeRepo()
         for status in [401, 403, 404, 422] {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 Self.respond(req, status, Data(#"{"data":null,"error":"refused"}"#.utf8))
             }
             await #expect(throws: (any Error).self) { _ = try await repo.skip(id: "r1") }
@@ -493,7 +493,7 @@ extension MeasurementReminderRepositoryTests {
     @Test("a published 429 surfaces as the typed rate limit on all three routes")
     func publishedRateLimit() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.respond(req, 429, Data(#"{"data":null,"error":"rate limited"}"#.utf8))
         }
         await #expect(throws: HLError.rateLimited(retryAfter: nil)) { _ = try await repo.skip(id: "r1") }
@@ -508,7 +508,7 @@ extension MeasurementReminderRepositoryTests {
         let repo = makeRepo()
         let log = WireLog()
         let row = Data("{\"data\":\(Self.rowJSON(id: "r1"))}".utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req)
             let completion = Data("{\"data\":{\"completed\":true,\"reminder\":\(Self.rowJSON(id: "r1"))}}".utf8)
             return Self.respond(req, 200, req.url?.path.hasSuffix("/complete") == true ? completion : row)

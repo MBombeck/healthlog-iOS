@@ -10,7 +10,7 @@ import Testing
 /// `PersonalRecordsScreen`: `enrichedRecords`, `heroRecord`,
 /// `visibleRecords` (bucket-filtered), `streakRecords` (slot match),
 /// `clearOnLogout` (also clears `selectedBucket`).
-@Suite("PersonalRecordsStore — enrichment + bucket selection", .serialized)
+@Suite("PersonalRecordsStore — enrichment + bucket selection", .serialized, .mockURLSession)
 @MainActor
 struct PersonalRecordsStoreEnrichmentTests {
     private let now = Date(timeIntervalSince1970: 1_716_854_400) // 28 May 2024
@@ -68,7 +68,7 @@ struct PersonalRecordsStoreEnrichmentTests {
 
     @Test("Hero pick prefers the most recent bucket (week beats all-time)")
     func heroPicksFreshestBucket() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -93,7 +93,7 @@ struct PersonalRecordsStoreEnrichmentTests {
 
     @Test("visibleRecords narrows by selectedBucket downward-inclusive")
     func bucketFilter() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -123,7 +123,7 @@ struct PersonalRecordsStoreEnrichmentTests {
 
     @Test("Streak records are surfaced into the rail by metricSlot pattern")
     func streakSurfacing() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -156,7 +156,7 @@ struct PersonalRecordsStoreEnrichmentTests {
 
     @Test("clearOnLogout resets selectedBucket + enrichedRecords")
     func clearOnLogoutResetsBucket() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }

@@ -20,7 +20,7 @@ import Testing
 ///
 /// Uses the real `APIClient` + stubbed `URLProtocol` (no mock server) so a
 /// schema / method / path drift is caught at the wire boundary.
-@Suite("Settings toggles — server-first wire contract", .serialized)
+@Suite("Settings toggles — server-first wire contract", .serialized, .mockURLSession)
 struct SettingsTogglesWireTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -50,7 +50,7 @@ struct SettingsTogglesWireTests {
         nonisolated(unsafe) var method: String?
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var bodyJSON: [String: Any]?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             method = req.httpMethod
             path = req.url?.path
             if let data = req.bodyOrStream() {
@@ -61,7 +61,7 @@ struct SettingsTogglesWireTests {
                 profilePayload(moodReminderEnabled: true)
             )
         }
-        let updated = try await repo.patchProfile(ProfilePatch(moodReminderEnabled: true))
+        let updated = try await repo.patchProfile(ProfilePatch(moodReminderEnabled: true)).profile
 
         #expect(method == "PATCH")
         #expect(path == "/api/user/profile")
@@ -74,7 +74,7 @@ struct SettingsTogglesWireTests {
     func moodReminderDisableSendsFalse() async throws {
         let repo = SettingsRepository(api: makeAPI())
         nonisolated(unsafe) var bodyJSON: [String: Any]?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if let data = req.bodyOrStream() {
                 bodyJSON = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             }
@@ -83,7 +83,7 @@ struct SettingsTogglesWireTests {
                 profilePayload(moodReminderEnabled: false)
             )
         }
-        let updated = try await repo.patchProfile(ProfilePatch(moodReminderEnabled: false))
+        let updated = try await repo.patchProfile(ProfilePatch(moodReminderEnabled: false)).profile
         #expect(bodyJSON?["moodReminderEnabled"] as? Bool == false)
         #expect(updated.moodReminderEnabled == false)
     }

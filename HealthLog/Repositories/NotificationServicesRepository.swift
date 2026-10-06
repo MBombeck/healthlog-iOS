@@ -26,6 +26,12 @@ import Foundation
 /// default `Idempotency-Key` (per `APIRequest.put`). The `test` POSTs are
 /// low-rate, server-rate-limited probes — no outbox `Kind` is wired (these are
 /// Settings actions, not high-volume health writes).
+///
+/// **The test POSTs never retry (#112).** Since server v1.38.21 a relay that
+/// refuses the test message answers `502` with the cause in `meta`. The
+/// transport retries a 5xx up to three times, so one tap sent up to four test
+/// messages to the relay and spent four of the route's five tests per five
+/// minutes, only to report the same refusal. Each test runs exactly once.
 public actor NotificationServicesRepository {
     /// `PUT /api/settings/ntfy` body. `authToken` is sent only when the user
     /// entered/changed one; `nil` ⇒ the server keeps the stored token.
@@ -53,7 +59,14 @@ public actor NotificationServicesRepository {
         let url: String
         let headerName: String?
         let headerValue: String?
+        /// #112 — `generic` | `gotify`. `nil` is left off the wire, and the
+        /// server then keeps the stored format; ``WebhookFormat/unknown`` is
+        /// never sent.
+        let format: String?
     }
+
+    /// No retry for a channel test — see the type comment.
+    static let channelTestMaxRetries = 0
 
     private let api: APIClientProtocol
 
@@ -91,7 +104,8 @@ public actor NotificationServicesRepository {
     public func testNtfy() async throws -> NotificationChannelTestResult {
         let req: APIRequest<NotificationChannelTestResult> = try .post(
             "/api/settings/ntfy/test",
-            body: EmptyBody()
+            body: EmptyBody(),
+            maxRetries: Self.channelTestMaxRetries
         )
         return try await api.send(req)
     }
@@ -121,7 +135,8 @@ public actor NotificationServicesRepository {
     public func testTelegram() async throws -> NotificationChannelTestResult {
         let req: APIRequest<NotificationChannelTestResult> = try .post(
             "/api/settings/telegram/test",
-            body: EmptyBody()
+            body: EmptyBody(),
+            maxRetries: Self.channelTestMaxRetries
         )
         return try await api.send(req)
     }
@@ -134,20 +149,25 @@ public actor NotificationServicesRepository {
     }
 
     /// Saves the generic-webhook channel config. `headerValue` (write-only
-    /// shared secret) is forwarded only on change.
+    /// shared secret) is forwarded only on change. `format` is sent only when
+    /// it is a known choice (#112); `nil` or ``WebhookFormat/unknown`` keeps the
+    /// stored format server-side.
     public func saveWebhook(
         enabled: Bool,
         url: String,
         headerName: String?,
-        headerValue: String?
+        headerValue: String?,
+        format: WebhookFormat? = nil
     ) async throws {
+        let wireFormat = format.flatMap { WebhookFormat.selectable.contains($0) ? $0.rawValue : nil }
         let req: APIRequest<EmptyPayload> = try .put(
             "/api/settings/webhook",
             body: SaveWebhookBody(
                 enabled: enabled,
                 url: url,
                 headerName: headerName,
-                headerValue: headerValue
+                headerValue: headerValue,
+                format: wireFormat
             )
         )
         try await api.sendVoid(req)
@@ -157,7 +177,8 @@ public actor NotificationServicesRepository {
     public func testWebhook() async throws -> NotificationChannelTestResult {
         let req: APIRequest<NotificationChannelTestResult> = try .post(
             "/api/settings/webhook/test",
-            body: EmptyBody()
+            body: EmptyBody(),
+            maxRetries: Self.channelTestMaxRetries
         )
         return try await api.send(req)
     }

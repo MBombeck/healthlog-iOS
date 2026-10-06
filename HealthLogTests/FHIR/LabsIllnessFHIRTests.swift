@@ -348,7 +348,8 @@ struct IllnessFHIRTests {
     func conditionSNOMEDCategoryMap() throws {
         let cases: [(IllnessType, String)] = [
             (.infection, "40733004"),
-            (.allergy, "106190000"),
+            // #115 R3 — 106190000 is inactive; server v1.39.3 uses 473011001.
+            (.allergy, "473011001"),
             (.injury, "417163006"),
             (.mentalHealth, "74732009"),
             (.autoimmune, "85828009"),
@@ -413,7 +414,8 @@ struct IllnessFHIRTests {
         #expect(obs.count == 2)
         for o in obs {
             let focus = try #require(o.focus?.first?.reference?.value?.string)
-            #expect(focus == "Condition/\(conditionID)")
+            // #115 R4 — references name the target entry's urn:uuid fullUrl (bdl-7), as the server does.
+            #expect(focus == "urn:uuid:\(conditionID)")
         }
         // Fever uses the body-temperature LOINC.
         let fever = try #require(obs.first { $0.code.coding?.first?.code?.value?.string == "8310-5" })
@@ -473,12 +475,13 @@ struct IllnessFHIRTests {
         #expect(try conditions(in: bundle).isEmpty)
 
         let entries = try #require(bundle.entry)
-        // Only one DiagnosticReport (the vitals one) — no lab report.
+        // No lab report — and (#115 R3) no vitals report either, because this
+        // spec carries no vital sign; the server leaves an empty one out too.
         let reports = entries.compactMap { entry -> DiagnosticReport? in
             if case let .diagnosticReport(r) = entry.resource { return r }
             return nil
         }
-        #expect(reports.count == 1)
+        #expect(reports.isEmpty)
 
         let composition = try #require(entries.compactMap { entry -> Composition? in
             if case let .composition(c) = entry.resource { return c }
@@ -512,7 +515,8 @@ struct IllnessFHIRTests {
         let patientID = try #require(patient.id?.value?.string)
 
         for obs in try observations(in: bundle) {
-            #expect(obs.subject?.reference?.value?.string == "Patient/\(patientID)")
+            // #115 R4 — references name the target entry's urn:uuid fullUrl (bdl-7), as the server does.
+            #expect(obs.subject?.reference?.value?.string == "urn:uuid:\(patientID)")
             switch obs.effective {
             case .dateTime, .period: break
             default: Issue.record("Observation has no effective date")

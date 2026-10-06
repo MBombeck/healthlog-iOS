@@ -210,11 +210,8 @@ public extension HealthKitDailyStatsSyncing {
                 lastCompletedSweepEnd: lastCompletedSweepEnd(ownerID: lease.ownerID),
                 calendar: calendar
             )
-            let rowsByType = await statisticsService.dailyRowsForAllDefaults(from: from, to: now)
-            let summary = await process(rowsByType.values.flatMap(\.self), requiring: lease)
-            if summary.isComplete {
-                recordCompletedSweep(ownerID: lease.ownerID, endingAt: now)
-            }
+            let read = await statisticsService.dailyRowsForAllDefaults(from: from, to: now)
+            let summary = await finishSweep(read, requiring: lease, endingAt: now)
             await reportQuarantinedLegacyRows()
             return summary
         }

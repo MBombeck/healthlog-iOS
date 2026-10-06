@@ -18,10 +18,13 @@ import SwiftUI
 /// - Each card = a Swift-Charts mini sparkline (`HLSparkline`) + a one-sentence
 ///   annotation; tapping a card pushes that metric's `ChartDetailScreen`.
 ///
-/// **On-device ((A) — survives standalone):** the charts read from local
-/// `measurementsStore.recent` and the annotation is computed on-device from the
-/// series direction, so this row renders in BOTH the paired and standalone
-/// paths (unlike the server-derived correlations row).
+/// **Charts on-device, sentence from the server (#115 · 1.3):** the charts read
+/// from local `measurementsStore.recent`, so the row still renders in BOTH the
+/// paired and standalone paths. The one-sentence annotation used to be computed
+/// on-device from the first and last point of the series; it now reads the
+/// server's 30-day regression direction (`summaries[TYPE].slope30.direction`
+/// of the comprehensive digest). No server slope (standalone, offline before
+/// the digest landed, a kind the digest does not summarise) → no sentence.
 ///
 /// **Cache-first paint:** while no measurements have resolved yet the row paints
 /// shimmer placeholders (`HLSkeleton`) instead of empty cards. It reuses the
@@ -38,6 +41,9 @@ struct InsightsTrendsRow: View {
     let kinds: [MetricKind]
     /// The local measurement pool the sparklines read from.
     let measurements: [Measurement]
+    /// #115 · 1.3 — the comprehensive digest's per-type summaries, source of
+    /// the annotation's direction. `nil` → no annotation.
+    let digest: ComprehensiveDigest?
     /// True while the screen is still in its cold-launch skeleton window — the
     /// row paints shimmer cards instead of resolving series. Wired from the
     /// screen's `isShowingInitialSkeleton` latch so we never add a second gate.
@@ -47,6 +53,8 @@ struct InsightsTrendsRow: View {
     let onSelect: ((MetricKind) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// #115 P2 — the latest value reads in the account's unit.
+    @Environment(\.unitPreferences) private var unitPreferences
 
     /// Window for the overview sparkline — last 30 days keeps the mini chart a
     /// glance, matching the web mini-chart default span. `nonisolated` so the
@@ -59,7 +67,7 @@ struct InsightsTrendsRow: View {
         // paints when it has a series).
         let charts: [Chart] = isLoading
             ? []
-            : kinds.compactMap { Self.chart(for: $0, in: measurements) }
+            : kinds.compactMap { Self.chart(for: $0, in: measurements, digest: digest, units: unitPreferences) }
         if isLoading {
             section { skeletonGrid }
         } else if !charts.isEmpty {
@@ -116,10 +124,12 @@ struct InsightsTrendsRow: View {
                 // ink (same as the metric's Insights detail), not a generic line.
                 HLTileMetricChart(kind: chart.kind, values: chart.series)
                     .frame(height: 56)
-                Text(chart.annotation)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let annotation = chart.annotation {
+                    Text(annotation)
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         if let onSelect {
@@ -162,7 +172,7 @@ struct InsightsTrendsRow: View {
         let symbol: String
         let valueText: String
         let series: [Double]
-        let annotation: String
+        let annotation: String?
         let accessibilityLabel: String
         var id: String {
             kind.rawValue
@@ -171,7 +181,12 @@ struct InsightsTrendsRow: View {
 
     /// Build a chart slot for `kind` from the measurement pool, or `nil` when
     /// there aren't enough points (< 2) to draw a meaningful line.
-    nonisolated static func chart(for kind: MetricKind, in measurements: [Measurement]) -> Chart? {
+    nonisolated static func chart(
+        for kind: MetricKind,
+        in measurements: [Measurement],
+        digest: ComprehensiveDigest? = nil,
+        units: UnitPreferences = .standard
+    ) -> Chart? {
         let cutoff = Calendar.current.date(byAdding: .day, value: -windowDays, to: Date())
             ?? Date.distantPast
         let rows = measurements
@@ -181,11 +196,12 @@ struct InsightsTrendsRow: View {
         let series = rows.map(\.primaryValue)
         let descriptor = kind.descriptor
         let title = String(localized: descriptor.title)
-        let unit = String(localized: descriptor.unitLabel)
+        let unit = units.transform(for: kind).suffix ?? String(localized: descriptor.unitLabel)
         let latestRow = rows.last
-        let valueText = formattedValue(latestRow, kind: kind, unit: unit)
-        let annotation = annotation(for: kind, series: series, title: title)
-        let axLabel = "\(title), \(valueText). \(annotation)"
+        let valueText = formattedValue(latestRow, kind: kind, unit: unit, units: units)
+        let summary = kind.availabilitySummaryKey.flatMap { digest?.summaries?[$0] }
+        let annotation = annotation(serverSlope: summary?.slope30, title: title)
+        let axLabel = annotation.map { "\(title), \(valueText). \($0)" } ?? "\(title), \(valueText)"
         return Chart(
             kind: kind,
             title: title,
@@ -199,7 +215,12 @@ struct InsightsTrendsRow: View {
 
     /// Latest-value string. BP renders the systolic/diastolic compound; every
     /// other kind renders the primary scalar + unit.
-    private nonisolated static func formattedValue(_ row: Measurement?, kind: MetricKind, unit: String) -> String {
+    private nonisolated static func formattedValue(
+        _ row: Measurement?,
+        kind: MetricKind,
+        unit: String,
+        units: UnitPreferences
+    ) -> String {
         guard let row else { return "—" }
         if case let .bloodPressure(sys, dia) = row.value {
             // SWEEP (W-CRASHGUARD) — `Measurement` BP values decode unsanitized
@@ -209,27 +230,21 @@ struct InsightsTrendsRow: View {
             guard let s = Int(safeServer: sys), let d = Int(safeServer: dia) else { return "—" }
             return "\(s)/\(d) \(unit)".trimmingCharacters(in: .whitespaces)
         }
-        let value = row.primaryValue.formatted(.number.precision(.fractionLength(0 ... 1)))
+        // #115 P2 — list rows are canonical SI; convert through the one formatter.
+        let value = MetricValueFormatter.formatScalar(row.primaryValue, kind: kind, units: units)
         return unit.isEmpty ? value : "\(value) \(unit)"
     }
 
-    /// On-device one-sentence annotation — direction + magnitude over the
-    /// window. Pure + signal-free copy (no LLM); survives standalone. Mirrors
-    /// the web's per-card caption slot without needing a server annotation.
-    nonisolated static func annotation(for kind: MetricKind, series: [Double], title: String) -> String {
-        guard let first = series.first, let last = series.last, series.count >= 2 else {
-            return String(localized: "Not enough data for a trend yet.")
+    /// One-sentence annotation from the server's 30-day regression direction
+    /// (`TrendSlope.direction`; the server calls a slope `stable` when
+    /// |slope| < 0.01/day). `nil` when the server gave no direction — the card
+    /// then shows no sentence rather than one derived from two chart points.
+    nonisolated static func annotation(serverSlope: TrendSlope?, title: String) -> String? {
+        switch serverSlope?.direction {
+        case .up: String(localized: "insights.trendsRow.annotation.up \(title)")
+        case .down: String(localized: "insights.trendsRow.annotation.down \(title)")
+        case .stable: String(localized: "insights.trendsRow.annotation.stable \(title)")
+        case .unknown, nil: nil
         }
-        let delta = last - first
-        let base = abs(first) > 0.0001 ? abs(first) : 1
-        let pct = abs(delta) / base * 100
-        if pct < 1.5 {
-            return String(localized: "\(title) has held steady over the last weeks.")
-        }
-        let magnitude = pct.formatted(.number.precision(.fractionLength(0)))
-        if delta > 0 {
-            return String(localized: "\(title) trended up about \(magnitude)% recently.")
-        }
-        return String(localized: "\(title) trended down about \(magnitude)% recently.")
     }
 }

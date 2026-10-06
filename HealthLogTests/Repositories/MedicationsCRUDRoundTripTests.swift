@@ -10,7 +10,7 @@ import Testing
 /// outbox-replay drain in isolation; these tests pin the **happy** path
 /// + the **offline-then-replay** path end-to-end through the store
 /// surface the UI actually consumes.
-@Suite("MedicationsStore CRUD round-trip — APIClient + Outbox", .serialized)
+@Suite("MedicationsStore CRUD round-trip — APIClient + Outbox", .serialized, .mockURLSession)
 struct MedicationsCRUDRoundTripTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -52,7 +52,7 @@ struct MedicationsCRUDRoundTripTests {
         let store = MedicationsStore(repo: repo)
 
         let captured = MethodPathRecorder()
-        MockURLProtocol.handler = { [resp = Self.medResp] req in
+        MockURLProtocol.install { [resp = Self.medResp] req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             let body = #"{"data":\#(resp)}"#
             return (
@@ -93,7 +93,7 @@ struct MedicationsCRUDRoundTripTests {
         let store = MedicationsStore(repo: repo)
 
         // Phase 1 — offline create (network unreachable error).
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let outcome = await store.create(.init(
@@ -109,7 +109,7 @@ struct MedicationsCRUDRoundTripTests {
 
         // Phase 2 — network recovers, replay drains the row.
         let captured = MethodPathRecorder()
-        MockURLProtocol.handler = { [resp = Self.medResp] req in
+        MockURLProtocol.install { [resp = Self.medResp] req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             captured.recordKey(req.value(forHTTPHeaderField: "Idempotency-Key"))
             let body = #"{"data":\#(resp)}"#
@@ -142,14 +142,14 @@ struct MedicationsCRUDRoundTripTests {
         let store = MedicationsStore(repo: repo)
         store._testForceSet(medications: [medT3Domain(id: "srv-med-1", name: "Old", dose: "1 mg")])
 
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let outcome = await store.update(id: "srv-med-1", patch: .init(name: "New"))
         #expect(outcome == .queued)
 
         let captured = MethodPathRecorder()
-        MockURLProtocol.handler = { [resp = Self.medResp] req in
+        MockURLProtocol.install { [resp = Self.medResp] req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             let body = #"{"data":\#(resp)}"#
             return (
@@ -204,7 +204,7 @@ struct MedicationsCRUDRoundTripTests {
         }
 
         let captured = MethodPathRecorder()
-        MockURLProtocol.handler = { [resp = Self.medResp] req in
+        MockURLProtocol.install { [resp = Self.medResp] req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             captured.recordBody(req.materializedBody())
             let body = #"{"data":\#(resp)}"#
@@ -263,7 +263,7 @@ struct MedicationsCRUDRoundTripTests {
         store._testForceSet(medications: [medT3Domain(id: "srv-med-1", name: "Ozempic", dose: "1 mg")])
 
         // Offline.
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let outcome = await store.archive(id: "srv-med-1")
@@ -274,7 +274,7 @@ struct MedicationsCRUDRoundTripTests {
         }
 
         let captured = MethodPathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             // DELETE returns 204 + empty body.
             return (

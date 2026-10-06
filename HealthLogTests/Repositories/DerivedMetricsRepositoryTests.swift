@@ -15,7 +15,7 @@ import Testing
 ///   is honestly NOT presented as a value
 /// - 422 (unknown id) / 404 (route absent) → nil (skip the metric)
 /// - HONEST-ONLY: the derived block renders only `ok`-with-value envelopes
-@Suite("DerivedMetrics — wire contract + honest-only gating", .serialized)
+@Suite("DerivedMetrics — wire contract + honest-only gating", .serialized, .mockURLSession)
 struct DerivedMetricsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -30,7 +30,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — decodes the ok arm (score + coverage + confidence + provenance)")
     func fetchOkComposite() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "metric":"READINESS","status":"ok",
@@ -59,7 +59,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — wellness score decodes trendDelta (real wellness-scores.ts wire shape)")
     func fetchWellnessScoreTrend() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Byte-aligned with src/lib/insights/derived/wellness-scores.ts
             // `WellnessScoreValue` (score/band/trendDelta/daysInWindow/asOf).
             let body = Data(#"""
@@ -112,7 +112,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — decodes the re-frame arm (fitness-age delta years)")
     func fetchOkReframe() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "metric":"FITNESS_AGE","status":"ok",
@@ -141,7 +141,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — insufficient arm decodes (no value, reason present)")
     func fetchInsufficient() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "metric":"SLEEP_SCORE","status":"insufficient",
@@ -165,7 +165,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — 422 (unknown id) → nil → metric skipped")
     func fetch422IsNil() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch(metric: "FUTURE_METRIC") == nil)
@@ -174,7 +174,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — 404 (route absent) → nil")
     func fetch404IsNil() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch(metric: "READINESS") == nil)
@@ -183,7 +183,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetchBatch — decodes the token-keyed map into one pass")
     func fetchBatchDecodesMap() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path.hasSuffix("/insights/derived/batch") == true)
             // `data.metrics` keyed by the per-request token; each value is the
             // same flat Derived<T> envelope the single route returns.
@@ -220,7 +220,7 @@ struct DerivedMetricsRepositoryTests {
         // single route drops just the unknown arm. The handler 422s `/batch`
         // and serves the single route, so the fallback must still hydrate the
         // known ids.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path.hasSuffix("/insights/derived/batch") == true {
                 return (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, Data())
             }
@@ -274,7 +274,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — READINESS decodes the components[] contributor breakdown")
     func fetchReadinessContributors() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Byte-aligned with readiness.ts ReadinessValue.components[].
             let body = Data(#"""
             {"data":{
@@ -311,7 +311,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — SLEEP_SCORE subScores[] decode into the unified contributors")
     func fetchSleepSubScores() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "metric":"SLEEP_SCORE","status":"ok",
@@ -339,7 +339,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — COINCIDENT_DEVIATION decodes fired/vitals/contributing (honest count)")
     func fetchCoincidentDeviation() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "metric":"COINCIDENT_DEVIATION","status":"ok",
@@ -467,7 +467,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — decodes the additive per-score assessment (text + source + updatedAt)")
     func fetchDecodesAssessment() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "metric":"SLEEP_SCORE","status":"ok",
@@ -493,7 +493,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — assessment is nil when the server emits null (no fabrication)")
     func fetchAssessmentNull() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "metric":"STRAIN_SCORE","status":"ok",
@@ -515,7 +515,7 @@ struct DerivedMetricsRepositoryTests {
     @Test("fetch — assessment field absent (older server) decodes to nil")
     func fetchAssessmentAbsent() async throws {
         let repo = DerivedMetricsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "metric":"READINESS","status":"ok",

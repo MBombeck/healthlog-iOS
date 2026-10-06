@@ -329,7 +329,7 @@ public actor AIProviderRepository {
 /// iOS **renders only** — never recomputes the score; the server's
 /// deterministic compute is authoritative.
 public actor AnalyticsRepository {
-    private let api: APIClientProtocol
+    let api: APIClientProtocol
     public init(api: APIClientProtocol) {
         self.api = api
     }
@@ -421,8 +421,13 @@ public actor SettingsRepository {
     ///
     /// Added v0.4.1 / M2-A6 to back `SettingsStore.updateProfile(patch:)`
     /// from `EditProfileScreen`.
-    public func patchProfile(_ patch: ProfilePatch) async throws -> UserProfile {
-        let req: APIRequest<UserProfile> = try .patch("/api/user/profile", body: patch)
+    ///
+    /// #97 / #115 · 0.4 — the 200 can be a PARTIAL save: the server skips a
+    /// field that fails validation, writes its siblings, and names the skipped
+    /// one in `rejectedFields`. The result carries both halves so the caller
+    /// can keep the form open instead of reading every 200 as a clean save.
+    public func patchProfile(_ patch: ProfilePatch) async throws -> ProfilePatchResult {
+        let req: APIRequest<ProfilePatchResult> = try .patch("/api/user/profile", body: patch)
         return try await api.send(req)
     }
 

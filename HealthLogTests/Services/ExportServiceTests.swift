@@ -12,7 +12,7 @@ import Testing
 /// drift surfaces). Covers: path/Accept/auth wiring per domain, the medication
 /// query passthrough, Content-Disposition filename parsing (+ fallback), the
 /// Content-Type guard, and graceful 429 rate-limit surfacing.
-@Suite("ExportService", .serialized)
+@Suite("ExportService", .serialized, .mockURLSession)
 struct ExportServiceTests {
     private func makeAPI(keychain: InMemoryKeychain = InMemoryKeychain()) -> APIClient {
         let env = AppEnvironment(
@@ -48,7 +48,7 @@ struct ExportServiceTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedAccept: String?
         nonisolated(unsafe) var capturedAuth: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedAccept = req.value(forHTTPHeaderField: "Accept")
             capturedAuth = req.value(forHTTPHeaderField: "Authorization")
@@ -68,7 +68,7 @@ struct ExportServiceTests {
     func domainPaths() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             return csvResponse(for: req)
         }
@@ -85,7 +85,7 @@ struct ExportServiceTests {
     func medicationQueryPassthrough() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var capturedQuery: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedQuery = req.url?.query
             return csvResponse(for: req)
         }
@@ -100,7 +100,7 @@ struct ExportServiceTests {
     @Test("Content-Disposition filename is parsed from the response")
     func filenameFromDisposition() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             csvResponse(for: req, filename: "healthlog-mood-u9-2026-06-02.csv")
         }
         let service = ExportService(api: api)
@@ -111,7 +111,7 @@ struct ExportServiceTests {
     @Test("missing Content-Disposition → deterministic local filename")
     func filenameFallback() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             csvResponse(for: req, filename: nil)
         }
         let service = ExportService(api: api)
@@ -123,7 +123,7 @@ struct ExportServiceTests {
     @Test("non-CSV Content-Type is rejected (schema-drift guard)")
     func contentTypeGuard() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(
                 url: req.url!,
                 statusCode: 200,
@@ -141,7 +141,7 @@ struct ExportServiceTests {
     @Test("429 surfaces as HLError.rateLimited (10/h limit), not a crash")
     func rateLimitSurfacing() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Reset already elapsed → retryAfter floors to 0, no long sleep;
             // after maxRetries the client throws .rateLimited.
             let http = HTTPURLResponse(
@@ -164,9 +164,13 @@ struct ExportServiceTests {
         }
     }
 
-    // MARK: - AUD-7 H3 — full backup (POST /api/export) is service-owned
+    // MARK: - AUD-7 H3 / R2 A4 — full backup (GET /api/export?type=all) is service-owned
 
-    @Test("full backup → POST /api/export with format body + Accept (AUD-7 H3)")
+    /// R2 / #115 A4 — this test used to pin `POST /api/export` with a format
+    /// body, and so pinned the defect: the route has only ever exported `GET`
+    /// (`src/app/api/export/route.ts`, query `format` + `type`), so the card
+    /// answered 405. It now pins the server's form.
+    @Test("full backup → GET /api/export?format=json&type=all with Accept, no body (R2 A4)")
     func fullBackupRequest() async throws {
         let kc = InMemoryKeychain()
         try kc.setString("hlk_test", forKey: KeychainKey.authToken)
@@ -175,10 +179,17 @@ struct ExportServiceTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedAccept: String?
-        MockURLProtocol.handler = { req in
+        nonisolated(unsafe) var capturedQuery: [URLQueryItem] = []
+        nonisolated(unsafe) var capturedHasBody = true
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedAccept = req.value(forHTTPHeaderField: "Accept")
+            capturedQuery = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            capturedHasBody = req.httpBody != nil || req.httpBodyStream != nil
+            guard req.httpMethod == "GET" else {
+                return (HTTPURLResponse(url: req.url!, statusCode: 405, httpVersion: nil, headerFields: nil)!, Data())
+            }
             let http = HTTPURLResponse(
                 url: req.url!, statusCode: 200, httpVersion: nil,
                 headerFields: ["Content-Type": "application/json"]
@@ -192,7 +203,10 @@ struct ExportServiceTests {
         // The exact path that 404'd before (W2a-A2 §8) must be `/api/export`,
         // never `/api/data/export`.
         #expect(capturedPath == "/api/export")
-        #expect(capturedMethod == "POST")
+        #expect(capturedMethod == "GET")
+        #expect(capturedHasBody == false)
+        #expect(capturedQuery.contains(URLQueryItem(name: "format", value: "json")))
+        #expect(capturedQuery.contains(URLQueryItem(name: "type", value: "all")))
         #expect(capturedAccept == "application/json")
         #expect(export.fileExtension == "json")
         #expect(!export.data.isEmpty)
@@ -202,7 +216,7 @@ struct ExportServiceTests {
     func fullBackupCSVFormat() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var capturedAccept: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedAccept = req.value(forHTTPHeaderField: "Accept")
             let http = HTTPURLResponse(
                 url: req.url!, statusCode: 200, httpVersion: nil,

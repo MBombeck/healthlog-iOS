@@ -26,7 +26,6 @@ struct PluralVariationGuardTests {
         "%lld entries in the period",
         "briefing.entries %lld",
         "Show all measurements, %lld entries",
-        "%lld measurements · last 30 days",
         "%lld measurements this minute",
         "%lld values",
         "%lld heart rate values",

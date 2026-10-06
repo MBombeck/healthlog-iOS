@@ -81,7 +81,7 @@ public actor MedicationsRepository {
         injectionSite: InjectionSite? = nil
     ) async throws -> MedicationIntake {
         guard let standalone else {
-            throw HLError.unknown("recordStandaloneIntake ohne Standalone-Gate")
+            throw HLError.unknown("recordStandaloneIntake without the standalone gate")
         }
         // v0.13 WP — mirror the paired `record(intake:)` gate: a site rides only
         // on a `taken` dose, persisted as the server-wire raw value so an offline
@@ -110,7 +110,7 @@ public actor MedicationsRepository {
     /// branch where the added `externalId` is in hand.
     public func deleteStandaloneIntake(externalId: String) async throws {
         guard let standalone else {
-            throw HLError.unknown("deleteStandaloneIntake ohne Standalone-Gate")
+            throw HLError.unknown("deleteStandaloneIntake without the standalone gate")
         }
         try await standalone.local.standaloneDeleteIntake(externalId: externalId)
     }

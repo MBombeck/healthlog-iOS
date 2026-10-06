@@ -13,7 +13,7 @@ import Testing
 /// `syncHealthKitSample` sentinel and is dropped. Both are health writes whose
 /// owner or meaning is unknown: they must be retained, never transmitted,
 /// never deleted, and never re-stamped with the live owner.
-@Suite("Outbox HealthKit sync quarantine", .serialized)
+@Suite("Outbox HealthKit sync quarantine", .serialized, .mockURLSession)
 struct OutboxHealthSyncQuarantineTests {
     private static let measurementSuccessBody = Data(
         #"""
@@ -94,7 +94,7 @@ struct OutboxHealthSyncQuarantineTests {
         ))
 
         let attempts = Counter()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             attempts.increment()
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
@@ -139,7 +139,7 @@ struct OutboxHealthSyncQuarantineTests {
             let outbox = OutboxQueue(testContainer: container, currentOwnerProvider: { "user-current" })
 
             let attempts = Counter()
-            MockURLProtocol.handler = { request in
+            MockURLProtocol.install { request in
                 attempts.increment()
                 return (
                     HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

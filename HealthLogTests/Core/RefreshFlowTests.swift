@@ -12,7 +12,7 @@ import Testing
 /// und wiederholt den originalrequest mit dem frischen Bearer. Bei
 /// Refresh-Failure fällt er auf `onUnauthorized` zurück und wirft
 /// `HLError.unauthorized` (siehe `05-auth-flows.md §3` + `17-error-handling.md §9`).
-@Suite("Refresh-token 401-bridge", .serialized)
+@Suite("Refresh-token 401-bridge", .serialized, .mockURLSession)
 struct RefreshFlowTests {
     private final class Counter: @unchecked Sendable {
         private let lock = NSLock()
@@ -85,7 +85,7 @@ struct RefreshFlowTests {
             }
         )
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             lock.lock()
             let bearer = req.value(forHTTPHeaderField: "Authorization") ?? ""
             bearers.add(bearer)
@@ -124,7 +124,7 @@ struct RefreshFlowTests {
             onUnauthorized: { @Sendable in unauthorizedFired.set() }
         )
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
@@ -167,7 +167,7 @@ struct RefreshFlowTests {
             onUnauthorized: { @Sendable in unauthorizedFired.set() }
         )
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Token expired"}"#.utf8)
@@ -206,7 +206,7 @@ struct RefreshFlowTests {
             onUnauthorized: { @Sendable in unauthorizedFired.set() }
         )
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
@@ -239,7 +239,7 @@ struct RefreshFlowTests {
                 return .refreshed
             }
         )
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Invalid credentials"}"#.utf8)

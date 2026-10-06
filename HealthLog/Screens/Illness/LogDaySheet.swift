@@ -6,6 +6,9 @@ import SwiftUI
 /// note.
 struct LogDaySheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// #115 P2 — the fever is typed and shown in the account's unit (°F on an
+    /// imperial account) and saved as canonical `feverC`.
+    @Environment(\.unitPreferences) private var units
 
     let store: IllnessStore
     let episodeId: String
@@ -32,6 +35,8 @@ struct LogDaySheet: View {
             Form {
                 Section("illness.daylog.section.date") {
                     DatePicker("illness.daylog.date", selection: $date, displayedComponents: [.date])
+                        // #115 1.5 — pick days in the zone `dayKey` cuts in.
+                        .environment(\.timeZone, ProfileDay.timeZone)
                         .onChange(of: date) { _, _ in
                             Task { await prefill() }
                         }
@@ -86,7 +91,7 @@ struct LogDaySheet: View {
                 HStack {
                     TextField("illness.daylog.feverC", text: $feverText)
                         .keyboardType(.decimalPad)
-                    Text(verbatim: "°C").foregroundStyle(HLText.secondary)
+                    Text(verbatim: units.unitLabel(for: .bodyTemperature)).foregroundStyle(HLText.secondary)
                 }
             }
         }
@@ -141,7 +146,8 @@ struct LogDaySheet: View {
         functionalImpact = log.functionalImpact
         if let fever = log.feverC {
             hasFever = true
-            feverText = fever.formatted(.number.precision(.fractionLength(0 ... 1)))
+            feverText = units.displayValue(fever, kind: .bodyTemperature)
+                .formatted(.number.precision(.fractionLength(0 ... 1)))
         } else {
             hasFever = false
             feverText = ""
@@ -152,6 +158,14 @@ struct LogDaySheet: View {
         }
         symptomSeverity = sev
         note = log.note ?? ""
+    }
+
+    /// A fever typed in the account's unit, as canonical °C (2 decimals on an
+    /// imperial account; verbatim on a metric one).
+    nonisolated static func canonicalFeverC(_ typed: Double, units: UnitPreferences) -> Double {
+        let transform = units.transform(for: .bodyTemperature)
+        guard transform.rescales else { return typed }
+        return (transform.canonical(fromDisplayed: typed) * 100).rounded() / 100
     }
 
     /// Blank the capture fields (used when the selected day has no stored log).
@@ -172,8 +186,10 @@ struct LogDaySheet: View {
         let symptoms = symptomSeverity
             .sorted { $0.key < $1.key }
             .map { IllnessSymptom(key: $0.key, severity: $0.value) }
+        // Typed in the account's unit; stored canonical °C at 2 decimals (the
+        // server's own entry dialect), so 101.3 °F persists as 38.5 °C.
         let fever: Double? = hasFever
-            ? LocaleDecimalParser.parse(feverText)
+            ? LocaleDecimalParser.parse(feverText).map { Self.canonicalFeverC($0, units: units) }
             : nil
         let body = IllnessDayLogUpsert(
             date: dayKey(),
@@ -192,11 +208,15 @@ struct LogDaySheet: View {
     }
 
     private func dayKey() -> String {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        Self.dayKey(for: date)
+    }
+
+    /// #115 1.5 — the day `date` names in the ACCOUNT zone, the zone the
+    /// server keys illness day logs in (`(episodeId, date)`). The date picker
+    /// above runs in the same zone, so the key is the day the person picked;
+    /// "today" is the account's today.
+    nonisolated static func dayKey(for date: Date, timeZone: TimeZone = ProfileDay.timeZone) -> String {
+        ProfileDay.key(for: date, timeZone: timeZone)
     }
 
     private func impactLabel(_ level: Int) -> String {

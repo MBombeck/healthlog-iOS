@@ -40,9 +40,11 @@ struct MedicationFreeIntakeSheet: View {
     @State private var saveErrorTick = 0
 
     /// Active meds are the only valid targets — an archived / paused med should
-    /// be reactivated before logging against it.
+    /// be reactivated before logging against it. v1.39.1 (#1033): a medication
+    /// kept as a record (intake tracking off) offers no intake either, and
+    /// v1.39.4 (#1040) neither does one the server calls not actionable today.
     private var candidates: [Medication] {
-        store.medications.filter(\.active)
+        store.medications.filter { $0.active && $0.offersIntakeActions }
     }
 
     /// The `takenAt` picker floor mirrors the server plausibility bound

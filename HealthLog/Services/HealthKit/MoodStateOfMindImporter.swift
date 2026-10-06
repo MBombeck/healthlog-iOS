@@ -58,8 +58,8 @@ import Foundation
         /// The partition token the importer was constructed for. An admitted
         /// owner whose token differs is a different account, and this importer
         /// refuses to sweep for it rather than writing into the wrong anchor.
-        private let partitionToken: String
-        private let defaults: UserDefaults
+        let partitionToken: String
+        let defaults: UserDefaults
         private let admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)?
         private let cursors: DurableHealthCursorStore?
         private var observerQuery: HKObserverQuery?
@@ -242,14 +242,19 @@ import Foundation
         }
 
         /// Imports every foreign sample of one page and reports what was proved.
+        ///
+        /// Internal (not `private`) so the durability suite can drive the
+        /// transmission half with constructed samples against the real
+        /// `APIClient`; the query half needs an authorized `HKHealthStore`.
         @available(iOS 18.0, *)
-        private func consume(
+        func consume(
             _ samples: [HKStateOfMind],
             requiring lease: HealthSyncAuthenticatedLease
         ) async -> HealthSyncPageOutcome {
             var entries: [HealthSyncEntryOutcome] = []
             var retryPersisted = false
             var retryFailed = false
+            var pageHeld = false
 
             for sample in samples {
                 // Anti-dupe (W-HK-RELIABILITY G-7): skip only OUR own echo —
@@ -258,7 +263,10 @@ import Foundation
                 // externalUUID now flows in instead of being silently dropped.
                 if HealthKitSampleOwnership.isOwnEcho(sample) { continue }
                 let identity = sample.uuid.uuidString
-                let outcome = await importForeign(sample, identity: identity, requiring: lease)
+                var outcome = await importForeign(sample, identity: identity, requiring: lease)
+                // E1 — an unreadable answer holds for a bounded run of sweeps, then
+                // the sample goes into the skip register and the page moves on.
+                outcome = await settleUnreadable(outcome, sample: sample, identity: identity, requiring: lease)
                 switch outcome {
                 case .queued:
                     retryPersisted = true
@@ -274,13 +282,26 @@ import Foundation
                         classification: Self.classification(of: outcome)
                     )
                 )
+                // #115 / 0.3 — the mood module is off. Every further sample
+                // would get the same 403, so the page stops here and holds.
+                // C4 — so does a cancelled request: nothing was stored or queued.
+                // E1 — and an unreadable answer still inside its run of sweeps.
+                if Self.isModuleRefusal(outcome) || Self.isInterrupted(outcome) || Self.isUnreadable(outcome) {
+                    pageHeld = true
+                    break
+                }
             }
 
             return HealthSyncPageOutcome(
                 postedCount: entries.count,
                 entries: entries,
                 transportThrew: false,
-                durableRetryPersisted: retryPersisted,
+                // A module refusal has no durable copy anywhere. A sample of the
+                // same page that did reach the outbox must not let the shared
+                // rule read "the nonterminal rows were persisted" and commit
+                // past the refused one; the queued sample rebuilds the same
+                // outbox operation (derived key) when the page is re-read.
+                durableRetryPersisted: retryPersisted && !pageHeld,
                 durableRetryFailed: retryFailed,
                 leaseIsCurrent: lease.isCurrent,
                 wasCancelled: Task.isCancelled
@@ -295,15 +316,46 @@ import Foundation
         /// a permanently stalled importer. It is the same rule the medication
         /// path applies to `unstable_external_id`, and the opposite of the rule
         /// for `enqueueLost`, which is precisely a failure a retry *would* fix.
+        ///
+        /// **#115 / 0.3 — one refusal is not about the sample.** A 403 with
+        /// `meta.errorCode == "module.disabled"` (typed by `APIClient` into
+        /// `HLError.moduleDisabled`) says the person's mood module is off right
+        /// now. Treating it as final lost every mood logged in Apple Health while
+        /// the module was off. It is nonterminal: the anchor holds while the
+        /// module is off and the next sweep after it is switched on imports.
+        ///
+        /// **C4 — nor is a cancelled request** (``isInterrupted(_:)``). Before, it
+        /// counted as a final refusal and the anchor moved past a mood that had
+        /// reached neither the server nor the outbox.
         static func classification(of outcome: MoodWriteOutcome) -> HealthSyncAcceptanceClass {
             switch outcome {
             case .accepted, .queued:
                 .terminalAccepted
+            case let .rejected(error) where error.isModuleDisabled || error == .canceled:
+                .nonterminal
+            case .rejected(.decoding):
+                // E1 — the write may have landed or not; see `settleUnreadable`.
+                .nonterminal
             case .rejected:
                 .terminalAccepted
             case .enqueueLost:
                 .nonterminal
             }
+        }
+
+        /// C4 — `true` for a request that was cancelled rather than answered
+        /// (`URLError.cancelled`, a failed certificate pin, or a cancelled task).
+        /// Not a refusal of the sample: nothing is stored and nothing queued, so
+        /// committing past it would lose the mood. The anchor holds.
+        static func isInterrupted(_ outcome: MoodWriteOutcome) -> Bool {
+            if case .rejected(.canceled) = outcome { return true }
+            return false
+        }
+
+        /// `true` for the module-off refusal (see ``classification(of:)``).
+        static func isModuleRefusal(_ outcome: MoodWriteOutcome) -> Bool {
+            if case let .rejected(error) = outcome { return error.isModuleDisabled }
+            return false
         }
 
         /// Import a single foreign sample under a restart-stable identity.

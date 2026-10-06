@@ -69,6 +69,9 @@ struct DashboardCustomizationScreen: View {
             // the picker shows current state on a deep-link entry.
             await layoutStore.load()
         }
+        // K1 — the banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing (H2).
+        .hlReserveErrorBannerSpace(layoutStore.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: layoutStore.error) {
                 Task { await layoutStore.refresh() }

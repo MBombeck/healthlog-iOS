@@ -26,6 +26,10 @@ struct CycleI18nKeysTests {
     static let cycleUIKeys: [String] = [
         // CycleScreen — title, calendar header, hero centre, log action.
         "cycle.home.title",
+        // v1.39.1 (#1032) — the two day markers the calendar gained.
+        "cycle.legend.intercourse",
+        "cycle.legend.otherEntries",
+        "cycle.calendar.a11y.intercourse",
         "cycle.home.logToday",
         "cycle.home.center.inDays",
         "cycle.home.center.dueToday",

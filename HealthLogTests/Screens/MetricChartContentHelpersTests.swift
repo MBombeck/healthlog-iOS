@@ -419,22 +419,13 @@ struct MetricChartContentNoRedOnPrimarySeriesTests {
     /// `HLChartTints.thresholdLow` / `.thresholdHigh`. The 70..140 target
     /// band + the 140..180 borderline band are no longer painted (absence
     /// of any rule conveys "in safe range").
-    @Test("Glucose chart paints hypo + hyper as dashed threshold rules")
-    func glucoseHasHypoAndHyperThresholdRules() throws {
+    @Test("Glucose chart paints no fixed mg/dL rules and no solid bands")
+    func glucoseHasNoFixedRulesOrBands() throws {
         let source = try String(contentsOf: Self.sourceURL(), encoding: .utf8)
 
-        // Hypoglycemia boundary at 70 mg/dL: dashed green ThresholdRule.
-        #expect(
-            source.contains("value: 70,") &&
-                source.contains("HLChartTints.thresholdLow"),
-            "Expected a hypoglycemia `ThresholdRule` at value 70 using `HLChartTints.thresholdLow`."
-        )
-        // Hyperglycemia boundary at 180 mg/dL: dashed red ThresholdRule.
-        #expect(
-            source.contains("value: 180,") &&
-                source.contains("HLChartTints.thresholdHigh"),
-            "Expected a hyperglycemia `ThresholdRule` at value 180 using `HLChartTints.thresholdHigh`."
-        )
+        // #115 1.3 — the 70/180 mg/dL rules were drawn on a series the server
+        // may already have converted to mmol/L; they are gone.
+        #expect(!source.contains("value: 70,") && !source.contains("value: 180,"))
         // No solid RectangleMark bands survive the T2-3 sweep.
         let rectangleCallSites = source.components(separatedBy: "RectangleMark(").count - 1
         #expect(
@@ -550,26 +541,20 @@ struct MetricChartContentSingleAccentTests {
         }
     }
 
-    /// Lock the exact clinical threshold values per metric. A regression
-    /// that quietly shifts the BP systolic threshold from 140 to 130
-    /// (or drops the SpO2 95 floor) will be caught here.
-    @Test("Each metric's threshold-rule values are clinically locked")
-    func thresholdRuleValuesAreLocked() throws {
+    /// #115 1.3 — the charts no longer draw hard-coded clinical constants
+    /// (BP 140/60, pulse 100/60, glucose 70/180 mg/dL on a series that may be
+    /// in mmol/L, fever 37.5, SpO2 95). Any rule comes from
+    /// `MetricChartContent.clinicalThresholds(for:)`, which has no server
+    /// source yet and is empty. This locks that the constants stay gone.
+    @Test("No metric draws a hard-coded clinical threshold rule")
+    func noHardCodedThresholdRules() throws {
         let source = try String(contentsOf: Self.sourceURL(), encoding: .utf8)
-
-        // BP: systolic high 140 + diastolic low 60.
-        #expect(source.contains("value: 140,"), "BP systolic-high `ThresholdRule` at 140 mmHg missing.")
-        // Pulse: tachycardia 100 + bradycardia 60.
-        #expect(source.contains("value: 100,"), "Pulse tachycardia `ThresholdRule` at 100 bpm missing.")
-        // (60 covers both BP diastolic-low + pulse bradycardia floors.)
-        #expect(source.contains("value: 60,"), "Lower-bound `ThresholdRule` at 60 (BP dia + pulse) missing.")
-        // Glucose: hypo 70 + hyper 180.
-        #expect(source.contains("value: 70,"), "Glucose hypoglycemia `ThresholdRule` at 70 mg/dL missing.")
-        #expect(source.contains("value: 180,"), "Glucose hyperglycemia `ThresholdRule` at 180 mg/dL missing.")
-        // Body-temp: fever 37.5.
-        #expect(source.contains("value: 37.5,"), "Body-temp fever `ThresholdRule` at 37.5°C missing.")
-        // SpO2: hypoxemia 95.
-        #expect(source.contains("value: 95,"), "SpO2 hypoxemia `ThresholdRule` at 95% missing.")
+        for value in ["value: 140,", "value: 100,", "value: 60,", "value: 70,", "value: 180,", "value: 37.5,", "value: 95,"] {
+            #expect(!source.contains(value), "hard-coded clinical rule `\(value)` is back in MetricChartContent.swift")
+        }
+        for kind in [MetricKind.bloodPressure, .pulse, .glucose, .bodyTemperature, .spo2] {
+            #expect(MetricChartContent.clinicalThresholds(for: kind).isEmpty)
+        }
     }
 
     /// Every `ThresholdRule` routes its stroke through `HLChartGrid`'s

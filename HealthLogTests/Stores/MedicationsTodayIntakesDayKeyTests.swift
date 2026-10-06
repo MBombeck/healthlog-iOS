@@ -14,7 +14,7 @@ import Testing
 /// button → masked a real pending dose). The key now carries a profile-tz
 /// `yyyy-MM-dd` day discriminator so a NEW calendar day is a STRUCTURAL cache
 /// miss; a prior-day `.taken` snapshot can never carry across midnight.
-@Suite("MedicationsStore — today-intakes day-anchored cache key", .serialized)
+@Suite("MedicationsStore — today-intakes day-anchored cache key", .serialized, .mockURLSession)
 struct MedicationsTodayIntakesDayKeyTests {
     private final class StubReach: ReachabilityProviding, @unchecked Sendable {
         let online: Bool
@@ -87,7 +87,7 @@ struct MedicationsTodayIntakesDayKeyTests {
         // Server (authoritative) says today's dose is PENDING — nothing taken.
         let api = makeAPIClient()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let method = req.httpMethod ?? "GET"
             let query = req.url?.query ?? ""

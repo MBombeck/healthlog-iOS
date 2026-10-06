@@ -18,7 +18,7 @@ import Testing
 /// repository half of the fix: ensure mints exactly when no active master
 /// receipt exists, the POST body matches the server zod schema, and the
 /// master revoke targets the right route.
-@Suite("ConsentReceiptRepository", .serialized)
+@Suite("ConsentReceiptRepository", .serialized, .mockURLSession)
 struct ConsentReceiptRepositoryTests {
     /// One recorded wire call (struct, not 3-tuple, per `large_tuple`).
     private struct RecordedCall {
@@ -110,7 +110,7 @@ struct ConsentReceiptRepositoryTests {
     func ensureMintsWhenAbsent() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = Self.wireHandler(latest: Self.emptyLatestPayload(), log: log)
+        MockURLProtocol.install(Self.wireHandler(latest: Self.emptyLatestPayload(), log: log))
 
         let ok = await repo.ensureFullConsentReceipt(artefact: "{\"source\":\"test\"}")
 
@@ -134,7 +134,7 @@ struct ConsentReceiptRepositoryTests {
     func ensureNoOpWhenActive() async {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = Self.wireHandler(latest: Self.activeLatestPayload(revoked: false), log: log)
+        MockURLProtocol.install(Self.wireHandler(latest: Self.activeLatestPayload(revoked: false), log: log))
 
         let ok = await repo.ensureFullConsentReceipt(artefact: "{}")
 
@@ -146,7 +146,7 @@ struct ConsentReceiptRepositoryTests {
     func ensureRemintsWhenRevoked() async {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = Self.wireHandler(latest: Self.activeLatestPayload(revoked: true), log: log)
+        MockURLProtocol.install(Self.wireHandler(latest: Self.activeLatestPayload(revoked: true), log: log))
 
         let ok = await repo.ensureFullConsentReceipt(artefact: "{}")
 
@@ -158,7 +158,7 @@ struct ConsentReceiptRepositoryTests {
     func revokeAllIssuesDelete() async {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = Self.wireHandler(latest: Self.emptyLatestPayload(), log: log)
+        MockURLProtocol.install(Self.wireHandler(latest: Self.emptyLatestPayload(), log: log))
 
         await repo.revokeAll()
 
@@ -171,7 +171,7 @@ struct ConsentReceiptRepositoryTests {
     @Test("ensure reports false on transport failure (best-effort, never throws)")
     func ensureBestEffortOnFailure() async {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
         }
 

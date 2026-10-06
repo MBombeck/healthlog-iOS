@@ -10,7 +10,7 @@ import Testing
 
 // MARK: - Route templating (pure — no network, no APIClient)
 
-@Suite("EndpointRouteTemplate")
+@Suite("EndpointRouteTemplate", .mockURLSession)
 struct EndpointRouteTemplateTests {
     @Test("Canonical UUID segments collapse to :id")
     func uuidSegment() {
@@ -86,7 +86,7 @@ struct EndpointRouteTemplateTests {
 
 // MARK: - Classification + line format (pure)
 
-@Suite("EndpointFailureDiagnostics — classification")
+@Suite("EndpointFailureDiagnostics — classification", .mockURLSession)
 struct EndpointFailureDiagnosticsClassificationTests {
     @Test("Every HLError maps onto its documented failure class")
     func classes() {
@@ -100,6 +100,18 @@ struct EndpointFailureDiagnosticsClassificationTests {
         #expect(EndpointFailureDiagnostics.classify(HLError.rateLimited(retryAfter: 3)) == .status)
         #expect(EndpointFailureDiagnostics.classify(HLError.moduleDisabled("illness")) == .status)
         #expect(EndpointFailureDiagnostics.classify(HLError.unknown("no url")) == .transport)
+    }
+
+    @Test("#110/#112: a detailed refusal is a server answer with its own status")
+    func detailedRefusal() {
+        let detail = APIRefusalDetail(
+            status: 502,
+            code: "credentials_rejected",
+            message: "The webhook answered HTTP 401.",
+            meta: APIEnvelopeMeta(errorCode: "credentials_rejected", upstreamStatus: 401)
+        )
+        #expect(EndpointFailureDiagnostics.classify(detail) == .status)
+        #expect(EndpointFailureDiagnostics.status(for: detail) == 502)
     }
 
     @Test("Cancellation never produces a line")
@@ -152,7 +164,7 @@ struct EndpointFailureDiagnosticsClassificationTests {
 /// same reason `MockURLProtocol.handler` needs it. The probe route
 /// (`/api/diagnostics-probe/...`) exists nowhere else in the app or the suite, so
 /// a line emitted by a concurrently running suite can never be mistaken for ours.
-@Suite("EndpointFailureDiagnostics — APIClient integration", .serialized)
+@Suite("EndpointFailureDiagnostics — APIClient integration", .serialized, .mockURLSession)
 struct EndpointFailureDiagnosticsIntegrationTests {
     private struct Probe: Decodable {
         let value: Int
@@ -209,7 +221,7 @@ struct EndpointFailureDiagnosticsIntegrationTests {
         EndpointFailureDiagnostics.sink = { recorder.append($0) }
         defer { EndpointFailureDiagnostics.sink = nil }
 
-        MockURLProtocol.handler = handler
+        MockURLProtocol.install(handler)
         let api = makeClient()
         // `maxRetries: 0` — the retry loop is not under test here, and it keeps
         // the "exactly one line" assertion honest without sleeping through backoff.

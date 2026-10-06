@@ -18,7 +18,7 @@ import Testing
 /// to the cache; only sibling keys (compliance heatmap, dashboard summary,
 /// health score) are invalidated. The next observe-pass sees `.cached`
 /// with the optimistic value rather than `.empty` — no flash.
-@Suite("MedicationsStore — F5 mark intake cache contract", .serialized)
+@Suite("MedicationsStore — F5 mark intake cache contract", .serialized, .mockURLSession)
 struct MedicationsStoreMarkIntakeTests {
     /// v0.14.1 INV-med-cadence-phantom (BUG 2) — the today-intakes cache key is
     /// now day-anchored in the store's `profileTimeZone` (defaults to `.current`
@@ -93,7 +93,7 @@ struct MedicationsStoreMarkIntakeTests {
         // request surfaces as a test failure.
         let api = makeAPIClient()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let method = req.httpMethod ?? "GET"
             let query = req.url?.query ?? ""
@@ -190,7 +190,7 @@ struct MedicationsStoreMarkIntakeTests {
 
         let api = makeAPIClient()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let method = req.httpMethod ?? "GET"
             let query = req.url?.query ?? ""

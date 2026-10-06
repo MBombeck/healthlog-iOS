@@ -3,52 +3,95 @@ import Foundation
 /// #49 / v1.30.11 — the closed set of `error=<reason>` values the native OIDC
 /// callback can return on `healthlog://oidc-callback?error=…`. Each maps to a
 /// localized, surfaced message — the app never renders a web error page.
+///
+/// R2 / #115 A2 — **the server's spelling is `oidc_<snake_case>`** and always
+/// was (`src/app/api/auth/oidc/login/route.ts`, `…/callback/route.ts`, listed
+/// in the OpenAPI description of `GET /api/auth/oidc/login` since v1.39.3).
+/// This type matched only the hyphenated shorthand (`no-email`), so every SSO
+/// error showed the generic sentence. `init(raw:)` now normalises both
+/// spellings to one token before matching:
+///
+/// - login step: `oidc_disabled`, `oidc_rate_limited`, `oidc_invalid_request`,
+///   `oidc_failed`
+/// - callback: `oidc_disabled`, `oidc_rate_limited`, `oidc_denied`,
+///   `oidc_no_email`, `oidc_email_unverified`, `oidc_identity_conflict`,
+///   `oidc_registration_disabled`, `oidc_link_required` (new in v1.39.3),
+///   `oidc_failed`
 public enum OidcErrorReason: Sendable, Equatable {
+    case disabled
+    case invalidRequest
+    case failed
     case denied
     case noEmail
     case emailUnverified
     case identityConflict
     case registrationDisabled
     case rateLimited
+    /// v1.39.3 — the provider's verified email matches a local account that has
+    /// no SSO identity yet. The server no longer links on the email alone: the
+    /// account signs in once on the web with its own password or passkey.
+    case linkRequired
     /// A reason outside the documented closed set (forward-compat) — surfaced
     /// with the generic SSO-failure copy. Carries the raw token for the log
     /// label only (the reason word is a closed vocabulary, not PII/secret).
     case unknown(String)
 
     public init(raw: String) {
-        switch raw {
+        switch Self.normalized(raw) {
+        case "disabled": self = .disabled
+        case "invalid-request": self = .invalidRequest
+        case "failed": self = .failed
         case "denied": self = .denied
         case "no-email": self = .noEmail
         case "email-unverified": self = .emailUnverified
         case "identity-conflict": self = .identityConflict
         case "registration-disabled": self = .registrationDisabled
         case "rate-limited": self = .rateLimited
+        case "link-required": self = .linkRequired
         default: self = .unknown(raw)
         }
+    }
+
+    /// `oidc_no_email` and the legacy `no-email` both become `no-email`.
+    private static func normalized(_ raw: String) -> String {
+        var token = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        if token.hasPrefix("oidc_") || token.hasPrefix("oidc-") {
+            token.removeFirst("oidc_".count)
+        }
+        return token.replacingOccurrences(of: "_", with: "-")
     }
 
     /// Localized, user-facing message (de+en) surfaced on the auth step.
     public var localizedMessage: String {
         switch self {
+        case .disabled: String(localized: "onboarding.sso.error.disabled")
+        case .invalidRequest: String(localized: "onboarding.sso.error.invalidRequest")
+        case .failed: String(localized: "onboarding.sso.error.failed")
         case .denied: String(localized: "onboarding.sso.error.denied")
         case .noEmail: String(localized: "onboarding.sso.error.noEmail")
         case .emailUnverified: String(localized: "onboarding.sso.error.emailUnverified")
         case .identityConflict: String(localized: "onboarding.sso.error.identityConflict")
         case .registrationDisabled: String(localized: "onboarding.sso.error.registrationDisabled")
         case .rateLimited: String(localized: "onboarding.sso.error.rateLimited")
+        case .linkRequired: String(localized: "onboarding.sso.error.linkRequired")
         case .unknown: String(localized: "onboarding.sso.error.generic")
         }
     }
 
-    /// Non-sensitive diagnostic label. An out-of-set reason logs as `unknown`.
+    /// Non-sensitive diagnostic label (the server's spelling). An out-of-set
+    /// reason logs as `unknown`.
     public var logLabel: String {
         switch self {
-        case .denied: "denied"
-        case .noEmail: "no-email"
-        case .emailUnverified: "email-unverified"
-        case .identityConflict: "identity-conflict"
-        case .registrationDisabled: "registration-disabled"
-        case .rateLimited: "rate-limited"
+        case .disabled: "oidc_disabled"
+        case .invalidRequest: "oidc_invalid_request"
+        case .failed: "oidc_failed"
+        case .denied: "oidc_denied"
+        case .noEmail: "oidc_no_email"
+        case .emailUnverified: "oidc_email_unverified"
+        case .identityConflict: "oidc_identity_conflict"
+        case .registrationDisabled: "oidc_registration_disabled"
+        case .rateLimited: "oidc_rate_limited"
+        case .linkRequired: "oidc_link_required"
         case .unknown: "unknown"
         }
     }

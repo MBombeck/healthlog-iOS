@@ -81,7 +81,7 @@ enum CorrelationsDismissFixtures {
 /// here means *"not relevant for me"* — a statement about relevance, never a
 /// verdict that the pair is wrong and never a delete. The tests assert the
 /// reversibility that framing implies, and that the copy stays non-causal.
-@Suite("Korrelations-Verwerfen — Aussage statt Löschen, optimistisch mit Rollback (CU-33)", .serialized)
+@Suite("Korrelations-Verwerfen — Aussage statt Löschen, optimistisch mit Rollback (CU-33)", .serialized, .mockURLSession)
 struct CorrelationsDismissTests {
     private func makeAPI() -> APIClient {
         CorrelationsDismissFixtures.makeAPI()
@@ -97,7 +97,7 @@ struct CorrelationsDismissTests {
     @Test("Fixture mit den neuen Feldern dekodiert (Labels, patternId, canonicalKey, dismissed)")
     func decodesNewCorrelationFields() async throws {
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             CorrelationsDismissFixtures.ok(req, CorrelationsDismissFixtures.correlationsBody(moodDismissed: true))
         }
         let dto = try #require(try await repo.fetch())
@@ -120,7 +120,7 @@ struct CorrelationsDismissTests {
     @Test("Ältere Antwort ohne die neuen Felder dekodiert weiterhin (alle fünf optional)")
     func decodesLegacyPayloadWithoutNewFields() async throws {
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             CorrelationsDismissFixtures.ok(req, Data(#"""
             {"data":{"discovered":[
               {"behaviour":"STEPS","outcome":"MOOD","n":30,"r":0.3,"pValue":0.02,
@@ -149,7 +149,7 @@ struct CorrelationsDismissTests {
     @Test("Store blendet verworfene Paare aus, hält sie aber erreichbar")
     func storeSuppressesButKeepsDismissedReachable() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             CorrelationsDismissFixtures.ok(req, CorrelationsDismissFixtures.correlationsBody(moodDismissed: true))
         }
         let store = makeStore(api)
@@ -168,7 +168,7 @@ struct CorrelationsDismissTests {
     @Test("Alle Paare verworfen → Block bleibt erreichbar (sonst wäre es unumkehrbar)")
     func allDismissedStillHasContent() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             CorrelationsDismissFixtures.ok(
                 req,
                 CorrelationsDismissFixtures.correlationsBody(moodDismissed: true, daylightDismissed: true)
@@ -257,7 +257,7 @@ struct CorrelationsDismissTests {
 /// **CU-33 (write path)** — the relevance statement going to the server:
 /// optimistic application, rollback on failure, reversal, and the calm handling
 /// of a pattern the SERVER brings back on its own after a recomputation.
-@Suite("Korrelations-Verwerfen — Schreibpfad, Rollback und Wiederkehr (CU-33)", .serialized)
+@Suite("Korrelations-Verwerfen — Schreibpfad, Rollback und Wiederkehr (CU-33)", .serialized, .mockURLSession)
 struct CorrelationsDismissWriteTests {
     private func makeAPI() -> APIClient {
         CorrelationsDismissFixtures.makeAPI()
@@ -276,7 +276,7 @@ struct CorrelationsDismissWriteTests {
         let api = makeAPI()
         nonisolated(unsafe) var patchPath: String?
         nonisolated(unsafe) var patchBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.httpMethod == "PATCH" else {
                 return CorrelationsDismissFixtures.ok(
                     req,
@@ -312,7 +312,7 @@ struct CorrelationsDismissWriteTests {
     @Test("Fehlschlag — das optimistische Update rollt zurück statt eine Lüge stehenzulassen")
     func failedDismissRollsBack() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.httpMethod == "PATCH" else {
                 return CorrelationsDismissFixtures.ok(
                     req,
@@ -341,7 +341,7 @@ struct CorrelationsDismissWriteTests {
     @Test("Zurückgezogenes Muster (404) — Rollback plus eigene, ehrliche Meldung")
     func withdrawnPatternRollsBackWithOwnMessage() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.httpMethod == "PATCH" else {
                 return CorrelationsDismissFixtures.ok(
                     req,
@@ -366,7 +366,7 @@ struct CorrelationsDismissWriteTests {
     func restoreIsReversible() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var patchBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.httpMethod == "PATCH" else {
                 return CorrelationsDismissFixtures.ok(
                     req,
@@ -396,7 +396,7 @@ struct CorrelationsDismissWriteTests {
     @Test("Server-Wahrheit gewinnt über das Gesendete (Antwort dismissed:false trotz true-Request)")
     func serverSettledStateWins() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.httpMethod == "PATCH" else {
                 return CorrelationsDismissFixtures.ok(
                     req,
@@ -424,7 +424,7 @@ struct CorrelationsDismissWriteTests {
     func resolvesPatternIdFromLedgerWhenAbsent() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var patchPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             if req.httpMethod == "PATCH" {
                 patchPath = path
@@ -474,7 +474,7 @@ struct CorrelationsDismissWriteTests {
         // The GET always answers `dismissed: false` — it is the recomputation
         // itself, and it has decided the evidence moved materially enough to
         // lift the dismissal it stored a moment ago.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.httpMethod == "PATCH" {
                 return CorrelationsDismissFixtures.ok(req, Data(#"""
                 {"data":{"id":"clx2pattern0000bbbb","canonicalKey":"p1:bbbb2222","dismissed":true,
@@ -509,7 +509,7 @@ struct CorrelationsDismissWriteTests {
     @Test("Nie verworfenes Paar wird nie als 'zurückgekehrt' markiert")
     func neverDismissedIsNeverResurfaced() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             CorrelationsDismissFixtures.ok(req, CorrelationsDismissFixtures.correlationsBody(moodDismissed: false))
         }
         let store = makeStore(api)
@@ -522,7 +522,7 @@ struct CorrelationsDismissWriteTests {
     @Test("Logout räumt Antwort, Sitzungsgedächtnis und Fehlermeldung ab")
     func logoutClearsEverything() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.httpMethod == "PATCH" {
                 return CorrelationsDismissFixtures.ok(req, Data(#"""
                 {"data":{"id":"clx2pattern0000bbbb","canonicalKey":"p1:bbbb2222","dismissed":true,

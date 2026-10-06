@@ -135,6 +135,9 @@ public final class MedicationDetailStore {
     /// `nil` = fetch unavailable (standalone / not yet loaded / error);
     /// `[]` = server answered with no items (section stays hidden).
     public private(set) var inventoryItems: [MedicationInventoryItemDTO]?
+    /// #25 / #115 · 1.3 — the server's supply summary from the same GET.
+    /// `nil` when the server sent none (older than v1.19) or the read failed.
+    public private(set) var inventorySummary: MedicationSupplySummary?
 
     /// Whether the generic inventory section should render: at least one
     /// item stored server-side, regardless of `treatmentClass`.
@@ -328,7 +331,9 @@ public final class MedicationDetailStore {
             self.compliance = try? await compliance
             self.doseHistory = try? await doseHistory
             self.efficacy = await efficacy
-            inventoryItems = await inventory
+            let inventoryList = await inventory
+            inventoryItems = inventoryList?.items
+            inventorySummary = inventoryList?.summary
         } catch let err as HLError {
             error = err
         } catch {
@@ -340,9 +345,9 @@ public final class MedicationDetailStore {
     /// server seam is wired (standalone) or the round-trip failed; the
     /// caller keeps the previous value only across transient errors inside
     /// `load()` by overwriting with the fresh result.
-    private func fetchInventory() async -> [MedicationInventoryItemDTO]? {
+    private func fetchInventory() async -> MedicationInventoryListDTO? {
         guard let therapyRepo else { return nil }
-        return try? await therapyRepo.inventory(medicationID: medication.id)
+        return try? await therapyRepo.inventoryList(medicationID: medication.id)
     }
 
     /// **C2 (v1.16.10–.12) — refetch the supply list alone (one GET).** Called
@@ -352,8 +357,9 @@ public final class MedicationDetailStore {
     /// A throw keeps the previous list in place (stale-but-stable).
     public func reloadInventory() async {
         guard let therapyRepo else { return }
-        if let refreshed = try? await therapyRepo.inventory(medicationID: medication.id) {
-            inventoryItems = refreshed
+        if let refreshed = try? await therapyRepo.inventoryList(medicationID: medication.id) {
+            inventoryItems = refreshed.items
+            inventorySummary = refreshed.summary
         }
     }
 
@@ -506,6 +512,7 @@ public final class MedicationDetailStore {
             compliance: MedicationCompliancePayload? = nil,
             doseHistory: MedicationDoseHistoryEnvelope? = nil,
             inventoryItems: [MedicationInventoryItemDTO]? = nil,
+            inventorySummary: MedicationSupplySummary? = nil,
             settled: Bool = true
         ) {
             self.intakes = intakes
@@ -513,6 +520,7 @@ public final class MedicationDetailStore {
             self.compliance = compliance
             self.doseHistory = doseHistory
             self.inventoryItems = inventoryItems
+            self.inventorySummary = inventorySummary
             // W-COMPLIANCE-INV — injected state represents a finished load by
             // default; pass `settled: false` to pin the pre-paint gate.
             hasSettledComplianceLoad = settled

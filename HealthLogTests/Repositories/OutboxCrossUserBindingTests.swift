@@ -18,7 +18,7 @@ import Testing
 /// each row with its owning `KeychainKey.userID` at enqueue and replays ONLY
 /// rows whose owner matches the current signed-in user; a foreign row is
 /// dead-lettered, never replayed.
-@Suite("Outbox cross-user binding", .serialized)
+@Suite("Outbox cross-user binding", .serialized, .mockURLSession)
 struct OutboxCrossUserBindingTests {
     private static let measurementSuccessBody = Data(
         #"""
@@ -106,7 +106,7 @@ struct OutboxCrossUserBindingTests {
 
         // Now user B is signed in and the replay loop fires.
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
@@ -144,7 +144,7 @@ struct OutboxCrossUserBindingTests {
         ))
 
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             let body = #"{"data":{"processed":1,"inserted":1,"duplicates":0,"entries":[{"index":0,"status":"inserted"}]},"error":null}"#
             return (
@@ -180,7 +180,7 @@ struct OutboxCrossUserBindingTests {
             idempotencyKey: "key-A-same"
         ))
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -229,7 +229,7 @@ struct OutboxCrossUserBindingTests {
         #expect(await outbox.snapshot.first?.ownerUserID == nil)
 
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -264,7 +264,7 @@ struct OutboxCrossUserBindingTests {
         let outbox = OutboxQueue(testContainer: container, currentOwnerProvider: { nil })
 
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

@@ -10,7 +10,7 @@ import Testing
 /// the `GET /api/labs` filter-query build, the restore round-trip, and the
 /// `403 module.disabled` discriminator. Real `APIClient` + stub `URLProtocol`
 /// (no mock server) per PROJECT_GUIDE.md.
-@Suite("Labs data layer (v1.18.1 W-LABS)", .serialized)
+@Suite("Labs data layer (v1.18.1 W-LABS)", .serialized, .mockURLSession)
 struct LabsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -97,7 +97,7 @@ struct LabsRepositoryTests {
 
     @Test("GET /api/labs unwraps data.results + meta.total")
     func listLabsEnvelope() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/labs")
             let body = Data(#"""
             {"data":{"results":[
@@ -119,7 +119,7 @@ struct LabsRepositoryTests {
 
     @Test("GET /api/biomarkers unwraps data.biomarkers")
     func listBiomarkersEnvelope() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/biomarkers")
             let body = Data(#"""
             {"data":{"biomarkers":[
@@ -140,7 +140,7 @@ struct LabsRepositoryTests {
 
     @Test("labs(biomarkerId:panel:) builds the right query")
     func filterQueryBuild() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let query = req.url?.query ?? ""
             #expect(query.contains("biomarkerId=bm1"))
             #expect(query.contains("panel=Metabolic"))
@@ -156,7 +156,7 @@ struct LabsRepositoryTests {
 
     @Test("restoreLabs posts ids + returns restored count")
     func restoreRoundTrip() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/labs/restore")
             #expect(req.httpMethod == "POST")
             let body = Data(#"{"data":{"restored":2},"error":null}"#.utf8)
@@ -171,7 +171,7 @@ struct LabsRepositoryTests {
 
     @Test("403 module.disabled(labs) is recognised by isLabsDisabled")
     func moduleDisabled() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Module disabled","meta":{"errorCode":"module.disabled","module":"labs"}}
             """#.utf8)
@@ -188,7 +188,7 @@ struct LabsRepositoryTests {
 
     @Test("409 on biomarker create is recognised as duplicate name")
     func duplicateName() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"A biomarker with this name already exists."}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -213,7 +213,7 @@ struct LabsRepositoryTests {
     @Test("createBiomarker POSTs /api/biomarkers with the body + an Idempotency-Key")
     func createBiomarkerWireShape() async throws {
         let probe = RequestProbe()
-        MockURLProtocol.handler = { [env = Self.biomarkerEnvelope] req in
+        MockURLProtocol.install { [env = Self.biomarkerEnvelope] req in
             probe.capture(req)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(env.utf8))
         }
@@ -236,7 +236,7 @@ struct LabsRepositoryTests {
     @Test("updateBiomarker PUTs /api/biomarkers/{id} with the patch body")
     func updateBiomarkerWireShape() async throws {
         let probe = RequestProbe()
-        MockURLProtocol.handler = { [env = Self.biomarkerEnvelope] req in
+        MockURLProtocol.install { [env = Self.biomarkerEnvelope] req in
             probe.capture(req)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(env.utf8))
         }
@@ -257,7 +257,7 @@ struct LabsRepositoryTests {
     @Test("deleteBiomarker DELETEs /api/biomarkers/{id} (no Idempotency-Key header by contract)")
     func deleteBiomarkerWireShape() async throws {
         let probe = RequestProbe()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             probe.capture(req)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

@@ -47,6 +47,8 @@ public extension WidgetSnapshot {
         now: Date = .now,
         calendar: Calendar = .current
     ) -> WidgetSnapshot {
+        // v1.39.1 (#1033) — a medication kept as a record has no dose here.
+        let derivedIntakes = MedicationIntake.excludingUntrackedMedications(derivedIntakes, medications: medications)
         let scheduled = derivedIntakes.count
         let taken = derivedIntakes.filter { $0.status == .taken }.count
 
@@ -104,15 +106,10 @@ public extension WidgetSnapshot.LatestMeasurement {
     }
 
     /// The unit-aware suffix for a kind (mirrors `DashboardMetric.unitSuffix`):
-    /// the user-chosen suffix for the three re-unitable families, else the
+    /// the account's display unit for a converted family (#115 P2), else the
     /// descriptor's canonical unit label.
     private static func unitSuffix(for kind: MetricKind, units: UnitPreferences) -> String {
-        switch kind.unitFamily {
-        case .weight: units.weight.unitSuffix
-        case .bloodPressure: units.bloodPressure.unitSuffix
-        case .glucose: units.glucose.unitSuffix
-        case .none: String(localized: kind.descriptor.unitLabel)
-        }
+        units.transform(for: kind).suffix ?? String(localized: kind.descriptor.unitLabel)
     }
 
     /// Unit-aware primary value string, mirroring `DashboardMetric.formatted
@@ -122,16 +119,6 @@ public extension WidgetSnapshot.LatestMeasurement {
     private static func formattedValue(for measurement: Measurement, units: UnitPreferences) -> String {
         let kind = measurement.kind
         switch kind.unitFamily {
-        case .weight:
-            let v = units.convertWeight(measurement.primaryValue)
-            guard v.isFinite else { return "—" }
-            return v.formatted(.number.precision(.fractionLength(1)))
-        case .glucose:
-            let v = units.convertGlucose(measurement.primaryValue)
-            // W-CRASHGUARD — `safeServerIntString` em-dashes a non-finite / OOR value.
-            guard units.glucose != .mgdL else { return v.safeServerIntString() }
-            guard v.isFinite else { return "—" }
-            return v.formatted(.number.precision(.fractionLength(1)))
         case .bloodPressure:
             guard case let .bloodPressure(sys, dia) = measurement.value, sys.isFinite, dia.isFinite else {
                 let v = units.convertBloodPressure(measurement.primaryValue)
@@ -147,6 +134,11 @@ public extension WidgetSnapshot.LatestMeasurement {
             return "\(sValue.formatted(.number.precision(.fractionLength(1))))/\(dValue.formatted(.number.precision(.fractionLength(1))))"
         case .none:
             return formattedByStyle(measurement.primaryValue, style: kind.descriptor.formatStyle)
+        case .some:
+            // #115 P2 — the one account-unit formatter the tile uses.
+            return MetricValueFormatter.account(measurement.primaryValue, kind: kind, units: units) { converted in
+                formattedByStyle(converted, style: kind.descriptor.formatStyle)
+            }
         }
     }
 
@@ -187,7 +179,7 @@ public extension WidgetSnapshot.HealthScoreGlance {
         guard let score else { return nil }
         return WidgetSnapshot.HealthScoreGlance(
             score: score.score,
-            band: score.displayBand.rawValue,
+            band: score.displayBand?.rawValue,
             resolvedAt: now,
             // v1.35.0 (GH #83) — mirrored, never derived. A missing flag on the
             // wire means the server did not say, and an untold flag must not

@@ -12,7 +12,7 @@ import Testing
 /// `Date` cursor.
 ///
 /// `.serialized` — the suite installs a process-global `MockURLProtocol.handler`.
-@Suite("AppleHealthMedicationImporter — dose import", .serialized)
+@Suite("AppleHealthMedicationImporter — dose import", .serialized, .mockURLSession)
 struct AppleHealthMedicationDoseImportTests {
     // MARK: - Dose bulk source/externalId + duplicate replay
 
@@ -21,7 +21,7 @@ struct AppleHealthMedicationDoseImportTests {
         let (api, kc) = MedFixtures.makeAPI()
         let recorder = MedicationRequestRecorder()
         // First bulk → inserted; every later bulk → duplicate (replay).
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
@@ -89,7 +89,7 @@ struct AppleHealthMedicationDoseImportTests {
     func notMirrored422StopsRun() async throws {
         let (api, kc) = MedFixtures.makeAPI()
         let recorder = MedicationRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
@@ -131,7 +131,7 @@ struct AppleHealthMedicationDoseImportTests {
     @Test("The repository surfaces the 422 errorCode as HLError.server")
     func repositorySurfaces422Code() async throws {
         let (api, kc) = MedFixtures.makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let json = #"""
             {"data":null,"error":"not mirrored",
             "meta":{"errorCode":"medications.intake.bulk.apple_health_not_mirrored"}}

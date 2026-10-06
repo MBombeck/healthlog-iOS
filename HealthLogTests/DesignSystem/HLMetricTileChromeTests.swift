@@ -5,14 +5,15 @@ import Testing
 
 /// W6b (#57-followup / STANDARDS §7) — locks the unified metric-tile chrome.
 ///
-/// The Dashboard tile (`HLDashboardTile`) and the Insights tile
-/// (`HLMetricTile`) now render every shared fragment (header glyph, title,
-/// trend glyph, mono sparkline) through the SINGLE `HLMetricTileChrome`
-/// primitive family. These tests pin (a) that both variants render to a
-/// non-zero image through the shared primitives, and (b) the load-bearing
-/// adverse-trend → colour-signal mapping that the two variants express
-/// differently (Insights: `Trend.adverse`; Dashboard: `TrendChip` polarity)
-/// resolves to the same single glyph treatment.
+/// The Dashboard tile (`HLDashboardTile`) and the Sleep composite render every
+/// shared fragment (header glyph, title, trend glyph, mono sparkline) through
+/// the SINGLE `HLMetricTileChrome` primitive family. These tests pin (a) that
+/// the variants render to a non-zero image through the shared primitives, and
+/// (b) the load-bearing adverse-trend → colour-signal mapping the glyph reads.
+///
+/// The Insights variant (`HLMetricTile`) is gone (#115 B7): it was only built
+/// by the never-mounted target grid and long-tail block, and it drew a
+/// favourable change as an up arrow whatever the real direction was.
 @MainActor
 @Suite("HLMetricTileChrome — unified tile fragments")
 struct HLMetricTileChromeTests {
@@ -46,7 +47,7 @@ struct HLMetricTileChromeTests {
         #expect(renders(HLTileTrendGlyph(symbolName: nil, isAdverse: false), height: 20))
     }
 
-    // MARK: - Variant rendering (Dashboard vs Insights)
+    // MARK: - Variant rendering (Dashboard tile + Sleep composite)
 
     @Test("Dashboard-variant tile renders through the shared chrome")
     func dashboardVariantRenders() {
@@ -58,28 +59,7 @@ struct HLMetricTileChromeTests {
         #expect(renders(HLDashboardTile(metric: metric)))
     }
 
-    @Test("Insights-variant tile renders through the shared chrome with band + badge + AI")
-    func insightsVariantRenders() {
-        let tile = HLMetricTile(
-            icon: "scalemass", title: "Weight", value: "72.4", unit: "kg",
-            trend: .favorable, sparkline: [73.4, 73.0, 72.4],
-            context: "23 of 30 days in range",
-            range: RangeBand(lowerLabel: "71", upperLabel: "74", unit: "kg", pctInRange: 77),
-            badge: .inBand, onAIExplainer: {}
-        )
-        #expect(renders(tile, height: 220))
-    }
-
     // MARK: - Adverse-trend colour-signal parity across the two variants
-
-    @Test("Insights Trend.adverse is the only coloured direction")
-    func insightsAdverseIsTheColourSignal() {
-        // The Insights tile passes `trend == .adverse` as the adverse flag.
-        #expect(HLMetricTile.Trend.adverse == .adverse)
-        #expect((HLMetricTile.Trend.favorable == .adverse) == false)
-        #expect((HLMetricTile.Trend.stable == .adverse) == false)
-        #expect((HLMetricTile.Trend.none == .adverse) == false)
-    }
 
     @Test("Dashboard TrendChip maps polarity to the same adverse flag the glyph consumes")
     func dashboardAdverseMapping() {

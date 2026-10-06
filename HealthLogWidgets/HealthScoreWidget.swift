@@ -63,33 +63,26 @@ struct HealthScoreProvider: TimelineProvider {
 enum HealthScoreSignal {
     /// The monochrome ring carries no per-score hue; the single status colour is
     /// reserved for the centre band word + the accessibility announcement. This
-    /// maps the server band (or the numeric thresholds) to the sanctioned
-    /// signal colour, matching `HLScoreRing.ScorePresentation`.
-    static func color(band: String?, score: Int) -> Color {
-        switch resolvedBand(band: band, score: score) {
+    /// maps the server band to the sanctioned signal colour, matching
+    /// `HLScoreRing.ScorePresentation`; no server band → neutral (#115 B7).
+    static func color(band: String?) -> Color {
+        switch band {
         case "green": LAColor.success
         case "yellow": LAColor.warn
-        default: LAColor.danger
+        case "red": LAColor.danger
+        default: LAColor.textSecondary
         }
     }
 
-    /// Localized band word (Strong / Fair / Low) for the centre label + a11y.
-    static func word(band: String?, score: Int) -> String {
-        switch resolvedBand(band: band, score: score) {
+    /// Localized band word (Strong / Fair / Low) for the centre label + a11y,
+    /// or `nil` (no word) when the server sent no band. #115 B7 removed the
+    /// 67/34 numeric fallback — a verdict the server never made.
+    static func word(band: String?) -> String? {
+        switch band {
         case "green": String(localized: "widget.health_score.band.strong")
         case "yellow": String(localized: "widget.health_score.band.fair")
-        default: String(localized: "widget.health_score.band.low")
-        }
-    }
-
-    /// Prefer the server band; fall back to the 67/34 numeric thresholds (the
-    /// same cutoffs `HealthScore.colorBand(forScore:)` uses) when absent.
-    private static func resolvedBand(band: String?, score: Int) -> String {
-        if let band, !band.isEmpty { return band }
-        switch score {
-        case 67...: return "green"
-        case 34...: return "yellow"
-        default: return "red"
+        case "red": String(localized: "widget.health_score.band.low")
+        default: nil
         }
     }
 }
@@ -126,7 +119,7 @@ private struct HealthScoreWidgetView: View {
                 WidgetRing(
                     progress: glance.fraction,
                     value: "\(glance.score)",
-                    caption: HealthScoreSignal.word(band: glance.band, score: glance.score)
+                    caption: HealthScoreSignal.word(band: glance.band)
                 )
                 // v1.35.0 (GH #83) — the Home widget is the number and nothing
                 // else, so it carries the provenance mark: a chosen composition

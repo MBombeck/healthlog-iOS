@@ -19,7 +19,7 @@ import Testing
     ///   - `forceRefreshRegistration()` bypasses the dedup.
     ///   - Decoding the persisted blob discards `fullTokenHex` so a
     ///     restarted app has no way to leak the credential.
-    @Suite("NotificationService — lastRegistrationSnapshot audit", .serialized)
+    @Suite("NotificationService — lastRegistrationSnapshot audit", .serialized, .mockURLSession)
     @MainActor
     struct NotificationServiceLastRegistrationTests {
         private static let env = AppEnvironment(
@@ -145,7 +145,7 @@ import Testing
         func successCaptures200() async {
             let defaults = makeDefaults()
             let api = makeAPI()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (Self.okResponse(req, status: 200), Data())
             }
             let svc = makeService(api: api, defaults: defaults)
@@ -172,7 +172,7 @@ import Testing
         func server409CapturesStatusAndSanitizedError() async {
             let defaults = makeDefaults()
             let api = makeAPI()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = #"{"error":{"message":"token already bound to user xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}}"#
                 return (Self.okResponse(req, status: 409), Data(body.utf8))
             }
@@ -207,7 +207,7 @@ import Testing
             let defaults = makeDefaults()
             let api = makeAPI()
             nonisolated(unsafe) var requestCount = 0
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // CU-07: the handler is process-global — count only the
                 // device-registration POST this test drives.
                 if req.targets("/api/devices") { requestCount += 1 }

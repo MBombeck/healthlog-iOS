@@ -8,7 +8,7 @@ import Foundation
 ///
 /// `nil` payload is the contract per-metric Insights cards inspect for
 /// fallback routing — any of {device-ineligible, safety-refused,
-/// feature-flag-off, framework-not-importable, insufficient-data} maps to
+/// capability-not-allowed, framework-not-importable, insufficient-data} maps to
 /// `nil` so the server-comprehensive path takes over (R4 use-case B).
 public struct TrendObservationOutcome: Sendable {
     public let observation: TrendObservation?
@@ -18,7 +18,7 @@ public struct TrendObservationOutcome: Sendable {
         case deviceIneligible
         case appleIntelligenceDisabled
         case modelNotReady
-        case featureFlagDisabled
+        case capabilityNotAllowed
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
@@ -37,14 +37,18 @@ public struct TrendObservationOutcome: Sendable {
 /// On-device trend-observations service. Wraps Apple FoundationModels'
 /// `LanguageModelSession` behind a single `observe(...)` entry per metric.
 /// Mirrors `OnDeviceBriefingService` (I-1 template) verbatim — same
-/// availability gate, same feature-flag short-circuit, same MDRSafetyFilter
+/// availability gate, same capability short-circuit, same MDRSafetyFilter
 /// post-process, same locale switch.
 ///
 /// **Availability:** the public type compiles on iOS 18+. The runtime path
 /// that actually invokes FoundationModels is gated by
 /// `#available(iOS 26.0, *)` per R4 §4.2 step 5.
 public actor TrendObservationsService {
-    public let featureFlags: any FeatureFlagsServicing
+    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// This service runs only while `.statusText` allows on-device work
+    /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
+    /// never consults anything a previous build persisted.
+    public let aiCapabilities: any AICapabilityReading
     public let safetyFilter: MDRSafetyFilter
 
     /// Minimum samples in the window for a meaningful trend call. Below
@@ -53,10 +57,10 @@ public actor TrendObservationsService {
     public static let minimumSamplesForTrend = 5
 
     public init(
-        featureFlags: any FeatureFlagsServicing = UserDefaultsFeatureFlagsService(),
+        aiCapabilities: any AICapabilityReading = LegacyAICapabilities(),
         safetyFilter: MDRSafetyFilter = MDRSafetyFilter()
     ) {
-        self.featureFlags = featureFlags
+        self.aiCapabilities = aiCapabilities
         self.safetyFilter = safetyFilter
     }
 
@@ -72,20 +76,12 @@ public actor TrendObservationsService {
         series: [Measurement],
         locale: Locale
     ) async -> TrendObservationOutcome {
-        // Feature-flag gate.
-        //
-        // **F-1 (server brief v1.4.31 §c.1 + R5):** the server locked
-        // the wire flag for per-metric trend observations as
-        // `assistant.trend`. We consult both the briefing-gate
-        // (operator may disable the whole AI surface family) AND the
-        // trend-specific gate so an operator can leave Briefing ON
-        // while silencing per-metric observations — finer-grained
-        // kill-switch, same gate-both philosophy as InsightsScreen.
-        guard featureFlags.isEnabled(.assistantBriefing),
-              featureFlags.isEnabled(.assistantTrend) else
-        {
-            HLLog.api.info("TrendObservationsService: feature flag off")
-            return .fallback(.featureFlagDisabled)
+        // #115 · 0.2 — per-metric observations are status notes: they follow
+        // the server-resolved `statusText` capability (`onDeviceAllowed`), so
+        // the operator's and the person's decisions hold on the device too.
+        guard aiCapabilities.allowsOnDevice(.statusText) else {
+            HLLog.api.info("TrendObservationsService: capability statusText does not allow on-device")
+            return .fallback(.capabilityNotAllowed)
         }
 
         // Pre-compute the structural facts (sample count, delta, direction)

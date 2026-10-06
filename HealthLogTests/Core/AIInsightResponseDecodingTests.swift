@@ -240,13 +240,14 @@ struct AIInsightResponseDecodingTests {
     }
 
     /// v0.7.0 W-API-RENDER — typed Recommendation decoding. Schema drift
-    /// (type mismatch on a known field) must surface as a thrown
-    /// DecodingError instead of silently coalescing into an empty
-    /// recommendation. Without this guard the server could rename
-    /// `severity` to `severityToken` and the iOS UI would render
-    /// blank cards forever without anyone noticing.
-    @Test("Severity type mismatch surfaces a decoding error (no silent empty)")
-    func severityTypeMismatchThrows() {
+    /// (type mismatch on a known field) must never coalesce into an empty
+    /// recommendation card.
+    ///
+    /// #115 · 1.7 — the drifted ROW still fails to decode (a non-string
+    /// severity throws), but the `recommendations` list is lossy now: that one
+    /// row is dropped, the rest of the answer stays. No blank card either way.
+    @Test("Severity type mismatch drops the row, never renders an empty card")
+    func severityTypeMismatchDropsRow() throws {
         let json = Data(#"""
         {
             "summary": "S",
@@ -261,8 +262,13 @@ struct AIInsightResponseDecodingTests {
         }
         """#.utf8)
         #expect(throws: DecodingError.self) {
-            try decoder.decode(AIInsightResponse.self, from: json)
+            try decoder.decode(Recommendation.self, from: Data(#"""
+            {"id":"r-1","text":"T","severity":42}
+            """#.utf8))
         }
+        let response = try decoder.decode(AIInsightResponse.self, from: json)
+        #expect(response.summary == "S")
+        #expect(response.recommendations.isEmpty)
     }
 
     /// String-fallback union branch survives the typed-decoder fix —

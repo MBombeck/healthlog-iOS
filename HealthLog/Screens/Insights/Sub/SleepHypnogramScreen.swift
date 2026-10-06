@@ -29,7 +29,7 @@ struct SleepHypnogramScreen: View {
     ///     when a repository is available (app), and is a no-op in test/preview
     ///     hosts without an `appContainer`.
     init(date: Date? = nil, initialNight: SleepNightDTO? = nil) {
-        _dayKey = State(initialValue: date.map(SleepNightRepository.dayKey))
+        _dayKey = State(initialValue: date.map { SleepNightRepository.dayKey(for: $0) })
         _night = State(initialValue: initialNight)
         _isLoading = State(initialValue: initialNight == nil)
         // Seed the navigation anchor so test/preview hosts (no repository →

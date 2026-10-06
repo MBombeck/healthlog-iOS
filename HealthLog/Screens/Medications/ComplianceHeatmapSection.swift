@@ -354,8 +354,30 @@ struct ComplianceHeatmapSection: View {
     /// whichever row matches today's weekday; column 0 is `weeks-1` weeks
     /// ago, column `weeks-1` is this week.
     private func day(forRow row: Int, column: Int) -> ComplianceDay? {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
+        Self.day(forRow: row, column: column, weeks: weeks, in: days, now: .now, timeZone: ProfileDay.timeZone)
+    }
+
+    /// **#115 1.5 — the cell's day is a day in the ACCOUNT's zone, matched by
+    /// key.** Pure so the matching is testable without a render pass.
+    ///
+    /// `ComplianceDay.date` is a server `YYYY-MM-DD` decoded as UTC midnight
+    /// (`JSONDecoder.hlDefault`) — an anchor for a calendar date, not an
+    /// instant. The old match (`Calendar.current.isDate(_:inSameDayAs:)`) read
+    /// that anchor as a moment on the device: everywhere west of UTC UTC
+    /// midnight is still the previous evening, so every cell showed the day
+    /// before it. The grid now lays its days out in the profile zone (the zone
+    /// the server buckets compliance in) and compares `YYYY-MM-DD` keys, the
+    /// anchor read back in UTC.
+    nonisolated static func day(
+        forRow row: Int,
+        column: Int,
+        weeks: Int,
+        in days: [ComplianceDay],
+        now: Date,
+        timeZone: TimeZone
+    ) -> ComplianceDay? {
+        let calendar = ProfileDay.calendar(in: timeZone)
+        let today = calendar.startOfDay(for: now)
         // Weekday offset relative to "Monday = row 0". `Calendar.weekday` is
         // 1=Sunday … 7=Saturday; we normalise to 0=Mon … 6=Sun.
         let weekday = calendar.component(.weekday, from: today)
@@ -371,7 +393,8 @@ struct ComplianceHeatmapSection: View {
         {
             return nil
         }
-        return days.first { calendar.isDate($0.date, inSameDayAs: cellDate) }
+        let cellKey = ProfileDay.key(for: cellDate, timeZone: timeZone)
+        return days.first { ProfileDay.key(ofAnchor: $0.date) == cellKey }
     }
 
     private func accessibilityLabel(for day: ComplianceDay?) -> Text {
@@ -384,7 +407,8 @@ struct ComplianceHeatmapSection: View {
         // hardcoded English "percent" (+ ": "/", " separators) that had no
         // catalog key, so German VoiceOver read "80 percent". Route through a
         // localized key so the whole label translates.
-        return Text("med.heatmap.a11y.cell \(formatted(day.date)) \(Int(day.rate * 100)) \(Self.statusWord(for: day))")
+        let percent = HLNumberFormat.percentValue(ofFraction: day.rate)
+        return Text("med.heatmap.a11y.cell \(formatted(day.date)) \(percent) \(Self.statusWord(for: day))")
     }
 
     /// Localised status descriptor matching the `ComplianceStatusPalette`
@@ -407,11 +431,15 @@ struct ComplianceHeatmapSection: View {
         let scheduledRates = days.compactMap(\.scheduledRate)
         guard !scheduledRates.isEmpty else { return "" }
         let avg = scheduledRates.reduce(0, +) / Double(scheduledRates.count)
-        return "\(Int(avg * 100))% Ø"
+        // F1 — rounded (was truncated) and with the locale's percent sign (was a
+        // glued "80%" in German too).
+        return "\(HLNumberFormat.percent(fraction: avg)) Ø"
     }
 
+    /// #115 1.5 — `date` is a UTC-midnight day anchor; format it in UTC so the
+    /// VoiceOver label names the same day the cell stands for.
     private func formatted(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month())
+        date.formatted(Date.FormatStyle(timeZone: ProfileDay.utcCalendar.timeZone).day().month())
     }
 }
 

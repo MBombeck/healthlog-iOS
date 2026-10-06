@@ -3,6 +3,10 @@ import SwiftUI
 extension SettingsHKSyncDiagnosticsScreen {
     /// Redacted direct-workout delivery snapshot. Counts and operational
     /// provenance only; never renders workout identifiers or health values.
+    ///
+    /// K1 — the rows used to borrow the server card's labels („Server-Urteil",
+    /// „Liefert selbstständig") for the local outcome and the history import,
+    /// and printed the enum spellings as values. Both now say what they are.
     var workoutDeliveryCard: some View {
         HLSettingsCard(
             icon: "figure.run",
@@ -11,7 +15,7 @@ extension SettingsHKSyncDiagnosticsScreen {
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 statRow(
-                    label: "settings.hkdiag.wake_observer",
+                    label: "settings.hkdiag.workout_observer",
                     value: registrationLabel
                 )
                 statRow(
@@ -19,24 +23,24 @@ extension SettingsHKSyncDiagnosticsScreen {
                     value: relativeOrNever(diagnostics.workout.lastAttemptedAt)
                 )
                 statRow(
-                    label: "settings.hkdiag.server_last_background",
+                    label: "settings.hkdiag.workout_last_delivered",
                     value: relativeOrNever(diagnostics.workout.lastCompletedUsefulAt)
                 )
                 statRow(
                     label: "settings.hkdiag.server_trigger",
-                    value: diagnostics.workout.lastSource?.rawValue ?? "—"
+                    value: HKSyncDiagnosticsVocabulary.workoutSource(diagnostics.workout.lastSource)
                 )
                 statRow(
                     label: "settings.hkdiag.summary_samples_read",
                     value: workoutCountSummary
                 )
                 statRow(
-                    label: "settings.hkdiag.server_verdict",
+                    label: "settings.hkdiag.workout_outcome",
                     value: workoutOutcomeLabel
                 )
                 statRow(
-                    label: "settings.hkdiag.server_autonomy",
-                    value: diagnostics.workout.backfillState.rawValue
+                    label: "settings.hkdiag.workout_backfill",
+                    value: HKSyncDiagnosticsVocabulary.workoutBackfill(diagnostics.workout.backfillState)
                 )
             }
         }
@@ -67,6 +71,6 @@ extension SettingsHKSyncDiagnosticsScreen {
                 ? String(localized: "settings.hkdiag.status_idle")
                 : String(localized: "settings.hkdiag.status_ok")
         }
-        return failure.rawValue
+        return HKSyncDiagnosticsVocabulary.workoutFailure(failure)
     }
 }

@@ -17,7 +17,7 @@ import Testing
 /// - a warm read inside the `staleAfter` window serves cache (no second network).
 /// - distinct `days` windows are distinct cache rows (no cross-window collision).
 /// - with NO coordinator wired (unit-test default) every call hits the network.
-@Suite("MoodRepository SWR-wrap (E3)", .serialized)
+@Suite("MoodRepository SWR-wrap (E3)", .serialized, .mockURLSession)
 struct MoodRepositorySWRTests {
     private struct StubReach: ReachabilityProviding, @unchecked Sendable {
         let online: Bool
@@ -58,7 +58,7 @@ struct MoodRepositorySWRTests {
         let swr = SWRCoordinator(cache: cache, reachability: StubReach(online: true))
         let repo = try MoodRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { [body = onePageBody()] req in
+        MockURLProtocol.install { [body = onePageBody()] req in
             if req.targets("/api/mood-entries") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -79,7 +79,7 @@ struct MoodRepositorySWRTests {
         let swr = SWRCoordinator(cache: cache, reachability: StubReach(online: true))
         let repo = try MoodRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { [body = onePageBody()] req in
+        MockURLProtocol.install { [body = onePageBody()] req in
             if req.targets("/api/mood-entries") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -92,7 +92,7 @@ struct MoodRepositorySWRTests {
     func noCoordinatorDirectFetch() async throws {
         let repo = try MoodRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true))
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { [body = onePageBody()] req in
+        MockURLProtocol.install { [body = onePageBody()] req in
             if req.targets("/api/mood-entries") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }

@@ -112,6 +112,9 @@ struct SourcePriorityEditorScreen: View {
         )
         .sensoryFeedback(.success, trigger: saveTickCount)
         .sensoryFeedback(.impact(weight: .medium), trigger: dropTickCount)
+        // K1 — the banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing (H2).
+        .hlReserveErrorBannerSpace(store.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: store.error) {
                 Task { await store.refresh() }

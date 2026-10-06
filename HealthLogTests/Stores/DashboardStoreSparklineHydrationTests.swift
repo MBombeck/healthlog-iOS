@@ -11,7 +11,7 @@ import Testing
 /// show on tap. Pre-fix the hydration only fired from the series-fallback
 /// arm — meaning BP + Pulse with data in the wide page rendered a value but
 /// no sparkline (operator-reported "tile ohne Chart" symptom).
-@Suite("DashboardStore — sparkline hydration from wide-page .ready states", .serialized)
+@Suite("DashboardStore — sparkline hydration from wide-page .ready states", .serialized, .mockURLSession)
 @MainActor
 struct DashboardStoreSparklineHydrationTests {
     private func makeAPIClient() -> APIClient {
@@ -83,7 +83,7 @@ struct DashboardStoreSparklineHydrationTests {
         let p3 = pair(id: "b3", at: now.addingTimeInterval(-86400), sys: 126, dia: 82)
         let payload = "{\"data\":{\"measurements\":[\(p1),\(p2),\(p3)]}}"
         let widePageData = Data(payload.utf8)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -127,7 +127,7 @@ struct DashboardStoreSparklineHydrationTests {
         let row1 = "{\"id\":\"p1\",\"type\":\"PULSE\",\"value\":64,\"measuredAt\":\"\(iso(now.addingTimeInterval(-3600)))\"}"
         let row2 = "{\"id\":\"p2\",\"type\":\"PULSE\",\"value\":68,\"measuredAt\":\"\(iso(now.addingTimeInterval(-1800)))\"}"
         let widePageData = Data("{\"data\":{\"measurements\":[\(row1),\(row2)]}}".utf8)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -179,7 +179,7 @@ struct DashboardStoreSparklineHydrationTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let row = "{\"id\":\"w1\",\"type\":\"WEIGHT\",\"value\":75,\"measuredAt\":\"\(iso(now.addingTimeInterval(-86400)))\"}"
         let widePageData = Data("{\"data\":{\"measurements\":[\(row)]}}".utf8)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -207,7 +207,7 @@ struct DashboardStoreSparklineHydrationTests {
         let store = DashboardStore(repo: dashboardRepo)
 
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -268,7 +268,7 @@ struct DashboardStoreSparklineHydrationTests {
         let p2 = pair(id: "b2", at: now.addingTimeInterval(-86400 * 2), sys: 124, dia: 81)
         let p3 = pair(id: "b3", at: now.addingTimeInterval(-86400), sys: 126, dia: 83)
         let payload = "{\"data\":{\"measurements\":[\(p1),\(p2),\(p3)]}}"
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -314,7 +314,7 @@ struct DashboardStoreSparklineHydrationTests {
         let r1 = "{\"id\":\"bf1\",\"type\":\"BODY_FAT\",\"value\":22.1,\"measuredAt\":\"\(iso(now.addingTimeInterval(-86400 * 5)))\"}"
         let r2 = "{\"id\":\"bf2\",\"type\":\"BODY_FAT\",\"value\":21.8,\"measuredAt\":\"\(iso(now.addingTimeInterval(-86400)))\"}"
         let payload = "{\"data\":{\"measurements\":[\(r1),\(r2)]}}"
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -356,7 +356,7 @@ struct DashboardStoreSparklineHydrationTests {
         let r1 = "{\"id\":\"p1\",\"type\":\"PULSE\",\"value\":66,\"measuredAt\":\"\(iso(now.addingTimeInterval(-3600 * 5)))\"}"
         let r2 = "{\"id\":\"p2\",\"type\":\"PULSE\",\"value\":70,\"measuredAt\":\"\(iso(now.addingTimeInterval(-1800)))\"}"
         let payload = "{\"data\":{\"measurements\":[\(r1),\(r2)]}}"
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -383,7 +383,7 @@ struct DashboardStoreSparklineHydrationTests {
         let store = DashboardStore(repo: dashboardRepo)
 
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 500,

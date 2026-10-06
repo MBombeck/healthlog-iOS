@@ -204,8 +204,10 @@ struct AppleHealthIntegrationDetailScreen: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// #10 — the device's own stamp first, the server's `lastSyncedAt` as the
+    /// fallback (see `HKReadinessStore.displayedLastSyncedAt`).
     private var syncStateCaption: String {
-        if let date = hkReadiness.lastSyncedAt {
+        if let date = hkReadiness.displayedLastSyncedAt(serverLastSyncedAt: store.hkConfig?.lastSyncedAt) {
             return String(
                 localized: "Last synced: \(date.formatted(.relative(presentation: .named)))"
             )
@@ -274,6 +276,7 @@ struct AppleHealthIntegrationDetailScreen: View {
         case .writeOnly: String(localized: "Write only")
         case .bidirectional: String(localized: "sources.mode.bidirectional")
         case .disabled: String(localized: "Disabled")
+        case .unknown: String(localized: "Unknown")
         }
     }
 

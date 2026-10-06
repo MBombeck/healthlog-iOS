@@ -8,9 +8,9 @@
 
     @Suite("HealthKitWireConverter")
     struct HealthKitWireConverterTests {
-        // MARK: - Unit Conversion (×100)
+        // MARK: - Percent types travel as the raw fraction (#113)
 
-        @Test("OxygenSaturation skaliert HK-Fraktion (0.97) auf Server-Prozent (97.0)")
+        @Test("OxygenSaturation carries the RAW HK fraction (0.97) — the server scales")
         func spo2Scaling() {
             let sample = HKQuantitySample(
                 type: HKQuantityType(.oxygenSaturation),
@@ -23,12 +23,13 @@
             let entry = entries[0]
             #expect(entry.hkIdentifier == HKQuantityTypeIdentifier.oxygenSaturation.rawValue)
             #expect(entry.unit == "%")
-            // Toleranz für FP-Drift bei der Multiplikation.
-            #expect(abs(entry.value - 97.0) < 0.001)
+            // #113 — no client-side ×100; the server's `percentFromFraction`
+            // stores 97. See `PercentFractionWireContractTests`.
+            #expect(abs(entry.value - 0.97) < 0.000_001)
             #expect(entry.sleepStage == nil)
         }
 
-        @Test("BodyFatPercentage skaliert HK-Fraktion (0.234) auf Server-Prozent (23.4)")
+        @Test("BodyFatPercentage carries the RAW HK fraction (0.234) — the server scales")
         func bodyFatScaling() {
             let sample = HKQuantitySample(
                 type: HKQuantityType(.bodyFatPercentage),
@@ -40,7 +41,7 @@
             #expect(entries.count == 1)
             let entry = entries[0]
             #expect(entry.unit == "%")
-            #expect(abs(entry.value - 23.4) < 0.001)
+            #expect(abs(entry.value - 0.234) < 0.000_001)
         }
 
         @Test("BodyMass lässt Wert unverändert (kg-identity)")

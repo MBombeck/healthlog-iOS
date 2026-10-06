@@ -63,7 +63,7 @@ private func statusBody(text: String) -> Data {
 
 // MARK: - BerlinDayKey
 
-@Suite("BerlinDayKey — daily discriminator")
+@Suite("BerlinDayKey — daily discriminator", .mockURLSession)
 struct BerlinDayKeyTests {
     @Test("string flips at Berlin local midnight, stable within the day")
     func dayStringRollover() throws {
@@ -92,7 +92,7 @@ struct BerlinDayKeyTests {
 
 // MARK: - CacheKey day-anchoring
 
-@Suite("CacheKey — insightStatus day anchoring")
+@Suite("CacheKey — insightStatus day anchoring", .mockURLSession)
 struct InsightStatusCacheKeyTests {
     @Test("Same kind+locale, different Berlin day → different persistentHash")
     func dayDifferentiatedHash() {
@@ -118,7 +118,7 @@ struct InsightStatusCacheKeyTests {
 
 // MARK: - Day-key staleness through the repo (real APIClient + stub URLSession)
 
-@Suite("MetricInsightsRepository — Berlin-day SWR staleness", .serialized)
+@Suite("MetricInsightsRepository — Berlin-day SWR staleness", .serialized, .mockURLSession)
 struct MetricInsightsDailyCacheTests {
     private final class StubReach: ReachabilityProviding, @unchecked Sendable {
         let online: Bool
@@ -153,7 +153,7 @@ struct MetricInsightsDailyCacheTests {
         )
 
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req.url!.path)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, statusBody(text: "HEUTE"))
         }
@@ -183,7 +183,7 @@ struct MetricInsightsDailyCacheTests {
         )
 
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req.url!.path)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -207,7 +207,7 @@ struct MetricInsightsDailyCacheTests {
         let coordinator = SWRCoordinator(cache: cache, reachability: StubReach(online: true))
 
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req.url!.path)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, statusBody(text: "FRESH"))
         }
@@ -229,7 +229,7 @@ struct MetricInsightsDailyCacheTests {
 
 // MARK: - Prefetch warm path
 
-@Suite("InsightsPrefetchService — warm path", .serialized)
+@Suite("InsightsPrefetchService — warm path", .serialized, .mockURLSession)
 struct InsightsPrefetchServiceTests {
     private final class StubReach: ReachabilityProviding, @unchecked Sendable {
         var isOnlineStream: AsyncStream<Bool> {
@@ -262,7 +262,7 @@ struct InsightsPrefetchServiceTests {
     @Test("shouldWarm == false → no fetch fires (standalone / backend-down)")
     func gatedWarmFiresNothing() async throws {
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req.url!.path)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(#"{"data":{}}"#.utf8))
         }
@@ -274,7 +274,7 @@ struct InsightsPrefetchServiceTests {
     @Test("shouldWarm == true → warms targets + comprehensive + briefing + status")
     func openWarmFansOut() async throws {
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req.url!.path)
             let path = req.url!.path
             let body = if path.contains("targets") {
@@ -304,7 +304,7 @@ struct InsightsPrefetchServiceTests {
     @Test("Re-entry guard: a second warm while one is running is a no-op")
     func reentryGuardCollapses() async throws {
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(req.url!.path)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(#"{"data":{}}"#.utf8))
         }

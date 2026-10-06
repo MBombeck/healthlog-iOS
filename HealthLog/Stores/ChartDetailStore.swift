@@ -280,11 +280,13 @@ public final class ChartDetailStore {
     /// `displayUnit` (already the user's unit, value already converted). Every
     /// other kind has no re-unitable family → server label / canonical default.
     public func displayUnit(units: UnitPreferences) -> String {
-        switch kind.unitFamily {
-        case .weight: units.weight.unitSuffix
-        case .bloodPressure: units.bloodPressure.unitSuffix
-        case .glucose, .none: displayUnit
+        // #115 P2 — every client-converted family (mass, BP, temperature,
+        // waist, distance, speed) flips to the account's label; glucose keeps
+        // the server-resolved series unit, the identity branch the server label.
+        guard kind.unitFamily != .glucose, let suffix = units.transform(for: kind).suffix else {
+            return displayUnit
         }
+        return suffix
     }
 
     /// A360-5 — converts a SERIES-derived delta (e.g. `deltaVsPriorWindow`) into
@@ -293,12 +295,74 @@ public final class ChartDetailStore {
     /// factor as a level. Glucose series points are ALREADY server-converted, so
     /// a glucose delta is already in the user's unit → passthrough.
     public func convertDelta(_ delta: Double, units: UnitPreferences) -> Double {
-        switch kind.unitFamily {
-        case .weight: units.convertWeight(delta)
-        case .bloodPressure: units.convertBloodPressure(delta)
-        // Series glucose is pre-converted; `.none` has no conversion.
-        case .glucose, .none: delta
+        // Series glucose is pre-converted; everything else converts by the
+        // factor alone (#115 P2 — a 1 °C change is a 1.8 °F change, never
+        // 33.8 °F, so the affine offset must not apply to a delta).
+        kind.unitFamily == .glucose ? delta : units.displayDelta(delta, kind: kind)
+    }
+
+    /// **#115 P2** — a SERIES value (a plotted point, a Min/Ø/Max stat) in the
+    /// account's unit. Series glucose is already converted by the server and
+    /// passes through; every other family converts from canonical SI.
+    public func convertSeriesValue(_ value: Double, units: UnitPreferences) -> Double {
+        kind.unitFamily == .glucose ? value : units.displayValue(value, kind: kind)
+    }
+
+    /// **#115 P2** — the chart points in the account's unit, for the plot, the
+    /// y-axis and the audio-graph descriptor. Before this the plot drew kg on
+    /// an axis labelled with the series' "kg" under a hero that said "lb", and
+    /// temperatures/waists never converted at all.
+    /// **#115 P2** — the series the chart's audio graph describes, in the same
+    /// unit as the plot: the converted points plus the server's stats (or the
+    /// on-device fallback stats) converted alongside them.
+    public func accessibilitySeries(units: UnitPreferences) -> MeasurementSeries {
+        let plotted = plotPoints(units: units)
+        guard let stats = displaySeries?.stats else {
+            return MeasurementSeries(kind: kind, points: plotted, stats: MetricChartMath.statsFor(plotted))
         }
+        let converted = SeriesStats(
+            mean: convertSeriesValue(stats.mean, units: units),
+            min: convertSeriesValue(stats.min, units: units),
+            max: convertSeriesValue(stats.max, units: units),
+            stdDev: kind.unitFamily == .glucose ? stats.stdDev : units.displayDelta(stats.stdDev, kind: kind),
+            count: stats.count
+        )
+        return MeasurementSeries(kind: kind, points: plotted, stats: converted)
+    }
+
+    public func plotPoints(units: UnitPreferences) -> [SeriesPoint] {
+        plotPoints(chartPoints, units: units)
+    }
+
+    /// ``plotPoints(units:)`` for an explicit point list (the fullscreen cover
+    /// plots `displaySeries.points`).
+    public func plotPoints(_ points: [SeriesPoint], units: UnitPreferences) -> [SeriesPoint] {
+        guard kind.unitFamily != nil, kind.unitFamily != .glucose else { return points }
+        return points.map { point in
+            SeriesPoint(
+                id: point.id,
+                at: point.at,
+                value: convertSeriesValue(point.value, units: units),
+                secondary: point.secondary.map { convertSeriesValue($0, units: units) }
+            )
+        }
+    }
+
+    /// **#108 — the units THIS chart renders in.** The settings units, with the
+    /// glucose unit pinned to the one the server converted the series into
+    /// (`series.unit`). The series is already in that unit, so the hero, the
+    /// scrub callout and every summary figure on the screen follow it. Before
+    /// this the summary converted with the device pick while the series came
+    /// in the account's unit, and one screen showed mg/dL and mmol/L side by
+    /// side. Anything that is not a glucose series, or a series without a
+    /// recognisable unit (older server), keeps the settings units.
+    public func effectiveUnits(_ units: UnitPreferences) -> UnitPreferences {
+        guard kind.unitFamily == .glucose, let seriesUnit = GlucoseUnit(serverToken: series?.unit) else {
+            return units
+        }
+        var pinned = units
+        pinned.glucose = seriesUnit
+        return pinned
     }
 
     /// A360-5 — converts a SUMMARY-derived canonical value (e.g. the
@@ -308,12 +372,8 @@ public final class ChartDetailStore {
     /// levels and deltas. The matching label is ``displayUnit(units:)`` for
     /// weight/BP and the glucose suffix for glucose.
     public func convertSummaryValue(_ value: Double, units: UnitPreferences) -> Double {
-        switch kind.unitFamily {
-        case .weight: units.convertWeight(value)
-        case .bloodPressure: units.convertBloodPressure(value)
-        case .glucose: units.convertGlucose(value)
-        case .none: value
-        }
+        let units = effectiveUnits(units)
+        return units.displayValue(value, kind: kind)
     }
 
     /// A360-5 — the unit label for SUMMARY-derived values (year-over-year). For
@@ -321,12 +381,8 @@ public final class ChartDetailStore {
     /// suffix (`displayUnit` would echo the SERIES unit which is correct here
     /// too, but resolve explicitly for clarity).
     public func summaryDisplayUnit(units: UnitPreferences) -> String {
-        switch kind.unitFamily {
-        case .weight: units.weight.unitSuffix
-        case .bloodPressure: units.bloodPressure.unitSuffix
-        case .glucose: units.glucose.unitSuffix
-        case .none: displayUnit
-        }
+        let units = effectiveUnits(units)
+        return units.transform(for: kind).suffix ?? displayUnit
     }
 
     /// v0.8.6 — chart-render points with a `recentInRange` fallback. For the

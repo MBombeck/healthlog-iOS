@@ -15,7 +15,7 @@
     #endif
 
     @MainActor
-    @Suite("Web-deletion cleanup serialization", .serialized)
+    @Suite("Web-deletion cleanup serialization", .serialized, .mockURLSession)
     struct WebDeletionCleanupSerializationTests {
         private final class NoopPasskey: PasskeyServiceProtocol, @unchecked Sendable {
             @MainActor func register(
@@ -156,7 +156,7 @@
             let fixture = try makeFixture()
             fixture.store.markPendingWebDeletion()
             let loginRequests = fixture.loginRequests
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 switch req.url?.path {
                 case "/api/auth/me":
                     return (

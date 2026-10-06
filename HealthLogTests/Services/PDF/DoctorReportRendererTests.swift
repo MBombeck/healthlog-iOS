@@ -42,8 +42,6 @@ struct DoctorReportRendererTests {
                 appVersion: "0.5.0",
                 measurements: [],
                 medications: [],
-                compliance: [],
-                intakes: [],
                 moodEntries: []
             ),
             periodStart: periodStart,
@@ -68,8 +66,6 @@ struct DoctorReportRendererTests {
                 appVersion: "0.5.0",
                 measurements: pulses,
                 medications: [],
-                compliance: [],
-                intakes: [],
                 moodEntries: []
             ),
             periodStart: periodStart,
@@ -94,13 +90,6 @@ struct DoctorReportRendererTests {
             treatmentClass: "ACE-Hemmer",
             schedule: MedicationSchedule(times: [TimeOfDay(hour: 8, minute: 0)])
         )
-        let intake = MedicationIntake(
-            id: "i1",
-            medicationId: "m1",
-            scheduledAt: makeDate(2026, 5, 12),
-            takenAt: makeDate(2026, 5, 12, 8),
-            status: .taken
-        )
         let moodEntries = [
             MoodEntry(id: "md1", recordedAt: makeDate(2026, 5, 11), score: 4, tags: ["happy"])
         ]
@@ -110,8 +99,6 @@ struct DoctorReportRendererTests {
                 appVersion: "0.5.0",
                 measurements: pulses,
                 medications: [med],
-                compliance: [],
-                intakes: [intake],
                 moodEntries: moodEntries
             ),
             periodStart: periodStart,
@@ -177,8 +164,6 @@ struct DoctorReportRendererTests {
                 appVersion: "0.5.0",
                 measurements: pulses,
                 medications: [],
-                compliance: [],
-                intakes: [],
                 moodEntries: []
             ),
             periodStart: Self.periodStart,

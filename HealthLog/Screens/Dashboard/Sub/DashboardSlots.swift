@@ -106,18 +106,27 @@ struct DashboardMetricsHost: View {
     // dependency is a cold cost, not a per-frame one.
     @Environment(InsightsStore.self) private var insights
     @Environment(InsightsTargetsStore.self) private var insightsTargets
+    /// #115 · 1.1 — the snapshot slot this store already fetches carries the
+    /// server's weight verdict; no extra request.
+    @Environment(DailyBriefingStore.self) private var briefingStore
     @Environment(\.appContainer) private var container
 
     var body: some View {
         if let summary = store.summary {
             HighlightInsightCard(insight: summary.highlightInsight)
-            // v0.5.4.3 HP-6 — see ComplianceReconciler.
-            let reconciledCompliance = ComplianceReconciler
-                .reconcile(server: summary.compliance, medicationsStore: medicationsStore)
+            // #115 · 1.3 — the ring renders the server's `compliance`
+            // (`scheduledToday` / `takenToday`, profile-zone day, projected
+            // slots included since v1.4.39) verbatim. The client no longer
+            // recounts today from local intakes; after the person marks a
+            // dose, the summary is re-read instead (see `.onChange` below).
             // The ring honours the customize screen's "Medications" toggle.
             if medicationsTileVisible {
-                ComplianceRingCard(snapshot: reconciledCompliance) {
+                ComplianceRingCard(snapshot: summary.compliance) {
                     onShowIntakes()
+                }
+                .onChange(of: DashboardIntakeSignature(medicationsStore)) { old, new in
+                    guard DashboardIntakeSignature.shouldRefreshSummary(from: old, to: new) else { return }
+                    Task { await store.refresh(force: true) }
                 }
             }
             let visibleMetrics = orderedMetrics(summary.metrics)
@@ -133,6 +142,7 @@ struct DashboardMetricsHost: View {
                     liveTodayStepsOverride: liveTodayStore.todayStepCount,
                     digest: insights.comprehensive?.digest,
                     targets: insightsTargets.response,
+                    weightTrendSentiment: briefingStore.snapshotBriefing?.weightTrend?.direction,
                     onTap: onTap
                 )
             }

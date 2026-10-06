@@ -63,16 +63,16 @@
         func unknownTriggerWordIsUnknown() {
             let summary = HKServerSyncHealthSummary(verdict: .fresh, lastSyncTrigger: "watch_relay")
             #expect(summary.autonomy == .unknown)
-            // Wörtlich angezeigt statt verschwiegen.
-            #expect(summary.triggerLabel == "watch_relay")
+            // K1 — neutral statt roh: ein Server-Wort ist ein Bezeichner.
+            #expect(summary.triggerLabel == String(localized: "settings.hkdiag.verdict_unknown"))
         }
 
         // MARK: - Verdict
 
-        @Test("Ein unbekanntes Verdict crasht nicht und wird wörtlich gezeigt")
-        func unknownVerdictRendersVerbatim() {
+        @Test("Ein unbekanntes Verdict crasht nicht und liest sich neutral (K1)")
+        func unknownVerdictRendersNeutral() {
             let summary = HKServerSyncHealthSummary(verdict: .unknown("quarantined_by_ops"))
-            #expect(summary.verdictLabel == "quarantined_by_ops")
+            #expect(summary.verdictLabel == String(localized: "settings.hkdiag.verdict_unknown"))
             // Und es färbt die Fläche NICHT rot — niemand weiß, was es bedeutet.
             #expect(summary.verdictTint == HLText.secondary)
         }

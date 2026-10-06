@@ -8,7 +8,7 @@ import Foundation
 ///
 /// `nil` `suggestions` is the contract callers (`MoodStore.suggestTags`,
 /// `EditMoodSheet`) inspect for fallback routing: any of {device-ineligible,
-/// feature-flag-off, safety-refused, framework-unavailable, generation-failed,
+/// capability-not-allowed, safety-refused, framework-unavailable, generation-failed,
 /// empty-input} maps to `nil` so the caller can present a calm, neutral
 /// empty-state to the user. We deliberately do not synthesise local tags as
 /// a heuristic — mood-tag extraction is semantic, not lexical, and a regex
@@ -21,7 +21,7 @@ public struct MoodTagSuggestionOutcome: Sendable {
         case deviceIneligible
         case appleIntelligenceDisabled
         case modelNotReady
-        case featureFlagDisabled
+        case capabilityNotAllowed
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
@@ -81,7 +81,11 @@ public struct MoodTagSuggestion: Sendable, Equatable, Hashable, Identifiable {
 /// brief — re-uses the same operator-flag that governs trend observations
 /// since both surfaces are derivations over per-day data).
 public actor MoodTagExtractionService {
-    public let featureFlags: any FeatureFlagsServicing
+    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// This service runs only while `.statusText` allows on-device work
+    /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
+    /// never consults anything a previous build persisted.
+    public let aiCapabilities: any AICapabilityReading
     public let safetyFilter: MDRSafetyFilter
 
     /// Hard cap on suggestion count. The user surface lists chips in a
@@ -96,10 +100,10 @@ public actor MoodTagExtractionService {
     public static let maxLabelLength = 32
 
     public init(
-        featureFlags: any FeatureFlagsServicing = UserDefaultsFeatureFlagsService(),
+        aiCapabilities: any AICapabilityReading = LegacyAICapabilities(),
         safetyFilter: MDRSafetyFilter = MDRSafetyFilter()
     ) {
-        self.featureFlags = featureFlags
+        self.aiCapabilities = aiCapabilities
         self.safetyFilter = safetyFilter
     }
 
@@ -121,9 +125,9 @@ public actor MoodTagExtractionService {
             return .fallback(.emptyInput)
         }
 
-        guard featureFlags.isEnabled(.assistantTrend) else {
-            HLLog.api.info("MoodTagExtractionService: feature flag off")
-            return .fallback(.featureFlagDisabled)
+        guard aiCapabilities.allowsOnDevice(.statusText) else {
+            HLLog.api.info("MoodTagExtractionService: capability statusText does not allow on-device")
+            return .fallback(.capabilityNotAllowed)
         }
 
         #if canImport(FoundationModels)

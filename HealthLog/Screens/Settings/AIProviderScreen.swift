@@ -518,7 +518,7 @@ private struct AIConsentToggleCard: View {
         let isGranted = consentStore.hasConsent(for: provider)
         HLSettingsCard(
             icon: "checkmark.shield.fill",
-            title: "Assistent-Einwilligung",
+            title: "Assistant consent",
             // R18 — war ein hartkodiertes deutsches Literal ohne Katalog-
             // eintrag (PROJECT_GUIDE.md: keine hardcoded UI-Strings). Der englische
             // Quelltext ist jetzt der Schlüssel, die deutsche Fassung steht

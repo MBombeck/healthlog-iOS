@@ -171,8 +171,9 @@ struct WPerfSharedFormatterTests {
             // Build a one-off formatter configured exactly like the old per-row code.
             let oneOff = RelativeDateTimeFormatter()
             oneOff.unitsStyle = .full
-            oneOff.locale = Locale(identifier: "de_DE")
-            let expected = "Archiviert \(oneOff.localizedString(for: date, relativeTo: reference))"
+            oneOff.locale = Locale.current
+            let relative = oneOff.localizedString(for: date, relativeTo: reference)
+            let expected = String(localized: "medications.archived.relative \(relative)")
             #expect(shared == expected, "offset \(offset)")
         }
     }

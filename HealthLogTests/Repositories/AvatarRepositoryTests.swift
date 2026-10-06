@@ -10,7 +10,7 @@ import Testing
 /// so the multipart upload, owner-scoped GET, and DELETE go over the exact
 /// request-building path production uses — catching header / idempotency /
 /// envelope-decode drift the way the 0.2.0 audit demands.
-@Suite("AvatarRepository", .serialized)
+@Suite("AvatarRepository", .serialized, .mockURLSession)
 struct AvatarRepositoryTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -35,7 +35,7 @@ struct AvatarRepositoryTests {
         nonisolated(unsafe) var capturedContentType: String?
         nonisolated(unsafe) var capturedIdem: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedMethod = req.httpMethod
             capturedContentType = req.value(forHTTPHeaderField: "Content-Type")
             capturedIdem = req.value(forHTTPHeaderField: "Idempotency-Key")
@@ -67,7 +67,7 @@ struct AvatarRepositoryTests {
 
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedMethod = req.httpMethod
             capturedPath = req.url?.path
             return (HTTPURLResponse(url: req.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!, nil)
@@ -88,7 +88,7 @@ struct AvatarRepositoryTests {
 
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedQuery: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedQuery = req.url?.query
             return (
@@ -112,7 +112,7 @@ struct AvatarRepositoryTests {
     func fetch404FallsBack() async throws {
         let api = makeClient()
         let repo = AvatarRepository(api: api)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let json = #"{"data":null,"error":"Avatar not found"}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
         }
@@ -124,7 +124,7 @@ struct AvatarRepositoryTests {
     func fetchRejectsAbsoluteURL() async throws {
         let api = makeClient()
         let repo = AvatarRepository(api: api)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Issue.record("No request should fire for an absolute URL")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
         }

@@ -31,15 +31,6 @@ struct MoodHistoryScreen: View {
         return formatter
     }()
 
-    private static let wireDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
     private var buckets: [MonthBucket] {
         let calendar = Calendar.current
         let sorted = historyEntries.sorted { $0.recordedAt > $1.recordedAt }
@@ -163,7 +154,9 @@ struct MoodHistoryScreen: View {
             }
             if draftFilter.period == .custom {
                 DatePicker("From", selection: customFromBinding, displayedComponents: .date)
+                    .environment(\.timeZone, ProfileDay.timeZone)
                 DatePicker("To", selection: customToBinding, displayedComponents: .date)
+                    .environment(\.timeZone, ProfileDay.timeZone)
             }
             Picker("Mood", selection: moodBinding) {
                 Text("All moods").tag("")
@@ -217,36 +210,33 @@ struct MoodHistoryScreen: View {
             set: { period in
                 draftFilter.period = period
                 if period == .custom {
-                    if draftFilter.customFrom == nil {
-                        let date = Calendar.current.date(byAdding: .day, value: -29, to: .now) ?? .now
-                        draftFilter.customFrom = Self.wireDateFormatter.string(from: date)
-                    }
-                    if draftFilter.customTo == nil {
-                        draftFilter.customTo = Self.wireDateFormatter.string(from: .now)
-                    }
+                    // #115 B6 — the account's last 29 days, not the phone's.
+                    let range = MoodHistoryFilter.defaultCustomRange()
+                    if draftFilter.customFrom == nil { draftFilter.customFrom = range.from }
+                    if draftFilter.customTo == nil { draftFilter.customTo = range.to }
                 }
             }
         )
     }
 
+    /// The pickers run in the profile zone (see `filterSection`), so a day key
+    /// and the picker's instant convert through ``ProfileDay`` both ways.
     private var customFromBinding: Binding<Date> {
         Binding(
-            get: {
-                draftFilter.customFrom.flatMap(Self.wireDateFormatter.date(from:))
-                    ?? Calendar.current.date(byAdding: .day, value: -29, to: .now)
-                    ?? .now
-            },
-            set: { draftFilter.customFrom = Self.wireDateFormatter.string(from: $0) }
+            get: { Self.pickerDate(draftFilter.customFrom ?? MoodHistoryFilter.defaultCustomRange().from) },
+            set: { draftFilter.customFrom = ProfileDay.key(for: $0) }
         )
     }
 
     private var customToBinding: Binding<Date> {
         Binding(
-            get: {
-                draftFilter.customTo.flatMap(Self.wireDateFormatter.date(from:)) ?? .now
-            },
-            set: { draftFilter.customTo = Self.wireDateFormatter.string(from: $0) }
+            get: { Self.pickerDate(draftFilter.customTo ?? MoodHistoryFilter.defaultCustomRange().to) },
+            set: { draftFilter.customTo = ProfileDay.key(for: $0) }
         )
+    }
+
+    private static func pickerDate(_ key: String) -> Date {
+        ProfileDay.startOfDay(forKey: key) ?? .now
     }
 
     private func sourceLabel(_ source: MoodEntrySource) -> LocalizedStringKey {

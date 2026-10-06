@@ -60,16 +60,26 @@ public struct InsightsTargetsResponseDTO: Codable, Sendable, Equatable {
         public let insufficientData: Bool
         public let consistency7d: [ConsistencyBucket?]
 
-        public enum Trend: String, Codable, Sendable, Equatable {
+        public enum Trend: String, Codable, Sendable, Equatable, TolerantServerEnum {
             case up
             case down
             case stable
+            /// #115 · 1.7 — unrecognised trend token; rendered without a direction.
+            case unknown
+
+            public static let unknownFallback = Trend.unknown
+            public static let wireVocabulary: StaticString = "target trend"
         }
 
-        public enum ConsistencyBucket: String, Codable, Sendable, Equatable {
+        public enum ConsistencyBucket: String, Codable, Sendable, Equatable, TolerantServerEnum {
             case inBand = "in"
             case nearBand = "near"
             case outBand = "out"
+            /// #115 · 1.7 — unrecognised bucket; rendered like a day without a verdict.
+            case unknown
+
+            public static let unknownFallback = ConsistencyBucket.unknown
+            public static let wireVocabulary: StaticString = "target consistency bucket"
         }
 
         public struct Range: Codable, Sendable, Equatable {

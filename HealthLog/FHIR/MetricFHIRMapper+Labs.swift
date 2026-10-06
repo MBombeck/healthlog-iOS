@@ -68,14 +68,17 @@ public extension MetricFHIRMapper {
         "hemoglobin": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
         "hämoglobin": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
         "haemoglobin": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
+        // #115 R3 — method-less LDL (server v1.39.3 `lab-loinc.ts`): a logged
+        // value does not say whether it was measured directly (18262-6) or
+        // calculated (13457-7), so neither method code may be asserted.
         "ldl": LOINCCode(
-            code: "13457-7",
-            display: "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation",
+            code: "2089-1",
+            display: "Cholesterol in LDL [Mass/volume] in Serum or Plasma",
             physicianReviewPending: true
         ),
         "ldl cholesterol": LOINCCode(
-            code: "13457-7",
-            display: "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation",
+            code: "2089-1",
+            display: "Cholesterol in LDL [Mass/volume] in Serum or Plasma",
             physicianReviewPending: true
         ),
         "hdl": LOINCCode(code: "2085-9", display: "Cholesterol in HDL [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
@@ -96,9 +99,15 @@ public extension MetricFHIRMapper {
         "kreatinin": LOINCCode(code: "2160-0", display: "Creatinine [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         "ferritin": LOINCCode(code: "2276-4", display: "Ferritin [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         "crp": LOINCCode(code: "1988-5", display: "C reactive protein [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
-        "vitamin d": LOINCCode(code: "1989-3", display: "Vitamin D [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
-        "25-oh vitamin d": LOINCCode(code: "1989-3", display: "Vitamin D [Mass/volume] in Serum or Plasma", physicianReviewPending: true)
+        // #115 R3 — total 25-OH vitamin D (D2 + D3) is what labs report; 1989-3
+        // is D3 alone (server v1.39.3 `lab-loinc.ts`).
+        "vitamin d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true),
+        "25-oh vitamin d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true)
     ]
+
+    /// LOINC 62292-8 long name, shared by the two vitamin-D aliases above.
+    private static let vitaminDTotalDisplay =
+        "25-Hydroxyvitamin D3+25-Hydroxyvitamin D2 [Mass/volume] in Serum or Plasma"
 
     /// Resolve a lab-result `analyte` name (+ the row's `isLinked` state) to a
     /// FHIR mapping.

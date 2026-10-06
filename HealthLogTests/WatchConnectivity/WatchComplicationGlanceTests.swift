@@ -61,16 +61,16 @@ struct WatchComplicationGlanceTests {
         #expect(WatchSnapshot.HealthScoreGlance.make(from: nil) == nil)
     }
 
-    @Test("Band signal resolves from the server band, falling back to thresholds")
+    @Test("Band signal is the server band; without one it stays neutral (#115 B7)")
     func bandSignalResolves() {
         // Server band wins.
         #expect(WatchSnapshot.HealthScoreGlance(score: 10, band: "green").signalBand == "green")
         #expect(WatchSnapshot.HealthScoreGlance(score: 90, band: "yellow").signalBand == "yellow")
         #expect(WatchSnapshot.HealthScoreGlance(score: 90, band: "red").signalBand == "red")
-        // No band → numeric thresholds (≥70 green / ≥40 yellow / else red).
-        #expect(WatchSnapshot.HealthScoreGlance(score: 70, band: nil).signalBand == "green")
-        #expect(WatchSnapshot.HealthScoreGlance(score: 55, band: nil).signalBand == "yellow")
-        #expect(WatchSnapshot.HealthScoreGlance(score: 12, band: nil).signalBand == "red")
+        // No band / unknown band → neutral, no ≥70/≥40 threshold verdict.
+        #expect(WatchSnapshot.HealthScoreGlance(score: 70, band: nil).signalBand == nil)
+        #expect(WatchSnapshot.HealthScoreGlance(score: 12, band: nil).signalBand == nil)
+        #expect(WatchSnapshot.HealthScoreGlance(score: 90, band: "chartreuse").signalBand == nil)
     }
 
     // MARK: - Latest-measurement glance

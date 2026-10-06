@@ -51,7 +51,7 @@ extension DoctorReportToFHIRBundle {
     /// budget (the per-collection loops + optional guards live here instead).
     /// Order is unchanged: Composition, Patient, (Coverage), vital + chart
     /// Observations, MedicationStatements, lab Observations, Conditions,
-    /// day-log Observations, vitals DiagnosticReport, (lab DiagnosticReport).
+    /// day-log Observations, (vitals DiagnosticReport), (lab DiagnosticReport).
     static func assembleEntries(
         composition: (id: String, resource: Composition),
         patient: (id: String, resource: Patient),
@@ -61,9 +61,16 @@ extension DoctorReportToFHIRBundle {
         labObservations: [Observation],
         conditions: [Condition],
         illnessObservations: [Observation],
-        vitalsReport: (id: String, resource: DiagnosticReport),
+        vitalsReport: (id: String, resource: DiagnosticReport)?,
         labReport: (id: String, resource: DiagnosticReport)?
     ) -> [BundleEntry] {
+        // #115 R4 — every entry below is reachable from the Composition.
+        linkUnsectionedEntries(
+            into: composition.resource,
+            coverageID: coverage?.id,
+            vitalsReportID: vitalsReport?.id,
+            labReportID: labReport?.id
+        )
         var entries: [BundleEntry] = []
         entries.append(makeEntry(fullURL: composition.id, resource: .composition(composition.resource)))
         entries.append(makeEntry(fullURL: patient.id, resource: .patient(patient.resource)))
@@ -75,7 +82,11 @@ extension DoctorReportToFHIRBundle {
         entries.append(contentsOf: labObservations.map { makeURNEntry(.observation($0), id: $0.id) })
         entries.append(contentsOf: conditions.map { makeURNEntry(.condition($0), id: $0.id) })
         entries.append(contentsOf: illnessObservations.map { makeURNEntry(.observation($0), id: $0.id) })
-        entries.append(makeEntry(fullURL: "urn:uuid:\(vitalsReport.id)", resource: .diagnosticReport(vitalsReport.resource)))
+        // #115 R3 — no vital sign, no vitals DiagnosticReport (server v1.39.3):
+        // an empty `result` panel asserts a report that has nothing in it.
+        if let vitalsReport {
+            entries.append(makeEntry(fullURL: "urn:uuid:\(vitalsReport.id)", resource: .diagnosticReport(vitalsReport.resource)))
+        }
         if let labReport {
             entries.append(makeEntry(fullURL: "urn:uuid:\(labReport.id)", resource: .diagnosticReport(labReport.resource)))
         }
@@ -151,7 +162,7 @@ extension DoctorReportToFHIRBundle {
         let observation = Observation(code: code, status: ObservationStatus.final.asPrimitive())
         observation.id = FHIRString(UUID().uuidString.lowercased()).asPrimitive()
         observation.category = [makeCategoryConcept(.laboratory)]
-        observation.subject = Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+        observation.subject = entryReference(patientID)
 
         // Effective = takenAt when parseable; the lab value is a point sample.
         if let takenAt = parseISO(row.takenAt) {
@@ -269,7 +280,7 @@ extension DoctorReportToFHIRBundle {
             status: DiagnosticReportStatus.final.asPrimitive()
         )
         report.id = FHIRString(reportID).asPrimitive()
-        report.subject = Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+        report.subject = entryReference(patientID)
         report.category = [makeCategoryConcept(.laboratory)]
 
         let period = Period()
@@ -287,7 +298,7 @@ extension DoctorReportToFHIRBundle {
 
     /// One `Condition` per illness episode.
     static func makeCondition(episode: IllnessEpisodeDTO, patientID: String) -> Condition {
-        let condition = Condition(subject: Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive()))
+        let condition = Condition(subject: entryReference(patientID))
         condition.id = FHIRString(UUID().uuidString.lowercased()).asPrimitive()
 
         // clinicalStatus — resolved when an abatement date exists, else active.
@@ -380,7 +391,9 @@ extension DoctorReportToFHIRBundle {
     static func makeIllnessCategoryCoding(_ type: IllnessType) -> Coding {
         let (code, display) = switch type {
         case .infection: ("40733004", "Infectious disease")
-        case .allergy: ("106190000", "Allergy")
+        // #115 R3 — 106190000 is inactive in SNOMED CT; the server moved to
+        // 473011001 in v1.39.3 (validator-checked against tx.fhir.org).
+        case .allergy: ("473011001", "Allergic condition")
         case .injury: ("417163006", "Traumatic or non-traumatic injury")
         case .mentalHealth: ("74732009", "Mental disorder")
         case .autoimmune: ("85828009", "Autoimmune disease")
@@ -417,8 +430,8 @@ extension DoctorReportToFHIRBundle {
         patientID: String
     ) -> [Observation] {
         var result: [Observation] = []
-        let conditionFocus = Reference(reference: FHIRString("Condition/\(conditionID)").asPrimitive())
-        let subject = Reference(reference: FHIRString("Patient/\(patientID)").asPrimitive())
+        let conditionFocus = entryReference(conditionID)
+        let subject = entryReference(patientID)
         let effective: Observation.EffectiveX? = parseDayKey(dayLog.date).map {
             .dateTime(FHIRPrimitiveFactory.dateTime(from: $0))
         }

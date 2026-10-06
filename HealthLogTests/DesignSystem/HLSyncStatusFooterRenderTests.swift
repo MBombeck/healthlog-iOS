@@ -21,7 +21,7 @@
     /// Set `SYNCUX_RENDER_DIR=/tmp/syncux` to additionally export the
     /// rendered PNGs for visual review (used by the W2-SYNCUX report).
     @MainActor
-    @Suite("HLSyncStatusFooter / HLSyncBanner — render verification", .serialized)
+    @Suite("HLSyncStatusFooter / HLSyncBanner — render verification", .serialized, .mockURLSession)
     struct HLSyncStatusFooterRenderTests {
         // MARK: - Fixtures
 
@@ -43,7 +43,7 @@
                 minimumSyncingHold: .zero,
                 doneHold: .zero
             )
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = Data(#"""
                 {"data":{
                   "userId":"usr_render","timezone":"Europe/Berlin",

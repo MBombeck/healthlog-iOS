@@ -50,6 +50,8 @@ struct EditMoodSheet: View {
     /// Bumped when a tag suggestion is accepted so the light impact plays
     /// declaratively via `.sensoryFeedback` (reduce-motion aware).
     @State private var acceptPulse: Int = 0
+    /// #115 R3 — the save landed but the server dropped some tag/factor keys.
+    @State private var showDroppedKeys = false
 
     var body: some View {
         NavigationStack {
@@ -121,6 +123,12 @@ struct EditMoodSheet: View {
             }
             .onAppear(perform: prefill)
             .sensoryFeedback(.impact(weight: .light), trigger: acceptPulse)
+            .hlAcknowledgeAlert(
+                "mood.droppedKeys.title",
+                message: "mood.droppedKeys.message",
+                isPresented: $showDroppedKeys,
+                onAcknowledge: onDismiss
+            )
         }
         .interactiveDismissDisabled(isSaving)
     }
@@ -242,7 +250,7 @@ struct EditMoodSheet: View {
 
     private func suggestionFallbackMessage(_ reason: MoodTagSuggestionOutcome.FallbackReason) -> String {
         switch reason {
-        case .featureFlagDisabled:
+        case .capabilityNotAllowed:
             String(localized: "Tag suggestions are currently disabled.")
         case .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady, .frameworkUnavailable:
             String(localized: "On-device suggestions are not available on this device.")
@@ -348,7 +356,10 @@ struct EditMoodSheet: View {
             recordedAt: recordedAt,
             note: note.isEmpty ? nil : note
         )
-        if ok {
+        if ok, !store.lastWriteDroppedKeys.isEmpty {
+            // #115 R3 — saved, but tell the person before closing.
+            showDroppedKeys = true
+        } else if ok {
             onDismiss()
         } else {
             error = store.error ?? .unknown(String(localized: "Could not save"))

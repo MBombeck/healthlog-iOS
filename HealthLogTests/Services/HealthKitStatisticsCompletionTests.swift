@@ -13,7 +13,7 @@ import Testing
     /// *claim* afterwards. A sweep is complete only when every planned row is
     /// either terminally accepted or durably queued, and "the sweep ran" is not
     /// the same statement as "the history is complete".
-    @Suite("HK-STATS completion truth — terminal, durably queued, or incomplete", .serialized)
+    @Suite("HK-STATS completion truth — terminal, durably queued, or incomplete", .serialized, .mockURLSession)
     struct HealthKitStatisticsCompletionTests {
         static let owner = "account-a"
 
@@ -87,7 +87,7 @@ import Testing
         }
 
         private func respondFailed() {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = #"""
                 {"data":{"processed":1,"inserted":0,"duplicates":0,"skipped":[],"entries":[{"index":0,"status":"failed","reason":"persistence_error"}]},"error":null}
                 """#
@@ -163,7 +163,7 @@ import Testing
         func acceptedSweepIsComplete() async throws {
             let harness = try makeRetryHarness(api: makeAPI(), retry: RecordingStatsRetryQueue())
             nonisolated(unsafe) var postedBatches = 0
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 var count = 1
                 if req.targets("/api/measurements/batch") {
                     postedBatches += 1
@@ -218,7 +218,7 @@ import Testing
                 lastPostedValue: 8345
             )
             nonisolated(unsafe) var requestCount = 0
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.targets(prefixedBy: "/api/measurements") { requestCount += 1 }
                 let response = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
                 return (response, Data())

@@ -141,7 +141,7 @@ struct InsightsMoodPage: View {
     /// header `✦` Coach circle exactly like `InsightsMetricScreen`.
     @Environment(\.appContainer) private var appContainer
     private var aiSurfacesVisible: Bool {
-        appContainer?.aiMode != AIMode.none && appContainer?.aiMode != nil
+        appContainer?.aiMode != AIMode.none && appContainer?.aiMode != nil && appContainer.offersCoach // #115 · 0.2
     }
 
     /// I-4 Item 3 — the two equal trailing header circles (Settings + `✦`

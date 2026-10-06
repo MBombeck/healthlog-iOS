@@ -52,7 +52,18 @@ public struct MeasurementSeries: Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        kind = try c.decode(MetricKind.self, forKey: .kind)
+        // #115 B6 — tolerant like every server-owned token: a `kind` this build
+        // cannot name lands on the `.unknown` sentinel and the points survive,
+        // instead of failing the whole chart. A non-string is still drift.
+        let rawKind = try c.decode(String.self, forKey: .kind)
+        if let known = MetricKind(rawValue: rawKind) {
+            kind = known
+        } else {
+            UnknownServerEnumLog.noteFirstSighting(
+                of: rawKind, vocabulary: "series kind", consequence: "decoded as the unknown sentinel, points kept"
+            )
+            kind = .unknown
+        }
         points = try c.decode([SeriesPoint].self, forKey: .points)
         stats = try c.decode(SeriesStats.self, forKey: .stats)
         // Tolerant: absent OR JSON `null` both decode to `nil` (older server).

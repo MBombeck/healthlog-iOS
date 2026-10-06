@@ -78,7 +78,7 @@ struct MfaChallengeSheet: View {
                     }
 
                     if let err = authStore.lastError {
-                        Text(err.localizedDescription)
+                        Text(err.signInFacingDescription)
                             .font(.hlSubhead)
                             .foregroundStyle(HLColor.statusBad)
                             .padding(.horizontal, HLSpace.xl)

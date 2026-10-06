@@ -35,7 +35,9 @@ extension MeasurementsRepository {
     /// Returns the number of rows the server confirmed tombstoned (standalone:
     /// the number of local rows removed).
     @discardableResult
-    public func bulkDelete(ids: [String]) async throws -> Int {
+    public func bulkDelete(ids requested: [String]) async throws -> Int {
+        // #115 R3 — a synthetic bucket key names no row; never send it.
+        let ids = requested.filter { !Measurement.isSyntheticServerRowID($0) }
         guard !ids.isEmpty else { return 0 }
         if standalone?.isActive == true, let standalone {
             for id in ids {

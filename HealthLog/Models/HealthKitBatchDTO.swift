@@ -5,7 +5,8 @@ import Foundation
 ///
 /// **Field-Mapping** (aus `06-ios-responsibilities.md § HealthKit table`):
 /// - `hkIdentifier`: Apple-HK-Konstante als String, z. B. `HKQuantityTypeIdentifierBodyMass`.
-/// - `value`: Vorkonvertiert (×100 für SpO2 + BodyFat — siehe `HealthKitWireConverter`).
+/// - `value`: Roh-Wert in Apples Einheit; Prozent-Typen (SpO2, Body-Fat, Gait) als
+///   0..1-Fraktion, der Server skaliert (#113 — siehe `HealthKitWireConverter`).
 /// - `unit`: HK-Unit-String, z. B. `kg`, `mmHg`, `count`.
 /// - `startDate`/`endDate`: ISO-8601 mit Offset.
 /// - `sleepStage`: Optional Integer (`HKCategoryValueSleepAnalysis` codepoint, 0..20).

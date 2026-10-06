@@ -17,7 +17,7 @@ import Testing
     ///   - a body-tap deep-links via the server-supplied `deepLink`, falling
     ///     back to the dashboard when the push carries none
     ///   - the `measurementReminder.clientManaged` opt-in mirror persists
-    @Suite("NotificationService — measurement reminder", .serialized)
+    @Suite("NotificationService — measurement reminder", .serialized, .mockURLSession)
     @MainActor
     struct NotificationServiceMeasurementReminderTests {
         private static let env = AppEnvironment(
@@ -158,7 +158,7 @@ import Testing
 /// **W-B189 (#23)** — decode contract for the preventive-care reminder opt-in
 /// block on `GET /api/auth/me/notification-prefs`. Mirrors the medication block
 /// shape (forward-compat: unknown siblings ignored, missing block → nil).
-@Suite("AuthNotificationPrefsPayload — measurementReminder decode")
+@Suite("AuthNotificationPrefsPayload — measurementReminder decode", .mockURLSession)
 struct AuthNotificationPrefsMeasurementReminderTests {
     @Test("decodes measurementReminder.clientManaged when present")
     func decodesClientManaged() throws {

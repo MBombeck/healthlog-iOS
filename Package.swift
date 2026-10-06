@@ -106,6 +106,9 @@ let package = Package(
                 // single file was compiled — the module-purity gate had never
                 // actually run.
                 "Services/AuthService+WireDTOs.swift",
+                // R2 / #115 A6 — the refresh's device-id read lives beside
+                // `AuthService.refresh()`; Foundation only.
+                "Services/AuthService+RefreshDeviceID.swift",
                 "Services/OidcStatus.swift",
                 // 09-15 — `EcgRepository` and `WorkoutsRepository` (both in the
                 // wholesale-globbed `Repositories/`) build their routes from
@@ -124,6 +127,10 @@ let package = Package(
                 "Services/FeatureFlagsService.swift",
                 "Services/IdempotencyKey.swift",
                 "Services/KeychainStore.swift",
+                // #115 / 0.3 — the per-account partition token the refusal
+                // register (`Repositories/HealthRefusalRegister.swift`) keys on.
+                // Foundation only; its own doc already places it in Core.
+                "Services/HealthKitBackfillWindowStore.swift",
                 "Services/Logger.swift",
                 // Audit-M2 — non-trapping in-memory floor der SwiftData-Recovery-
                 // Ladders (`OutboxQueue+WriteAhead`, `SWRCacheFactory`, beide in

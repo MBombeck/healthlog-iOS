@@ -36,14 +36,23 @@ public struct AuthMeModules: Decodable, Sendable, Equatable {
     /// vocabulary word can never cost the whole map.
     public let moduleAccess: [String: ModuleAccessState]?
 
+    /// **#114 / #115 · 0.2 — the AI capability block** (server v1.39), resolved
+    /// for the same active record as `modules`. `nil` on an older server (the
+    /// field is absent) — and, deliberately, when the block cannot be read at
+    /// all, so a malformed `ai` can never cost the module map. Both mean the
+    /// legacy AI behaviour (see ``AICapabilityGate``).
+    public let ai: AIAccountBlock?
+
     public init(
         modules: [String: Bool]?,
         moduleAccess: [String: ModuleAccessState]? = nil,
-        updatedAt: String? = nil
+        updatedAt: String? = nil,
+        ai: AIAccountBlock? = nil
     ) {
         self.modules = modules
         self.moduleAccess = moduleAccess
         self.updatedAt = updatedAt
+        self.ai = ai
     }
 
     public init(from decoder: Decoder) throws {
@@ -51,12 +60,14 @@ public struct AuthMeModules: Decodable, Sendable, Equatable {
         modules = try container.decodeIfPresent([String: Bool].self, forKey: .modules)
         moduleAccess = try container.decodeIfPresent([String: ModuleAccessState].self, forKey: .moduleAccess)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        ai = try? container.decodeIfPresent(AIAccountBlock.self, forKey: .ai)
     }
 
     private enum CodingKeys: String, CodingKey {
         case modules
         case moduleAccess
         case updatedAt
+        case ai
     }
 }
 

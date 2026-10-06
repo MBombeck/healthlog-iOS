@@ -450,7 +450,7 @@ public enum LocalLLMError: Error, Sendable {
     /// (`runServerTurn`), mirroring `.byoFailed` for the BYO arm. Previously the
     /// server arm collapsed every failure into `.modelResponseFailed`, discarding
     /// the discriminating cause (`CoachServerError.provider(code)` for
-    /// no-tokens/rate-limited, `HLError.assistantDisabled` / HTTP status, offline,
+    /// no-tokens/rate-limited, `HLError.aiUnavailable` / HTTP status, offline,
     /// missing consent receipt) so the banner could only ever say "Response
     /// failed. Please try again." The associated value keeps the typed cause so
     /// `serverErrorCopy` maps it to an actionable, localized message.

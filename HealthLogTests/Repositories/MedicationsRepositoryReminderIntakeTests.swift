@@ -14,7 +14,7 @@ import Testing
 ///    and emits a log signpost)
 ///  - `idempotencyKey` survives the outbox round-trip so the replay
 ///    path reuses the same key (server-side dedup)
-@Suite("MedicationsRepository — recordFromReminder", .serialized)
+@Suite("MedicationsRepository — recordFromReminder", .serialized, .mockURLSession)
 struct MedicationsRepositoryReminderIntakeTests {
     private static let scheduledFor = Date(timeIntervalSince1970: 1_779_710_400)
     private static let takenAt = Self.scheduledFor.addingTimeInterval(60)
@@ -59,7 +59,7 @@ struct MedicationsRepositoryReminderIntakeTests {
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var capturedRequestBody: Data?
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedRequestBody = req.httpBody ?? req.bodyStreamData()
             let body = #"{"data":{"processed":1,"inserted":1,"duplicates":0,"entries":[{"index":0,"status":"inserted","id":"new-event-1"}]}}"#
@@ -92,7 +92,7 @@ struct MedicationsRepositoryReminderIntakeTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var capturedRequestBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedRequestBody = req.httpBody ?? req.bodyStreamData()
             let body = #"{"data":{"processed":1,"inserted":1,"duplicates":0,"entries":[{"index":0,"status":"inserted","id":"new-event-2"}]}}"#
             return (Self.ok(req), Data(body.utf8))
@@ -120,7 +120,7 @@ struct MedicationsRepositoryReminderIntakeTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             requestCount += 1
             return (Self.ok(request), Data(#"{"data":{}}"#.utf8))
         }
@@ -149,7 +149,7 @@ struct MedicationsRepositoryReminderIntakeTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         // Bulk endpoint returns 200 with the rejection embedded in entries[0]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = #"{"data":{"processed":1,"inserted":0,"duplicates":0,"entries":[{"index":0,"status":"skipped","reason":"medication_not_found"}]}}"#
             return (Self.ok(req), Data(body.utf8))
         }
@@ -175,7 +175,7 @@ struct MedicationsRepositoryReminderIntakeTests {
     func retriableNetworkErrorEnqueues() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let repo = MedicationsRepository(api: api, outbox: outbox)

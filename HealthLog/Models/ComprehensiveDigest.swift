@@ -162,22 +162,21 @@ public struct TrendSlope: Codable, Sendable, Hashable {
     }
 }
 
-public enum TrendDirection: String, Codable, Sendable {
+public enum TrendDirection: String, Codable, Sendable, TolerantServerEnum {
     case up
     case down
     case stable
+    /// #115 · 1.7 — a token this build does not know. The old decoder claimed
+    /// to be tolerant but threw, and because `AIInsightResponse` decodes the
+    /// digest through `try?`, one new trend word erased the WHOLE digest.
+    /// Rendered as "no direction", never as a guess.
+    case unknown
 
-    /// Tolerant decoder — unknown tokens decode to `nil`.
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let raw = try container.decode(String.self).lowercased()
-        guard let value = Self(rawValue: raw) else {
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Unknown TrendDirection: \(raw)"
-            )
-        }
-        self = value
+    public static let unknownFallback = TrendDirection.unknown
+    public static let wireVocabulary: StaticString = "digest trend direction"
+
+    public static func normalizedWireValue(_ raw: String) -> String? {
+        raw.lowercased()
     }
 }
 

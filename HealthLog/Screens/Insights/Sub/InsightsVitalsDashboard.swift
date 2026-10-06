@@ -6,8 +6,8 @@ import SwiftUI
 ///
 /// **Why this exists:** the web overview renders a dedicated vital-signs
 /// summary section — the key vitals at a glance, each with its latest value +
-/// trend. The iOS overview folded vitals into the generic `InsightsTargetTile
-/// Grid` (which is driven by the user's CONFIGURED *targets*, not by the vital
+/// trend. The iOS overview once folded vitals into the generic target-tile
+/// grid (driven by the user's CONFIGURED *targets*, not by the vital
 /// SIGNS), so a vital the user tracks but hasn't set a target for never
 /// surfaced at a glance. This block closes that gap: it reads the same
 /// `DashboardSummary.metrics` the dashboard tiles already read (NO new server
@@ -42,8 +42,8 @@ struct InsightsVitalsDashboard: View {
     /// site — the same array the dashboard tiles + target grid already read, so
     /// this block costs no extra round-trip.
     let metrics: [DashboardMetric]
-    /// W5-1 (v0.12 W5a) — kinds already rendered by the `InsightsTargetTileGrid`
-    /// (the operator's configured *targets*). The overview must show each metric
+    /// W5-1 (v0.12 W5a) — kinds already rendered by another overview surface
+    /// (originally the target-tile grid, gone since #115 B7). The overview must show each metric
     /// EXACTLY ONCE: a vital that already lives as a target tile (e.g. weight,
     /// resting-HR) is dropped from this Vitals block so the two surfaces never
     /// double-render the same graphic. Defaults to empty (previews / non-grid
@@ -60,6 +60,8 @@ struct InsightsVitalsDashboard: View {
     var container: AppContainer?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// #115 P2 — weight, temperature and glucose read in the account's unit.
+    @Environment(\.unitPreferences) private var unitPreferences
 
     /// Web `SECTION_VITALS` order, mapped onto the iOS `MetricKind` enum.
     /// `nonisolated` so the pure resolver can read it off the main actor in
@@ -75,7 +77,7 @@ struct InsightsVitalsDashboard: View {
     ]
 
     var body: some View {
-        let tiles = Self.tiles(from: metrics, excluding: excludedKinds)
+        let tiles = Self.tiles(from: metrics, excluding: excludedKinds, units: unitPreferences)
         // Self-suppress: no vital with a value → render nothing (calm doctrine).
         if !tiles.isEmpty {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
@@ -173,7 +175,8 @@ struct InsightsVitalsDashboard: View {
     /// self-suppress gate is unit-testable without instantiating the view.
     nonisolated static func tiles(
         from metrics: [DashboardMetric],
-        excluding excludedKinds: Set<MetricKind> = []
+        excluding excludedKinds: Set<MetricKind> = [],
+        units: UnitPreferences = .standard
     ) -> [VitalTile] {
         let byKind = Dictionary(metrics.map { ($0.kind, $0) }, uniquingKeysWith: { first, _ in first })
         return vitalOrder.compactMap { kind -> VitalTile? in
@@ -183,8 +186,12 @@ struct InsightsVitalsDashboard: View {
             guard let metric = byKind[kind], let latest = metric.latestValue else { return nil }
             let descriptor = kind.descriptor
             let title = String(localized: descriptor.title)
-            let unit = metric.unit.isEmpty ? String(localized: descriptor.unitLabel) : metric.unit
-            let value = latest.formatted(.number.precision(.fractionLength(0 ... 1)))
+            // #115 P2 — the summary value is canonical SI; a converted family
+            // reads in the account's unit (the identity branch keeps the
+            // summary's own label and the 0…1-dp text).
+            let unit = units.transform(for: kind).suffix
+                ?? (metric.unit.isEmpty ? String(localized: descriptor.unitLabel) : metric.unit)
+            let value = MetricValueFormatter.formatScalar(latest, kind: kind, units: units)
             let valueText = unit.isEmpty ? value : "\(value) \(unit)"
             return VitalTile(
                 kind: kind,

@@ -34,9 +34,16 @@ public enum DoctorReportSpecBuilder {
         public let appVersion: String
         public let measurements: [Measurement]
         public let medications: [Medication]
-        public let compliance: [ComplianceDay]
-        public let intakes: [MedicationIntake]
+        /// #115 · 1.2 — the server's per-medication adherence
+        /// (`GET /api/medications/compliance`), read when the report is
+        /// generated. `nil` = the server could not be asked (offline,
+        /// standalone); the report then says adherence is unavailable.
+        public let serverCompliance: [MedicationComplianceSummaryEntry]?
         public let moodEntries: [MoodEntry]
+        /// #115 B5 — the account's glucose unit the PDF prints glucose in.
+        public let glucoseUnit: GlucoseUnit
+        /// #115 P2 — the account's unit system + weight unit the PDF prints in.
+        public let accountUnits: UnitPreferences
 
         public init(
             patientName: String,
@@ -47,10 +54,12 @@ public enum DoctorReportSpecBuilder {
             appVersion: String,
             measurements: [Measurement],
             medications: [Medication],
-            compliance: [ComplianceDay],
-            intakes: [MedicationIntake],
-            moodEntries: [MoodEntry]
+            serverCompliance: [MedicationComplianceSummaryEntry]? = nil,
+            moodEntries: [MoodEntry],
+            glucoseUnit: GlucoseUnit = .mgdL,
+            accountUnits: UnitPreferences = .standard
         ) {
+            self.accountUnits = accountUnits
             self.patientName = patientName
             self.fullName = fullName
             self.insurerName = insurerName
@@ -59,9 +68,9 @@ public enum DoctorReportSpecBuilder {
             self.appVersion = appVersion
             self.measurements = measurements
             self.medications = medications
-            self.compliance = compliance
-            self.intakes = intakes
+            self.serverCompliance = serverCompliance
             self.moodEntries = moodEntries
+            self.glucoseUnit = glucoseUnit
         }
     }
 
@@ -95,14 +104,8 @@ public enum DoctorReportSpecBuilder {
         let measurementsInWindow = snapshot.measurements.filter {
             $0.recordedAt >= periodStart && $0.recordedAt <= periodEnd
         }
-        let intakesInWindow = snapshot.intakes.filter {
-            $0.scheduledAt >= periodStart && $0.scheduledAt <= periodEnd
-        }
         let moodInWindow = snapshot.moodEntries.filter {
             $0.recordedAt >= periodStart && $0.recordedAt <= periodEnd
-        }
-        let complianceInWindow = snapshot.compliance.filter {
-            $0.date >= calendar.startOfDay(for: periodStart) && $0.date <= periodEnd
         }
 
         let vitals = selection.vitals
@@ -117,8 +120,12 @@ public enum DoctorReportSpecBuilder {
         let adherence = selection.adherence
             ? makeAdherenceBlock(
                 medications: snapshot.medications,
-                intakes: intakesInWindow,
-                compliance: complianceInWindow
+                serverCompliance: snapshot.serverCompliance,
+                periodDays: calendar.dateComponents(
+                    [.day],
+                    from: calendar.startOfDay(for: periodStart),
+                    to: calendar.startOfDay(for: periodEnd)
+                ).day ?? 0
             )
             : nil
         let mood = selection.mood
@@ -136,7 +143,9 @@ public enum DoctorReportSpecBuilder {
             medications: medications,
             adherence: adherence,
             mood: mood,
-            footer: footer
+            footer: footer,
+            glucoseUnit: snapshot.glucoseUnit,
+            accountUnits: snapshot.accountUnits
         )
     }
 
@@ -258,52 +267,44 @@ public enum DoctorReportSpecBuilder {
 
     // MARK: - Adherence
 
-    /// Per-medication adherence rolls up the in-window intake events
-    /// keyed by `medicationId`. Each row reports scheduled + taken
-    /// counts; the overall band aggregates across medications. When the
-    /// snapshot only carries `ComplianceDay` rows (server returned the
-    /// aggregate) we fall back to the day-window sum.
+    /// #115 · 1.2 — one row per active, scheduled (non-PRN) medication with
+    /// the server's `compliance30` verbatim. Returns `nil` when there is no
+    /// active medication to report on. With no server answer the block is
+    /// `.unavailable` and carries no rows — the drawer says so.
     static func makeAdherenceBlock(
         medications: [Medication],
-        intakes: [MedicationIntake],
-        compliance: [ComplianceDay]
+        serverCompliance: [MedicationComplianceSummaryEntry]?,
+        periodDays: Int
     ) -> DoctorReportSpec.AdherenceBlock? {
-        guard !medications.isEmpty else {
-            return fallbackAdherence(compliance: compliance)
+        let active = medications.filter(\.active)
+        guard !active.isEmpty else { return nil }
+        let windowDays = 30
+        guard let serverCompliance else {
+            return DoctorReportSpec.AdherenceBlock(
+                availability: .unavailable, windowDays: windowDays, periodDays: periodDays, perMedication: []
+            )
         }
-        let byMed: [String: [MedicationIntake]] = Dictionary(grouping: intakes, by: \.medicationId)
-        let activeMeds = medications.filter(\.active)
-        var rows: [DoctorReportSpec.AdherenceBlock.Row] = []
-        var totalScheduled = 0
-        var totalTaken = 0
-        for med in activeMeds {
-            let bucket = byMed[med.id] ?? []
-            let scheduled = bucket.count
-            let taken = bucket.filter { $0.status == .taken }.count
-            guard scheduled > 0 else { continue }
-            totalScheduled += scheduled
-            totalTaken += taken
-            rows.append(DoctorReportSpec.AdherenceBlock.Row(
-                medicationId: med.id,
-                medicationName: med.name,
-                scheduled: scheduled,
-                taken: taken
-            ))
+        let byID = Dictionary(serverCompliance.map { ($0.medicationId, $0) }, uniquingKeysWith: { first, _ in first })
+        // PRN medications carry no server entry (the route excludes them), so
+        // they get no row rather than an invented one.
+        let rows: [DoctorReportSpec.AdherenceBlock.Row] = active.compactMap { med in
+            guard let entry = byID[med.id] else { return nil }
+            guard entry.isApplicable else {
+                return .init(
+                    medicationId: med.id, medicationName: med.name, applicable: false,
+                    rate: nil, taken: nil, expected: nil
+                )
+            }
+            let window = entry.compliance30
+            return .init(
+                medicationId: med.id, medicationName: med.name, applicable: true,
+                rate: window.rate, taken: window.taken, expected: window.taken + window.missed
+            )
         }
-        if rows.isEmpty {
-            return fallbackAdherence(compliance: compliance)
-        }
-        let overall = totalScheduled == 0 ? 1 : Double(totalTaken) / Double(totalScheduled)
-        return DoctorReportSpec.AdherenceBlock(perMedication: rows, overall: overall)
-    }
-
-    private static func fallbackAdherence(compliance: [ComplianceDay]) -> DoctorReportSpec.AdherenceBlock? {
-        guard !compliance.isEmpty else { return nil }
-        let totalScheduled = compliance.reduce(0) { $0 + $1.scheduled }
-        let totalTaken = compliance.reduce(0) { $0 + $1.taken }
-        guard totalScheduled > 0 else { return nil }
-        let overall = Double(totalTaken) / Double(totalScheduled)
-        return DoctorReportSpec.AdherenceBlock(perMedication: [], overall: overall)
+        guard !rows.isEmpty else { return nil }
+        return DoctorReportSpec.AdherenceBlock(
+            availability: .server, windowDays: windowDays, periodDays: periodDays, perMedication: rows
+        )
     }
 
     // MARK: - Mood

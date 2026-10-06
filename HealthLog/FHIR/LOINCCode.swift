@@ -34,11 +34,12 @@ import Foundation
 /// (`.planning/v056-marathon/v060-research.md`) marks the following
 /// rows as high-uncertainty:
 ///
-/// - Body-composition: `bodyWater` (73704-9), `boneMass` (73708-0),
+/// - Body-composition: `bodyWater` (101683-1), `boneMass` (101685-6),
 ///   `bodyFat` (41982-0).
-/// - Performance: `hrv` (80404-7), `vo2Max` (96402-2).
-/// - Walking-* (Apple-Health-derived metrics without LOINC consensus):
-///   `walkingSpeed`, `walkingAsymmetry`, `walkingStepLength`.
+/// - Performance: `hrv` (80404-7), `vo2Max` (HealthKit identifier — #115 R3).
+/// - Walking-* (Apple-Health-derived metrics without LOINC consensus, HealthKit
+///   identifiers since #115 R3): `walkingSpeed`, `walkingAsymmetry`,
+///   `walkingStepLength`.
 /// - Glucose discriminator codes (fasting / postprandial / random).
 ///
 /// The flag is intentionally **not** consumed by the mapper — it surfaces

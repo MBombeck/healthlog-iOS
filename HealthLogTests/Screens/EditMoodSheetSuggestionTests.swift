@@ -57,7 +57,7 @@ struct EditMoodSheetSuggestionTests {
     func fallbackMessageCompleteness() {
         let allReasons: [MoodTagSuggestionOutcome.FallbackReason] = [
             .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady,
-            .featureFlagDisabled, .safetyRefused, .generationFailed,
+            .capabilityNotAllowed, .safetyRefused, .generationFailed,
             .frameworkUnavailable, .emptyInput
         ]
         for reason in allReasons {
@@ -105,7 +105,7 @@ private struct SuggestionAcceptance {
 
     static func fallbackMessage(_ reason: MoodTagSuggestionOutcome.FallbackReason) -> String {
         switch reason {
-        case .featureFlagDisabled:
+        case .capabilityNotAllowed:
             "Tag-Vorschlaege sind aktuell deaktiviert."
         case .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady, .frameworkUnavailable:
             "On-Device-Vorschlaege sind auf diesem Geraet nicht verfuegbar."

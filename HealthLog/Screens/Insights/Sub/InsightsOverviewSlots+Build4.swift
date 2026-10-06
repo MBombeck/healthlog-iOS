@@ -7,7 +7,7 @@ import SwiftUI
 // SMALLEST set of `@Observable` stores it needs, so a refresh invalidates only
 // that slot.
 
-// MARK: - Rhythm-events slot (RhythmEventsStore + Backend + module gate)
+// MARK: - Rhythm-events slot (RhythmEventsStore + Backend)
 
 /// **Parity Build 4 · 4.6 — the `rhythm-events` overview section.**
 ///
@@ -28,13 +28,13 @@ struct InsightsRhythmEventsSlot: View {
     @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.insightsModuleEnabled(appContainer) {
+        if backend.hasServer, InsightsOverviewGate.isVisible(.rhythmEvents, appContainer) {
             InsightsRhythmEventsCard(events: rhythmEventsStore.events)
         }
     }
 }
 
-// MARK: - Clinical-signals slots (ClinicalSignalsStore + Backend + module gate)
+// MARK: - Clinical-signals slots (ClinicalSignalsStore + Backend + owning module)
 
 /// v1.25 (GH iOS #38) — the baseline-drift health-status card. Self-suppresses
 /// when the server read is absent (server-authoritative, paired-only).
@@ -50,7 +50,7 @@ struct InsightsHealthStatusSlot: View {
     @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.insightsModuleEnabled(appContainer) {
+        if backend.hasServer, InsightsOverviewGate.isVisible(.healthStatus, appContainer) {
             InsightsHealthStatusCard(status: clinicalSignalsStore.healthStatus)
         }
     }
@@ -65,13 +65,13 @@ struct InsightsBreathingSlot: View {
     @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.insightsModuleEnabled(appContainer) {
+        if backend.hasServer, InsightsOverviewGate.isVisible(.breathing, appContainer) {
             InsightsBreathingScreeningCard(screening: clinicalSignalsStore.breathing)
         }
     }
 }
 
-// MARK: - Labs-changes slot (ClinicalSignalsStore + Backend + module gate)
+// MARK: - Labs-changes slot (ClinicalSignalsStore + Backend + `labs` module)
 
 /// **Parity Build 4 · 4.6 — the `labs-changes` overview section.**
 ///
@@ -93,7 +93,7 @@ struct InsightsLabsChangesSlot: View {
     @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.insightsModuleEnabled(appContainer) {
+        if backend.hasServer, InsightsOverviewGate.isVisible(.labsChanges, appContainer) {
             LabsChangesCard(changes: clinicalSignalsStore.labsChanges)
         }
     }

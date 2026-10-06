@@ -141,7 +141,8 @@ private extension DailyDigest {
             topSignal: topSignal,
             briefingLead: briefingLead,
             line: line,
-            worthALook: items
+            worthALook: items,
+            ai: ai
         )
     }
 }

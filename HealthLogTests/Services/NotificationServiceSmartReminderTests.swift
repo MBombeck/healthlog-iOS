@@ -122,7 +122,7 @@ import Testing
                 .deviceIneligible,
                 .appleIntelligenceDisabled,
                 .modelNotReady,
-                .featureFlagDisabled,
+                .capabilityNotAllowed,
                 .safetyRefused,
                 .generationFailed,
                 .frameworkUnavailable,

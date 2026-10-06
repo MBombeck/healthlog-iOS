@@ -100,10 +100,19 @@ struct AllergyEditorSheet: View {
                         ForEach(AllergySeverity.allCases) { s in
                             Text(s.localizedLabel).tag(AllergySeverity?.some(s))
                         }
+                        // A stored grade this build does not know stays selectable
+                        // as itself, so the picker shows it honestly; unchanged,
+                        // the tri-state PATCH leaves it out.
+                        if record?.severity == .unknown {
+                            Text(AllergySeverity.unknown.localizedLabel).tag(AllergySeverity?.some(.unknown))
+                        }
                     }
                     Picker("allergies.field.status", selection: $status) {
                         ForEach(AllergyStatus.allCases) { s in
                             Text(s.localizedLabel).tag(s)
+                        }
+                        if record?.status == .unknown {
+                            Text(AllergyStatus.unknown.localizedLabel).tag(AllergyStatus.unknown)
                         }
                     }
                 }

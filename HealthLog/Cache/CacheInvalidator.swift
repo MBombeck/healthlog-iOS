@@ -18,22 +18,25 @@ public enum MutationKind: Sendable, Hashable {
 }
 
 public extension MutationKind {
-    /// v0.14.8 INV-home-compliance-slot — the day-anchored dashboard-summary
-    /// key. The `.dashboardSummary` key is now profile-tz day-anchored (the
-    /// Home compliance ring must not SWR-serve a prior-day snapshot across
-    /// midnight). This static matrix has no profile-tz context, so it anchors on
-    /// the current device-tz day — the authoritative intake/measurement-change
-    /// invalidation runs through `MedicationsStore.dashboardSummaryKey` /
-    /// `DashboardStore.dashboardSummaryKey` directly; this matrix entry is the
-    /// cross-cutting contract fallback. Mirrors the `.medicationsTodayIntakes`
-    /// device-tz fallback below.
-    private static var dashboardSummaryKey: CacheKey {
-        .dashboardSummary(day: MedicationDayKey.string(timeZone: .current))
+    /// Keys that should be invalidated after this mutation succeeds.
+    ///
+    /// **#115 1.5** — the day-anchored keys (`.dashboardSummary(day:)`,
+    /// `.medicationsTodayIntakes(day:)`) are cut in the ACCOUNT zone, the same
+    /// zone `DashboardStore.dashboardSummaryKey` / `MedicationsStore
+    /// .todayIntakesKey` read them in (``ProfileDay``, fed from `/me`). This
+    /// matrix used to anchor on the device zone, so for anyone whose phone and
+    /// account disagree it invalidated a day row nobody reads — around
+    /// midnight, the live row survived a write and served the old compliance
+    /// ring.
+    var affectedKeys: [CacheKey] {
+        affectedKeys(profileTimeZone: ProfileDay.timeZone)
     }
 
-    /// Keys that should be invalidated after this mutation succeeds.
-    var affectedKeys: [CacheKey] {
-        switch self {
+    /// ``affectedKeys`` with the zone and clock pinned (the unit-test seam).
+    func affectedKeys(profileTimeZone: TimeZone, now: Date = .now) -> [CacheKey] {
+        let day = MedicationDayKey.string(for: now, timeZone: profileTimeZone)
+        let dashboardSummaryKey = CacheKey.dashboardSummary(day: day)
+        return switch self {
         case let .measurementChange(kind):
             // Invalidate all measurement-series buckets for this kind +
             // measurements-recent + dashboard summary + comprehensive insights.
@@ -50,7 +53,7 @@ public extension MutationKind {
                 // the affected set (the dead-`moodEntryChange` lesson).
                 .measurementAvailability,
                 .measurementsRecentKind(type: kind.availabilitySummaryKey ?? kind.rawValue, limit: 400),
-                Self.dashboardSummaryKey,
+                dashboardSummaryKey,
                 .healthScore,
                 .insightsComprehensive,
                 .insightsCards,
@@ -70,7 +73,8 @@ public extension MutationKind {
                 // caller (M-2), so this arm is no longer dead.
                 .moodEntries(days: 365),
                 .moodInsights,
-                Self.dashboardSummaryKey,
+                .moodDailySeries,
+                dashboardSummaryKey,
                 .insightsComprehensive,
                 .insightsCards,
                 .healthScore
@@ -79,12 +83,9 @@ public extension MutationKind {
             [
                 .medicationsList,
                 // v0.14.1 INV-med-cadence-phantom (BUG 2): the today-intakes key
-                // is now day-anchored (profile-tz `yyyy-MM-dd`). This static
-                // matrix has no profile-tz context, so it anchors on the current
-                // device-tz day — the authoritative intake-change invalidation
-                // runs through `MedicationsStore.todayIntakesKey` directly; this
-                // matrix entry is the cross-cutting contract fallback.
-                .medicationsTodayIntakes(day: MedicationDayKey.string(timeZone: .current)),
+                // is day-anchored (profile-tz `yyyy-MM-dd`); #115 1.5 — this
+                // matrix now cuts it in the same profile zone.
+                .medicationsTodayIntakes(day: day),
                 // v0.5.5.3 (2026-05-21): keep the invalidation key arity in
                 // lock-step with the compliance fetch window, otherwise
                 // mutations would never sweep the cached row.
@@ -93,19 +94,19 @@ public extension MutationKind {
                 // the 26-week picker maximum) so the lock-step can no
                 // longer drift.
                 .medicationsCompliance(days: CacheKey.complianceWindowDays),
-                Self.dashboardSummaryKey
+                dashboardSummaryKey
             ]
         case .medicationIntakeChange:
             [
-                .medicationsTodayIntakes(day: MedicationDayKey.string(timeZone: .current)),
+                .medicationsTodayIntakes(day: day),
                 .medicationsCompliance(days: CacheKey.complianceWindowDays),
-                Self.dashboardSummaryKey,
+                dashboardSummaryKey,
                 .healthScore
             ]
         case .insightsFeedback:
             [.insightsCards]
         case .settingsChange:
-            [.userProfile, Self.dashboardSummaryKey]
+            [.userProfile, dashboardSummaryKey]
         }
     }
 }

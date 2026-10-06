@@ -12,7 +12,7 @@ import Testing
 ///
 /// Uses a real `APIClient` over a stubbed `URLProtocol` (per PROJECT_GUIDE.md —
 /// no mock-server for network paths, so schema drift surfaces).
-@Suite("APIClient — captive-portal health probe", .serialized)
+@Suite("APIClient — captive-portal health probe", .serialized, .mockURLSession)
 struct APIClientHealthProbeTests {
     // swiftlint:disable force_unwrapping
 
@@ -67,7 +67,7 @@ struct APIClientHealthProbeTests {
     func probeReturnsTrueOnHealthyResponse() async {
         let api = makeClient()
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             let body = Data(#"{"status":"ok"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -79,7 +79,7 @@ struct APIClientHealthProbeTests {
     @Test("Probe returns true on a 503 health envelope (server up, deps degraded)")
     func probeReturnsTrueOn503HealthEnvelope() async {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"status":"degraded"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -89,7 +89,7 @@ struct APIClientHealthProbeTests {
     @Test("Probe returns false on a captive-portal HTML 200")
     func probeReturnsFalseOnCaptivePortalHTML() async {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data("<html>Login</html>".utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -99,7 +99,7 @@ struct APIClientHealthProbeTests {
     @Test("Probe returns false when the request errors (timeout / portal hang)")
     func probeReturnsFalseOnTransportError() async {
         let api = makeClient()
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.timedOut)
         }
         #expect(await api.probeReachable() == false)

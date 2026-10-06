@@ -15,7 +15,7 @@ import Testing
 /// so the server preserves the stored choice (older-client-safe). Verified at
 /// two layers: the DTO encode (key present/absent) and the real wire body over
 /// `APIClient` + `MockURLProtocol` (per PROJECT_GUIDE.md: real client, not a mock).
-@Suite("selectedScoreRings PUT preserve-when-absent", .serialized)
+@Suite("selectedScoreRings PUT preserve-when-absent", .serialized, .mockURLSession)
 struct DashboardScoreRingsSelectionPutTests {
     // MARK: - Helpers
 
@@ -108,7 +108,7 @@ struct DashboardScoreRingsSelectionPutTests {
     private func capturePutBody(_ layout: DashboardWidgetLayout) async throws -> String {
         let repo = DashboardRepository(api: makeAPI())
         let box = BodyBox()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let data = req.httpBody ?? Self.drainStream(req.httpBodyStream)
             box.set(data.flatMap { String(bytes: $0, encoding: .utf8) })
             // Echo a valid layout so the repo's decode succeeds.

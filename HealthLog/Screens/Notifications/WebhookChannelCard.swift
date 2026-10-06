@@ -21,6 +21,10 @@ struct WebhookChannelCard: View {
     /// Transient header-value draft. Empty ⇒ not sent (server keeps any stored
     /// secret). The stored value is never read back into this field.
     @State private var headerValueDraft = ""
+    /// #112 — the body shape. Hydrated from the server; ``WebhookFormat/unknown``
+    /// (a value this build does not know) selects nothing and is never sent, so
+    /// saving keeps whatever the server stored.
+    @State private var format: WebhookFormat = .generic
     @State private var hydratedFromConfig = false
     @State private var testTick = 0
 
@@ -72,6 +76,8 @@ struct WebhookChannelCard: View {
                         .accessibilityIdentifier("notifications.webhook.headerValueField")
                 }
 
+                formatPicker
+
                 if let invalid = validationMessage {
                     Text(invalid)
                         .font(.hlCaption)
@@ -109,6 +115,10 @@ struct WebhookChannelCard: View {
                 testOkRow
             }
 
+            if let failure = store.webhookTestFailure {
+                ChannelTestFailureRow(failure: failure, identifier: "notifications.webhook.testFailure")
+            }
+
             if let error = store.webhookError {
                 Text(error.userFacingDescription)
                     .font(.hlCaption)
@@ -120,6 +130,30 @@ struct WebhookChannelCard: View {
         .onAppear { hydrate() }
         .onChange(of: store.webhook) { _, _ in hydrate() }
         .sensoryFeedback(.success, trigger: testTick)
+    }
+
+    // MARK: - Format (#112)
+
+    private var formatPicker: some View {
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
+            Picker(selection: $format) {
+                Text("notifications.webhook.format.generic").tag(WebhookFormat.generic)
+                Text("notifications.webhook.format.gotify").tag(WebhookFormat.gotify)
+            } label: {
+                Text("notifications.webhook.format.label")
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("notifications.webhook.formatPicker")
+
+            Text(
+                format == .gotify
+                    ? "notifications.webhook.format.gotify.footer"
+                    : "notifications.webhook.format.generic.footer"
+            )
+            .font(.hlCaption)
+            .foregroundStyle(HLText.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     // MARK: - Derived
@@ -162,6 +196,7 @@ struct WebhookChannelCard: View {
         enabled = config.enabled
         url = config.url
         headerName = config.headerName
+        format = config.format
         hydratedFromConfig = true
     }
 
@@ -172,7 +207,8 @@ struct WebhookChannelCard: View {
             enabled: enabled,
             url: url.trimmingCharacters(in: .whitespaces),
             headerName: name.isEmpty ? nil : name,
-            headerValue: secret.isEmpty ? nil : secret
+            headerValue: secret.isEmpty ? nil : secret,
+            format: format
         )
         // Wipe the transient secret as soon as it leaves the device.
         if store.webhookError == nil {

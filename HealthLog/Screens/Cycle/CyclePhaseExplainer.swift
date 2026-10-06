@@ -170,7 +170,7 @@ struct PhaseHighlightSlot: View {
                 .overlay(alignment: PhaseHighlightSlot.contentAlignment(for: phase)) {
                     Image(assetName)
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
+                        .scaledToFill()
                 }
                 .clipped()
                 .accessibilityHidden(true)

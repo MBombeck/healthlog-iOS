@@ -15,7 +15,7 @@
     /// worth-a-look rail bounding.
     ///
     /// `.serialized` because `MockURLProtocol.handler` is a process-global.
-    @Suite("DailyDigest — decode + store + rail bounding", .serialized)
+    @Suite("DailyDigest — decode + store + rail bounding", .serialized, .mockURLSession)
     struct DailyDigestTests {
         // MARK: - Decode fixtures
 
@@ -149,7 +149,7 @@
         @MainActor
         @Test("200 data → .data presentation")
         func storePresentsData() async {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 respond(req, status: 200, body: #"{"data":\#(Self.fullJSON),"error":null}"#)
             }
             let store = makeStore()
@@ -166,7 +166,7 @@
         @MainActor
         @Test("404 → nil digest → .hidden (never an error)")
         func storeHidesOn404() async {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 respond(req, status: 404, body: #"{"data":null,"error":"not found"}"#)
             }
             let store = makeStore()
@@ -180,7 +180,7 @@
         @MainActor
         @Test("403 module.disabled → .hidden (insights off)")
         func storeHidesOnModuleDisabled() async {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 respond(
                     req, status: 403,
                     body: #"{"data":null,"error":"module disabled","meta":{"errorCode":"module.disabled","module":"insights"}}"#
@@ -196,7 +196,7 @@
         @MainActor
         @Test("200 empty-degrade digest → .hidden")
         func storeHidesOnEmptyDegrade() async {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 respond(req, status: 200, body: #"{"data":\#(Self.emptyDegradeJSON),"error":null}"#)
             }
             let store = makeStore()
@@ -209,7 +209,7 @@
         @MainActor
         @Test("500 → .error presentation (retry)")
         func storeSurfacesError() async {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 respond(req, status: 500, body: #"{"data":null,"error":"boom"}"#)
             }
             let store = makeStore()
@@ -222,7 +222,7 @@
         @MainActor
         @Test("Optimistic dismiss removes the card immediately")
         func storeOptimisticDismiss() async {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.url?.path.contains("/dismiss") == true {
                     return respond(req, status: 200, body: #"{"data":{"dismissed":true},"error":null}"#)
                 }

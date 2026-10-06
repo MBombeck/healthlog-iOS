@@ -38,15 +38,39 @@ public actor MetricInsightsRepository {
     /// block has cache-first content on first frame. `nil` (default) keeps
     /// the legacy direct-fetch ergonomics for unit tests.
     private let swr: SWRCoordinator?
+    /// **#114 / #115 · 0.2 — the `statusText` capability.** While it is
+    /// unavailable the server serves no model note (its fixed general line or
+    /// `text: null`), so a note cached on this device while it WAS available
+    /// must not be painted either: reads bypass the daily cache and nothing is
+    /// written back. `nil` (unit tests) reads as available.
+    private let aiCapabilities: (any AICapabilityReading)?
 
     public init(
         api: APIClientProtocol,
         consentGate: (@Sendable () async -> Bool)? = nil,
-        swr: SWRCoordinator? = nil
+        swr: SWRCoordinator? = nil,
+        aiCapabilities: (any AICapabilityReading)? = nil
     ) {
         self.api = api
         self.consentGate = consentGate
         self.swr = swr
+        self.aiCapabilities = aiCapabilities
+    }
+
+    /// **#115 B7.** A server that sends the `ai` block (v1.39+) resolves consent
+    /// for the status family itself: `statusText` reads `consent_required` and
+    /// the route answers `text: null` (`status-cache.ts` `statusTextServable`).
+    /// The client consent gate would only duplicate that — and block the read
+    /// outright when the consent was given on another device. Older servers do
+    /// not resolve consent for these routes, so for them the gate stays.
+    private var serverResolvesConsent: Bool {
+        aiCapabilities?.reportsCapabilities ?? false
+    }
+
+    /// Whether model-written status text may be served from / written to the
+    /// daily cache.
+    private var statusTextAvailable: Bool {
+        aiCapabilities?.isAvailable(.statusText) ?? true
     }
 
     /// Task #50 — whether a ``read`` may touch the daily SWR cache.
@@ -65,8 +89,9 @@ public actor MetricInsightsRepository {
     ///   - locale: BCP-47 locale tag — server uses it to localize the prose.
     /// - Returns: `nil` when (a) the metric has no assessment surface at all
     ///   (no dedicated route AND no generic-registry id — see
-    ///   ``statusRequest(for:locale:)``), (b) the consent gate is closed (no
-    ///   LLM call may fire), or (c) the fetch 404s (route not deployed) /
+    ///   ``statusRequest(for:locale:)``), (b) the consent gate is closed on a
+    ///   server older than v1.39 (no LLM call may fire; newer servers resolve
+    ///   consent themselves, see ``serverResolvesConsent``), or (c) the fetch 404s (route not deployed) /
     ///   422s (registry rejects the id). UI surfaces a "no findings" state for
     ///   all nil cases. Otherwise the envelope as emitted by the dedicated
     ///   `/api/insights/{metric}-status` route or the generic
@@ -75,7 +100,7 @@ public actor MetricInsightsRepository {
         guard Self.statusRequest(for: metric, locale: locale) != nil else {
             return nil
         }
-        if let consentGate {
+        if let consentGate, !serverResolvesConsent {
             let allowed = await consentGate()
             guard allowed else {
                 // MetricKind raw value is an enum case — operator-grade.
@@ -155,7 +180,7 @@ public actor MetricInsightsRepository {
     /// the Berlin-day key — the page then served the stale hint for the rest
     /// of the day even after the provider/consent state recovered server-side.
     public func cacheReadyAssessment(metric: MetricKind, locale: String, dto: MetricStatusDTO) async {
-        guard let swr, dto.hasReadyText, dto.hasProvider else { return }
+        guard let swr, dto.hasReadyText, dto.hasProvider, statusTextAvailable else { return }
         let key = CacheKey.insightStatus(kind: metric, locale: locale, day: BerlinDayKey.string())
         await swr.writeThrough(key, value: dto)
     }
@@ -187,7 +212,7 @@ public actor MetricInsightsRepository {
         // The 404 "endpoint not deployed" arm is preserved on both paths and is
         // never cached (it surfaces empty findings).
         do {
-            if cachePolicy == .cacheReadyText, let swr {
+            if cachePolicy == .cacheReadyText, statusTextAvailable, let swr {
                 let key = CacheKey.insightStatus(
                     kind: metric,
                     locale: locale,

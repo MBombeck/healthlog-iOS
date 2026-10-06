@@ -22,7 +22,7 @@ import Testing
 ///
 /// Real `MedicationsRepository` against a stubbed `URLSession` per the
 /// PROJECT_GUIDE.md anti-pattern rule (no mock server on intake/outbox paths).
-@Suite("MedicationsStore — synth-mark debounce + derived revert (W1b)", .serialized)
+@Suite("MedicationsStore — synth-mark debounce + derived revert (W1b)", .serialized, .mockURLSession)
 struct MedicationsStoreSynthMarkDebounceTests {
     // MARK: - Fixtures
 
@@ -109,7 +109,7 @@ struct MedicationsStoreSynthMarkDebounceTests {
         // dispatched, so the second tap genuinely overlaps the first
         // in-flight CREATE (proving the guard, not just serialisation).
         let gate = AsyncGate()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/medications/intake/bulk" {
                 counter.increment()
                 gate.wait()
@@ -149,7 +149,7 @@ struct MedicationsStoreSynthMarkDebounceTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let counter = BulkCreateCounter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/medications/intake/bulk" { counter.increment() }
             return (Self.ok(req), Self.bulkSuccessBody)
         }
@@ -177,7 +177,7 @@ struct MedicationsStoreSynthMarkDebounceTests {
     func hardFailRevertsDerivedCount() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (Self.status(422, request: req), Data(#"{"error":"medication_not_found"}"#.utf8))
         }
         let repo = MedicationsRepository(api: api, outbox: outbox)
@@ -186,20 +186,12 @@ struct MedicationsStoreSynthMarkDebounceTests {
         let med = Self.twiceDailyMed()
         store._testForceSet(medications: [med])
         let synthID = Self.firstSlotSynthID(medicationID: med.id)
-        let activeIDs: Set<String> = [med.id]
-        // Server reports nothing scheduled yet (the RED-window asymmetry
-        // this whole synth path exists to paper over).
-        let serverSnapshot = ComplianceSnapshot(scheduledToday: 0, takenToday: 0)
-
-        // Baseline: two synth placeholders derived, none taken.
-        let baseline = ComplianceSnapshot.reconciled(
-            server: serverSnapshot,
-            todayIntakes: store.derivedTodayIntakes,
-            activeMedicationIDs: activeIDs,
-            medicationsLoaded: true
-        )
-        #expect(baseline.takenToday == 0)
-        #expect(baseline.scheduledToday == 2)
+        // Baseline: two synth placeholders derived, none taken. (#115 1.3 —
+        // the Home ring no longer reads this derived list; it is still the
+        // list the medications surfaces render, so its revert is pinned here.)
+        let baseline = store.derivedTodayIntakes
+        #expect(baseline.count(where: { $0.status == .taken }) == 0)
+        #expect(baseline.count == 2)
 
         let outcome = await store.markIntakeQuick(intakeId: synthID, status: .taken)
 
@@ -212,19 +204,14 @@ struct MedicationsStoreSynthMarkDebounceTests {
         // Row reverted.
         #expect(store.todayIntakes.contains(where: { $0.id == synthID }) == false)
 
-        // Derived reconciled count reverted: the optimistic taken is gone,
-        // the placeholder re-surfaces as pending → takenToday back to 0.
-        let afterFail = ComplianceSnapshot.reconciled(
-            server: serverSnapshot,
-            todayIntakes: store.derivedTodayIntakes,
-            activeMedicationIDs: activeIDs,
-            medicationsLoaded: true
-        )
+        // Derived list reverted: the optimistic taken is gone, the
+        // placeholder re-surfaces as pending.
+        let afterFail = store.derivedTodayIntakes
         #expect(
-            afterFail.takenToday == 0,
-            "A hard-failed optimistic synth mark must revert the derived ring count, not leave it widened"
+            afterFail.count(where: { $0.status == .taken }) == 0,
+            "A hard-failed optimistic synth mark must revert the derived list, not leave it taken"
         )
-        #expect(afterFail.scheduledToday == 2)
+        #expect(afterFail.count == 2)
         // Guard released so a retry is possible.
         #expect(store.isMarking(intakeId: synthID) == false)
     }

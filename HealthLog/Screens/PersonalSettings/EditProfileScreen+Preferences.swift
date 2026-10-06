@@ -5,9 +5,10 @@ import SwiftUI
 /// The two "how I read my own data" prefs were relocated INTO the profile
 /// editor so Profile is the single home for personal-attribute settings:
 ///   - **Units** (weight / blood pressure / blood glucose) — moved here from
-///     `SettingsAccountScreen`. Local UserDefaults prefs (`SettingsStore.weightUnit`
-///     etc.); the server stores canonical SI and conversion happens at display
-///     time. Accessibility identifiers (`settings.units.*`) are preserved verbatim
+///     `SettingsAccountScreen`. Weight / blood pressure are local UserDefaults
+///     prefs (`SettingsStore.weightUnit` etc.); the glucose unit is the
+///     account's (#108, `setGlucoseUnit`). The server stores canonical SI and
+///     conversion happens at display time. Accessibility identifiers (`settings.units.*`) are preserved verbatim
 ///     so existing selectors / UI tests keep resolving.
 ///   - **Time format** (auto / 24h / 12h) — moved here from the Appearance page
 ///     (`SettingsDashboardScreen`). Server-backed (`User.timeFormat`); the picker
@@ -55,7 +56,10 @@ extension EditProfileScreen {
                 .labelsHidden()
             }
             unitRow(label: "Blood glucose", identifier: "settings.units.glucosePicker") {
-                Picker(String(localized: "Blood glucose"), selection: bindable(\.glucoseUnit)) {
+                // #108 — the glucose unit belongs to the account: the pick
+                // PATCHes `/api/auth/me/glucose-unit` (optimistic, reverted on
+                // failure) so the server converts the series into the same unit.
+                Picker(String(localized: "Blood glucose"), selection: glucoseUnitBinding) {
                     ForEach(GlucoseUnit.allCases) { unit in
                         Text(unit.unitSuffix).tag(unit)
                     }
@@ -138,6 +142,13 @@ extension EditProfileScreen {
     /// Binding for the server-backed unit-system pick: reads the resolved
     /// preference, writes through ``SettingsStore/setUnitPreference(_:)``
     /// (optimistic mirror + PATCH). Mirrors ``timeFormatBinding``.
+    private var glucoseUnitBinding: Binding<GlucoseUnit> {
+        Binding(
+            get: { settings.glucoseUnit },
+            set: { newValue in Task { await settings.setGlucoseUnit(newValue) } }
+        )
+    }
+
     private var unitSystemBinding: Binding<HLUnitPreference> {
         Binding(
             get: { settings.unitPreference },

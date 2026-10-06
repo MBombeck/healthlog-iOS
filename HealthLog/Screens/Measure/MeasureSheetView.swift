@@ -222,6 +222,9 @@ struct MeasureSheetView: View {
         // v0.5.5.2 — surface the save error visually. Before this the
         // operator only got a haptic; the banner makes the failure
         // legible so they know what went wrong + can retry.
+        // K1 — the banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing (H2).
+        .hlReserveErrorBannerSpace(saveError)
         .overlay(alignment: .top) {
             // A2-M4 — give the save-error banner an explicit way forward.
             // Previously the only retry was the still-live Save button, which a
@@ -370,7 +373,19 @@ struct MeasureSheetView: View {
     /// `title`, empty-state copy), and the values here are user-friendly
     /// "typical" examples rather than canonical defaults. Kept inline so a
     /// reader can scan the picker contents without leaving the sheet file.
+    ///
+    /// **#115 P2** — the examples are canonical (kg, °C, cm, mg/dL). On an
+    /// account that reads another unit the example converts with the field's
+    /// own unit, so a °F field never suggests "36,8".
     private var placeholder: String {
+        let transform = units.transform(for: kind)
+        guard transform.rescales,
+              let canonical = Double(canonicalPlaceholder.replacingOccurrences(of: ",", with: ".")),
+              let converted = transform.formatted(canonical) else { return canonicalPlaceholder }
+        return converted
+    }
+
+    private var canonicalPlaceholder: String {
         switch kind {
         case .weight: "72,4"
         case .glucose: "92"

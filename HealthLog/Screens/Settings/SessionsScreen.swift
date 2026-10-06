@@ -70,11 +70,7 @@ struct SessionsScreen: View {
             // v1.38.11 the calling device is spared, below it the same call
             // also drops this phone's refresh token. Never promise "except
             // this device" on a server that does not honour it.
-            message: Text(
-                store.sparesThisDevice
-                    ? "sessions.signOutAll.else.confirmBody"
-                    : "sessions.signOutAll.confirmBody"
-            ),
+            message: Text(SignOutEverywhereCopy.confirmBody(store)),
             confirm: Text(String(localized: "sessions.signOutAll.confirmAction")),
             cancel: Text(String(localized: "Cancel")),
             action: {
@@ -90,11 +86,7 @@ struct SessionsScreen: View {
         ) {
             Button(String(localized: "OK")) { store.clearRevokedOthersConfirmation() }
         } message: {
-            Text(
-                store.sparesThisDevice
-                    ? "sessions.signOutAll.else.doneBody"
-                    : "sessions.signOutAll.doneBody"
-            )
+            SignOutEverywhereCopy.doneMessage(store)
         }
         .alert(
             "Error",
@@ -193,7 +185,18 @@ struct SessionsScreen: View {
     }
 
     private var signOutEverywhereSection: some View {
-        Section {
+        @Bindable var store = store
+        return Section {
+            // R2 / #115 A7 — only where the server ends share links at all.
+            if store.endsConnectionsAndLinks {
+                HLSettingsToggleRow(
+                    title: "sessions.signOutAll.keepShareLinks",
+                    description: nil,
+                    isOn: $store.keepShareLinks,
+                    isEnabled: !store.isRevokingOthers,
+                    accessibilityID: "sessions.signOutAll.keepShareLinks"
+                )
+            }
             Button(role: .destructive) {
                 showSignOutAllConfirm = true
             } label: {
@@ -212,12 +215,8 @@ struct SessionsScreen: View {
             .accessibilityIdentifier("sessions.signOutAllButton")
         } footer: {
             // R12 — Fußnoten-Tinte in Listen-Gerüsten ist `HLText.secondary`.
-            Text(
-                store.sparesThisDevice
-                    ? "sessions.signOutAll.else.footer"
-                    : "sessions.signOutAll.footer"
-            )
-            .foregroundStyle(HLText.secondary)
+            Text(SignOutEverywhereCopy.footer(store))
+                .foregroundStyle(HLText.secondary)
         }
     }
 

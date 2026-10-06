@@ -9,7 +9,7 @@ import Testing
 /// facets, a duplicate upload flags the row, and `clearOnLogout` purges the PHI
 /// snapshot. Real `APIClient` + stub `URLProtocol` per PROJECT_GUIDE.md.
 @MainActor
-@Suite("Documents store", .serialized)
+@Suite("Documents store", .serialized, .mockURLSession)
 struct DocumentsStoreTests {
     private func makeStore() -> DocumentsStore {
         let env = AppEnvironment(
@@ -53,7 +53,7 @@ struct DocumentsStoreTests {
 
     @Test("load populates documents + usage; condition chips come from usage")
     func loadPopulates() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/documents/inbound/usage" {
                 return json(req, Self.usageBody)
             }
@@ -70,7 +70,7 @@ struct DocumentsStoreTests {
 
     @Test("A 403 module.disabled flips isDisabled + clears the snapshot")
     func moduleDisabled() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             json(
                 req,
                 #"{"data":null,"error":"off","meta":{"errorCode":"module.disabled","module":"inboundDocuments"}}"#,
@@ -114,7 +114,7 @@ struct DocumentsStoreTests {
 
     @Test("load reflects assistAvailable + contentIndex → the data half of the gate is open")
     func assistGateOpen() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/documents/inbound/usage" {
                 return json(req, Self.assistUsageBody)
             }
@@ -129,7 +129,7 @@ struct DocumentsStoreTests {
 
     @Test("A pre-P2 usage (no assist fields) keeps the gate closed → actions absent")
     func assistGateClosedWhenUnavailable() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/documents/inbound/usage" {
                 // The existing pre-P2 usage body omits assistAvailable + contentIndex.
                 return json(req, Self.usageBody)
@@ -145,7 +145,7 @@ struct DocumentsStoreTests {
 
     @Test("indexContent posts to /index and refreshes usage coverage")
     func indexContentRefreshesUsage() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/documents/inbound/d1/index" {
                 return json(req, #"{"data":{"documentId":"d1","indexed":true,"tokenCount":9},"error":null}"#)
             }
@@ -165,7 +165,7 @@ struct DocumentsStoreTests {
 
     @Test("A duplicate upload flags the highlighted row")
     func uploadDuplicateHighlights() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/documents/inbound/usage" {
                 return json(req, Self.usageBody)
             }

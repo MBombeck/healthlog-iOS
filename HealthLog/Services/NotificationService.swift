@@ -109,6 +109,15 @@ import Foundation
         /// carries no resolvable `reminderId`.
         var measurementReminderCompleter: (@MainActor (String) async -> Bool)?
 
+        /// **v1.39.2 — re-read the Vorsorge list after a reminder arrives.**
+        /// Since v1.39.2 the server keeps a long-cycle check-up's `nextDueAt`
+        /// after its reminder goes out (weekly-or-shorter ones still roll on),
+        /// and the app never predicts either outcome. A `MEASUREMENT_REMINDER`
+        /// that arrives in the foreground or is tapped re-lists from the server
+        /// so the Home tile and the list show what the server now says, instead
+        /// of a cached row. Wired from `AppContainer`; `nil` in headless tests.
+        var measurementReminderRefresher: (@MainActor () async -> Void)?
+
         /// v0.6.0.8 — operator-facing diagnostic of the last
         /// `POST /api/devices` attempt. Mirrored to UserDefaults so a
         /// crashed/restarted app still surfaces the most recent state in

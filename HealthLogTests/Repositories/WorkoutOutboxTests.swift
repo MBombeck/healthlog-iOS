@@ -20,7 +20,7 @@ import Testing
 /// in-request retry loop with real backoff sleeps, while a 408 surfaces as a
 /// retriable `HLError.server` immediately — same `shouldPersistToOutbox` arm,
 /// deterministic single wire call.
-@Suite("Workout batch upload — Outbox-Mandate (C4.1)", .serialized)
+@Suite("Workout batch upload — Outbox-Mandate (C4.1)", .serialized, .mockURLSession)
 struct WorkoutOutboxTests {
     enum IncompleteAcceptance: String, CaseIterable, Sendable {
         case partial
@@ -112,7 +112,7 @@ struct WorkoutOutboxTests {
         let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { nil })
         let repo = WorkoutsRepository(api: makeAPI(), outbox: outbox)
         nonisolated(unsafe) var wireKey: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — record only OUR route.
             if req.targets("/api/workouts/batch") {
                 wireKey = req.value(forHTTPHeaderField: "Idempotency-Key")
@@ -142,7 +142,7 @@ struct WorkoutOutboxTests {
             currentAuthTokenProvider: { "token-A" }
         )
         let repo = WorkoutsRepository(api: makeAPI(), outbox: outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 408, httpVersion: nil, headerFields: nil)!, Data())
         }
 
@@ -165,7 +165,7 @@ struct WorkoutOutboxTests {
             currentAuthTokenProvider: { "token-A" }
         )
         let repo = WorkoutsRepository(api: makeAPI(), outbox: outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             currentOwner.withLock { $0 = "user-B" }
             return (HTTPURLResponse(url: req.url!, statusCode: 408, httpVersion: nil, headerFields: nil)!, Data())
         }
@@ -186,7 +186,7 @@ struct WorkoutOutboxTests {
         )
         let repo = WorkoutsRepository(api: makeAPI(), outbox: outbox)
         let calls = Mutex(0)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/workouts/batch") {
                 calls.withLock { $0 += 1 }
             }
@@ -205,7 +205,7 @@ struct WorkoutOutboxTests {
     func nonRetriableFailureDoesNotEnroll() async throws {
         let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { nil })
         let repo = WorkoutsRepository(api: makeAPI(), outbox: outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"workout.batch.too_large"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -221,7 +221,7 @@ struct WorkoutOutboxTests {
         let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { nil })
         let repo = WorkoutsRepository(api: makeAPI(), outbox: outbox)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/workouts/batch") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.successBody)
         }
@@ -265,7 +265,7 @@ struct WorkoutOutboxTests {
         nonisolated(unsafe) var hitBatch = false
         nonisolated(unsafe) var replayKey: String?
         nonisolated(unsafe) var bodyData: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: a parallel suite's request must not clear `hitBatch` again
             // nor overwrite the recorded key/body.
             if req.targets("/api/workouts/batch") {
@@ -312,7 +312,7 @@ struct WorkoutOutboxTests {
             ownerUserID: "user-A"
         ))
         let calls = Mutex(0)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/workouts/batch") {
                 calls.withLock { $0 += 1 }
             }
@@ -359,7 +359,7 @@ struct WorkoutOutboxTests {
         let authHeaders = Mutex<[String]>([])
         let refreshCalls = Mutex(0)
         let unauthorizedCalls = Mutex(0)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/workouts/batch") {
                 authHeaders.withLock { $0.append(req.value(forHTTPHeaderField: "Authorization") ?? "") }
             }
@@ -405,7 +405,7 @@ struct WorkoutOutboxTests {
         let payload = try JSONEncoder.hlDefault.encode(OutboxQueue.Payloads.UploadWorkoutBatch(workouts: makeWorkouts()))
         try await outbox.enqueue(.init(kind: .uploadWorkoutBatch, payload: payload, idempotencyKey: "idem-workout-2"))
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 408, httpVersion: nil, headerFields: nil)!, Data())
         }
         let api = makeAPI()
@@ -428,7 +428,7 @@ struct WorkoutOutboxTests {
         try await enqueueReplayBatch(makeWorkouts(), key: key, in: outbox)
 
         nonisolated(unsafe) var replayKey: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/workouts/batch") {
                 replayKey = req.value(forHTTPHeaderField: "Idempotency-Key")
             }
@@ -455,7 +455,7 @@ struct WorkoutOutboxTests {
         try await enqueueReplayBatch(makeWorkouts(), key: key, in: outbox)
 
         nonisolated(unsafe) var replayKeys: [String] = []
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/workouts/batch"),
                let key = req.value(forHTTPHeaderField: "Idempotency-Key")
             {
@@ -492,7 +492,7 @@ struct WorkoutOutboxTests {
         )
         try await enqueueReplayBatch(workouts, key: "idem-complete-mixed", in: outbox)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Self.mixedAcceptanceBody
@@ -512,7 +512,7 @@ struct WorkoutOutboxTests {
         try await outbox.enqueue(.init(kind: .uploadWorkoutBatch, payload: payload, idempotencyKey: "idem-workout-3"))
 
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/workouts/batch") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.successBody)
         }

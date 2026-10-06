@@ -106,6 +106,107 @@ final class MarketingScreenshotsTest: XCTestCase {
         captureCoach(app: app)
     }
 
+    /// The four App Store motifs, and nothing else — raw device frames for
+    /// `scripts/appstore-screenshots/compose.py`. 1 Dashboard, 2 Medications,
+    /// 3 Share, 4 Insights overview. Output: `/tmp/marketing-shots-<lang>-<tag>/`
+    /// (`TEST_RUNNER_HL_MARKETING_LANG`, `TEST_RUNNER_HL_MARKETING_TAG`).
+    func test_capture_appstore_motifs() {
+        let app = bootMarketingApp()
+        settle(12)
+        capture(name: "1-dashboard")
+
+        openDeepLink("healthlog://medications")
+        settle(5)
+        capture(name: "2-medications")
+
+        // Insights before Share: in English, switching to the Insights tab
+        // after the Share screen was scrolled to its end sends SwiftUI into a
+        // layout loop (main thread at 100 %, UI queries time out). An app bug,
+        // reported with the v3 shots; the capture order simply avoids it.
+        let insightsTab = app.buttons["Insights"]
+        if insightsTab.waitForExistence(timeout: 10) {
+            insightsTab.tap()
+            _ = app.staticTexts["insights.page.header.title.overview"].waitForExistence(timeout: 20)
+            settle(5)
+            // Weight is the last vital; park its title behind the tab bar so
+            // only its chart line and the card edge show below the bar, and
+            // the empty insight-cards card after it stays off screen.
+            scroll(app: app, anchor: "insights.vitals", toY: 510)
+            capture(name: "4-insights")
+        } else {
+            logSkip("Insights tab not reachable")
+        }
+
+        // Share, scrolled to its end: the "Time range" card's top edge sits
+        // just under the navigation bar (no truncated explainer line, no half
+        // card), and all four output forms are fully visible.
+        if openUnifiedSharing(app: app) {
+            scroll(app: app, anchor: "sharing.unified.period", toY: 150)
+            capture(name: "3-share")
+        }
+    }
+
+    /// Navigates More → share glyph, waits for the screen to hydrate and
+    /// selects the whole fixture vocabulary ("4 of 4"). `false` (with a skip
+    /// note) when the screen cannot be reached.
+    private func openUnifiedSharing(app: XCUIApplication) -> Bool {
+        dismissSystemHealthSheet()
+        let moreTab = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "More", "Mehr")).firstMatch
+        guard moreTab.waitForExistence(timeout: 10) else {
+            logSkip("More tab not reachable — unified sharing not captured")
+            return false
+        }
+        moreTab.tap()
+        settle(2)
+        let shareGlyph = app.buttons["more.toolbar.share"]
+        guard shareGlyph.waitForExistence(timeout: 10), shareGlyph.isHittable else {
+            logSkip("More header share glyph not reachable — unified sharing not captured")
+            return false
+        }
+        shareGlyph.tap()
+        let produce = app.descendants(matching: .any)["sharing.unified.produce"]
+        guard produce.waitForExistence(timeout: 15) else {
+            logSkip("Unified sharing screen did not hydrate — not captured")
+            return false
+        }
+        let selectAll = app.descendants(matching: .any)["sharing.unified.selectAll"]
+        if selectAll.waitForExistence(timeout: 4), selectAll.isHittable {
+            selectAll.tap()
+            settle(2)
+        }
+        settle(3)
+        return true
+    }
+
+    /// Scrolls the current screen until the element with the `anchor`
+    /// identifier has its top edge at `toY` points. Anchoring on an element
+    /// keeps the framing the same in every language (a fixed drag distance
+    /// does not — German copy wraps differently).
+    private func scroll(app: XCUIApplication, anchor: String, toY targetY: CGFloat) {
+        let element = app.descendants(matching: .any).matching(identifier: anchor).firstMatch
+        guard element.waitForExistence(timeout: 5) else {
+            logSkip("Scroll anchor \(anchor) not found — capturing unscrolled")
+            return
+        }
+        let window = app.windows.firstMatch
+        var lastY = CGFloat.infinity
+        for _ in 0 ..< 6 {
+            let minY = element.frame.minY
+            let delta = minY - targetY
+            // Close enough, or the scroll view is at its end and will not move.
+            if abs(delta) < 2 || abs(minY - lastY) < 1 { break }
+            lastY = minY
+            // Drag from mid-screen and hold at the end: no momentum, so the
+            // content follows the finger.
+            let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.0))
+                .withOffset(CGVector(dx: 0, dy: 500))
+            let end = start.withOffset(CGVector(dx: 0, dy: -delta))
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: 150, thenHoldForDuration: 0.6)
+            settle(1.5)
+        }
+        settle(1)
+    }
+
     /// Navigates More → share glyph and captures the unified sharing screen.
     private func captureUnifiedSharing(app: XCUIApplication) {
         dismissSystemHealthSheet()

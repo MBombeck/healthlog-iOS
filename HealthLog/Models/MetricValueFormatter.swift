@@ -48,12 +48,7 @@ public enum MetricValueFormatter {
     /// re-unitable families this reflects the chosen unit; otherwise the
     /// canonical `kind.unit`. Identical to `DashboardMetric.unitSuffix(units:)`.
     public static func unitSuffix(for kind: MetricKind, units: UnitPreferences) -> String {
-        switch kind.unitFamily {
-        case .weight: units.weight.unitSuffix
-        case .bloodPressure: units.bloodPressure.unitSuffix
-        case .glucose: units.glucose.unitSuffix
-        case .none: kind.unit
-        }
+        units.unitLabel(for: kind)
     }
 
     /// Formats a scalar canonical value for `kind` in the user's chosen unit.
@@ -65,27 +60,65 @@ public enum MetricValueFormatter {
         units: UnitPreferences,
         glucose: GlucoseSourceState = .canonical
     ) -> String {
-        guard value.isFinite else { return Double.emDashPlaceholder }
-        switch kind.unitFamily {
-        case .weight:
-            return units.convertWeight(value).formatted(.number.precision(.fractionLength(1)))
-        case .glucose:
-            // `.seriesPreConvertedGlucose` — server already converted to the
-            // user's unit; render at the same precision as the dashboard
-            // without re-running `convertGlucose` (the 18× double-convert trap).
-            let v = glucose == .seriesPreConvertedGlucose ? value : units.convertGlucose(value)
-            return units.glucose == .mgdL
-                ? v.safeServerIntString()
-                : v.formatted(.number.precision(.fractionLength(1)))
-        case .bloodPressure, .none:
-            break
-        }
-        // Non-re-unitable kinds: the canonical descriptor precision. The list/
-        // chart surfaces this serves only ever feed scalar/decimal kinds here;
+        // Non-re-unitable kinds (and the identity branch of every family): a
+        // plain round-to-0…1 mirrors the prior call-site behaviour exactly. The
+        // list/chart surfaces this serves only ever feed scalar/decimal kinds;
         // BP routes through `formatBloodPressure` and the dashboard owns the
-        // exotic styles (durationHM / grouped / signed), so a plain
-        // round-to-0…1 mirrors the prior call-site behaviour exactly.
-        return value.formatted(.number.precision(.fractionLength(0 ... 1)))
+        // exotic styles (durationHM / grouped / signed).
+        account(value, kind: kind, units: units, glucose: glucose) {
+            $0.formatted(.number.precision(.fractionLength(0 ... 1)))
+        }
+    }
+
+    /// **#115 P2 — the one account-unit scalar formatter.** Converts a
+    /// canonical value of `kind` into the account's unit
+    /// (`UnitPreferences.transform(for:)`) and renders it at that unit's fixed
+    /// precision. Where the transform leaves precision open (the identity
+    /// branch, the signed temperature deviation), `identity` renders the
+    /// CONVERTED number in the calling surface's own style, so metric output
+    /// stays byte-identical to what each surface printed before.
+    ///
+    /// `.seriesPreConvertedGlucose` passes a glucose value through unconverted
+    /// (the series endpoint already converted it) and only applies the unit's
+    /// precision. Never traps on a non-finite server value.
+    public static func account(
+        _ value: Double,
+        kind: MetricKind,
+        units: UnitPreferences,
+        glucose: GlucoseSourceState = .canonical,
+        identity: (Double) -> String
+    ) -> String {
+        guard value.isFinite else { return Double.emDashPlaceholder }
+        let transform = units.transform(for: kind)
+        let displayed = kind.unitFamily == .glucose && glucose == .seriesPreConvertedGlucose
+            ? value
+            : transform.display(value)
+        guard displayed.isFinite else { return Double.emDashPlaceholder }
+        guard let digits = transform.fractionDigits else { return identity(displayed) }
+        return digits == 0
+            ? displayed.safeServerIntString()
+            : displayed.formatted(.number.precision(.fractionLength(digits)))
+    }
+
+    /// The descriptor `FormatStyle` rendering of an already-display-unit
+    /// number — the identity renderer the dashboard, widget and tile surfaces
+    /// hand to ``account(_:kind:units:glucose:identity:)``.
+    public static func styled(_ value: Double, style: MetricKindDescriptor.FormatStyle) -> String {
+        guard value.isFinite else { return Double.emDashPlaceholder }
+        switch style {
+        case .integer, .bloodPressureCompound:
+            return value.safeServerIntString()
+        case .decimal1:
+            return value.formatted(.number.precision(.fractionLength(1)))
+        case .decimal2:
+            return value.formatted(.number.precision(.fractionLength(0 ... 2)))
+        case .durationHM:
+            return value.safeServerSleepDurationHM
+        case .groupedInteger:
+            return value.safeServerGroupedIntString
+        case .signedDecimal1:
+            return MetricKindDescriptor.formatSignedDecimal1(value)
+        }
     }
 
     /// Formats a `systolic/diastolic` pair in the user's chosen BP unit. Mirrors

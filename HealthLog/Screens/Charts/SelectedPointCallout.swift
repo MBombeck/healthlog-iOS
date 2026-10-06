@@ -35,8 +35,11 @@ public struct SelectedPointCallout: View {
 
     /// The resolved unit label — host-supplied (unit-aware) when present, else
     /// the canonical `kind.unit`.
+    /// #115 P2 — the fallback is the account's label for the same units the
+    /// value converts with, never the canonical one, so value and label can
+    /// no longer disagree ("162.1 kg").
     private var resolvedUnit: String {
-        displayUnit ?? kind.unit
+        displayUnit ?? units.unitLabel(for: kind)
     }
 
     public var body: some View {
@@ -108,7 +111,9 @@ public struct SelectedPointCallout: View {
     }
 
     private var accessibilityDescription: Text {
-        Text("\(formattedDate), \(formattedValue) \(resolvedUnit)\(isPersonalRecord ? ", persönliche Bestleistung" : "")")
+        // L1 — the record note comes from the catalog (was a fixed German suffix).
+        let recordNote = isPersonalRecord ? ", " + String(localized: "Personal best") : ""
+        return Text("\(formattedDate), \(formattedValue) \(resolvedUnit)\(recordNote)")
     }
 }
 

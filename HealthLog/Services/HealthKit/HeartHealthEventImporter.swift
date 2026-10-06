@@ -67,8 +67,8 @@ import Foundation
         /// The partition token the importer was constructed for. An admitted
         /// owner whose token differs is a different account, and this importer
         /// refuses to sweep for it rather than writing into the wrong anchor.
-        private let partitionToken: String
-        private let defaults: UserDefaults
+        let partitionToken: String
+        let defaults: UserDefaults
         private let admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)?
         private let cursors: DurableHealthCursorStore?
         /// `nil` in contexts with no queue (tests, pre-composition). A page that
@@ -374,6 +374,8 @@ import Foundation
                 try lease.requireCurrent()
                 let outcomes = try await uploader.upload(entries)
                 try lease.requireCurrent()
+                // INT-A — an answer ends a run of held rejections for this type.
+                defaults.removeObject(forKey: heldRejectionKey(entries))
                 for outcome in outcomes {
                     for skipped in outcome.skipped
                         where skipped.reason == HealthKitServerSupportConfig.reasonUnmappableIdentifier
@@ -385,6 +387,9 @@ import Foundation
                 return Self.refusedPage(refusal, postedCount: entries.count)
             } catch is CancellationError {
                 return Self.refusedPage(.cancelled, postedCount: entries.count)
+            } catch where HealthKitBatchRejection.classify(error) != .retry {
+                // #115 / 0.3 — a whole-batch 4xx is not a transport failure.
+                return await rejectedPage(HealthKitBatchRejection.classify(error), entries: entries, requiring: lease)
             } catch {
                 // A raised transport says nothing about individual rows: the
                 // batch may never have been seen at all. Every index is

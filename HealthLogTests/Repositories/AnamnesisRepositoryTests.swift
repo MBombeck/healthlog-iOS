@@ -8,7 +8,7 @@ import Testing
 /// Kein Mock-Server: der Transportweg ist echt, nur `URLProtocol` ist gestubbt,
 /// damit Schema-Drift zwischen Fixture und Decoder auffällt statt durchzurutschen.
 /// `.serialized`, weil `MockURLProtocol.handler` prozessglobal ist.
-@Suite("AnamnesisRepository", .serialized)
+@Suite("AnamnesisRepository", .serialized, .mockURLSession)
 struct AnamnesisRepositoryTests {
     // MARK: - Fixtures
 
@@ -104,7 +104,7 @@ struct AnamnesisRepositoryTests {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             capturedPath = request.url?.path
             capturedMethod = request.httpMethod
             return Self.respond(request, 200, Self.factsPayload)
@@ -142,7 +142,7 @@ struct AnamnesisRepositoryTests {
     @Test("history is per-kind, newest validity first, and carries the superseded predecessor")
     func historyRenders() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { Self.respond($0, 200, Self.factsPayload) }
+        MockURLProtocol.install { Self.respond($0, 200, Self.factsPayload) }
 
         let payload = try await repo.facts()
         let smoking = payload.history(for: .smokingStatus)
@@ -171,7 +171,7 @@ struct AnamnesisRepositoryTests {
         "supersededByRevisionId":null,"createdAt":"2026-01-01T00:00:00.000Z"}
           ]},"error":null}
         """
-        MockURLProtocol.handler = { Self.respond($0, 200, payload) }
+        MockURLProtocol.install { Self.respond($0, 200, payload) }
 
         let decoded = try await repo.facts()
         #expect(decoded.history.count == 1)
@@ -188,7 +188,7 @@ struct AnamnesisRepositoryTests {
         "createdAt":"2026-01-01T00:00:00.000Z"},"ALCOHOL_PATTERN":null,"SHIFT_SCHEDULE":null},
           "history":[]},"error":null}
         """
-        MockURLProtocol.handler = { Self.respond($0, 200, payload) }
+        MockURLProtocol.install { Self.respond($0, 200, payload) }
 
         let decoded = try await repo.facts()
         #expect(decoded.state(for: .smokingStatus).value == .unknown("VAPING_ONLY"))
@@ -203,7 +203,7 @@ struct AnamnesisRepositoryTests {
         nonisolated(unsafe) var capturedBody: Data?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedKey: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             capturedBody = request.httpBody ?? request.httpBodyStream.flatMap(Self.consumeStream(_:))
             capturedMethod = request.httpMethod
             capturedKey = request.value(forHTTPHeaderField: "Idempotency-Key")
@@ -227,7 +227,7 @@ struct AnamnesisRepositoryTests {
     func crossKindValueIsRejectedBeforeTheWire() async throws {
         let repo = makeRepo()
         nonisolated(unsafe) var didHitNetwork = false
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             didHitNetwork = true
             return Self.respond(request, 201, Self.createdRevision)
         }
@@ -246,7 +246,7 @@ struct AnamnesisRepositoryTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             capturedPath = request.url?.path
             capturedMethod = request.httpMethod
             capturedBody = request.httpBody ?? request.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -278,7 +278,7 @@ struct AnamnesisRepositoryTests {
         let repo = makeRepo()
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             capturedMethod = request.httpMethod
             capturedPath = request.url?.path
             let json = """
@@ -301,7 +301,7 @@ struct AnamnesisRepositoryTests {
     @Test("409 anamnesis.fact.conflict becomes .conflict, not a generic error")
     func conflictIsNamed() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let json = """
             {"data":null,"error":"Profile fact changed since it was loaded",\
             "meta":{"errorCode":"anamnesis.fact.conflict"}}
@@ -317,7 +317,7 @@ struct AnamnesisRepositoryTests {
     @Test("409 anamnesis.fact.currentExists becomes .currentExists")
     func currentExistsIsNamed() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let json = """
             {"data":null,"error":"A current value already exists for this fact",\
             "meta":{"errorCode":"anamnesis.fact.currentExists"}}
@@ -333,7 +333,7 @@ struct AnamnesisRepositoryTests {
     @Test("422 anamnesis.fact.invalidValue becomes .invalidValue")
     func invalidValueIsNamed() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let json = """
             {"data":null,"error":"Value is not valid for this fact kind",\
             "meta":{"errorCode":"anamnesis.fact.invalidValue"}}
@@ -349,7 +349,7 @@ struct AnamnesisRepositoryTests {
     @Test("404 on a superseded revision id becomes .staleRevision, not a bare not-found")
     func staleRevisionIsNamed() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             Self.respond(request, 404, #"{"data":null,"error":"Current profile fact not found"}"#)
         }
 
@@ -366,7 +366,7 @@ struct AnamnesisRepositoryTests {
     @Test("409 with an OBJECT-shaped error (idempotency wrapper) becomes .requestInFlight")
     func idempotencyInFlightIsCaught() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let json = """
             {"data":null,"error":{"message":"A request with this Idempotency-Key is already in progress"}}
             """
@@ -387,7 +387,7 @@ struct AnamnesisRepositoryTests {
     @Test("a successful idempotent replay (201 + X-Idempotent-Replay) decodes normally")
     func idempotentReplayDecodes() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let http = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 201,
@@ -404,7 +404,7 @@ struct AnamnesisRepositoryTests {
     @Test("a 500 stays generic — only the four named failures get their own copy")
     func serverErrorFallsThrough() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             Self.respond(request, 500, #"{"data":null,"error":"Interner Serverfehler"}"#)
         }
 

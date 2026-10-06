@@ -21,7 +21,7 @@ import Testing
     /// The query half of the sweep needs an authorized `HKHealthStore`, which a
     /// unit test does not have; the classification and the durable write are pure
     /// and are driven directly.
-    @Suite("Cycle import durability — per-index acceptance and a durable hold", .serialized)
+    @Suite("Cycle import durability — per-index acceptance and a durable hold", .serialized, .mockURLSession)
     struct CycleImportDurabilityTests {
         private static let owner = "account-a"
 

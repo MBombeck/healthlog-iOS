@@ -7,7 +7,8 @@
 //      X-Client-Type: native header) + the standard bundle decode → stored.
 //   3. the `mfa_ticket` callback branch routes into the existing #37 MFA-verify
 //      flow (challenge raised, no token yet).
-//   4. each closed-set `error=<reason>` maps to a surfaced, non-empty message.
+//   4. each server `error=oidc_<reason>` maps to its own surfaced message
+//      (R2 / #115 A2 — the real spellings, legacy shorthand still accepted).
 //
 // Drives the REAL `APIClient` over a stub `URLProtocol`, per the repo's
 // no-mock-server doctrine.
@@ -23,7 +24,7 @@
         import AuthenticationServices
     #endif
 
-    @Suite("OIDC SSO login (#49)", .serialized)
+    @Suite("OIDC SSO login (#49)", .serialized, .mockURLSession)
     struct OidcSSOLoginTests {
         // MARK: - Fixtures
 
@@ -133,7 +134,7 @@
             nonisolated(unsafe) var capturedBody: Data?
             nonisolated(unsafe) var capturedClientType: String?
             nonisolated(unsafe) var capturedPath: String?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 capturedPath = req.url?.path
                 capturedClientType = req.value(forHTTPHeaderField: "X-Client-Type")
                 capturedBody = req.httpBody ?? req.httpBodyStream.map { stream in
@@ -178,7 +179,7 @@
             let store = AuthStore(auth: service, keychain: kc)
             let callback = try #require(URL(string: "healthlog://oidc-callback?code=hlh_used0000000000000000000000000000000000000"))
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"Invalid or expired code"}"#.utf8)
@@ -226,7 +227,7 @@
             )
             store.oidcAuthenticator = authenticator
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.bundleBody())
             }
             await store.loginWithSSO(anchor: StubAnchor())
@@ -262,9 +263,50 @@
 
         // MARK: - 4) each error reason maps to a surfaced message
 
-        @Test("every closed-set error reason parses + maps to a non-empty distinct message")
+        /// R2 / #115 A2 — the server's real spellings (`oidc_<snake_case>`,
+        /// `src/app/api/auth/oidc/login/route.ts` + `…/callback/route.ts` at
+        /// tag v1.39.6, listed in the OpenAPI description of
+        /// `GET /api/auth/oidc/login`). This test used to pin the hyphenated
+        /// shorthand, which the server never sent — so every SSO error in the
+        /// app showed the generic sentence and nothing caught it.
+        static let serverReasons: [(String, OidcErrorReason)] = [
+            ("oidc_disabled", .disabled),
+            ("oidc_rate_limited", .rateLimited),
+            ("oidc_invalid_request", .invalidRequest),
+            ("oidc_failed", .failed),
+            ("oidc_denied", .denied),
+            ("oidc_no_email", .noEmail),
+            ("oidc_email_unverified", .emailUnverified),
+            ("oidc_identity_conflict", .identityConflict),
+            ("oidc_registration_disabled", .registrationDisabled),
+            ("oidc_link_required", .linkRequired)
+        ]
+
+        @Test("every server error code parses + maps to its own non-generic message")
         func errorReasonsMapToMessages() throws {
-            let cases: [(String, OidcErrorReason)] = [
+            let generic = OidcErrorReason.unknown("x").localizedMessage
+            var seen = Set<String>()
+            for (raw, expected) in Self.serverReasons {
+                #expect(OidcErrorReason(raw: raw) == expected, "\(raw)")
+                let url = try #require(URL(string: "healthlog://oidc-callback?error=\(raw)"))
+                #expect(OidcCallback.parse(url) == .error(expected))
+                let message = expected.localizedMessage
+                #expect(!message.isEmpty)
+                #expect(message != generic, "\(raw) fell back to the generic sentence")
+                #expect(expected.logLabel == raw)
+                seen.insert(message)
+            }
+            // Distinct copy per reason (no accidental shared string).
+            #expect(seen.count == Self.serverReasons.count)
+            // An out-of-set reason falls back to the generic message, not a crash.
+            let unknown = OidcErrorReason(raw: "oidc_some_future_reason")
+            #expect(unknown == .unknown("oidc_some_future_reason"))
+            #expect(unknown.localizedMessage == generic)
+        }
+
+        @Test("the legacy hyphenated shorthand is still accepted")
+        func legacyHyphenatedSpellings() {
+            let legacy: [(String, OidcErrorReason)] = [
                 ("denied", .denied),
                 ("no-email", .noEmail),
                 ("email-unverified", .emailUnverified),
@@ -272,21 +314,18 @@
                 ("registration-disabled", .registrationDisabled),
                 ("rate-limited", .rateLimited)
             ]
-            var seen = Set<String>()
-            for (raw, expected) in cases {
-                #expect(OidcErrorReason(raw: raw) == expected)
-                let url = try #require(URL(string: "healthlog://oidc-callback?error=\(raw)"))
-                #expect(OidcCallback.parse(url) == .error(expected))
-                let message = expected.localizedMessage
-                #expect(!message.isEmpty)
-                seen.insert(message)
+            for (raw, expected) in legacy {
+                #expect(OidcErrorReason(raw: raw) == expected, "\(raw)")
             }
-            // Distinct copy per reason (no accidental shared string).
-            #expect(seen.count == cases.count)
-            // An out-of-set reason falls back to the generic message, not a crash.
-            let unknown = OidcErrorReason(raw: "some-future-reason")
-            #expect(unknown == .unknown("some-future-reason"))
-            #expect(!unknown.localizedMessage.isEmpty)
+        }
+
+        @Test("oidc_link_required tells the person to connect the account once on the web")
+        func linkRequiredCopy() throws {
+            let entry = try #require(ParityCatalog.load().strings["onboarding.sso.error.linkRequired"])
+            #expect(try #require(ParityCatalog.value(entry, language: "en")).contains("browser"))
+            #expect(try #require(ParityCatalog.value(entry, language: "de")).contains("Browser"))
+            #expect(OidcErrorReason(raw: "oidc_link_required").localizedMessage
+                == String(localized: "onboarding.sso.error.linkRequired"))
         }
 
         @MainActor
@@ -297,10 +336,11 @@
             let store = AuthStore(auth: service, keychain: kc)
 
             try await store.handleSSOCallback(
-                #require(URL(string: "healthlog://oidc-callback?error=identity-conflict")),
+                #require(URL(string: "healthlog://oidc-callback?error=oidc_identity_conflict")),
                 codeVerifier: "verifier-0123456789012345678901234567890123"
             )
             #expect(store.lastError != nil)
+            #expect(store.lastError == .unknown(OidcErrorReason.identityConflict.localizedMessage))
             #expect(store.phase == .unknown)
             #expect(kc.getString(forKey: KeychainKey.authToken) == nil)
         }

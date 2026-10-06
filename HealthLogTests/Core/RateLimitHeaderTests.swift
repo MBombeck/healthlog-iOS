@@ -11,7 +11,7 @@ import Testing
 /// Locks: APIClient liest `X-RateLimit-Reset` (ISO-8601), schickt den Wert
 /// als `HLError.rateLimited(retryAfter:)` weiter und nutzt ihn als Sleep-
 /// Delay im retry-Loop — KEIN extra Exponential-Backoff (W2a-A2 Audit §6).
-@Suite("Rate-limit header handling", .serialized)
+@Suite("Rate-limit header handling", .serialized, .mockURLSession)
 struct RateLimitHeaderTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -27,7 +27,7 @@ struct RateLimitHeaderTests {
     func parsesRateLimitReset() async {
         let api = makeAPI()
         let resetIso = ISO8601DateFormatter().string(from: Date().addingTimeInterval(2))
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let headers: [String: String] = [
                 "X-RateLimit-Remaining": "0",
                 "X-RateLimit-Reset": resetIso
@@ -62,7 +62,7 @@ struct RateLimitHeaderTests {
         nonisolated(unsafe) var attempts = 0
         nonisolated(unsafe) var firstAttemptAt: Date?
         nonisolated(unsafe) var secondAttemptAt: Date?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             attempts += 1
             switch attempts {
             case 1:

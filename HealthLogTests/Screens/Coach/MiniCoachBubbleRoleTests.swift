@@ -41,10 +41,10 @@ struct MiniCoachBubbleRoleTests {
         #expect(store.messages.last?.role == .system)
     }
 
-    @Test("featureFlagDisabled outcome lands as system bubble")
-    func featureFlagDisabledLandsAsSystem() async {
+    @Test("capabilityNotAllowed outcome lands as system bubble")
+    func capabilityNotAllowedLandsAsSystem() async {
         let store = makeStore()
-        await sendStubbed(outcome: .featureFlagDisabled("Mini-Coach ist deaktiviert."), store: store)
+        await sendStubbed(outcome: .capabilityNotAllowed("Mini-Coach ist deaktiviert."), store: store)
         #expect(store.messages.last?.role == .system)
     }
 
@@ -69,7 +69,7 @@ struct MiniCoachBubbleRoleTests {
     func systemOutcomesDoNotCountTurn() async {
         let store = makeStore()
         await sendStubbed(outcome: .unsupported("nope"), store: store)
-        await sendStubbed(outcome: .featureFlagDisabled("off"), store: store)
+        await sendStubbed(outcome: .capabilityNotAllowed("off"), store: store)
         await sendStubbed(outcome: .generationFailed("bad"), store: store)
         #expect(store.completedAssistantTurns == 0)
     }
@@ -101,7 +101,7 @@ struct MiniCoachBubbleRoleTests {
         }
         defaults.removePersistentDomain(forName: suite)
         return MiniCoachStore(
-            service: MiniCoachService(featureFlags: StubFlags(enabled: true)),
+            service: MiniCoachService(aiCapabilities: StubFlags(enabled: true)),
             defaults: defaults
         )
     }

@@ -49,8 +49,19 @@
 
         /// `HealthLog.Measurement` (Domain-Type) explizit qualifizieren — sonst kollidiert
         /// der Param-Type mit `Foundation.Measurement<UnitType>` an genau dieser Signatur.
-        func write(_: HealthLog.Measurement) async throws {
-            lock.withLock { _writeCallCount += 1 }
+        func write(_ measurement: HealthLog.Measurement) async throws {
+            lock.withLock {
+                _writeCallCount += 1
+                _writtenMeasurements.append(measurement)
+            }
+        }
+
+        /// S1 — what the create-time write received (its id is the one stamped
+        /// into `HKMetadataKeyExternalUUID`).
+        private var _writtenMeasurements: [HealthLog.Measurement] = []
+
+        var writtenMeasurements: [HealthLog.Measurement] {
+            lock.withLock { _writtenMeasurements }
         }
 
         /// W-HKBACKFILL — records every batch handed to the server-origin mirror

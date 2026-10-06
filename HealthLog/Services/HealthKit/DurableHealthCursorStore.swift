@@ -353,6 +353,64 @@ actor DurableHealthCursorStore {
         markFailed(key, reason: reason)
     }
 
+    // MARK: - One-time resets
+
+    /// What a completed one-time reset leaves behind next to the partition, so a
+    /// relaunch can prove it already ran.
+    struct ResetRecord: Codable, Sendable, Equatable {
+        let version: Int
+        let resetAt: Date
+    }
+
+    /// Whether the named one-time reset has already run for this partition.
+    func hasApplied(reset resetID: String, for key: HealthSyncCursorKey) -> Bool {
+        resetRecord(forMarkerKey: resetMarkerKey(resetID, for: key)) != nil
+    }
+
+    /// Drops the committed cursor of one partition, once per `resetID`, so the
+    /// next collection walks the partition again from the chosen cutoff.
+    ///
+    /// **#113.** Readings the server refused before a client fix are behind the
+    /// anchor; only a re-read can offer them again, and the server folds every
+    /// reading it already holds on `externalId`. The migration record is left
+    /// alone — the partition stays exactly as collectable as it was — and the
+    /// marker is written only after the dropped cursor reads back as absent, so a
+    /// process that dies halfway runs the reset again instead of skipping it.
+    ///
+    /// - Returns: `true` when this call performed the reset, `false` when the
+    ///   marker already existed.
+    @discardableResult
+    func resetCursorOnce(
+        _ resetID: String,
+        for key: HealthSyncCursorKey,
+        requiring lease: HealthSyncAuthenticatedLease
+    ) throws -> Bool {
+        try lease.requireCurrent()
+        guard lease.ownerID == key.ownerID else {
+            throw HealthSyncCursorStoreError.partitionOwnerMismatch
+        }
+        let markerKey = resetMarkerKey(resetID, for: key)
+        if resetRecord(forMarkerKey: markerKey) != nil { return false }
+
+        // An empty blob is how "no cursor" reads (see `record(for:)`): the
+        // backing store has no delete, and a tombstone keeps it that way.
+        storage.write(key.storageKey, Data())
+        guard record(for: key) == nil else {
+            throw HealthSyncCursorStoreError.writeNotVerified
+        }
+
+        let marker = ResetRecord(version: Self.formatVersion, resetAt: clock())
+        guard let encoded = try? encoder.encode(marker) else {
+            throw HealthSyncCursorStoreError.writeNotVerified
+        }
+        storage.write(markerKey, encoded)
+        guard resetRecord(forMarkerKey: markerKey) == marker else {
+            throw HealthSyncCursorStoreError.writeNotVerified
+        }
+        try lease.requireCurrent()
+        return true
+    }
+
     // MARK: - Migration
 
     /// Establishes the migration state for a partition exactly once.
@@ -461,6 +519,20 @@ actor DurableHealthCursorStore {
 
     private func migrationKey(for key: HealthSyncCursorKey) -> String {
         key.storageKey + Self.migrationSuffix
+    }
+
+    private func resetMarkerKey(_ resetID: String, for key: HealthSyncCursorKey) -> String {
+        key.storageKey + ".reset." + resetID
+    }
+
+    private func resetRecord(forMarkerKey markerKey: String) -> ResetRecord? {
+        guard let data = storage.read(markerKey),
+              let stored = try? decoder.decode(ResetRecord.self, from: data),
+              stored.version == Self.formatVersion else
+        {
+            return nil
+        }
+        return stored
     }
 
     private func write(_ record: MigrationRecord, for key: HealthSyncCursorKey) {

@@ -56,14 +56,11 @@ enum MeasureEntryConversion {
     /// Convert a single displayed scalar value into its canonical unit for
     /// `kind`. Non-re-unitable kinds pass through unchanged.
     static func canonicalScalar(_ displayed: Double, kind: MetricKind, units: UnitPreferences) -> Double {
-        switch kind.unitFamily {
-        case .weight: units.canonicalWeight(fromDisplayed: displayed)
-        case .glucose: units.canonicalGlucose(fromDisplayed: displayed)
-        // Blood-pressure never reaches the scalar path (it uses the paired
-        // systolic/diastolic fields), but route it correctly for completeness.
-        case .bloodPressure: units.canonicalBloodPressure(fromDisplayed: displayed)
-        case .none: displayed
-        }
+        // #115 P2 — the one account-unit transform, inverted: lb → kg,
+        // °F → °C (affine), in → cm, mmol/L → mg/dL, kPa → mmHg. Blood
+        // pressure never reaches the scalar path (it uses the paired
+        // systolic/diastolic fields) but routes correctly for completeness.
+        units.canonicalValue(fromDisplayed: displayed, kind: kind)
     }
 
     /// Forward-convert a stored canonical scalar into the unit the operator is
@@ -74,12 +71,7 @@ enum MeasureEntryConversion {
     /// whose every other surface says "159,6 lb" — self-consistent, but a standing
     /// invitation to retype 159,6 into a field the save path treats as kg.
     static func displayScalar(_ canonical: Double, kind: MetricKind, units: UnitPreferences) -> Double {
-        switch kind.unitFamily {
-        case .weight: units.convertWeight(canonical)
-        case .glucose: units.convertGlucose(canonical)
-        case .bloodPressure: units.convertBloodPressure(canonical)
-        case .none: canonical
-        }
+        units.displayValue(canonical, kind: kind)
     }
 
     /// Forward-convert a canonical range's bounds into the displayed unit, so an
@@ -89,13 +81,9 @@ enum MeasureEntryConversion {
         kind: MetricKind,
         units: UnitPreferences
     ) -> ClosedRange<Double> {
-        switch kind.unitFamily {
-        case .weight: units.convertWeight(range.lowerBound) ... units.convertWeight(range.upperBound)
-        case .glucose: units.convertGlucose(range.lowerBound) ... units.convertGlucose(range.upperBound)
-        case .bloodPressure:
-            units.convertBloodPressure(range.lowerBound) ... units.convertBloodPressure(range.upperBound)
-        case .none: range
-        }
+        // Every transform is increasing (positive factor), so the bounds keep
+        // their order.
+        units.displayValue(range.lowerBound, kind: kind) ... units.displayValue(range.upperBound, kind: kind)
     }
 
     /// The unit suffix the operator is currently typing in for `kind` — the same

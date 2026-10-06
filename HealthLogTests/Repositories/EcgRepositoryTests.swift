@@ -18,7 +18,7 @@ import Testing
 ///   INCONCLUSIVE route to the clinician note
 /// - detail decode (samples + decimated) and detail `404` → `nil`
 /// - `recordedAt` ISO-8601 decode through the APIClient's date strategy
-@Suite("ECG — wire contract + double gating", .serialized)
+@Suite("ECG — wire contract + double gating", .serialized, .mockURLSession)
 struct EcgRepositoryTests {
     @Test("ECG ingest, list and detail routes share the pinned canonical base")
     func canonicalRoutes() {
@@ -39,7 +39,7 @@ struct EcgRepositoryTests {
 
     private func respond(_ json: String, status: Int = 200) {
         let body = Data(json.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, body)
         }
     }
@@ -55,7 +55,7 @@ struct EcgRepositoryTests {
         let payload = try Self.payload(from: expectedRequest)
         let recorder = EcgRequestRecorder()
         let responseBody = try JSONSerialization.data(withJSONObject: inserted)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request)
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
@@ -88,7 +88,7 @@ struct EcgRepositoryTests {
         response["data"] = data
         response["futureEnvelopeField"] = "ignored"
         let responseBody = try JSONSerialization.data(withJSONObject: response)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (
                 HTTPURLResponse(url: request.url!, statusCode: statusCode, httpVersion: nil, headerFields: nil)!,
                 responseBody
@@ -105,7 +105,7 @@ struct EcgRepositoryTests {
     func ingestSampleLimitFailsClosed() async {
         #expect(EcgIngestRequestDTO.maxSamples == 32768)
         let recorder = EcgRequestRecorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request)
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
@@ -136,7 +136,7 @@ struct EcgRepositoryTests {
         let inserted = try #require(responses["inserted"])
         let responseBody = try JSONSerialization.data(withJSONObject: inserted)
         let recorder = EcgRequestRecorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request)
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
@@ -162,7 +162,7 @@ struct EcgRepositoryTests {
     func ingestBodyLimitFailsClosed() async {
         #expect(EcgIngestRequestDTO.maxBodyBytes == 2 * 1024 * 1024)
         let recorder = EcgRequestRecorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request)
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
@@ -195,7 +195,7 @@ struct EcgRepositoryTests {
         let responseBody = try JSONSerialization.data(withJSONObject: inserted)
         let payload = try Self.payload(encodedSize: releasedLimit)
         let recorder = EcgRequestRecorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request)
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
@@ -289,7 +289,7 @@ struct EcgRepositoryTests {
     @Test("fetchList — 404 (route not deployed) → nil")
     func listRouteAbsentIsNil() async throws {
         let repo = EcgRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetchList() == nil)
@@ -349,7 +349,7 @@ struct EcgRepositoryTests {
          "samplingFrequency":300,"averageHeartRate":62,"lead":"I",
          "classification":null,"source":"WITHINGS","samples":[0],"decimated":false},"error":null}
         """#.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             seen.record(req.url?.absoluteString ?? "")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -361,7 +361,7 @@ struct EcgRepositoryTests {
     @Test("fetchDetail — 404 (foreign or unknown id) → nil, existence sealed")
     func detail404IsNil() async throws {
         let repo = EcgRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetchDetail(id: "someone-elses-id") == nil)

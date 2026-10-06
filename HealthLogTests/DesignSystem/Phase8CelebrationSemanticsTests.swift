@@ -87,9 +87,10 @@
             )
             let body = try #require(Phase8SourceScan.member(named: "var body: some View", in: source))
 
-            #expect(announcement.contains("Self.valueText(for: record.base)"))
-            #expect(body.contains("Self.spokenAchievement(for: record.base)"))
-            #expect(source.contains("valueText(for: dto)"), "the spoken label must compose the printed figure")
+            // #115 P2 — both now carry the account's units, still one call each.
+            #expect(announcement.contains("Self.valueText(for: record.base, units: unitPreferences)"))
+            #expect(body.contains("Self.spokenAchievement(for: record.base, units: unitPreferences)"))
+            #expect(source.contains("valueText(for: dto, units: units)"), "the spoken label must compose the printed figure")
         }
 
         // MARK: - Fixtures

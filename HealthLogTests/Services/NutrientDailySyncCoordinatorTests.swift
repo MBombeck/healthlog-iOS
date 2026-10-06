@@ -12,7 +12,7 @@ import Testing
 /// pass-through / timezone correctness.
 ///
 /// `.serialized` — the suite installs a process-global `MockURLProtocol.handler`.
-@Suite("NutrientDailySyncCoordinator — sync + batch contract", .serialized)
+@Suite("NutrientDailySyncCoordinator — sync + batch contract", .serialized, .isolatedSkipRegister, .mockURLSession)
 struct NutrientDailySyncCoordinatorTests {
     // MARK: - Fixtures
 
@@ -70,7 +70,7 @@ struct NutrientDailySyncCoordinatorTests {
     func batchPayloadShapeAndIdempotency() async throws {
         let (api, kc) = makeClient()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let n = recorder.decodeLastBody()?.entries.count ?? 0
             let entries = (0 ..< n).map { #"{ "index": \#($0), "status": "inserted" }"# }.joined(separator: ",")
@@ -106,7 +106,7 @@ struct NutrientDailySyncCoordinatorTests {
     @Test("Server 'updated' status is tallied (re-post replaces, no duplicate)")
     func updatedStatusTallied() async {
         let (api, kc) = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"processed":1,"inserted":0,"updated":1,"skipped":[],"entries":[{"index":0,"status":"updated"}]},"error":null}
             """#.utf8)
@@ -128,7 +128,7 @@ struct NutrientDailySyncCoordinatorTests {
     func skipHandling() async {
         let (api, kc) = makeClient()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let body = Data(#"""
             {"data":{"processed":2,"inserted":1,"updated":0,
@@ -151,13 +151,136 @@ struct NutrientDailySyncCoordinatorTests {
         #expect(recorder.requestCount == 1)
     }
 
+    // MARK: - Transient vs terminal skips (#115 / 0.3)
+
+    /// The server's `upsert_failed` (route.ts at v1.39.0): the DB write for the
+    /// whole group failed, nothing was stored. The 279 coordinator logged it,
+    /// dropped it and moved `lastSweepEnd` (and the backfill marker) past it.
+    private static let upsertFailedBody = Data(#"""
+    {"data":{"processed":1,"inserted":0,"updated":0,
+    "skipped":[{"index":0,"reason":"upsert_failed"}],
+    "entries":[{"index":0,"status":"skipped","reason":"upsert_failed"}]},"error":null}
+    """#.utf8)
+
+    private static let insertedBody = Data(#"""
+    {"data":{"processed":1,"inserted":1,"updated":0,"skipped":[],"entries":[{"index":0,"status":"inserted"}]},"error":null}
+    """#.utf8)
+
+    private static let lastSweepKey = NutrientDailySyncCoordinator.lastSweepEndKeyPrefix
+        + HealthKitBackfillWindowStore.partitionToken(for: "user-123")
+
+    @Test("upsert_failed is retried: lastSweepEnd stays put and the next sweep re-posts the day")
+    func upsertFailedHoldsTheSweep() async throws {
+        let (api, kc) = makeClient()
+        let recorder = RequestRecorder()
+        let serverRecovered = OSAllocatedUnfairLock(initialState: false)
+        MockURLProtocol.install { req in
+            recorder.record(req)
+            let body = serverRecovered.withLock { $0 } ? Self.insertedBody : Self.upsertFailedBody
+            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
+        }
+        let rows = FakeNutrientRows(byIdentifier: [
+            "HKQuantityTypeIdentifierDietaryVitaminC": [row(day: "2026-06-20", value: 88)]
+        ])
+        let defaults = isolatedDefaults()
+        let coordinator = makeCoordinator(api: api, keychain: kc, rows: rows, defaultsProvider: defaults)
+
+        let first = await coordinator.sync()
+        #expect(first.heldSkips == 1)
+        #expect(defaults().object(forKey: Self.lastSweepKey) == nil, "the sweep must not move past an unstored row")
+
+        _ = await coordinator.sync()
+        let secondWindow = try #require(rows.lastFrom)
+        #expect(lookbackDays(for: secondWindow) == 30, "the window that held the row is asked for again")
+        #expect(recorder.requestCount == 2, "the transient skip is re-posted")
+        #expect(recorder.decodeLastBody()?.entries.first?.day == "2026-06-20")
+
+        serverRecovered.withLock { $0 = true }
+        let landed = await coordinator.sync()
+        #expect(landed.inserted == 1)
+        #expect(landed.heldSkips == 0)
+        #expect(defaults().object(forKey: Self.lastSweepKey) as? Date == Self.fixedNow, "stored → the sweep advances")
+        #expect(await HealthKitSkippedRowRegister.current.count(ownerID: "user-123") == 0)
+    }
+
+    @Test("a transient skip holds for a bounded number of sweeps, then is recorded and released")
+    func transientSkipIsBounded() async {
+        let (api, kc) = makeClient()
+        MockURLProtocol.install { req in
+            (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.upsertFailedBody)
+        }
+        let rows = FakeNutrientRows(byIdentifier: [
+            "HKQuantityTypeIdentifierDietaryVitaminC": [row(day: "2026-06-20", value: 88)]
+        ])
+        let defaults = isolatedDefaults()
+        let coordinator = makeCoordinator(api: api, keychain: kc, rows: rows, defaultsProvider: defaults)
+
+        for _ in 1 ..< NutrientDailySyncCoordinator.maxHeldSweeps {
+            _ = await coordinator.sync()
+        }
+        #expect(defaults().object(forKey: Self.lastSweepKey) == nil)
+
+        _ = await coordinator.sync()
+        #expect(defaults().object(forKey: Self.lastSweepKey) as? Date == Self.fixedNow)
+        let recorded = await HealthKitSkippedRowRegister.current.rows(ownerID: "user-123")
+        #expect(recorded.map(\.reason) == ["upsert_failed"], "released, but never in silence")
+        #expect(recorded.first?.nutrient?.day == "2026-06-20")
+    }
+
+    @Test("a terminal skip advances the sweep and is recorded, not dropped in silence")
+    func terminalSkipIsRecorded() async {
+        let (api, kc) = makeClient()
+        MockURLProtocol.install { req in
+            let body = Data(#"""
+            {"data":{"processed":2,"inserted":1,"updated":0,
+            "skipped":[{"index":1,"reason":"value_out_of_range"}],
+            "entries":[{"index":0,"status":"inserted"},
+            {"index":1,"status":"skipped","reason":"value_out_of_range"}]},"error":null}
+            """#.utf8)
+            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
+        }
+        let rows = FakeNutrientRows(byIdentifier: [
+            "HKQuantityTypeIdentifierDietaryIron": [row(day: "2026-07-06", value: 8)],
+            "HKQuantityTypeIdentifierDietaryZinc": [row(day: "2026-07-06", value: 999_999)]
+        ])
+        let defaults = isolatedDefaults()
+        let summary = await makeCoordinator(api: api, keychain: kc, rows: rows, defaultsProvider: defaults).sync()
+
+        #expect(summary.heldSkips == 0)
+        #expect(defaults().object(forKey: Self.lastSweepKey) as? Date == Self.fixedNow)
+        // INT-A — the ONE skip register, not a second list in UserDefaults.
+        let recorded = await HealthKitSkippedRowRegister.current.rows(ownerID: "user-123")
+        #expect(recorded.count == 1)
+        #expect(recorded.first?.nutrient?.nutrient == .zinc)
+        #expect(recorded.first?.reason == "value_out_of_range")
+        #expect(recorded.first?.nutrient?.amount == 999_999)
+        #expect(NutrientRefusalRegister(defaultsProvider: defaults, userID: "user-123").entries.isEmpty)
+    }
+
+    @Test("a HealthKit query that threw does not let the sweep move past the window it never read")
+    func failedQueryHoldsTheSweep() async {
+        let (api, kc) = makeClient()
+        MockURLProtocol.install { req in
+            (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.insertedBody)
+        }
+        let rows = FakeNutrientRows(
+            byIdentifier: ["HKQuantityTypeIdentifierDietaryVitaminC": [row(day: "2026-06-20", value: 88)]],
+            failing: ["HKQuantityTypeIdentifierDietaryIron"]
+        )
+        let defaults = isolatedDefaults()
+        let summary = await makeCoordinator(api: api, keychain: kc, rows: rows, defaultsProvider: defaults).sync()
+
+        #expect(summary.inserted == 1, "what was read still uploads")
+        #expect(defaults().object(forKey: Self.lastSweepKey) == nil)
+    }
+
     // MARK: - Module disabled 403 → stop
 
     @Test("403 module.disabled stops the sync — no retry, no further chunks")
     func moduleDisabledStops() async {
         let (api, kc) = makeClient()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let body = Data(#"""
             {"data":null,"error":"Nutrients module is disabled","meta":{"errorCode":"module.disabled","module":"nutrients"}}
@@ -183,7 +306,7 @@ struct NutrientDailySyncCoordinatorTests {
     func moduleOffGate() async {
         let (api, kc) = makeClient()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
         }
@@ -201,7 +324,7 @@ struct NutrientDailySyncCoordinatorTests {
     func noTokenGate() async {
         let (api, kc) = makeClient(token: nil)
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
         }
@@ -218,7 +341,7 @@ struct NutrientDailySyncCoordinatorTests {
     func dayKeyPassThrough() async throws {
         let (api, kc) = makeClient()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let body = Data(#"""
             {"data":{"processed":1,"inserted":1,"updated":0,"skipped":[],"entries":[{"index":0,"status":"inserted"}]},"error":null}
@@ -239,7 +362,7 @@ struct NutrientDailySyncCoordinatorTests {
     @Test("First enable asks for 30 days; a landed run switches later runs to the incremental window")
     func backfillNarrowsOnlyAfterUpload() async throws {
         let (api, kc) = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"processed":1,"inserted":1,"updated":0,"skipped":[],"entries":[{"index":0,"status":"inserted"}]},"error":null}
             """#.utf8)
@@ -264,7 +387,7 @@ struct NutrientDailySyncCoordinatorTests {
     func emptyWindowKeepsBackfillArmed() async throws {
         let (api, kc) = makeClient()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let body = Data(#"""
             {"data":{"processed":1,"inserted":1,"updated":0,"skipped":[],"entries":[{"index":0,"status":"inserted"}]},"error":null}
@@ -308,7 +431,7 @@ struct NutrientDailySyncCoordinatorTests {
 
     /// Locks the user-timezone `yyyy-MM-dd` day-key rule the coordinator relies on
     /// (same rule as the `stats:` measurement keys).
-    @Suite("Nutrient day-key timezone correctness")
+    @Suite("Nutrient day-key timezone correctness", .mockURLSession)
     struct NutrientDayKeyTests {
         @Test("dayKey uses the calendar's timezone, not UTC (Berlin near midnight)")
         func berlinDayKey() throws {
@@ -331,6 +454,8 @@ struct NutrientDailySyncCoordinatorTests {
 /// Fake ``NutrientDailyRowsProviding`` returning canned rows per HK identifier.
 private final class FakeNutrientRows: NutrientDailyRowsProviding, @unchecked Sendable {
     private let byIdentifier: [String: [HealthKitDailyStatRow]]
+    /// Identifiers whose query throws (a locked device's protected data).
+    private let failing: Set<String>
     private let queryCountLock = OSAllocatedUnfairLock(initialState: 0)
     private let lastFromLock = OSAllocatedUnfairLock<Date?>(initialState: nil)
 
@@ -344,8 +469,9 @@ private final class FakeNutrientRows: NutrientDailyRowsProviding, @unchecked Sen
         lastFromLock.withLock { $0 }
     }
 
-    init(byIdentifier: [String: [HealthKitDailyStatRow]]) {
+    init(byIdentifier: [String: [HealthKitDailyStatRow]], failing: Set<String> = []) {
         self.byIdentifier = byIdentifier
+        self.failing = failing
     }
 
     func dailyRows(
@@ -356,6 +482,9 @@ private final class FakeNutrientRows: NutrientDailyRowsProviding, @unchecked Sen
     ) async throws -> [HealthKitDailyStatRow] {
         queryCountLock.withLock { $0 += 1 }
         lastFromLock.withLock { $0 = from }
+        if failing.contains(identifier) {
+            throw CocoaError(.fileReadNoPermission)
+        }
         // Re-stamp the row's unit to the caller's wire unit so the coordinator's
         // pass-through is exercised with the catalog unit.
         return (byIdentifier[identifier] ?? []).map {
@@ -425,6 +554,37 @@ private final class RequestRecorder: @unchecked Sendable {
             data.append(buffer, count: read)
         }
         return data
+    }
+}
+
+/// #110 — kept in an extension so the suite body stays inside `type_body_length`.
+extension NutrientDailySyncCoordinatorTests {
+    // MARK: - 429 → stop, hold, register nothing (#110)
+
+    @Test("a 429 on the batch route stops the sweep: no further chunk, window held, register empty")
+    func rateLimitedHoldsTheSweep() async {
+        let (api, kc) = makeClient()
+        let recorder = RequestRecorder()
+        MockURLProtocol.install { req in
+            recorder.record(req)
+            // `src/app/api/nutrients/batch/route.ts` at v1.39.0: no code, the
+            // limiter headers attached by `api-handler.ts`.
+            let body = Data(#"{"data":null,"error":"Too many batch submissions, try again later"}"#.utf8)
+            let headers = ["Retry-After": "120", "X-RateLimit-Limit": "60", "X-RateLimit-Remaining": "0"]
+            return (HTTPURLResponse(url: req.url!, statusCode: 429, httpVersion: nil, headerFields: headers)!, body)
+        }
+        // Two 500-cap chunks; the first meets the limiter.
+        let manyRows = (0 ..< 600).map { row(day: "2026-\(String(format: "%02d", ($0 % 12) + 1))-01", value: Double($0 + 1)) }
+        let rows = FakeNutrientRows(byIdentifier: ["HKQuantityTypeIdentifierDietaryVitaminC": manyRows])
+        let defaults = isolatedDefaults()
+        let summary = await makeCoordinator(api: api, keychain: kc, rows: rows, defaultsProvider: defaults).sync()
+
+        #expect(recorder.requestCount == 1, "the second chunk would meet the same bucket — it must not POST")
+        #expect(summary.failedBatches == 1)
+        #expect(defaults().object(forKey: Self.lastSweepKey) == nil, "the sweep holds the window it did not store")
+        #expect(await HealthKitSkippedRowRegister.current.count(ownerID: "user-123") == 0, "a 429 is never a refusal")
+        let heldKey = NutrientDailySyncCoordinator.heldSweepsKeyPrefix + HealthKitBackfillWindowStore.partitionToken(for: "user-123")
+        #expect(defaults().integer(forKey: heldKey) == 0, "and it spends none of the transient-skip budget")
     }
 }
 

@@ -42,16 +42,27 @@ public final class SettingsStore {
     /// foreground pass. Wired in `AppContainer+Wiring`.
     public var onMoodReminderEnabledChanged: ((Bool) -> Void)?
 
-    /// The server-profile IANA timezone resolved to a `TimeZone`, or `.current`
-    /// when the profile carries no (valid) zone.
-    public var resolvedProfileTimeZone: TimeZone {
-        guard let raw = profile?.timezone, let zone = TimeZone(identifier: raw) else { return .current }
-        return zone
-    }
+    /// #115 B5 — fired after every glucose-unit change (adoption, pick, logout):
+    /// the App-Group mirror and the watch snapshot follow the account's unit.
+    public var onGlucoseUnitChange: ((GlucoseUnit) -> Void)?
+    /// #115 P2 — fired after the unit system or the weight unit changes: Siri
+    /// in the extension takes weight and temperature in the account's unit.
+    public var onAccountUnitsChange: ((UnitPreferences) -> Void)?
+
+    /// **N1** — fired after each `/api/auth/me` hydration with the account's
+    /// medication-reminder delivery state (`nil` on a server that does not
+    /// report it) and the lease the read ran under. The composition root hands
+    /// it to ``MedicationReminderDeliveryCoordinator``.
+    var onMedicationReminderServerDelivery: ((MedicationReminderServerDelivery?, AuthenticatedSessionLease) -> Void)?
+
+    /// #115 1.5 — the `/api/auth/me` zone (see `resolvedProfileTimeZone`).
+    public internal(set) var accountTimeZoneIdentifier: String?
 
     public private(set) var hkConfig: HealthKitSyncConfig?
     public private(set) var isLoading: Bool = false
     public internal(set) var error: HLError?
+    /// #97 — fields the last profile save skipped (200 + `rejectedFields`).
+    public private(set) var rejectedProfileFields: [ProfileRejectedField] = []
     /// Set when either of the two visible payloads was served from cache
     /// (SWR `.cached` arm). Drives a future "showing cached" affordance
     /// on the Settings header — not surfaced yet but stays consistent
@@ -89,6 +100,7 @@ public final class SettingsStore {
         set {
             weightUnitOverride = newValue
             defaults.set(newValue.rawValue, forKey: Keys.weightUnit)
+            onAccountUnitsChange?(unitPreferences)
         }
     }
 
@@ -99,21 +111,29 @@ public final class SettingsStore {
     /// load. Written to the network only by an explicit toggle
     /// (``setUnitPreference(_:)``) or the one flag-guarded migration — never from
     /// hydration/adoption (no ping-pong, no initial write).
-    public internal(set) var unitPreference: HLUnitPreference
+    public internal(set) var unitPreference: HLUnitPreference {
+        didSet { if unitPreference != oldValue { onAccountUnitsChange?(unitPreferences) } }
+    }
 
     public var bloodPressureUnit: BloodPressureUnit {
         didSet { defaults.set(bloodPressureUnit.rawValue, forKey: Keys.bpUnit) }
     }
 
-    public var glucoseUnit: GlucoseUnit {
-        didSet { defaults.set(glucoseUnit.rawValue, forKey: Keys.glucoseUnit) }
+    /// #108 — the account's unit: adopted from `/me`, written via `setGlucoseUnit`.
+    public internal(set) var glucoseUnit: GlucoseUnit {
+        didSet { glucoseUnitDidChange() }
     }
 
     /// Value-type snapshot of the three display-unit prefs, handed to the
     /// metric display path (`DashboardMetric.formattedPrimary(units:)` /
     /// `unitSuffix(for:units:)`) so conversion stays a pure transform.
     public var unitPreferences: UnitPreferences {
-        UnitPreferences(weight: weightUnit, bloodPressure: bloodPressureUnit, glucose: glucoseUnit)
+        UnitPreferences(
+            weight: weightUnit,
+            bloodPressure: bloodPressureUnit,
+            glucose: glucoseUnit,
+            system: unitPreference
+        )
     }
 
     /// **v0.5.5.7 COACH-COIN** — operator-dismissible Hero-card flag.
@@ -416,6 +436,9 @@ public final class SettingsStore {
     /// Returns `true` on success so the caller can dismiss the edit-sheet only
     /// when the write committed. Errors land in `self.error` for the banner.
     ///
+    /// #97 — a 200 with `rejectedFields` is a PARTIAL save: the written
+    /// fields are applied, the skipped ones land in ``rejectedProfileFields``
+    /// and the call returns `false` so the form stays open.
     /// Added v0.4.1 / M2-A6 to back `EditProfileScreen.save()`.
     @discardableResult
     public func updateProfile(_ patch: ProfilePatch) async -> Bool {
@@ -423,11 +446,13 @@ public final class SettingsStore {
         guard !patch.isEmpty else { return true }
         guard authenticatedEffectIsCurrent(sessionLease) else { return false }
         error = nil
+        rejectedProfileFields = []
         do {
             try sessionLease.requireCurrent()
-            let updated = try await repo.patchProfile(patch)
+            let result = try await repo.patchProfile(patch), updated = result.profile
             try sessionLease.requireCurrent()
-            profile = updated
+            // Profile and skipped fields publish together, at one fenced point.
+            (profile, rejectedProfileFields) = (updated, result.rejectedFields)
             // Mirror to cache so the next observe sees the writer-truth
             // (otherwise the cached arm would emit a stale profile on the
             // next tab-mount before revalidation lands).
@@ -436,7 +461,7 @@ public final class SettingsStore {
                 await swr.writeThrough(.userProfile, value: updated)
                 guard authenticatedEffectIsCurrent(sessionLease) else { return false }
             }
-            return true
+            return !result.isPartial
         } catch let err as HLError {
             guard authenticatedEffectIsCurrent(sessionLease) else { return false }
             error = err
@@ -552,32 +577,22 @@ public final class SettingsStore {
         return ok
     }
 
-    /// Mirrors the in-memory `timeFormat` / `dateFormat` into the UserDefaults
-    /// keys the pure (`nonisolated static`) formatters read. Called from the
-    /// `profile` `didSet` so the mirrors track the server-resolved value.
-    private func mirrorTimeFormatPreference() {
-        let value = HLTimeFormat(rawValue: profile?.timeFormat ?? "")?.rawValue ?? HLTimeFormat.auto.rawValue
-        defaults.set(value, forKey: HLTimeFormat.defaultsKey)
-    }
-
-    private func mirrorDateFormatPreference() {
-        let value = HLDateFormat(rawValue: profile?.dateFormat ?? "")?.rawValue ?? HLDateFormat.auto.rawValue
-        defaults.set(value, forKey: HLDateFormat.defaultsKey)
-    }
-
     public func toggle(syncEntryID: String) async {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return }
         guard var config = hkConfig,
               let i = config.entries.firstIndex(where: { $0.id == syncEntryID }) else { return }
         let entry = config.entries[i]
-        let updated = HealthKitSyncEntry(id: entry.id, kind: entry.kind, direction: entry.direction, enabled: !entry.enabled)
+        let updated = entry.withEnabled(!entry.enabled)
         var entries = config.entries
         entries[i] = updated
-        config = HealthKitSyncConfig(entries: entries, lastSyncedAt: config.lastSyncedAt)
+        // #10 — the optimistic value keeps every read field of the GET, not
+        // only `lastSyncedAt`; the PATCH body still encodes just the two it knows.
+        config = HealthKitSyncConfig(entries: entries, lastSyncedAt: nil).keepingReadFields(of: config)
         hkConfig = config
         do {
             try sessionLease.requireCurrent()
-            let saved = try await repo.updateHealthKit(config: config)
+            // #10 — the echo carries no read fields; keep the GET's.
+            let saved = try await repo.updateHealthKit(config: config).keepingReadFields(of: config)
             try sessionLease.requireCurrent()
             hkConfig = saved
             if let swr {
@@ -599,6 +614,7 @@ public final class SettingsStore {
         profile = nil
         hkConfig = nil
         error = nil
+        rejectedProfileFields = []
         // 14-06 — this line was missing, the same omission 13-03 found in
         // `DashboardStore`. A logout during an in-flight load handed the next
         // account a profile that was already, permanently, loading.
@@ -625,6 +641,7 @@ public final class SettingsStore {
         cycleTrackingServerEnabled = nil
         defaults.removeObject(forKey: Self.cycleServerEnabledKey)
         defaults.removeObject(forKey: Self.cycleOptInMigratedKey)
+        clearAccountUnitAndZone() // #108 / #115 1.5 — the account's unit + zone
     }
 
     private enum Keys {

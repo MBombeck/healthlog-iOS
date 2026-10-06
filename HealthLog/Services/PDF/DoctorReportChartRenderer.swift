@@ -24,23 +24,36 @@ import SwiftUI
     enum DoctorReportChartRenderer {
         /// Pre-renders every chart series in the block into a UIImage list,
         /// suitable for tiling on a single PDF page.
+        /// #115 B5 — `glucoseUnit` is the unit the glucose tile plots in (the
+        /// spec's series stay canonical mg/dL for the FHIR bundle).
+        /// #115 P2 — `units` (the spec's `printUnits`) wins over `glucoseUnit`
+        /// when given: weight / temperature / waist tiles plot in the account's
+        /// unit too.
         static func renderImages(
             _ block: DoctorReportSpec.ChartsBlock,
+            glucoseUnit: GlucoseUnit = .mgdL,
+            units: UnitPreferences? = nil,
             tileSize: CGSize = CGSize(width: 540, height: 120)
         ) -> [ChartImage] {
-            block.series.map { series in
+            let units = units ?? UnitPreferences(glucose: glucoseUnit)
+            return block.series.map { series in
                 ChartImage(
                     kind: series.kind,
-                    image: renderSeriesImage(series: series, size: tileSize)
+                    image: renderSeriesImage(
+                        series: DoctorReportGlucoseDisplay.series(series, units: units),
+                        units: units,
+                        size: tileSize
+                    )
                 )
             }
         }
 
         private static func renderSeriesImage(
             series: DoctorReportSpec.ChartsBlock.Series,
+            units: UnitPreferences,
             size: CGSize
         ) -> UIImage? {
-            let view = ChartTile(series: series)
+            let view = ChartTile(series: series, glucoseUnit: units.glucose, units: units)
                 .frame(width: size.width, height: size.height)
                 .padding(.horizontal, 0)
             let renderer = ImageRenderer(content: view)
@@ -85,6 +98,21 @@ import SwiftUI
     /// VoiceOver path for free.
     struct ChartTile: View {
         let series: DoctorReportSpec.ChartsBlock.Series
+        /// #115 B5 — names the glucose tile's unit (its points are already in it).
+        var glucoseUnit: GlucoseUnit = .mgdL
+        /// #115 P2 — the units the tile's points are in (glucose from
+        /// ``glucoseUnit`` when not given).
+        var units: UnitPreferences?
+
+        /// The tile title; a converted kind carries its unit, which is the
+        /// account's and not self-evident from the axis.
+        var title: String {
+            let units = units ?? UnitPreferences(glucose: glucoseUnit)
+            guard let unit = DoctorReportGlucoseDisplay.titleUnit(for: series.kind, units: units) else {
+                return series.kind.displayName
+            }
+            return "\(series.kind.displayName) (\(unit))"
+        }
 
         // v0.14 light-mode walk: the doctor PDF always prints on white
         // (mode-independent), so it can NOT use the adaptive `HLColor.inkGraphite`
@@ -97,7 +125,7 @@ import SwiftUI
 
         var body: some View {
             VStack(alignment: .leading, spacing: 4) {
-                Text(series.kind.displayName)
+                Text(title)
                     // Fixed print size — renders onto a fixed-metrics PDF page,
                     // Dynamic Type has no meaning for print output (audit-01 M1).
                     // swiftlint:disable:next dynamic_type_bypass

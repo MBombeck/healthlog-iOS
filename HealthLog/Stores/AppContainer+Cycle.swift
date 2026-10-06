@@ -44,6 +44,21 @@ extension AppContainer {
                 keychain.getString(forKey: KeychainKey.userID)
             }
         )
+        // #115 B6 — a period boundary replayed from the outbox refetches the
+        // calendar, as the live write does.
+        Task { await store.followBoundaryReplays() }
         return (gate, store)
+    }
+}
+
+extension CycleStore {
+    /// #115 B6 — reload the calendar whenever the outbox delivers a queued
+    /// period start or end. The boundary can move, absorb or restore a start on
+    /// the server, so the grid the person sees is refetched, as after a live
+    /// boundary write (``commitCapture(dayLog:period:existingID:patch:)``).
+    func followBoundaryReplays() async {
+        await repository.attachBoundaryReplaySink { [weak self] in
+            await self?.load()
+        }
     }
 }

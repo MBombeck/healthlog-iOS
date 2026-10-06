@@ -28,7 +28,7 @@ import Testing
 /// ein Mock-Server), damit ein Schema-Drift auf `/api/nutrients` oder
 /// `/api/auth/me/modules` hier auffliegt. `.serialized`, weil
 /// `MockURLProtocol.handler` prozessweit ist.
-@Suite("N2 — Nährstoff-Berechtigung hängt am Zustand, nicht an der Handlung", .serialized)
+@Suite("N2 — Nährstoff-Berechtigung hängt am Zustand, nicht an der Handlung", .serialized, .mockURLSession)
 @MainActor
 struct NutrientHealthKitAuthorizationTests {
     // MARK: - Fixtures
@@ -87,7 +87,7 @@ struct NutrientHealthKitAuthorizationTests {
 
     @Test("Modul serverseitig AN + auf diesem Gerät nie gefragt ⇒ es wird gefragt und danach synchronisiert")
     func moduleOnAndNeverAskedRequestsAuthorization() async throws {
-        MockURLProtocol.handler = { Self.emptyWindow($0) }
+        MockURLProtocol.install { Self.emptyWindow($0) }
         let writer = SpyNutrientHealthKitWriter()
         let sync = SpyNutrientSync()
         let (store, _) = try makeStore(moduleEnabled: true, writer: writer, sync: sync)
@@ -108,7 +108,7 @@ struct NutrientHealthKitAuthorizationTests {
 
     @Test("Modul serverseitig AUS ⇒ es wird nicht gefragt (wer nicht zugestimmt hat, wird nicht behelligt)")
     func moduleOffNeverPrompts() async throws {
-        MockURLProtocol.handler = { Self.emptyWindow($0) }
+        MockURLProtocol.install { Self.emptyWindow($0) }
         let writer = SpyNutrientHealthKitWriter()
         let sync = SpyNutrientSync()
         let (store, _) = try makeStore(moduleEnabled: false, writer: writer, sync: sync)
@@ -123,7 +123,7 @@ struct NutrientHealthKitAuthorizationTests {
 
     @Test("Zweiter Besuch derselben Fläche fragt nicht erneut — keine Schleife")
     func repeatedVisitsAskOnlyOnce() async throws {
-        MockURLProtocol.handler = { Self.emptyWindow($0) }
+        MockURLProtocol.install { Self.emptyWindow($0) }
         let writer = SpyNutrientHealthKitWriter()
         let sync = SpyNutrientSync()
         let (store, _) = try makeStore(moduleEnabled: true, writer: writer, sync: sync)
@@ -137,7 +137,7 @@ struct NutrientHealthKitAuthorizationTests {
 
     @Test("Eine fehlgeschlagene Anfrage stoppt nichts — der Server bleibt die Wahrheit")
     func failedAuthorizationDoesNotStopTheFlow() async throws {
-        MockURLProtocol.handler = { Self.emptyWindow($0) }
+        MockURLProtocol.install { Self.emptyWindow($0) }
         let writer = SpyNutrientHealthKitWriter(failAuthorization: true)
         let sync = SpyNutrientSync()
         let (store, _) = try makeStore(moduleEnabled: true, writer: writer, sync: sync)
@@ -162,7 +162,7 @@ struct NutrientHealthKitAuthorizationTests {
 
     @Test("Abmelden setzt die Merkung zurück — der nächste Nutzer bekommt seinen eigenen Nachlauf")
     func logoutRearmsTheLifecycle() async throws {
-        MockURLProtocol.handler = { Self.emptyWindow($0) }
+        MockURLProtocol.install { Self.emptyWindow($0) }
         let writer = SpyNutrientHealthKitWriter()
         let sync = SpyNutrientSync()
         let (store, _) = try makeStore(moduleEnabled: true, writer: writer, sync: sync)
@@ -183,7 +183,7 @@ struct NutrientHealthKitAuthorizationTests {
 
     @Test("Die Merkung ist prozess-lokal — ein neuer Prozess fragt wieder (und iOS bleibt stumm, wenn entschieden)")
     func theMemoIsNotPersisted() async throws {
-        MockURLProtocol.handler = { Self.emptyWindow($0) }
+        MockURLProtocol.install { Self.emptyWindow($0) }
         let writer = SpyNutrientHealthKitWriter()
         let sync = SpyNutrientSync()
         let gate = ModuleGate(modules: ["nutrients": true])
@@ -206,7 +206,7 @@ struct NutrientHealthKitAuthorizationTests {
     @Test("Einschalten aus dem Leerzustand schaltet das Modul ein und fragt dann die Berechtigung")
     func enableFromEmptyStateFlipsModuleThenAsks() async throws {
         let recorder = PathRecorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request.url?.path ?? "")
             if request.url?.path == "/api/auth/me/modules" {
                 let body = #"{"data":{"modules":{"nutrients":true},"updatedAt":"2026-08-08T00:00:00Z"},"error":null}"#

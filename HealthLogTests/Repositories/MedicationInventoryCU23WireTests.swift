@@ -22,7 +22,7 @@ import Testing
 ///     list, and skips rows that are not pen entries.
 ///
 /// `.serialized` because every case owns the global `MockURLProtocol.handler`.
-@Suite("Medication inventory — CU-23 wire (#52 + null first-use)", .serialized)
+@Suite("Medication inventory — CU-23 wire (#52 + null first-use)", .serialized, .mockURLSession)
 struct MedicationInventoryCU23WireTests {
     // MARK: - Helpers
 
@@ -89,7 +89,7 @@ struct MedicationInventoryCU23WireTests {
         let repo = MedicationTherapyLogRepository(api: api, outbox: outbox)
         let recorder = BodyRecorder()
         let row = inventoryRowJSON
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(Self.body(of: req))
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -183,7 +183,7 @@ struct MedicationInventoryCU23WireTests {
     @MainActor
     func serverPenIsBackfilled() async throws {
         let list = serverInventoryListJSON
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(list.utf8)
@@ -207,7 +207,7 @@ struct MedicationInventoryCU23WireTests {
     @MainActor
     func backfillIsIdempotent() async throws {
         let list = serverInventoryListJSON
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(list.utf8)
@@ -232,7 +232,7 @@ struct MedicationInventoryCU23WireTests {
            "createdAt":"2026-03-20T00:00:00Z","updatedAt":"2026-05-01T08:00:00Z"}
         ],"meta":{"total":1}}}
         """#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(list.utf8)
@@ -248,7 +248,7 @@ struct MedicationInventoryCU23WireTests {
     @Test("#52: an unreachable server leaves the local pen list standing")
     @MainActor
     func offlineKeepsLocalPens() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let store = try makePenStore()

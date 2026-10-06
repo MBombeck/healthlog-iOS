@@ -3,7 +3,7 @@ import Foundation
 import os
 import Testing
 
-@Suite("Apple Health medication archive mirror", .serialized)
+@Suite("Apple Health medication archive mirror", .serialized, .mockURLSession)
 struct AppleHealthMedicationArchiveTests {
     @Test("An archived Apple Health medication is re-posted inactive")
     func archivedMedicationIsRepostedInactive() async throws {
@@ -23,7 +23,7 @@ struct AppleHealthMedicationArchiveTests {
         let api = APIClient(environment: environment, keychain: keychain, sessionConfiguration: .mock())
         let concept = AppleHealthConceptKey.derive(fromArchivedIdentifier: Data("archive-concept".utf8))
         let recordedBody = OSAllocatedUnfairLock(initialState: Data?.none)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.httpMethod == "GET" {
                 let json = #"{"data":[{"id":"srv-existing","name":"Lisinopril","dose":"1","active":true,"externalSource":"APPLE_HEALTH","externalId":"\#(concept)"}],"error":null}"#
                 return (Self.ok(request), Data(json.utf8))

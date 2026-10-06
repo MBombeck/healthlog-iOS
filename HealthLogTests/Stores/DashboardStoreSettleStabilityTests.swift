@@ -25,7 +25,7 @@ import Testing
 /// already-settled hide decisions stay settled. The pull-to-refresh path
 /// (`resetMetricStatesForRefresh()`) clears `fanOutSettledAt = nil`, so
 /// that user-driven invalidation point still re-stamps on the next pass.
-@Suite("DashboardStore — W-TILEHOTFIX set-once fanOutSettledAt contract", .serialized)
+@Suite("DashboardStore — W-TILEHOTFIX set-once fanOutSettledAt contract", .serialized, .mockURLSession)
 struct DashboardStoreSettleStabilityTests {
     @MainActor
     private func makeStore() throws -> (DashboardStore, MeasurementsRepository) {
@@ -68,7 +68,7 @@ struct DashboardStoreSettleStabilityTests {
     @MainActor
     func successiveRefreshesPreserveSettleTimestamp() async throws {
         let (store, measurementsRepo) = try makeStore()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let url = request.url ?? URL(fileURLWithPath: "/")
             let path = url.path
             let body: Data = if path.contains("/api/measurements/series") {
@@ -116,7 +116,7 @@ struct DashboardStoreSettleStabilityTests {
     @MainActor
     func successiveFailuresPreserveSettleTimestamp() async throws {
         let (store, measurementsRepo) = try makeStore()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let url = request.url ?? URL(fileURLWithPath: "/")
             let response = HTTPURLResponse(
                 url: url,
@@ -157,7 +157,7 @@ struct DashboardStoreSettleStabilityTests {
     @MainActor
     func pullToRefreshReopensSettleAnchor() async throws {
         let (store, measurementsRepo) = try makeStore()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let url = request.url ?? URL(fileURLWithPath: "/")
             let path = url.path
             let body: Data = if path.contains("/api/measurements/series") {
@@ -206,7 +206,7 @@ struct DashboardStoreSettleStabilityTests {
     @MainActor
     func clearOnLogoutResetsSettleAnchor() async throws {
         let (store, measurementsRepo) = try makeStore()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let url = request.url ?? URL(fileURLWithPath: "/")
             let response = HTTPURLResponse(
                 url: url,

@@ -10,7 +10,7 @@ import Testing
 /// fill the gap" semantics. The screen relies on this so the moment the
 /// detection worker ships (v1.4.26 / v1.5) the authoritative records
 /// take over without an iOS release.
-@Suite("PersonalRecordsStore — server + derived merge", .serialized)
+@Suite("PersonalRecordsStore — server + derived merge", .serialized, .mockURLSession)
 @MainActor
 struct PersonalRecordsStoreDerivedMergeTests {
     private func makeAPI() -> APIClient {
@@ -26,7 +26,7 @@ struct PersonalRecordsStoreDerivedMergeTests {
 
     @Test("Empty server response surfaces all derived records")
     func emptyServerSurfacesDerived() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -42,7 +42,7 @@ struct PersonalRecordsStoreDerivedMergeTests {
 
     @Test("Server records win their metric-type bucket — derived suppressed for same type")
     func serverWinsBucket() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":[{
               "id":"server.steps.1","userId":"u1","metricType":"ACTIVITY_STEPS","metricSlot":null,
@@ -68,7 +68,7 @@ struct PersonalRecordsStoreDerivedMergeTests {
 
     @Test("Server failure still surfaces derived records, clearing the error")
     func serverFailureKeepsDerived() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Surface a 500 — repo will throw a `.server` HLError.
             let body = Data(#"{"data":null,"error":"boom"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, body)
@@ -85,7 +85,7 @@ struct PersonalRecordsStoreDerivedMergeTests {
 
     @Test("No derived source — store behaves exactly like v0.5.3")
     func noDerivedSourceBackcompat() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }

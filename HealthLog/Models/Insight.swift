@@ -12,8 +12,9 @@ public struct Insight: Codable, Sendable, Identifiable, Hashable {
     /// the service may return provider and model-family identifiers that are
     /// wider than the app's configurable-provider enum. Decoding it as the narrow
     /// `AIProvider` enum threw the entire array on first unknown value
-    /// (W2a-A2 Audit §2.4). We now keep the raw string and surface a
-    /// best-effort label via `providerLabel`.
+    /// (W2a-A2 Audit §2.4). Kept raw and never rendered: from server v1.39 the
+    /// cards are rule-based and always say `"rules"` (#115 · 0.2 dropped the
+    /// provider badge).
     public let provider: String
 
     public init(
@@ -37,14 +38,11 @@ public struct Insight: Codable, Sendable, Identifiable, Hashable {
     }
 }
 
-public extension Insight {
-    /// Best-effort UI-Label für den Provider-Badge. Maps the wide server
+public extension AIInsightResponse {
+    /// Best-effort label for a model provider string. Maps the wide server
     /// vocabulary onto a user-friendly family label whenever we recognise
     /// it, and falls back to a tidied raw string otherwise.
-    ///
-    /// The family labels are plain strings so Insight cards can tolerate wider
-    /// provider/model identifiers without coupling to the configuration enum.
-    var providerLabel: String {
+    static func providerFamilyLabel(_ provider: String) -> String {
         let key = provider.lowercased()
         if key.contains("anthropic") || key.contains("claude") { return "Anthropic" }
         if key.contains("gpt") || key.contains("openai") { return "OpenAI" }
@@ -57,11 +55,20 @@ public extension Insight {
     }
 }
 
-public enum InsightSeverity: String, Codable, Sendable {
+public enum InsightSeverity: String, Codable, Sendable, TolerantServerEnum {
     case info
     case good
     case caution
     case alert
+    /// #115 · 1.7 — unrecognised severity; rendered neutrally.
+    case unknown
+
+    public static let unknownFallback = InsightSeverity.unknown
+    public static let wireVocabulary: StaticString = "insight severity"
+
+    public static func normalizedWireValue(_ raw: String) -> String? {
+        raw.lowercased()
+    }
 }
 
 public struct InsightRecommendation: Codable, Sendable, Identifiable, Hashable {

@@ -12,7 +12,7 @@ import Testing
 /// never transmitted, never deleted. The replay used to log "dead-lettered"
 /// and then `remove` the row, so a shared-device sign-in as User B silently
 /// destroyed User A's queued health writes.
-@Suite("Outbox — foreign-owner rows are retained (A11)", .serialized)
+@Suite("Outbox — foreign-owner rows are retained (A11)", .serialized, .mockURLSession)
 struct OutboxForeignOwnerRetentionTests {
     private final class Recorder: @unchecked Sendable {
         private let lock = NSLock()
@@ -52,7 +52,7 @@ struct OutboxForeignOwnerRetentionTests {
             ownerUserID: "user-a"
         ))
         let recorder = Recorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record()
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }

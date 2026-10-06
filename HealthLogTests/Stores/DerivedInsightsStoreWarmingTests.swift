@@ -19,7 +19,7 @@ import Testing
 /// - the re-poll picks up the settled grid + clears `warming`
 /// - a settled-from-the-start grid never warms
 @MainActor
-@Suite("DerivedInsightsStore — warm-in-flight re-poll", .serialized)
+@Suite("DerivedInsightsStore — warm-in-flight re-poll", .serialized, .mockURLSession)
 struct DerivedInsightsStoreWarmingTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -57,7 +57,7 @@ struct DerivedInsightsStoreWarmingTests {
         // First read: server still warming (revalidating:true, no value).
         // Second read (the scheduled re-poll): settled with a score.
         let callCount = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let n = callCount.next()
             let body = n == 0
                 ? Self.batchBody(revalidating: true, score: nil)
@@ -80,7 +80,7 @@ struct DerivedInsightsStoreWarmingTests {
     func noWarmWhenSettled() async {
         let repo = DerivedMetricsRepository(api: makeAPI())
         let store = DerivedInsightsStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Self.batchBody(revalidating: false, score: 80)

@@ -43,6 +43,7 @@ struct IllnessDayLogTimeline: View {
 }
 
 struct IllnessDayLogRow: View {
+    @Environment(\.unitPreferences) private var units
     let log: IllnessDayLogDTO
 
     var body: some View {
@@ -97,10 +98,11 @@ struct IllnessDayLogRow: View {
         IllnessPresentation.impactLabel(for: impact) ?? String(impact)
     }
 
+    /// #115 P2 — canonical °C, shown in the account's unit.
     private func feverLabel(_ fever: Double) -> String {
-        let value = fever.formatted(.number.precision(.fractionLength(0 ... 1)))
-        let template = String(localized: "illness.daylog.fever.value")
-        return String(format: template, value)
+        let value = units.displayValue(fever, kind: .bodyTemperature)
+            .formatted(.number.precision(.fractionLength(0 ... 1)))
+        return String(localized: "illness.daylog.fever.value \(value) \(units.unitLabel(for: .bodyTemperature))")
     }
 }
 

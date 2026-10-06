@@ -182,7 +182,9 @@ extension APIClient {
         // Consulting the same allowlist rather than hard-coding the collapse
         // means the two policies cannot drift if a future upload route needs
         // its 401 body.
-        if http.statusCode == 401, !Self.preserves401Body(path: request.path) {
+        if http.statusCode == 401, !Self.preserves401Body(path: request.path),
+           !SecurityStepUp.isProofRefusal(body: data)
+        {
             throw HLError.unauthorized
         }
         guard keychain.getString(forKey: KeychainKey.authToken) == authGeneration else {

@@ -2,7 +2,8 @@ import Foundation
 
 public extension AppContainer {
     /// v0.12 W8-8 — single coalesced entry point for the network-touching
-    /// foreground revalidation. Routes the feature-flags refresh + APNs push
+    /// foreground revalidation. Routes the module-map refresh (which since
+    /// #115 · 0.2 also carries the `ai` capability block) + APNs push
     /// re-registration through `foregroundNetworkThrottle` so rapid foreground
     /// bounces don't each fire a network request. `RootView` calls this once per
     /// `.active` transition instead of spawning two independent network Tasks.
@@ -20,7 +21,6 @@ public extension AppContainer {
         // #30 — keep the server module map fresh on foreground. Fail-open + the
         // gate recompute drives CycleGate to re-resolve against the new map.
         async let modules: Void = refreshModuleGate()
-        async let flags: Void = featureFlagsStore.refresh()
         // CCH-03 — refresh the Coach unread signal on foreground so a proactive
         // nudge minted while backgrounded lights the dot on return. Gated +
         // SWR-deduped inside the store (coach-off / offline → no call).
@@ -37,9 +37,9 @@ public extension AppContainer {
         // (always 404) was retired.
         #if canImport(UserNotifications) && canImport(UIKit)
             async let push: Void = notifications.registerForRemoteNotificationsIfAuthorized()
-            _ = await (modules, flags, nudge, slots, push)
+            _ = await (modules, nudge, slots, push)
         #else
-            _ = await (modules, flags, nudge, slots)
+            _ = await (modules, nudge, slots)
         #endif
     }
 

@@ -44,17 +44,22 @@ struct InsightsEcgSpecialPageTests {
         }
     }
 
-    @Test("module `insights` off → no pill even WITH recordings")
-    func moduleOffSuppressesPill() {
-        // `availableSpecials` is the post-module-filter set; the container drops
-        // `.ecg` there when the module is off, so `ordered` never places it.
+    /// Server v1.39 — the ECG routes carry no module gate, and `insights` means
+    /// "AI analysis" only (migration 0343 switched it off for every "Hide
+    /// Coach" account). 279 dropped the pill with that module; the recordings
+    /// alone decide now.
+    @Test("module `insights` off → the pill stays WITH recordings")
+    @MainActor
+    func insightsModuleOffKeepsPill() {
+        let gate = ModuleGate(modules: ["insights": false])
+        let specials = Set([InsightsSpecialPage.ecg].filter { $0.isModuleEnabled(in: gate) })
         let (flat, _) = model(
             visibleSlugs: [InsightsLayoutTileId.pulse],
             availableKinds: [.pulse],
-            availableSpecials: []
+            availableSpecials: specials
         )
-        #expect(flat == [.overview, .metric(.pulse)])
-        #expect(InsightsSpecialPage.ecg.moduleKey == .insights)
+        #expect(flat.contains(.special(.ecg)))
+        #expect(InsightsSpecialPage.ecg.moduleKey == nil)
     }
 
     // MARK: - Placement

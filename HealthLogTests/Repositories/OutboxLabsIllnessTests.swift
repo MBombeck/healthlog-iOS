@@ -12,7 +12,7 @@ import Testing
 ///
 /// Real `APIClient` + `MockURLProtocol` (stub `URLSession`) per the PROJECT_GUIDE.md
 /// anti-pattern guidance — NO mock server (those hide schema drift).
-@Suite("Outbox labs + illness durable writes", .serialized)
+@Suite("Outbox labs + illness durable writes", .serialized, .mockURLSession)
 struct OutboxLabsIllnessTests {
     private func makeAPI(configuration: URLSessionConfiguration = .mock()) -> APIClient {
         let env = AppEnvironment(
@@ -59,7 +59,7 @@ struct OutboxLabsIllnessTests {
         let outbox = try OutboxQueue(inMemory: true)
         let api = makeAPI()
         // 503 is retriable → shouldPersistToOutbox.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let repo = LabsRepository(api: api, outbox: outbox)
@@ -80,7 +80,7 @@ struct OutboxLabsIllnessTests {
         try await outbox.enqueue(.init(kind: .createLab, payload: JSONEncoder.hlDefault.encode(payload), idempotencyKey: key))
 
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { [resp = labResponse] req in
+        MockURLProtocol.install { [resp = labResponse] req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             #expect(req.httpMethod == "POST")
             #expect(req.url?.path == "/api/labs")
@@ -105,7 +105,7 @@ struct OutboxLabsIllnessTests {
         ))
 
         let recorder = PathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -123,7 +123,7 @@ struct OutboxLabsIllnessTests {
     func createEpisodeEnqueuesOnFailure() async throws {
         let outbox = try OutboxQueue(inMemory: true)
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let repo = IllnessRepository(api: api, outbox: outbox)
@@ -154,7 +154,7 @@ struct OutboxLabsIllnessTests {
         ))
 
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { [resp = episodeResponse] req in
+        MockURLProtocol.install { [resp = episodeResponse] req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             #expect(req.httpMethod == "POST")
             #expect(req.url?.path == "/api/illness/episodes")
@@ -179,7 +179,7 @@ struct OutboxLabsIllnessTests {
 
         let recorder = PathRecorder()
         let dayLogResponse = #"{"data":{"id":"dl1","episodeId":"srv-ep-1","date":"2026-01-02","functionalImpact":2,"feverC":38.5,"symptoms":[],"updatedAt":"2026-01-02T00:00:00Z"}}"#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(dayLogResponse.utf8))
         }

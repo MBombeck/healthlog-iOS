@@ -34,7 +34,7 @@
     - value: "down"
   ▿ (2 elements)
     - key: "trendPolarity"
-    - value: "lowerIsBetter"
+    - value: "neutral"
   ▿ (2 elements)
     - key: "unitLabel"
     - value: "kg"

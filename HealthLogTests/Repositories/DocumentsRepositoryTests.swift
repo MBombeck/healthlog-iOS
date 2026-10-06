@@ -10,7 +10,7 @@ import Testing
 /// upload idempotency + sha256-duplicate 200, restore 409, bulk per-id results,
 /// and the `403 module.disabled` discriminator. Real `APIClient` + stub
 /// `URLProtocol` (no mock server) per PROJECT_GUIDE.md.
-@Suite("Documents data layer", .serialized)
+@Suite("Documents data layer", .serialized, .mockURLSession)
 struct DocumentsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -99,7 +99,7 @@ struct DocumentsRepositoryTests {
 
     @Test("List sends q / kind (repeated) / episodeId / year + server-pinned sort")
     func listFacets() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound")
             let query = req.url?.query ?? ""
             #expect(query.contains("q=Blut"))
@@ -124,7 +124,7 @@ struct DocumentsRepositoryTests {
 
     @Test("Usage decodes limits + linked episodes and computes headroom")
     func usageDecode() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, #"""
             {"data":{"usedBytes":800,"quotaBytes":1000,"maxFileBytes":500,
              "acceptedExtensions":[".pdf",".jpg"],
@@ -142,7 +142,7 @@ struct DocumentsRepositoryTests {
 
     @Test("Upload pre-flight rejects an over-cap file before the network")
     func uploadPreflightFileTooLarge() async throws {
-        MockURLProtocol.handler = { _ in Issue.record("upload must not hit the network")
+        MockURLProtocol.install { _ in Issue.record("upload must not hit the network")
             throw URLError(.badURL)
         }
         let repo = makeRepo()
@@ -161,7 +161,7 @@ struct DocumentsRepositoryTests {
 
     @Test("Upload pre-flight rejects when the file would exceed remaining quota")
     func uploadPreflightQuota() async throws {
-        MockURLProtocol.handler = { _ in Issue.record("upload must not hit the network")
+        MockURLProtocol.install { _ in Issue.record("upload must not hit the network")
             throw URLError(.badURL)
         }
         let repo = makeRepo()
@@ -181,7 +181,7 @@ struct DocumentsRepositoryTests {
 
     @Test("Upload carries an Idempotency-Key + multipart body and maps a 200 duplicate")
     func uploadDuplicate200() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound")
             #expect(req.httpMethod == "POST")
             #expect(req.value(forHTTPHeaderField: "Idempotency-Key")?.isEmpty == false)
@@ -204,7 +204,7 @@ struct DocumentsRepositoryTests {
 
     @Test("Upload maps a 201 as a fresh (non-duplicate) store")
     func uploadCreated201() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, #"""
             {"data":{"id":"new1","kind":"OTHER","title":null,"filename":"f.pdf","mimeType":"application/pdf",
              "byteSize":3,"status":"STORED","providerType":null,"reportDate":null,"documentDate":null,
@@ -222,7 +222,7 @@ struct DocumentsRepositoryTests {
 
     @Test("Upload maps a 415 to unsupportedType")
     func upload415() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, #"{"data":null,"error":"unsupported"}"#, status: 415)
         }
         do {
@@ -240,7 +240,7 @@ struct DocumentsRepositoryTests {
 
     @Test("Restore surfaces a 409 conflict via the discriminator")
     func restore409() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, #"{"data":null,"error":"duplicate exists","meta":{"errorCode":"conflict"}}"#, status: 409)
         }
         do {
@@ -253,7 +253,7 @@ struct DocumentsRepositoryTests {
 
     @Test("Bulk returns per-id results (partial failure preserved)")
     func bulkPerIdResults() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound/bulk")
             return ok(req, #"""
             {"data":{"results":[{"id":"a","ok":true,"error":null},
@@ -270,7 +270,7 @@ struct DocumentsRepositoryTests {
 
     @Test("A 403 module.disabled is recognised so the surface renders the enable CTA")
     func moduleDisabled403() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(
                 req,
                 #"{"data":null,"error":"disabled","meta":{"errorCode":"module.disabled","module":"inboundDocuments"}}"#,

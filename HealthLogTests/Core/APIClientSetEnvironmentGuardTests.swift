@@ -15,7 +15,7 @@ import Testing
 /// check refuses any swap that fires while an auth token is present in the
 /// Keychain, so a future Settings "switch server" affordance fails closed
 /// instead of silently breaking the trust chain.
-@Suite("APIClient.setEnvironment post-auth guard (M-2)", .serialized)
+@Suite("APIClient.setEnvironment post-auth guard (M-2)", .serialized, .mockURLSession)
 struct APIClientSetEnvironmentGuardTests {
     private static func makeEnvironment(host: String) -> AppEnvironment {
         AppEnvironment(

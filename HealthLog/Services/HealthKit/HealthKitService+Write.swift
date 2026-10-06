@@ -24,13 +24,13 @@ import Foundation
     /// Drop that metadata key in any new branch and you build a re-upload
     /// loop on every HK observer wake.
     public extension HealthKitService {
-        /// Save a manual-entry `Measurement` back into HealthKit. Idempotent
-        /// from the iOS side — duplicate calls with the same `measurement.id`
-        /// create two HK samples (HK has no de-dup on metadata), so callers
-        /// MUST gate this on a successful server POST. The
-        /// `MeasurementsRepository.create` path already does that; the outbox
-        /// replay path inherits the same single-call guarantee because every
-        /// outbox entry has a unique idempotency-key.
+        /// Save a manual-entry `Measurement` back into HealthKit. Callers MUST
+        /// gate this on a successful server POST so `measurement.id` is the
+        /// server id. Idempotent since S1: a second call for the same server id
+        /// (or a mirror write of the same row) is skipped, by the in-flight
+        /// claim and by the externalUUID probe. An offline-queued row is not
+        /// written here at all; the server→Health mirror writes it once the
+        /// outbox replay has given it a server id.
         func writeMeasurement(_ measurement: Measurement) async throws {
             // A4 MEDIUM #3 — source-aware write-back guard. Only user-originated
             // rows round-trip into Apple Health; device-integration rows
@@ -48,15 +48,19 @@ import Foundation
         }
 
         private func performWrite(_ measurement: Measurement) async throws {
-            let metadata: [String: Any] = [
-                HKMetadataKeyExternalUUID: measurement.id,
-                HKMetadataKeyWasUserEntered: true,
-                // BH-final-diff H2 — app-origin marker so the delete path can
-                // confirm ownership (HKDeletedObject has no sourceRevision).
-                HealthKitSampleOwnership.appOriginMetadataKey: HealthKitSampleOwnership.appOriginMetadataValue
-            ]
+            // S1 / public #11 — the server→Health mirror now writes `.manual`
+            // rows too, so a row this device just created can reach the mirror
+            // (a `.fresh` page right after the POST) while this write is in
+            // flight. Claim its server ids before the first suspension; whoever
+            // claims first writes, the other skips.
+            let ids = measurement.serverMirrorLinkageIDs
+            guard serverMirrorClaims.isDisjoint(with: ids) else { return }
+            serverMirrorClaims.formUnion(ids)
+            var metadata = HealthKitServerMirrorPlanner.metadata(for: measurement)
+            metadata[HKMetadataKeyWasUserEntered] = true
             let samples = Self.quantitySamples(for: measurement, metadata: metadata)
-            guard !samples.isEmpty else {
+            guard let first = samples.first else {
+                serverMirrorClaims.subtract(ids)
                 // MetricKind raw value is an enum case — operator-grade.
                 // swiftlint:disable:next hllog_public_privacy_interpolation
                 HLLog.healthKit.debug(
@@ -64,7 +68,14 @@ import Foundation
                 )
                 return
             }
-            try await store.save(samples)
+            // A sample with this id is already there (the mirror finished first).
+            if await existsInHealth(externalUUIDs: ids, sampleType: first.sampleType) { return }
+            do {
+                try await store.save(Self.healthObjects(for: measurement, samples: samples, metadata: metadata))
+            } catch {
+                serverMirrorClaims.subtract(ids)
+                throw error
+            }
         }
 
         /// **W-HKMIRROR** — pure builder mapping a `Measurement` to the
@@ -144,6 +155,40 @@ import Foundation
             }
         }
 
+        /// **T4 / public #15** — what is actually saved for a measurement's
+        /// samples. A blood pressure is ONE `HKCorrelation` of type
+        /// `.bloodPressure` holding the systolic and diastolic sample; every
+        /// other kind saves its samples as they are.
+        ///
+        /// Apple Health presents blood pressure only as that correlation. Two
+        /// loose systolic/diastolic samples (what every build up to 290 saved)
+        /// never show up as a blood-pressure reading in the Health app, so a
+        /// reading typed in HealthLog looked as if it had not reached Apple
+        /// Health at all. The child samples keep their own metadata, so the
+        /// externalUUID probe, the read-back echo filter and the deletion
+        /// tombstones, which all query the quantity types, see them unchanged.
+        /// Saving the correlation needs share authorization for the two
+        /// quantity types only; the correlation type itself is not requestable.
+        static func healthObjects(
+            for measurement: Measurement,
+            samples: [HKQuantitySample],
+            metadata: [String: Any]
+        ) -> [HKObject] {
+            guard measurement.kind == .bloodPressure,
+                  samples.count == 2,
+                  Set(samples.map(\.quantityType)) == [
+                      HKQuantityType(.bloodPressureSystolic),
+                      HKQuantityType(.bloodPressureDiastolic)
+                  ] else { return samples }
+            return [HKCorrelation(
+                type: HKCorrelationType(.bloodPressure),
+                start: measurement.recordedAt,
+                end: measurement.recordedAt,
+                objects: Set(samples),
+                metadata: metadata
+            )]
+        }
+
         // MARK: - Server-origin mirror (W-HKMIRROR)
 
         /// **W-HKMIRROR** — mirror SERVER-ORIGIN measurements (entered on web /
@@ -151,68 +196,69 @@ import Foundation
         /// iPhone Health app shows readings they did NOT type on this device.
         ///
         /// Hooked into the MeasurementsStore SWR `.fresh` path (authoritative
-        /// server page). Closes the bidirectional-sync gap: until now only
-        /// `.manual` rows round-tripped at create-time.
+        /// server page) and the one-shot historical backfill.
         ///
-        /// **Conservative source policy.** We mirror ONLY rows the user
-        /// genuinely authored away from this device and for which the server is
-        /// a legitimate authoring source: `.withings` and `.import_`. We
-        /// deliberately EXCLUDE:
-        /// - `.manual` — already round-tripped at create-time (and suppressed
-        ///   in standalone), mirroring again would double-write.
-        /// - `.appleHealth` — originated in HealthKit already; writing it back
-        ///   would duplicate / could re-enter via the Apple-Health source on
-        ///   another device (cross-source contamination).
-        /// - `.whoop` / `.fitbit` — wearable read-only-source kinds
-        ///   (HR-series / sleep / strain) that belong to their provider; never
-        ///   author those into Apple Health.
+        /// **Source policy** (`MeasurementSource.isServerMirrorEligible`):
+        /// `.withings`, `.import_` and — since S1 / public #11 — `.manual`. A
+        /// manual row typed on the web or on another device never reached Apple
+        /// Health while `.manual` was excluded as "already round-tripped at
+        /// create-time"; that only ever held for rows typed on this device.
+        /// Still excluded: `.appleHealth` (originated in HealthKit) and every
+        /// provider-owned source.
         ///
-        /// **Anti-duplicate / idempotency.** Every sample carries
-        /// `HKMetadataKeyExternalUUID = measurement.id` (the SAME stable server
-        /// id used by the read foreign-filter), so HK read-back drops it (no
-        /// echo). Before writing we query existing samples by that externalUUID
-        /// and skip ids already present — writing the same id twice on a
-        /// re-sync is a no-op (HK has no metadata de-dup, so we de-dup
-        /// ourselves). Requires share-auth (skips silently otherwise). Runs on
-        /// the actor, off the main thread; never throws into the sync path.
+        /// **Anti-duplicate / idempotency** (``HealthKitServerMirrorPlanner``).
+        /// Every sample carries `HKMetadataKeyExternalUUID = measurement.id`,
+        /// so HK read-back drops it (no echo). A row is skipped when a sample
+        /// already carries one of its server ids (BP: the systolic id, or the
+        /// diastolic id older builds stamped at create-time), when this app
+        /// already authored a sample of the same type, instant and value, when
+        /// a create-time write on this actor has claimed it, or when the user
+        /// deleted its sample from Apple Health (``HealthKitMirrorTombstones``).
+        /// Requires share-auth (skips silently otherwise). Runs on the actor,
+        /// off the main thread; never throws into the sync path.
         func mirrorServerMeasurements(_ measurements: [Measurement]) async {
-            let candidates = measurements.filter { Self.shouldMirrorFromServer($0) }
-            guard !candidates.isEmpty else { return }
-
-            var samples: [HKQuantitySample] = []
-            for measurement in candidates {
-                let metadata: [String: Any] = [
-                    HKMetadataKeyExternalUUID: measurement.id,
-                    // BH-final-diff H2 — app-origin marker for delete-path ownership.
-                    HealthKitSampleOwnership.appOriginMetadataKey: HealthKitSampleOwnership.appOriginMetadataValue
-                ]
-                let built = Self.quantitySamples(for: measurement, metadata: metadata)
-                guard !built.isEmpty else { continue }
-                // Share-auth gate per write-type — skip silently if not granted.
-                guard built.allSatisfy({ store.authorizationStatus(for: $0.sampleType) == .sharingAuthorized }) else {
-                    continue
-                }
-                // Idempotency: skip ids already mirrored (re-sync no-op).
-                if await existsInHealth(externalUUID: measurement.id, sampleType: built[0].sampleType) {
-                    continue
-                }
-                samples.append(contentsOf: built)
+            let excluded = serverMirrorClaims.union(HealthKitMirrorTombstones().ids)
+            let plan = await HealthKitServerMirrorPlanner.plan(
+                measurements,
+                excluding: excluded,
+                probe: serverMirrorProbe()
+            )
+            guard !plan.samples.isEmpty else { return }
+            // S1 — a create-time write that reached the actor while the plan was
+            // probing may have claimed one of these rows; it owns that row.
+            guard serverMirrorClaims.isDisjoint(with: plan.linkageIDs) else {
+                return await mirrorServerMeasurements(measurements)
             }
-            guard !samples.isEmpty else { return }
+            serverMirrorClaims.formUnion(plan.linkageIDs)
             do {
-                try await store.save(samples)
+                try await store.save(plan.objects)
                 // Count is operator-grade (no PHI).
                 // swiftlint:disable:next hllog_public_privacy_interpolation
                 HLLog.healthKit.debug(
-                    "HK server-mirror: \(samples.count, privacy: .public) Sample(s) gespiegelt."
+                    "HK server-mirror: \(plan.samples.count, privacy: .public) Sample(s) gespiegelt."
                 )
             } catch {
+                serverMirrorClaims.subtract(plan.linkageIDs)
                 // Localized HK error string is operator-grade diagnostics.
                 // swiftlint:disable:next hllog_public_privacy_interpolation
                 HLLog.healthKit.warning(
                     "HK server-mirror write fehlgeschlagen: \(error.localizedDescription, privacy: .public)"
                 )
             }
+        }
+
+        /// The live Health reads behind ``HealthKitServerMirrorPlanner``.
+        private func serverMirrorProbe() -> HealthKitServerMirrorProbe {
+            let store = store
+            return HealthKitServerMirrorProbe(
+                isShareAuthorized: { store.authorizationStatus(for: $0.sampleType) == .sharingAuthorized },
+                existsWithExternalIDs: { [weak self] ids, type in
+                    await self?.existsInHealth(externalUUIDs: ids, sampleType: type) ?? true
+                },
+                ownSamplesNear: { [weak self] type, instant in
+                    await self?.ownSamples(of: type, near: instant) ?? []
+                }
+            )
         }
 
         /// Source + kind policy for the server-origin mirror. Mirrors only
@@ -228,12 +274,13 @@ import Foundation
             return !quantitySamples(for: measurement, metadata: [:]).isEmpty
         }
 
-        /// Idempotency probe — true if a sample with this externalUUID already
-        /// exists in HealthKit for the given type. Cheap, bounded `limit: 1`.
-        private func existsInHealth(externalUUID: String, sampleType: HKSampleType) async -> Bool {
+        /// Idempotency probe — true if a sample carrying one of these
+        /// externalUUIDs already exists in HealthKit for the given type. Cheap,
+        /// bounded `limit: 1`.
+        private func existsInHealth(externalUUIDs: [String], sampleType: HKSampleType) async -> Bool {
             let predicate = HKQuery.predicateForObjects(
                 withMetadataKey: HKMetadataKeyExternalUUID,
-                allowedValues: [externalUUID]
+                allowedValues: externalUUIDs
             )
             return await withCheckedContinuation { continuation in
                 let query = HKSampleQuery(
@@ -243,6 +290,30 @@ import Foundation
                     sortDescriptors: nil
                 ) { _, result, _ in
                     continuation.resume(returning: !(result ?? []).isEmpty)
+                }
+                store.execute(query)
+            }
+        }
+
+        /// Samples this app authored of `type` that start within a second of
+        /// `instant` — the metadata-free fallback of the mirror dedup.
+        private func ownSamples(of type: HKQuantityType, near instant: Date) async -> [HKQuantitySample] {
+            let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                HKQuery.predicateForSamples(
+                    withStart: instant.addingTimeInterval(-1),
+                    end: instant.addingTimeInterval(1),
+                    options: []
+                ),
+                HKQuery.predicateForObjects(from: HKSource.default())
+            ])
+            return await withCheckedContinuation { continuation in
+                let query = HKSampleQuery(
+                    sampleType: type,
+                    predicate: predicate,
+                    limit: 16,
+                    sortDescriptors: nil
+                ) { _, result, _ in
+                    continuation.resume(returning: (result ?? []).compactMap { $0 as? HKQuantitySample })
                 }
                 store.execute(query)
             }

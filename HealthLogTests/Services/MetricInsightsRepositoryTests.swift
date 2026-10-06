@@ -32,7 +32,7 @@ private func isMetricInsightsRoute(_ request: URLRequest) -> Bool {
 /// "passed tests" but the text still never surfaced because `MetricStatusDTO`
 /// dropped the `preparing`/`revalidating`/`insufficient` keys, so the card
 /// self-suppressed on the cold body and never polled.
-@Suite("MetricInsightsRepository — Task #50 assessment polling", .serialized)
+@Suite("MetricInsightsRepository — Task #50 assessment polling", .serialized, .mockURLSession)
 struct MetricInsightsAssessmentPollingTests {
     private struct StubReach: ReachabilityProviding, @unchecked Sendable {
         let online: Bool
@@ -76,7 +76,7 @@ struct MetricInsightsAssessmentPollingTests {
     func preparingThenPollSurfacesText() async throws {
         let api = try await makeAPI()
         nonisolated(unsafe) var callCount = 0
-        MockURLProtocol.handler = { [self] request in
+        MockURLProtocol.install { [self] request in
             if isMetricInsightsRoute(request) { callCount += 1 }
             // First call (the screen's initial fetch) → cold preparing body.
             // Second call (a poll) → the warmed assessment.
@@ -110,7 +110,7 @@ struct MetricInsightsAssessmentPollingTests {
     @Test("insufficient body is terminal (no poll)")
     func insufficientIsTerminal() async throws {
         let api = try await makeAPI()
-        MockURLProtocol.handler = { [self] request in
+        MockURLProtocol.install { [self] request in
             (
                 ok(request),
                 Data(#"{"data":{"hasProvider":true,"text":null,"cached":false,"updatedAt":null,"insufficient":true},"error":null}"#.utf8)
@@ -127,7 +127,7 @@ struct MetricInsightsAssessmentPollingTests {
     @Test("no-provider body is terminal (hidden, no poll)")
     func noProviderIsTerminal() async throws {
         let api = try await makeAPI()
-        MockURLProtocol.handler = { [self] request in
+        MockURLProtocol.install { [self] request in
             (
                 ok(request),
                 Data(#"{"data":{"hasProvider":false,"text":"Assistent deaktiviert.","cached":true,"updatedAt":null},"error":null}"#.utf8)
@@ -149,7 +149,7 @@ struct MetricInsightsAssessmentPollingTests {
         let api = try await makeAPI()
         let cache = try SWRCache(modelContainer: SWRCache.makeInMemory())
         let swr = SWRCoordinator(cache: cache, reachability: StubReach(online: true))
-        MockURLProtocol.handler = { [self] request in
+        MockURLProtocol.install { [self] request in
             (
                 ok(request),
                 Data(#"{"data":{"hasProvider":true,"text":null,"cached":false,"updatedAt":null,"preparing":true},"error":null}"#.utf8)
@@ -184,13 +184,13 @@ struct MetricInsightsAssessmentPollingTests {
 /// 1. Gate closed → no network request fires, fetch returns nil.
 /// 2. Gate open → request fires + envelope decodes.
 /// 3. No gate wired (default ctor) → legacy behaviour (request fires).
-@Suite("MetricInsightsRepository — consent gate (PB1 H1)", .serialized)
+@Suite("MetricInsightsRepository — consent gate (PB1 H1)", .serialized, .mockURLSession)
 struct MetricInsightsRepositoryTests {
     @Test("fetch returns nil and skips the network when consent gate is closed")
     func gateClosedSkipsNetwork() async throws {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) { requestCount += 1 }
             return (Self.ok(request), Data(#"{"data":{"hasProvider":true,"text":"x","cached":false,"updatedAt":null}}"#.utf8))
         }
@@ -206,7 +206,7 @@ struct MetricInsightsRepositoryTests {
     func gateOpenPerformsRequest() async throws {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var observedPath: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) { observedPath = request.url?.path }
             return (Self.ok(request), Data(#"{"data":{"hasProvider":true,"text":"Werte stabil.","cached":false,"updatedAt":null}}"#.utf8))
         }
@@ -223,7 +223,7 @@ struct MetricInsightsRepositoryTests {
     func legacyConstructorPermitsRequest() async throws {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) { requestCount += 1 }
             return (Self.ok(request), Data(#"{"data":{"hasProvider":false,"text":"hint","cached":false,"updatedAt":null}}"#.utf8))
         }
@@ -243,7 +243,7 @@ struct MetricInsightsRepositoryTests {
     func unsupportedMetricReturnsNil() async throws {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) { requestCount += 1 }
             return (Self.ok(request), Data(#"{"data":null}"#.utf8))
         }
@@ -266,7 +266,7 @@ struct MetricInsightsRepositoryTests {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var observedPath: String?
         nonisolated(unsafe) var observedQuery: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) {
                 observedPath = request.url?.path
                 observedQuery = request.url?.query
@@ -289,7 +289,7 @@ struct MetricInsightsRepositoryTests {
     @Test("a 422 from the generic route maps to nil (graceful empty, never an error)")
     func genericRoute422MapsToNil() async throws {
         let api = try await makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.status(request, 422), Data(#"{"error":"unknown metric"}"#.utf8))
         }
         let repo = MetricInsightsRepository(api: api, consentGate: { true })
@@ -304,7 +304,7 @@ struct MetricInsightsRepositoryTests {
     @Test("a 404 from the generic route maps to nil (route not deployed yet)")
     func genericRoute404MapsToNil() async throws {
         let api = try await makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.status(request, 404), Data(#"{"error":"not found"}"#.utf8))
         }
         let repo = MetricInsightsRepository(api: api, consentGate: { true })
@@ -346,7 +346,7 @@ struct MetricInsightsRepositoryTests {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var observedPath: String?
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) {
                 observedPath = request.url?.path
                 requestCount += 1
@@ -381,7 +381,7 @@ struct MetricInsightsRepositoryTests {
     @Test("fetchAssessment surfaces hasProvider:false (no provider configured) verbatim")
     func fetchAssessmentSurfacesNoProviderHint() async throws {
         let api = try await makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (
                 Self.ok(request),
                 Data(#"{"data":{"hasProvider":false,"text":"Assistent deaktiviert.","cached":true,"updatedAt":null},"error":null}"#.utf8)
@@ -401,7 +401,7 @@ struct MetricInsightsRepositoryTests {
     func fetchAssessmentUnsupportedKindReturnsNil() async throws {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) { requestCount += 1 }
             return (Self.ok(request), Data(#"{"data":null,"error":null}"#.utf8))
         }
@@ -416,7 +416,7 @@ struct MetricInsightsRepositoryTests {
     @Test("fetchAssessment maps a 404/422 to nil (graceful empty, never an error)")
     func fetchAssessment404MapsToNil() async throws {
         let api = try await makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.status(request, 404), Data(#"{"data":null,"error":"not found"}"#.utf8))
         }
         let repo = MetricInsightsRepository(api: api)
@@ -432,7 +432,7 @@ struct MetricInsightsRepositoryTests {
     func summaryExtractsFromComprehensive() async throws {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var observedPath: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) { observedPath = request.url?.path }
             let body = #"""
             {"data":{"summaries":{"WEIGHT":{"count":87,"latest":78.4,"avg30":79.2,"slope7":{"slope":-0.04,"direction":"down","confidence":0.62},"avg30LastYear":81.5}}}}
@@ -453,7 +453,7 @@ struct MetricInsightsRepositoryTests {
     func summaryNilForUnmappedKind() async throws {
         let api = try await makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if isMetricInsightsRoute(request) { requestCount += 1 }
             return (Self.ok(request), Data(#"{"data":{}}"#.utf8))
         }
@@ -469,7 +469,7 @@ struct MetricInsightsRepositoryTests {
     @Test("summary(metric:) returns nil when the metric is absent from summaries")
     func summaryNilWhenMetricMissing() async throws {
         let api = try await makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // Digest carries WEIGHT but not PULSE.
             (Self.ok(request), Data(#"{"data":{"summaries":{"WEIGHT":{"count":5}}}}"#.utf8))
         }
@@ -483,7 +483,7 @@ struct MetricInsightsRepositoryTests {
     @Test("summary(metric:) returns nil on a 500 — best-effort, never re-throws (v0.7.1 H-1)")
     func summaryReturnsNilOnServerError() async throws {
         let api = try await makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.status(request, 500), Data(#"{"error":"boom"}"#.utf8))
         }
         let repo = MetricInsightsRepository(api: api)
@@ -499,7 +499,7 @@ struct MetricInsightsRepositoryTests {
     @Test("summary(metric:) returns nil on a decode failure — best-effort (v0.7.1 H-1)")
     func summaryReturnsNilOnDecodeFailure() async throws {
         let api = try await makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // 200 OK but a body that cannot decode into AIInsightResponse.
             (Self.ok(request), Data(#"{"data":{"summaries":{"WEIGHT":"not-an-object"}}}"#.utf8))
         }

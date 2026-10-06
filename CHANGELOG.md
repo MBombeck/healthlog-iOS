@@ -2,6 +2,21 @@
 
 > This changelog resumes at v0.6.2; earlier detailed release notes are not included in this repository.
 
+## 1.1.0 (291) — 2026-10-05
+
+HealthLog Companion App 1.1.0 is available on the [App Store](https://apps.apple.com/app/id6769501341). This source release corresponds to the published build. It follows HealthLog server v1.39 and also contains the fixes prepared for 1.0.4, which was not released on its own.
+
+- Values the server computes for your account are shown as the server sends them: medication adherence in the ring, widget, detail screen and doctor report, the weight trend against your goal, mood averages, supply and the basis of the health score. Where the server has no value, the app says so instead of estimating one.
+- AI features (coach, daily briefing, status notes, period summaries, document help) follow what the server and your account allow, and say in one sentence why a feature is unavailable. Computed insights load without AI consent.
+- Removed until the server provides values: the mood pattern cards, fixed threshold lines in charts and population benchmarks next to personal records.
+- The glucose unit, imperial units and day boundaries follow your account settings everywhere, including Apple Watch, widgets, Siri, Shortcuts and the doctor report.
+- Cycle logging shows the cycle day of the chosen date, the calendar marks every logged day, and editing a day no longer duplicates it in Apple Health.
+- Medications can be kept as a record only, without reminders or adherence. Courses use calendar days in every time zone, finished courses are marked as ended, categories survive edits, and reminders are topped up in the background without the server sending them a second time.
+- Readings from the web app and other devices are written to Apple Health once. Blood pressure reaches the server with both values and appears in Apple Health as one reading. Heart rate uploads recover after the switch to 10-minute values, and large ECG backlogs upload in steps.
+- The offline queue keeps entries when an upload is interrupted, waits when the server asks it to, and lists readings the server refused in Sync Diagnostics with a way to send them again.
+- Sign-in, single sign-on and confirmation errors each get their own message, and a confirmation request no longer signs you out. The app lock starts only after the app has been in the background.
+- Fixes for a freeze when leaving settings pages, a crash when tapping + during an animation, the full backup export, FHIR export references, percentage rounding, English text that appeared in German, and layouts at large text sizes.
+
 ## 1.0.3 (279) — 2026-09-20
 
 HealthLog Companion App is available on the [App Store](https://apps.apple.com/app/id6769501341). This source release corresponds to the published build.

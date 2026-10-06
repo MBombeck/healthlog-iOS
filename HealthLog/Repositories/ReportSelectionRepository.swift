@@ -20,9 +20,10 @@ import Foundation
 /// template visibly); it must not invent one, because a scope nobody chose is
 /// the defect this whole shape exists to remove.
 ///
-/// **This route is not in the OpenAPI.** The wire shape above is taken verbatim
-/// from the catch-up brief (block A2) and cross-checked against the server
-/// route; nothing is inferred beyond it.
+/// **Contract.** The wire shape above was first taken from the catch-up brief
+/// (block A2); server v1.39.0 publishes the route in `docs/api/openapi.yaml`
+/// (`src/lib/openapi/routes/profile.ts`), including the refusal shapes
+/// ``ReportSelectionError`` maps.
 ///
 /// The same selection is mirrored **read-only** onto `GET /api/auth/me` as
 /// `reportSelection` — see ``AuthMeServerPrefs/reportSelection``, which picks it
@@ -49,8 +50,8 @@ public actor ReportSelectionRepository {
     /// caller's, so two clients that chose the same scope store the same bytes.
     /// Adopt the echo rather than the value you sent.
     ///
-    /// - Throws: ``ReportSelectionError`` for the three documented `422`
-    ///   classes; any other transport/server failure passes through as the
+    /// - Throws: ``ReportSelectionError`` for the three documented refusal
+    ///   classes (`400`/`422`); any other transport/server failure passes through as the
     ///   original ``HLError``.
     @discardableResult
     public func replace(_ profile: SavedReportProfile) async throws -> SavedReportProfile {
@@ -91,34 +92,43 @@ public struct ReportSelectionEnvelope: Decodable, Sendable, Equatable {
     }
 }
 
-/// The three `422` classes `PUT /api/auth/me/report-selection` distinguishes.
+/// The three refusal classes `PUT /api/auth/me/report-selection` distinguishes.
 ///
 /// They are genuinely different failures and must not collapse into one banner:
 /// - ``invalidJSON`` and ``invalidShape`` are **client bugs** — the body never
 ///   should have been sent. Surface them as a defect, do not offer "try again".
-/// - ``unknownLeaves`` is a **contract mismatch**: the app sent a leaf id this
-///   server build does not know. The recovery is to re-read the live vocabulary
-///   from `GET /api/meta/capabilities` (`share.leaves`) and let the user
-///   re-choose — never to silently drop the offending ids, which would narrow a
-///   scope the user did express.
+/// - ``unknownLeaves(ids:)`` is a **contract mismatch**: the app sent a leaf id
+///   this server build does not know. The recovery is to re-read the live
+///   vocabulary from `GET /api/meta/capabilities` (`share.leaves`) and let the
+///   user re-choose — never to silently drop the offending ids, which would
+///   narrow a scope the user did express.
 ///
-/// **Wire detail (verified against the server):** these codes ride in the
-/// envelope's top-level `error` **string**, not in `meta.errorCode` — the route
-/// throws `HttpError(422, "<code>")` and the handler serialises that message
-/// verbatim. ``mapped(_:)`` therefore matches `HLError.server`'s `code` *and*
-/// `message`, so a later server change that promotes the code into
-/// `meta.errorCode` needs no iOS change.
+/// **Wire detail (#110, verified against server v1.39.0
+/// `src/app/api/auth/me/report-selection/route.ts`):**
+/// - `invalid_json` is `400` since the release after v1.38.15 (it was `422`),
+///   with `error: "Invalid JSON body"` and the token in `meta.errorCode`.
+/// - `invalid_shape` stays `422`; the token rides in `meta.errorCode` **and**
+///   (unchanged) as the `error` string, with `details.issues` beside it.
+/// - `leaves.unknown` stays `422`, now with a sentence in `error`, the token in
+///   `meta.errorCode` and the refused ids in `meta.unknownLeaves`. The
+///   transport hands that one over as ``APIRefusalDetail`` so the ids survive.
+///
+/// ``mapped(_:)`` therefore accepts `400` **or** `422`, matches the code first
+/// (which `HLError.server` already takes from `meta.errorCode` before the
+/// top-level one) and the `error` string only as the fallback an older server
+/// needs.
 public enum ReportSelectionError: Error, Sendable, Equatable {
-    /// `422 report-selection.body.invalid_json` — the body was not JSON at all.
+    /// `400 report-selection.body.invalid_json` (`422` before the release after
+    /// v1.38.15) — the body was not JSON at all.
     case invalidJSON
     /// `422 report-selection.body.invalid_shape` — JSON, but not a valid v2
     /// profile (wrong `v`, missing/extra key, `rangeDays` out of 1…365, a leaf
     /// id outside 1…64 chars, more than 91 leaves …).
     case invalidShape
     /// `422 report-selection.leaves.unknown` — one or more leaf ids are not in
-    /// the server's catalogue. The server names them in its log, not in the
-    /// response body, so the ids are not recoverable client-side.
-    case unknownLeaves
+    /// the server's catalogue. `ids` are the ones the server named in
+    /// `meta.unknownLeaves`; empty when an older server named none.
+    case unknownLeaves(ids: [String])
 
     /// Wire codes, in the order they are matched.
     public var wireCode: String {
@@ -129,19 +139,30 @@ public enum ReportSelectionError: Error, Sendable, Equatable {
         }
     }
 
+    /// The statuses a refusal class may arrive with: `invalid_json` moved from
+    /// `422` to `400`, and an older server still answers `422`.
+    static let refusalStatuses: Set<Int> = [400, 422]
+
     /// Recognise one of the three classes in a raw error, or return the error
-    /// untouched. Never invents a class: anything that is not a `422` carrying
-    /// one of the three codes passes through as-is, so transport failures,
-    /// 401s and 5xx keep their existing handling (incl. Outbox eligibility).
+    /// untouched. Never invents a class: anything that is not a `400`/`422`
+    /// carrying one of the three codes passes through as-is, so transport
+    /// failures, 401s and 5xx keep their existing handling (incl. Outbox
+    /// eligibility).
     static func mapped(_ error: Error) -> Error {
+        if let detail = error as? APIRefusalDetail,
+           refusalStatuses.contains(detail.status),
+           detail.code == APIRefusalDetail.unknownLeavesCode
+        {
+            return unknownLeaves(ids: detail.meta.unknownLeaves ?? [])
+        }
         guard let hlError = error as? HLError,
               case let .server(status, code, message) = hlError,
-              status == 422 else
+              refusalStatuses.contains(status) else
         {
             return error
         }
-        let match = [Self.invalidJSON, .invalidShape, .unknownLeaves]
-            .first { code == $0.wireCode || message == $0.wireCode }
+        let classes: [Self] = [.invalidJSON, .invalidShape, .unknownLeaves(ids: [])]
+        let match = classes.first { code == $0.wireCode } ?? classes.first { message == $0.wireCode }
         return match ?? error
     }
 }

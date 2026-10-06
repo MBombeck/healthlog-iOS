@@ -23,7 +23,7 @@
         import AuthenticationServices
     #endif
 
-    @Suite("Web-deletion return detection (Privacy H3)", .serialized)
+    @Suite("Web-deletion return detection (Privacy H3)", .serialized, .mockURLSession)
     struct WebDeletionReturnDetectionTests {
         /// Passkey stub — the probe / delete cascade never touches it.
         private final class NoopPasskey: PasskeyServiceProtocol, @unchecked Sendable {
@@ -166,7 +166,7 @@
             f.store.markPendingWebDeletion()
             #expect(f.store.hasPendingWebDeletion)
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 #expect(req.url?.path == "/api/auth/me")
                 return (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
             }
@@ -202,7 +202,7 @@
             ))
             f.store.markPendingWebDeletion()
             let probe = SuspendedProbe()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 probe.waitForRelease()
                 return (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
             }
@@ -239,7 +239,7 @@
             f.store.setPhaseForTesting(.authenticated(owner))
             f.store.markPendingWebDeletion()
             let probe = SuspendedProbe()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 probe.waitForRelease()
                 return (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
             }
@@ -275,7 +275,7 @@
             ))
             f.store.markPendingWebDeletion()
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
             }
 
@@ -295,7 +295,7 @@
             ))
             f.store.markPendingWebDeletion()
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"Temporarily unavailable"}"#.utf8)
@@ -317,7 +317,7 @@
                 User(id: "user-h3-1", email: nil, username: nil, displayName: nil, createdAt: .now)
             ))
             // No markPendingWebDeletion().
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 Issue.record("probe must not fire when the flag is unarmed")
                 return (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, nil)
             }
@@ -340,7 +340,7 @@
             // old marker was reconciled. The marker must be owner-bound so it
             // can never delete the later account's local state.
             try f.keychain.setString("user-h3-2", forKey: KeychainKey.userID)
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 Issue.record("a marker owned by another account must not probe")
                 return (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, nil)
             }
@@ -361,7 +361,7 @@
             let f = try makeStore(tokenPresent: false)
             f.store.setPhaseForTesting(.unauthenticated)
             f.store.markPendingWebDeletion()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 Issue.record("probe must short-circuit without a network call when token-less")
                 return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
             }
@@ -387,12 +387,12 @@
             let api = APIClient(environment: env, keychain: keychain, sessionConfiguration: .mock())
             let auth = AuthService(api: api, keychain: keychain, passkey: NoopPasskey())
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
             }
             #expect(await auth.probeAccountStatus() == .exists)
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
             }
             #expect(await auth.probeAccountStatus() == .gone)

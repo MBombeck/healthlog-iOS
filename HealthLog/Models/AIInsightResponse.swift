@@ -71,9 +71,10 @@ public struct AIInsightResponse: Codable, Sendable, Hashable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
-        recommendations = try container.decodeIfPresent([Recommendation].self, forKey: .recommendations) ?? []
-        citations = try container.decodeIfPresent([Citation].self, forKey: .citations) ?? []
-        warnings = try container.decodeIfPresent([InsightWarning].self, forKey: .warnings) ?? []
+        // #115 · 1.7 — lossy: one malformed row never fails the whole answer.
+        recommendations = try container.decodeLossyArray(Recommendation.self, forKey: .recommendations)
+        citations = try container.decodeLossyArray(Citation.self, forKey: .citations)
+        warnings = try container.decodeLossyArray(InsightWarning.self, forKey: .warnings)
         dailyBriefing = try container.decodeIfPresent(DailyBriefing.self, forKey: .dailyBriefing)
         promptVersion = try container.decodeIfPresent(String.self, forKey: .promptVersion)
         provider = try container.decodeIfPresent(String.self, forKey: .provider)
@@ -103,20 +104,10 @@ public struct AIInsightResponse: Codable, Sendable, Hashable {
 }
 
 public extension AIInsightResponse {
-    /// Reuses the `Insight.providerLabel` mapper so the same
-    /// The provider-family table applies to comprehensive responses.
+    /// The provider-family label of the generating model (briefing path).
     var providerLabel: String? {
         guard let provider, !provider.isEmpty else { return nil }
-        return Insight(
-            id: "_",
-            title: "_",
-            summary: "_",
-            body: nil,
-            severity: .info,
-            recommendations: [],
-            generatedAt: Date(),
-            provider: provider
-        ).providerLabel
+        return Self.providerFamilyLabel(provider)
     }
 }
 
@@ -182,15 +173,27 @@ public struct Recommendation: Codable, Sendable, Hashable, Identifiable {
 /// Lowercase EN tokens — see `08-locked-contracts.md §9.1` (GROUND RULE 11).
 /// The UI translates at render time via `Localizable.xcstrings`; never
 /// localise on-wire.
-public enum RecommendationSeverity: String, Codable, Sendable, CaseIterable {
+public enum RecommendationSeverity: String, Codable, Sendable, CaseIterable, TolerantServerEnum {
     case info
     case suggestion
     case important
     case urgent
+    /// #115 · 1.7 — a severity this build does not know. Rendered neutrally
+    /// and sorted last: an unread level is neither downgraded to `info` nor
+    /// promoted to `urgent`.
+    case unknown
 
-    /// Sort key (info < suggestion < important < urgent).
+    public static let unknownFallback = RecommendationSeverity.unknown
+    public static let wireVocabulary: StaticString = "recommendation severity"
+
+    public static func normalizedWireValue(_ raw: String) -> String? {
+        raw.lowercased()
+    }
+
+    /// Sort key (unknown < info < suggestion < important < urgent).
     public var sortRank: Int {
         switch self {
+        case .unknown: -1
         case .info: 0
         case .suggestion: 1
         case .important: 2
@@ -270,10 +273,19 @@ public struct InsightWarning: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-public enum WarningSeverity: String, Codable, Sendable {
+public enum WarningSeverity: String, Codable, Sendable, TolerantServerEnum {
     case info
     case warning
     case important
+    /// #115 · 1.7 — unrecognised warning level; rendered neutrally.
+    case unknown
+
+    public static let unknownFallback = WarningSeverity.unknown
+    public static let wireVocabulary: StaticString = "warning severity"
+
+    public static func normalizedWireValue(_ raw: String) -> String? {
+        raw.lowercased()
+    }
 }
 
 // MARK: - DailyBriefing
@@ -309,10 +321,12 @@ public struct DailyBriefing: Codable, Sendable, Hashable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         paragraph = try container.decode(String.self, forKey: .paragraph)
-        keyFindings = try container.decodeIfPresent([KeyFinding].self, forKey: .keyFindings) ?? []
+        // #115 · 1.7 — lossy: one malformed finding or signal is dropped,
+        // the briefing stays.
+        keyFindings = try container.decodeLossyArray(KeyFinding.self, forKey: .keyFindings)
         // Nullable + optional on the wire (server caps at 3) — tolerate
         // missing/null so legacy caches decode to an empty signals list.
-        signalsOfDay = try container.decodeIfPresent([DailyBriefingSignal].self, forKey: .signalsOfDay) ?? []
+        signalsOfDay = try container.decodeLossyArray(DailyBriefingSignal.self, forKey: .signalsOfDay)
     }
 }
 
@@ -381,8 +395,17 @@ public struct KeyFinding: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-public enum KeyFindingTone: String, Codable, Sendable {
+public enum KeyFindingTone: String, Codable, Sendable, TolerantServerEnum {
     case good
     case watch
     case info
+    /// #115 · 1.7 — unrecognised tone; rendered neutrally, never as `good`.
+    case unknown
+
+    public static let unknownFallback = KeyFindingTone.unknown
+    public static let wireVocabulary: StaticString = "key finding tone"
+
+    public static func normalizedWireValue(_ raw: String) -> String? {
+        raw.lowercased()
+    }
 }

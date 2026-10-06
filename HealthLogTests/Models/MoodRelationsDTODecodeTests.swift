@@ -196,8 +196,10 @@ struct MoodRelationsDTODecodeTests {
         """#
         let res = try decode(json)
         let factor = try #require(res.betterDays.first)
-        #expect(factor.source == .tag) // unknown → conservative default
-        #expect(factor.direction == .up)
+        // #115 · 1.7 — unknown stays unknown: no `.tag` renderer for a factor
+        // nobody read, and no "goes with higher mood" claim.
+        #expect(factor.source == .unknown)
+        #expect(factor.direction == .unknown)
     }
 
     // MARK: - Additive: a payload missing the relations slices decodes empty

@@ -28,7 +28,7 @@ import Testing
 ///    retries with the fresh token while still carrying the hero-item field.
 ///
 /// `.serialized` because `MockURLProtocol.handler` is global state.
-@Suite("CU-34 — enabledHeroItemKinds auf PUT /api/dashboard/widgets", .serialized)
+@Suite("CU-34 — enabledHeroItemKinds auf PUT /api/dashboard/widgets", .serialized, .mockURLSession)
 struct DashboardHeroItemKindsPutTests {
     // MARK: - Helpers
 
@@ -192,7 +192,7 @@ struct DashboardHeroItemKindsPutTests {
     func wireCarriesTokenFromPrecedingRead() async throws {
         let repo = DashboardRepository(api: makeAPI())
         let recorder = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (http, Self.layoutEcho(token: "2026-07-30T10:00:00.000Z"))
@@ -212,7 +212,7 @@ struct DashboardHeroItemKindsPutTests {
     func wireConflictRereadsAndRetriesWithFreshToken() async throws {
         let repo = DashboardRepository(api: makeAPI())
         let recorder = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let index = recorder.record(req)
             let url = req.url!
             switch index {
@@ -265,7 +265,7 @@ struct DashboardHeroItemKindsPutTests {
     private func capture(_ layout: DashboardWidgetLayout) async throws -> Recorder {
         let repo = DashboardRepository(api: makeAPI())
         let recorder = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (http, Self.layoutEcho(token: "T-echo"))

@@ -35,7 +35,8 @@ public enum StatistikModeBriefingService {
         healthScore: HealthScore?,
         locale _: Locale = .current,
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        units: UnitPreferences = .standard
     ) -> DailyBriefing? {
         let recentMeasurements = measurements.filter {
             now.timeIntervalSince($0.recordedAt) <= 7 * 86400
@@ -74,7 +75,7 @@ public enum StatistikModeBriefingService {
             .sorted { $0.samples > $1.samples }
             .prefix(3)
         for bucket in topKinds {
-            findings.append(measurementFinding(bucket: bucket))
+            findings.append(measurementFinding(bucket: bucket, units: units))
         }
 
         // Compliance finding when meds are scheduled today.
@@ -196,9 +197,9 @@ public enum StatistikModeBriefingService {
         }
     }
 
-    private static func measurementFinding(bucket: KindBucket) -> KeyFinding {
+    private static func measurementFinding(bucket: KindBucket, units: UnitPreferences) -> KeyFinding {
         let label = bucket.kind.displayName
-        let latestValue = bucket.latest.flatMap { formatValue(measurement: $0, kind: bucket.kind) }
+        let latestValue = bucket.latest.flatMap { formatValue(measurement: $0, kind: bucket.kind, units: units) }
         let directionArrow = arrow(for: bucket)
         let headline = "\(label) · \(bucket.samples)×"
         let detail: String = if let latestValue {
@@ -292,8 +293,15 @@ public enum StatistikModeBriefingService {
     /// Per-kind value formatter. BP renders "sys/dia mmHg", scalars render
     /// with kind-appropriate precision. Reused from the previous
     /// curated-digest format for visual continuity.
-    private static func formatValue(measurement: Measurement, kind: MetricKind) -> String? {
+    ///
+    /// #115 P2 — a converted family (weight, temperature, glucose, waist, …)
+    /// prints in the account's unit through the central formatter; the rest
+    /// keep the digest's own precision and canonical unit.
+    private static func formatValue(measurement: Measurement, kind: MetricKind, units: UnitPreferences) -> String? {
         switch measurement.value {
+        case let .scalar(v) where kind.unitFamily != nil && units.transform(for: kind).rescales:
+            let formatted = MetricValueFormatter.formatScalar(v, kind: kind, units: units)
+            return "\(formatted) \(units.unitLabel(for: kind))"
         case let .scalar(v):
             let formatted = switch kind {
             case .pulse, .restingHeartRate, .spo2, .glucose, .steps:

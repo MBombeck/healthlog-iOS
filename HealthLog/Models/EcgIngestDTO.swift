@@ -155,10 +155,24 @@ public struct EcgIngestResponseDTO: Decodable, Sendable, Equatable {
 /// was written, and `id` names the row that is already there. Treating it as a
 /// failure would make a re-sync after an archive import look broken when it is
 /// precisely the guarantee working.
-public enum EcgIngestStatus: String, Decodable, Sendable, Equatable, CaseIterable {
+public enum EcgIngestStatus: String, Decodable, Sendable, Equatable, CaseIterable, TolerantServerEnum {
     case inserted
     case updated
     case duplicate
+    /// #115 · 1.7 — a status word this build does not know. It is **not**
+    /// success: nothing tells us the strip was stored, so the sync coordinator
+    /// treats it like an unreadable answer and holds the anchor (the upload is
+    /// idempotent, a retry is safe). Before, the same case failed the decode
+    /// and landed on that path through `HLError.decoding`.
+    case unknown
+
+    public static let unknownFallback = EcgIngestStatus.unknown
+    public static let wireVocabulary: StaticString = "ECG ingest status"
+
+    /// The three statuses that confirm the recording is on the server.
+    public var isConfirmedStored: Bool {
+        self != .unknown
+    }
 }
 
 /// The **one** place volts become microvolts.

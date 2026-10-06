@@ -38,10 +38,15 @@ import Foundation
     /// Gated behind `FeatureFlag.cycleTracking` — only constructed once the gate
     /// passes. iOS 18+; silent no-op on older OS.
     actor CycleHealthKitWriter {
-        private let store: HKHealthStore
+        private let store: any CycleHealthSampleStore
 
         init(store: HKHealthStore) {
-            self.store = store
+            self.store = HealthStoreCycleSampleStore(store: store)
+        }
+
+        /// Test seam — a fake store records deletes and saves in order.
+        init(sampleStore: any CycleHealthSampleStore) {
+            store = sampleStore
         }
 
         /// Mirror a MANUAL day-log into Apple Health. Idempotent from the iOS
@@ -59,7 +64,7 @@ import Foundation
             // Echo guard — never push a HealthKit-origin row back into HealthKit.
             guard dayLog.source == "MANUAL" else { return }
 
-            guard let date = Self.dateFormatter.date(from: dayLog.date) else { return }
+            guard let date = Self.sampleDate(forDayKey: dayLog.date) else { return }
             // HealthKit validates `HKMetadataKeyExternalUUID` as a UUID string at
             // sample init (uncatchable exception otherwise) — a non-UUID id must
             // skip the mirror entirely; dropping the key instead would break the
@@ -76,23 +81,37 @@ import Foundation
             ]
 
             let samples = Self.buildSamples(for: dayLog, isCycleStart: isCycleStart, date: date, metadata: metadata)
+            // #115 B6 — an edit REPLACES the day's mirror. The server upserts the
+            // day under the same row id, so the previous save's samples carry the
+            // same `HKMetadataKeyExternalUUID`; without this every edit stacked
+            // another full set of samples onto the day in Apple Health. Runs even
+            // when the new row mirrors nothing (flow cleared → old flow goes).
+            try await delete(dayLogID: dayLog.id)
             guard !samples.isEmpty else { return }
             try await store.save(samples)
         }
 
         /// Delete every cycle category sample we mirrored for a day-log (by our
         /// anti-dup marker). Mirrors `deleteMoodEntry`. Silent no-op when nothing
-        /// matches / auth is off.
+        /// matches / auth is off. Only our own samples are touched: a foreign
+        /// app's sample that happens to carry the same external UUID stays
+        /// (``isOwnMirror(metadata:isFromThisApp:dayLogID:)``).
         func delete(dayLogID: String) async throws {
             guard #available(iOS 18.0, *) else { return }
-            let predicate = HKQuery.predicateForObjects(
-                withMetadataKey: HKMetadataKeyExternalUUID,
-                allowedValues: [dayLogID]
-            )
-            for type in CycleHealthKitImporter.readCategoryTypes() {
-                let matches = try await samples(of: type, matching: predicate)
-                if !matches.isEmpty { try await store.delete(matches) }
-            }
+            let own = try await store.ownMirrorSamples(dayLogID: dayLogID)
+            if !own.isEmpty { try await store.delete(own) }
+        }
+
+        /// Pure ownership check for the replace/delete path: the sample names
+        /// this day-log in `HKMetadataKeyExternalUUID` AND was written by
+        /// HealthLog — the app-origin marker (every write since BH-final-diff
+        /// H2) or, for older mirrors without it, this app's own HealthKit source.
+        static func isOwnMirror(metadata: [String: Any]?, isFromThisApp: Bool, dayLogID: String) -> Bool {
+            guard let metadata,
+                  metadata[HKMetadataKeyExternalUUID] as? String == dayLogID else { return false }
+            let marked = metadata[HealthKitSampleOwnership.appOriginMetadataKey] as? String
+                == HealthKitSampleOwnership.appOriginMetadataValue
+            return marked || isFromThisApp
         }
 
         // MARK: - Sample builders (static + pure so the crash path unit-tests)
@@ -243,7 +262,73 @@ import Foundation
             return HKCategorySample(type: type, value: value, start: date, end: date, metadata: metadata)
         }
 
-        @available(iOS 18.0, *)
+        /// **#115 B5 — the instant a server day is written to Health at: noon of
+        /// that day in the ACCOUNT zone.**
+        ///
+        /// `dayLog.date` is a day the server cut in the account zone. It was
+        /// parsed as device midnight by a formatter that froze `.current` at first
+        /// use, so the sample's instant named the account's day only while phone
+        /// and account agreed. Noon in the account zone is on that day in the
+        /// account zone by construction, and on the same calendar date in every
+        /// device zone within ±12 h of it, so the Health app — which shows the
+        /// device's day — lists it on the day it was logged for, whichever way
+        /// the phone is off. Midnight would drop onto the previous device day for
+        /// any phone west of the account.
+        ///
+        /// Server side nothing moves: the importer skips these samples by their
+        /// `HKMetadataKeyExternalUUID` echo marker, and the delete path finds
+        /// them by that marker, not by time. Samples written earlier at device
+        /// midnight stay where they are.
+        static func sampleDate(forDayKey key: String, timeZone: TimeZone = ProfileDay.timeZone) -> Date? {
+            guard let midnight = ProfileDay.startOfDay(forKey: key, timeZone: timeZone) else { return nil }
+            return ProfileDay.calendar(in: timeZone).date(bySettingHour: 12, minute: 0, second: 0, of: midnight)
+        }
+    }
+
+    /// Seam between the cycle writer and HealthKit (#115 B6): the replace path
+    /// is tested against a fake that records deletes and saves in order.
+    protocol CycleHealthSampleStore: Sendable {
+        /// This app's mirrored cycle samples for one day-log, across every
+        /// reproductive type.
+        func ownMirrorSamples(dayLogID: String) async throws -> [HKSample]
+        func delete(_ samples: [HKSample]) async throws
+        func save(_ samples: [HKCategorySample]) async throws
+    }
+
+    /// The live store: a metadata query per reproductive type, narrowed by
+    /// ``CycleHealthKitWriter/isOwnMirror(metadata:isFromThisApp:dayLogID:)``.
+    struct HealthStoreCycleSampleStore: CycleHealthSampleStore {
+        let store: HKHealthStore
+
+        func ownMirrorSamples(dayLogID: String) async throws -> [HKSample] {
+            guard #available(iOS 18.0, *) else { return [] }
+            let predicate = HKQuery.predicateForObjects(
+                withMetadataKey: HKMetadataKeyExternalUUID,
+                allowedValues: [dayLogID]
+            )
+            let thisApp = HKSource.default()
+            var own: [HKSample] = []
+            for type in CycleHealthKitImporter.readCategoryTypes() {
+                let matches = try await samples(of: type, matching: predicate)
+                own += matches.filter {
+                    CycleHealthKitWriter.isOwnMirror(
+                        metadata: $0.metadata,
+                        isFromThisApp: $0.sourceRevision.source == thisApp,
+                        dayLogID: dayLogID
+                    )
+                }
+            }
+            return own
+        }
+
+        func delete(_ samples: [HKSample]) async throws {
+            try await store.delete(samples)
+        }
+
+        func save(_ samples: [HKCategorySample]) async throws {
+            try await store.save(samples)
+        }
+
         private func samples(of type: HKCategoryType, matching predicate: NSPredicate) async throws -> [HKSample] {
             try await withCheckedThrowingContinuation { continuation in
                 let query = HKSampleQuery(
@@ -261,15 +346,6 @@ import Foundation
                 store.execute(query)
             }
         }
-
-        private static let dateFormatter: DateFormatter = {
-            let f = DateFormatter()
-            f.calendar = Calendar(identifier: .gregorian)
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.timeZone = .current
-            f.dateFormat = "yyyy-MM-dd"
-            return f
-        }()
     }
 
 #endif

@@ -11,7 +11,7 @@ import Testing
 /// store conforms to `LogoutClearable` and never leaks the raw item answers into
 /// the user-visible error string. Real `APIClient` + stub `URLProtocol`.
 @MainActor
-@Suite("Mental-health store safety (v1.25)", .serialized)
+@Suite("Mental-health store safety (v1.25)", .serialized, .mockURLSession)
 struct MentalHealthStoreTests {
     private func makeStore(locale: String, outbox: OutboxQueue) -> MentalHealthStore {
         let env = AppEnvironment(
@@ -53,7 +53,7 @@ struct MentalHealthStoreTests {
           {"id":"lifeline988","contacts":["988"]},
           {"id":"crisisTextLine","contacts":["Text HOME to 741741"]}]}
         """
-        MockURLProtocol.handler = { [env = successEnvelope(item9Flagged: true, crisisJSON: serverCrisis)] req in
+        MockURLProtocol.install { [env = successEnvelope(item9Flagged: true, crisisJSON: serverCrisis)] req in
             (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, env)
         }
         // Store locale "en" would FALL BACK to International (112); proving the
@@ -79,7 +79,7 @@ struct MentalHealthStoreTests {
 
     @Test("item-9 flagged but server omits crisis → bundled FALLBACK resolves (deploy skew)")
     func crisisFromFallbackOnDeploySkew() async throws {
-        MockURLProtocol.handler = { [env = successEnvelope(item9Flagged: true, crisisJSON: "null")] req in
+        MockURLProtocol.install { [env = successEnvelope(item9Flagged: true, crisisJSON: "null")] req in
             (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, env)
         }
         let store = try makeStore(locale: "de", outbox: OutboxQueue(inMemory: true))
@@ -101,7 +101,7 @@ struct MentalHealthStoreTests {
 
     @Test("item-9 flagged + 503 upload failure → crisis STILL shows from the bundled fallback")
     func crisisOnUploadFailure() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }
         let outbox = try OutboxQueue(inMemory: true)
@@ -135,7 +135,7 @@ struct MentalHealthStoreTests {
           "takenAt":"2026-06-28T08:00:00.000Z","createdAt":"2026-06-28T08:00:00.000Z"},
          "actionThreshold":10,"crisis":null},"error":null}
         """.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, highTotalNoFlag)
         }
         let store = try makeStore(locale: "de", outbox: OutboxQueue(inMemory: true))
@@ -161,7 +161,7 @@ struct MentalHealthStoreTests {
         // answers; assert the sanitized lastError is free of the distinctive
         // answer sequence. (item-9 == 0 keeps this off the C1 crisis path so the
         // .form assertion is meaningful — the flagged path is covered below.)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"error":"validation failed","data":null}"#.utf8)
@@ -197,7 +197,8 @@ struct MentalHealthStoreTests {
 
     private func assertCrisisShownAfterFailure(
         _ store: MentalHealthStore,
-        outbox: OutboxQueue
+        outbox: OutboxQueue,
+        queued: Bool = false
     ) async throws {
         store.begin(.phq9)
         let answers = phq9FlaggedAnswers()
@@ -214,8 +215,9 @@ struct MentalHealthStoreTests {
         #expect(result.serverDerived == false) // provisional
         let crisis = try #require(result.crisis)
         #expect(crisis.resources.contains { $0.id == "telefonSeelsorge" }) // DE fallback
-        // No double-write: the non-retriable branch does NOT enqueue.
-        #expect(await outbox.snapshot.isEmpty)
+        // No double-write: the non-retriable branch does NOT enqueue. A write cut
+        // off on the wire (E1) is queued once, under the key it was sent with.
+        #expect(await outbox.snapshot.count == (queued ? 1 : 0))
         // PHI never leaks into the soft error string.
         let err = store.lastError ?? ""
         #expect(!err.contains("1, 2, 1"))
@@ -224,7 +226,7 @@ struct MentalHealthStoreTests {
     @Test("C1: positive item-9 + .decoding (201 shape-drift) → crisis card STILL shows, no enqueue")
     func crisisOnDecodingFailure() async throws {
         // 201 (server persisted) but the envelope shape drifts → `.decoding`.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":{"unexpected":"shape"},"error":null}"#.utf8)
@@ -237,7 +239,7 @@ struct MentalHealthStoreTests {
 
     @Test("C1: positive item-9 + .server 4xx (422) → crisis card STILL shows, no enqueue")
     func crisisOnServer4xxFailure() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"error":"validation failed","data":null}"#.utf8)
@@ -248,14 +250,17 @@ struct MentalHealthStoreTests {
         try await assertCrisisShownAfterFailure(store, outbox: outbox)
     }
 
-    @Test("C1: positive item-9 + .canceled → crisis card STILL shows, no enqueue")
+    /// E1 — a submit cut off on the wire (`URLError.cancelled` while the task
+    /// runs: suspend, pin failure) is no longer dropped: it is queued once under
+    /// the idempotency key it was sent with, and the crisis card still shows.
+    @Test("C1: positive item-9 + cut-off submit → crisis card STILL shows, queued once")
     func crisisOnCanceledFailure() async throws {
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.cancelled)
         }
         let outbox = try OutboxQueue(inMemory: true)
         let store = makeStore(locale: "de", outbox: outbox)
-        try await assertCrisisShownAfterFailure(store, outbox: outbox)
+        try await assertCrisisShownAfterFailure(store, outbox: outbox, queued: true)
     }
 
     @Test("C1: positive item-9 + .unknown/unexpected error → crisis card STILL shows, no enqueue")
@@ -263,7 +268,7 @@ struct MentalHealthStoreTests {
         // A non-URLError, non-HLError thrown by the transport surfaces through the
         // store's generic `catch` (the `.unknown` class).
         struct OpaqueFailure: Error {}
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw OpaqueFailure()
         }
         let outbox = try OutboxQueue(inMemory: true)
@@ -377,7 +382,7 @@ struct MentalHealthStoreTests {
 
     @Test("Detail refresh uses the instrument filter and replaces its seeded rows")
     func detailFilteredRefresh() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let instrument = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "instrument" })?.value
             #expect(instrument == "SCI")

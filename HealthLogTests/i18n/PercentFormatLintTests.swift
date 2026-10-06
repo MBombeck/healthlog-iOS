@@ -30,7 +30,6 @@ struct PercentFormatLintTests {
         "Insights/Sub/WellnessScoreDetailSheet.swift",
         "Insights/Sub/MetricRangeDelta.swift",
         "Insights/Sub/InsightsInTargetBar.swift",
-        "Insights/Sub/InsightsAuxChartDetailScreen.swift",
         "Settings/Sub/SettingsAppleHealthImportScreen.swift",
         // 08-13 removed the compact medication row this list used to name; its
         // entry went with the file in the same commit. That is what the

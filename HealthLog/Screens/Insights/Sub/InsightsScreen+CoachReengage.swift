@@ -28,7 +28,10 @@ extension InsightsScreen {
     ///
     /// - Parameters:
     ///   - aiMode: the resolved `AIMode` (the affordance is only for `.none`).
-    ///   - coachFlagEnabled: the `assistant.coach` feature flag.
+    ///   - coachCapability: the server-resolved `coach` capability (#115 · 0.2),
+    ///     `nil` on a server older than v1.39. When present it is the only
+    ///     signal: re-engage is offered exactly when the server says the Coach
+    ///     waits on consent (`reason == consent_required`).
     ///   - hasServer: `BackendAvailability.hasServer` (server-only path).
     ///   - resolvedProvider: the server-resolved `AIProvider`.
     ///   - hasConsentForProvider: whether consent is already granted for it.
@@ -36,7 +39,7 @@ extension InsightsScreen {
     ///   - hasServerManagedConsent: whether the server-managed scope is granted.
     static func isCoachReengageAvailable(
         aiMode: AIMode,
-        coachFlagEnabled: Bool,
+        coachCapability: AICapabilityState? = nil,
         hasServer: Bool,
         resolvedProvider: AIProvider,
         hasConsentForProvider: Bool,
@@ -44,7 +47,10 @@ extension InsightsScreen {
         hasServerManagedConsent: Bool = false,
         isAIExplicitlyUnavailable: Bool = false
     ) -> Bool {
-        guard aiMode == .none, coachFlagEnabled, hasServer else { return false }
+        guard aiMode == .none, hasServer else { return false }
+        if let coachCapability {
+            return coachCapability.reason == .consentRequired
+        }
         guard !isAIExplicitlyUnavailable else { return false }
         // W-B186 COACH-1 — server/admin-managed external AI: offer the re-engage
         // CTA against the server-managed scope when consent hasn't landed yet.

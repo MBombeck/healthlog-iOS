@@ -11,7 +11,7 @@ import Testing
 /// the outbox-replay path). The undo of a card mark must return the dose to
 /// `.pending` — these lock that round-trip for the real-intake path and the
 /// synth-placeholder (PRN / off-day weekly) path.
-@Suite("MedicationsStore — undo intake-mark reversal", .serialized)
+@Suite("MedicationsStore — undo intake-mark reversal", .serialized, .mockURLSession)
 struct MedicationsStoreUndoMarkTests {
     private static let scheduled = Date(timeIntervalSince1970: 1_714_550_400)
     private static let now = scheduled.addingTimeInterval(3600)
@@ -60,7 +60,7 @@ struct MedicationsStoreUndoMarkTests {
         let outbox = try OutboxQueue(inMemory: true)
         // Echo back whatever status the POST carried so the optimistic patch
         // resolves: taken on the forward mark, pending on the undo re-mark.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let skipped = false
             let body = """
             {"data":{"id":"intake-1","medicationId":"med-1",\
@@ -106,7 +106,7 @@ struct MedicationsStoreUndoMarkTests {
         nonisolated(unsafe) var requests: [(method: String, path: String)] = []
         // Bulk-intake endpoint returns the BulkIntakeResponse shape on success
         // including the event id required for a real inverse DELETE.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             requests.append((req.httpMethod ?? "", req.url?.path ?? ""))
             if req.httpMethod == "DELETE" {
                 return (
@@ -175,7 +175,7 @@ struct MedicationsStoreUndoMarkTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var requests: [(method: String, path: String)] = []
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             requests.append((request.httpMethod ?? "", request.url?.path ?? ""))
             throw URLError(.notConnectedToInternet)
         }
@@ -209,7 +209,7 @@ struct MedicationsStoreUndoMarkTests {
     func noTokenOnFailure() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: "HTTP/1.1", headerFields: nil)!,
                 Data(#"{"error":"validation"}"#.utf8)

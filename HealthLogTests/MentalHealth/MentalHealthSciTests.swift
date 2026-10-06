@@ -23,7 +23,7 @@ import Testing
 ///
 /// Real `APIClient` + `MockURLProtocol` per PROJECT_GUIDE.md — never a mock server.
 @MainActor
-@Suite("SCI wire shape + server-evaluated result (CU-36)", .serialized)
+@Suite("SCI wire shape + server-evaluated result (CU-36)", .serialized, .mockURLSession)
 struct MentalHealthSciWireTests {
     private func makeStore(locale: String, outbox: OutboxQueue) -> MentalHealthStore {
         let env = AppEnvironment(
@@ -63,7 +63,7 @@ struct MentalHealthSciWireTests {
     @Test("SCI submit POSTs { instrument: SCI, items: 8×0–4, locale, source, externalId } and no functionalDifficulty")
     func sciSubmitRequestShape() async throws {
         let probe = SciRequestProbe()
-        MockURLProtocol.handler = { [envelope = sciEnvelope(totalScore: 20, band: "aboveThreshold", actionThreshold: 16)] req in
+        MockURLProtocol.install { [envelope = sciEnvelope(totalScore: 20, band: "aboveThreshold", actionThreshold: 16)] req in
             probe.capture(req)
             return (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, envelope)
         }
@@ -95,7 +95,7 @@ struct MentalHealthSciWireTests {
 
     @Test("SCI has no safety item, so a maximally-distressed answer set still returns no crisis card")
     func sciNeverRaisesCrisisCard() async throws {
-        MockURLProtocol.handler = { [envelope = sciEnvelope(totalScore: 0, band: "belowThreshold", actionThreshold: 16)] req in
+        MockURLProtocol.install { [envelope = sciEnvelope(totalScore: 0, band: "belowThreshold", actionThreshold: 16)] req in
             (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, envelope)
         }
         let store = try makeStore(locale: "de", outbox: OutboxQueue(inMemory: true))
@@ -119,7 +119,7 @@ struct MentalHealthSciWireTests {
         // (18 > 16). If the client were still consulting its own constant this
         // expectation would fail — that is the whole point of the fixture.
         #expect(MentalHealthInstrument.sci.actionThreshold == 16)
-        MockURLProtocol.handler = { [envelope = sciEnvelope(totalScore: 18, band: "aboveThreshold", actionThreshold: 20)] req in
+        MockURLProtocol.install { [envelope = sciEnvelope(totalScore: 18, band: "aboveThreshold", actionThreshold: 20)] req in
             (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, envelope)
         }
         let store = try makeStore(locale: "de", outbox: OutboxQueue(inMemory: true))
@@ -142,7 +142,7 @@ struct MentalHealthSciWireTests {
     ])
     func sciFlagsTheLowSide(total: Int, expectsNudge: Bool) async throws {
         let band = total <= 16 ? "belowThreshold" : "aboveThreshold"
-        MockURLProtocol.handler = { [envelope = sciEnvelope(totalScore: total, band: band, actionThreshold: 16)] req in
+        MockURLProtocol.install { [envelope = sciEnvelope(totalScore: total, band: band, actionThreshold: 16)] req in
             (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, envelope)
         }
         let store = try makeStore(locale: "de", outbox: OutboxQueue(inMemory: true))
@@ -166,7 +166,7 @@ struct MentalHealthSciWireTests {
         // A deliberately "wrong" pairing: the bundled bands would call 4
         // `belowThreshold`. The client must not second-guess the server.
         #expect(MentalHealthInstrument.sci.severityBand(forTotal: 4) == "belowThreshold")
-        MockURLProtocol.handler = { [envelope = sciEnvelope(totalScore: 4, band: "aboveThreshold", actionThreshold: 16)] req in
+        MockURLProtocol.install { [envelope = sciEnvelope(totalScore: 4, band: "aboveThreshold", actionThreshold: 16)] req in
             (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, envelope)
         }
         let store = try makeStore(locale: "de", outbox: OutboxQueue(inMemory: true))
@@ -189,7 +189,7 @@ struct MentalHealthSciWireTests {
 /// description, bands, follow-up hint, buttons — is localised normally.
 ///
 /// Pure catalog / source reads, no network → no `.serialized`.
-@Suite("SCI localisation stance (CU-36)")
+@Suite("SCI localisation stance (CU-36)", .mockURLSession)
 struct MentalHealthSciLocalisationTests {
     private static let itemKeys = (1 ... 8).map { "mentalHealth.items.sci.\($0)" }
     private static let stemKeys = [

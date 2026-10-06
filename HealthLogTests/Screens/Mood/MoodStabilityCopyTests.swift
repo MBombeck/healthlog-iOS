@@ -3,12 +3,12 @@ import Foundation
 import Testing
 
 /// v0.10.0 W-Mood-A — lock that every stability band maps to a distinct,
-/// non-empty label + sentence (DESIGN-B §3.3), and that only the low bands
-/// flag the gauge marker.
+/// non-empty label + sentence (DESIGN-B §3.3), and that only the low band
+/// flags the gauge marker. #115 1.3 — the bands are the server's four.
 @Suite("Mood stability copy + flag")
 struct MoodStabilityCopyTests {
     private static let bands: [MoodStability.Band] = [
-        .verySteady, .steady, .variable, .unsettled, .veryUnsettled
+        .verySteady, .steady, .variable, .veryVariable, .unknown
     ]
 
     @Test("every band has a non-empty label + sentence")
@@ -27,12 +27,12 @@ struct MoodStabilityCopyTests {
         #expect(sentences.count == Self.bands.count)
     }
 
-    @Test("only the two lowest bands flag the marker")
+    @Test("only the server's lowest band flags the marker")
     func flaggingThreshold() {
         #expect(MoodStability.Band.verySteady.isFlagged == false)
         #expect(MoodStability.Band.steady.isFlagged == false)
         #expect(MoodStability.Band.variable.isFlagged == false)
-        #expect(MoodStability.Band.unsettled.isFlagged == true)
-        #expect(MoodStability.Band.veryUnsettled.isFlagged == true)
+        #expect(MoodStability.Band.veryVariable.isFlagged == true)
+        #expect(MoodStability.Band.unknown.isFlagged == false)
     }
 }

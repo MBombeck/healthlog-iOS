@@ -206,19 +206,55 @@ struct CacheInvalidatorMatrixTests {
     }
 
     @Test("measurementChange always invalidates dashboardSummary + healthScore")
-    func measurementChangeFanOut() {
-        let keys = MutationKind.measurementChange(kind: .weight).affectedKeys
-        #expect(keys.contains(.dashboardSummary(day: MedicationDayKey.string(timeZone: .current))))
+    func measurementChangeFanOut() throws {
+        let zone = try #require(TimeZone(identifier: "Europe/Berlin"))
+        let keys = MutationKind.measurementChange(kind: .weight).affectedKeys(profileTimeZone: zone)
+        #expect(keys.contains(.dashboardSummary(day: MedicationDayKey.string(timeZone: zone))))
         #expect(keys.contains(.healthScore))
         #expect(keys.contains(.measurementsRecent(limit: 50)))
     }
 
     @Test("medicationIntakeChange invalidates today-intakes + healthScore")
-    func medicationIntakeFanOut() {
-        let keys = MutationKind.medicationIntakeChange.affectedKeys
-        // v0.14.1 INV-med-cadence-phantom (BUG 2) — today-intakes is now
-        // day-anchored (current device-tz day in the static matrix fallback).
-        #expect(keys.contains(.medicationsTodayIntakes(day: MedicationDayKey.string(timeZone: .current))))
+    func medicationIntakeFanOut() throws {
+        let zone = try #require(TimeZone(identifier: "Europe/Berlin"))
+        let keys = MutationKind.medicationIntakeChange.affectedKeys(profileTimeZone: zone)
+        // v0.14.1 INV-med-cadence-phantom (BUG 2) — today-intakes is
+        // day-anchored in the profile zone.
+        #expect(keys.contains(.medicationsTodayIntakes(day: MedicationDayKey.string(timeZone: zone))))
         #expect(keys.contains(.healthScore))
+    }
+
+    /// **#115 1.5** — the day keys this matrix drops are the ones the stores READ:
+    /// cut in the profile zone. At 2026-06-19T03:00Z an account in Los Angeles is
+    /// on 2026-06-18 while a phone in Berlin is on 2026-06-19; the matrix used to
+    /// invalidate the Berlin day and leave the LA row the dashboard serves.
+    @Test("Day-anchored keys follow the profile zone, not the device zone")
+    func dayKeysFollowProfileZone() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-06-19T03:00:00Z"))
+        let losAngeles = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let tokyo = try #require(TimeZone(identifier: "Asia/Tokyo"))
+        for (zone, day) in [(losAngeles, "2026-06-18"), (tokyo, "2026-06-19")] {
+            let intake = MutationKind.medicationIntakeChange.affectedKeys(profileTimeZone: zone, now: now)
+            #expect(intake.contains(.medicationsTodayIntakes(day: day)))
+            #expect(intake.contains(.dashboardSummary(day: day)))
+            let settings = MutationKind.settingsChange.affectedKeys(profileTimeZone: zone, now: now)
+            #expect(settings.contains(.dashboardSummary(day: day)))
+        }
+    }
+
+    /// **B5 base merge check** — `CacheInvalidator.swift` was the one conflict
+    /// between B3 (day keys in the profile zone) and B2 (`.moodDailySeries`).
+    /// The resolution must keep both: a mood write drops the server day-mean
+    /// series the mood analysis reads AND the dashboard row of the ACCOUNT's
+    /// day, never the device's.
+    @Test("moodEntryChange drops the mood daily series and the profile-zone dashboard day")
+    func moodEntryChangeKeepsBothMergeSides() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-06-19T03:00:00Z"))
+        let losAngeles = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let keys = MutationKind.moodEntryChange.affectedKeys(profileTimeZone: losAngeles, now: now)
+        #expect(keys.contains(.moodDailySeries))
+        #expect(keys.contains(.dashboardSummary(day: "2026-06-18")))
+        #expect(!keys.contains(.dashboardSummary(day: "2026-06-19")))
+        #expect(keys.contains(.moodEntries(days: 365)))
     }
 }

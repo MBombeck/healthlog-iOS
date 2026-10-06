@@ -54,7 +54,9 @@ struct VorsorgeReminderLedgerActions: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack(spacing: HLSpace.sm) {
+            // K1 — the medication card's twin, so the same row: equal halves
+            // while the longer label fits, stacked when it would break.
+            HLTileActionRow(spacing: HLSpace.sm) {
                 if store.supports(.skip, id: row.id) { skipButton }
                 if store.supports(.snooze, id: row.id) { snoozeButton }
             }

@@ -18,7 +18,8 @@ import SwiftUI
 /// - `hlSubhead` (15pt) semibold title — aligns visually with the per-row
 ///   body font rather than a 20pt heading shouting at the user.
 /// - Optional `hlCaption` subtitle in `textSecondary` directly below the
-///   title row, single line (was 2 pre-W1-4).
+///   title row, single line (was 2 pre-W1-4) unless the card passes
+///   `subtitleWraps: true` (F1, 1.1.0) for a subtitle that must be read whole.
 /// - `Divider` at 60% opacity separating header block from body.
 /// - 16pt internal spacing inside the body (matches web `space-y-4`).
 /// - Canonical card radius (`HLRadius.card` = 20, W6-2) on an
@@ -41,6 +42,12 @@ public struct HLSettingsCard<Content: View>: View {
     private let subtitle: LocalizedStringKey?
     private let footer: LocalizedStringKey?
     private let bothSlotsJustification: StaticString?
+    /// F1 (1.1.0) — `true` lets the subtitle wrap at every text size. Opt-in
+    /// per card: most subtitles are a short label and keep the one-line
+    /// density; a card whose subtitle is an explanation the person needs in
+    /// full (the sharing list's "checked means: this data goes with it") sets
+    /// it, because a truncated rule is a wrong rule.
+    private let subtitleWraps: Bool
     private let trailing: AnyView?
     private let content: Content
     /// v0.14.1 08-04 — same policy as `HLSettingsRow`: the header's layout and
@@ -61,6 +68,7 @@ public struct HLSettingsCard<Content: View>: View {
         subtitle: LocalizedStringKey? = nil,
         footer: LocalizedStringKey? = nil,
         bothSlotsJustification: StaticString? = nil,
+        subtitleWraps: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.icon = icon
@@ -68,6 +76,7 @@ public struct HLSettingsCard<Content: View>: View {
         self.subtitle = subtitle
         self.footer = footer
         self.bothSlotsJustification = bothSlotsJustification
+        self.subtitleWraps = subtitleWraps
         trailing = nil
         self.content = content()
         warnOnDoubleSlot()
@@ -82,6 +91,7 @@ public struct HLSettingsCard<Content: View>: View {
         subtitle: LocalizedStringKey? = nil,
         footer: LocalizedStringKey? = nil,
         bothSlotsJustification: StaticString? = nil,
+        subtitleWraps: Bool = false,
         @ViewBuilder trailing: () -> some View,
         @ViewBuilder content: () -> Content
     ) {
@@ -90,6 +100,7 @@ public struct HLSettingsCard<Content: View>: View {
         self.subtitle = subtitle
         self.footer = footer
         self.bothSlotsJustification = bothSlotsJustification
+        self.subtitleWraps = subtitleWraps
         self.trailing = AnyView(trailing())
         self.content = content()
         warnOnDoubleSlot()
@@ -126,12 +137,14 @@ public struct HLSettingsCard<Content: View>: View {
                 // A card header that truncates the sentence explaining what the
                 // card is, precisely when the user has asked for larger text,
                 // is the defect — not the density.
+                // F1: a card that opts in with `subtitleWraps` wraps at every size.
+                let wraps = subtitleWraps || dynamicTypeSize.isAccessibilitySize
                 Text(subtitle)
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .lineLimit(wraps ? nil : 1)
                     .truncationMode(.tail)
-                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
+                    .fixedSize(horizontal: false, vertical: wraps)
             }
             Divider().opacity(0.6)
             VStack(alignment: .leading, spacing: HLSpace.lg) {
@@ -199,7 +212,7 @@ public struct HLSettingsCard<Content: View>: View {
 
 // MARK: - ScrollView wrapper
 
-/// Wraps the standard `ScrollView { LazyVStack(spacing: HLSpace.xxl) { … } }`
+/// Wraps the standard `ScrollView { VStack(spacing: HLSpace.lg) { … } }`
 /// shape every Settings sub-screen uses so callers don't repeat the boilerplate.
 ///
 /// Use as the sole root view of a Settings sub-screen:
@@ -234,7 +247,17 @@ public struct HLSettingsPage<Content: View>: View {
             // W1-4 — drop the in-content `HLSettingsPageHeader` (hlTitle1
             // 28pt bold + subtitle). Every sub-screen calls
             // `.navigationTitle(...)` which already shows the title.
-            LazyVStack(alignment: .leading, spacing: HLSpace.lg) {
+            //
+            // G1 — an eager `VStack`, not a `LazyVStack`. A page holds a
+            // handful of cards, so laziness saved nothing, and it froze the
+            // app: when the Share screen was left (Back, or any tab switch)
+            // while a card's top edge sat a few points below the visible
+            // bottom edge, the viewport change on leaving made that card cross
+            // the edge, and the lazy stack never settled on whether to realize
+            // it (main thread at 100 % in `LazyStack.place`). An eager stack
+            // has no realization window to oscillate around.
+            // `HLSettingsPageEagerStackTests` pins this.
+            VStack(alignment: .leading, spacing: HLSpace.lg) {
                 content
             }
             .padding(.horizontal, HLSpace.lg)

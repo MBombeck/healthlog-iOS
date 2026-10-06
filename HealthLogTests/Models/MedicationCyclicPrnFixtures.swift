@@ -15,10 +15,11 @@ enum MedicationCyclicPrnFixtures {
     // MARK: - The server's own cyclic rule, transcribed
 
     /// Verbatim transcription of `isInCyclicOnWeek`
-    /// (`src/lib/medications/scheduling/recurrence.ts:236-253`) at the accepted
-    /// tag `v1.37.24`. The anchor is the medication's `startsOn ?? createdAt`,
-    /// snapped to the Sunday-rooted UTC week; the slot survives iff
-    /// `phase < onWeeks`. Transcribed rather than paraphrased so the parity
+    /// (`src/lib/medications/scheduling/recurrence.ts`) at tag `v1.39.3`
+    /// (R1 — the server moved from Sunday-rooted UTC weeks to seven-day blocks
+    /// counted from the start DAY in 1.39.3, `8a03654e8`). The anchor is the
+    /// calendar day of `startsOn ?? createdAt`; the slot survives iff
+    /// `floor(days / 7) mod (on + off) < on`. Transcribed rather than paraphrased so the parity
     /// clause compares the iOS engine against the server's arithmetic instead
     /// of against a hand-written list of days that would have to be re-derived
     /// every time the fixture moved.
@@ -26,19 +27,11 @@ enum MedicationCyclicPrnFixtures {
         if onWeeks <= 0 { return true }
         let cycleLength = onWeeks + offWeeks
         if cycleLength <= 0 { return true }
-        let anchorWeekStart = startOfUtcWeek(anchor)
-        let instantWeekStart = startOfUtcWeek(instant)
-        let weeksFromAnchor = Int((instantWeekStart.timeIntervalSince(anchorWeekStart) / (7 * 86400)).rounded())
+        let days = Int((utcCalendar.startOfDay(for: instant).timeIntervalSince(utcCalendar.startOfDay(for: anchor)) / 86400)
+            .rounded())
+        let weeksFromAnchor = Int((Double(days) / 7).rounded(.down))
         let phase = ((weeksFromAnchor % cycleLength) + cycleLength) % cycleLength
         return phase < onWeeks
-    }
-
-    /// `startOfUtcWeek` (same file, line 919): UTC midnight of `d`, rolled back
-    /// to the preceding Sunday.
-    static func startOfUtcWeek(_ date: Date) -> Date {
-        let midnight = utcCalendar.startOfDay(for: date)
-        let weekdayIndex = utcCalendar.component(.weekday, from: midnight) - 1
-        return midnight.addingTimeInterval(-Double(weekdayIndex) * 86400)
     }
 
     static func utcDayKey(_ date: Date) -> String {

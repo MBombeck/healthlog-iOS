@@ -86,7 +86,9 @@ enum IntentDependencies {
             outbox: outbox,
             measurementsRepo: MeasurementsRepository(api: api, outbox: outbox),
             medicationsRepo: MedicationsRepository(api: api, outbox: outbox),
-            moodRepo: MoodRepository(api: api, outbox: outbox)
+            moodRepo: MoodRepository(api: api, outbox: outbox),
+            glucoseUnit: { accountGlucoseUnit() },
+            accountUnits: { accountUnits() }
         )
         cached = resolved
         return resolved
@@ -101,6 +103,50 @@ enum IntentDependencies {
 
     private static var cached: Resolved?
 
+    /// **#115 B5 — the unit a spoken glucose value is in: the account's.**
+    ///
+    /// First the account-scoped App-Group mirror (``SharedAccountPrefs``), the
+    /// only copy the widget extension can see. Then, for an intent the system
+    /// runs in the app process before the container copied that mirror across
+    /// (the first run after an update), the app's own mirror of the same
+    /// `/me` answer. Neither: mg/dL — what the server resolves an unset
+    /// account to, and what every earlier build took.
+    ///
+    /// Read on every perform, not cached with the bundle: a unit changed in the
+    /// app must be the unit the next spoken value is taken in.
+    nonisolated static func accountGlucoseUnit(
+        shared: SharedAccountPrefs = .live,
+        appDefaults: UserDefaults = .standard
+    ) -> GlucoseUnit {
+        if let unit = shared.glucoseUnit() { return unit }
+        let appMirror = appDefaults.string(forKey: appGlucoseUnitMirrorKey)
+        return appMirror.flatMap(GlucoseUnit.init(rawValue:)) ?? .mgdL
+    }
+
+    /// **#115 P2 — the unit system and weight unit a spoken weight or
+    /// temperature is in: the account's.** Same order as the glucose unit: the
+    /// account-scoped App-Group mirror, then the app's own mirrors (an intent in
+    /// the app process before the first copy), else metric/kg — what every
+    /// earlier build took. Glucose is filled in by ``Resolved/units()``.
+    nonisolated static func accountUnits(
+        shared: SharedAccountPrefs = .live,
+        appDefaults: UserDefaults = .standard
+    ) -> UnitPreferences {
+        let system = shared.unitSystem() ?? HLUnitPreference.current(defaults: appDefaults)
+        let weight = shared.weightUnit()
+            ?? appDefaults.string(forKey: appWeightUnitOverrideKey).flatMap(WeightUnit.init(rawValue:))
+            ?? system.defaultWeightUnit
+        return UnitPreferences(weight: weight, system: system)
+    }
+
+    /// `SettingsStore`'s explicit weight-unit override key (`hl.settings.weightUnit`).
+    nonisolated static let appWeightUnitOverrideKey = "hl.settings.weightUnit"
+
+    /// `SettingsStore`'s glucose-unit mirror key (`hl.settings.glucoseUnit`).
+    /// Spelled out here because the intents also compile into the widget
+    /// extension, which does not see the store.
+    nonisolated static let appGlucoseUnitMirrorKey = "hl.settings.glucoseUnit"
+
     /// **Test seam.** When set, `resolve()` returns this bundle instead
     /// of building the live one — lets the intent `perform()` tests run
     /// against a stub `APIClient` + in-memory Outbox without standing up
@@ -114,6 +160,10 @@ enum IntentDependencies {
         let measurementsRepo: MeasurementsRepository
         let medicationsRepo: MedicationsRepository
         let moodRepo: MoodRepository
+        /// #115 B5 — the account's glucose unit, read at perform time.
+        let glucoseUnit: () -> GlucoseUnit
+        /// #115 P2 — the account's unit system + weight unit, read at perform time.
+        let accountUnits: () -> UnitPreferences
 
         init(
             keychain: KeychainStoring,
@@ -121,7 +171,9 @@ enum IntentDependencies {
             outbox: OutboxQueue,
             measurementsRepo: MeasurementsRepository,
             medicationsRepo: MedicationsRepository,
-            moodRepo: MoodRepository
+            moodRepo: MoodRepository,
+            glucoseUnit: @escaping () -> GlucoseUnit = { .mgdL },
+            accountUnits: @escaping () -> UnitPreferences = { .standard }
         ) {
             self.keychain = keychain
             self.api = api
@@ -129,6 +181,16 @@ enum IntentDependencies {
             self.measurementsRepo = measurementsRepo
             self.medicationsRepo = medicationsRepo
             self.moodRepo = moodRepo
+            self.glucoseUnit = glucoseUnit
+            self.accountUnits = accountUnits
+        }
+
+        /// Every unit a spoken value may be in: the account's system and
+        /// weight unit, with the account's glucose unit (``glucoseUnit``).
+        func units() -> UnitPreferences {
+            var units = accountUnits()
+            units.glucose = glucoseUnit()
+            return units
         }
     }
 }

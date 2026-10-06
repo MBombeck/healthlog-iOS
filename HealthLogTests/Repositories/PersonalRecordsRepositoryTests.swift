@@ -12,7 +12,7 @@ import Testing
 /// - happy-path multi-row decode
 /// - SWR cache fresh → no second network call
 /// - metricType filter as query param
-@Suite("PersonalRecordsRepository — wire contract", .serialized)
+@Suite("PersonalRecordsRepository — wire contract", .serialized, .mockURLSession)
 struct PersonalRecordsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -28,7 +28,7 @@ struct PersonalRecordsRepositoryTests {
     @Test("list — empty array decodes (current prod state)")
     func emptyListDecodes() async throws {
         let repo = PersonalRecordsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -39,7 +39,7 @@ struct PersonalRecordsRepositoryTests {
     @Test("list — multi-row decode with MAX + MIN directions")
     func multiRowDecode() async throws {
         let repo = PersonalRecordsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":[
               {
@@ -73,7 +73,7 @@ struct PersonalRecordsRepositoryTests {
     func listCacheHit() async throws {
         let repo = PersonalRecordsRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/personal-records") { calls += 1 }
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -87,7 +87,7 @@ struct PersonalRecordsRepositoryTests {
     func listFilterSeparatesCache() async throws {
         let repo = PersonalRecordsRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/personal-records") { calls += 1 }
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -104,7 +104,7 @@ struct PersonalRecordsRepositoryTests {
         // the next user never sees the previous user's PRs.
         let repo = PersonalRecordsRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/personal-records") { calls += 1 }
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -125,7 +125,7 @@ struct PersonalRecordsRepositoryTests {
     func storeLoadMirrors() async {
         let repo = PersonalRecordsRepository(api: makeAPI())
         let store = PersonalRecordsStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":[{
               "id":"pr1","userId":"u1","metricType":"VO2_MAX","metricSlot":null,

@@ -352,5 +352,61 @@
             #expect(entry.valueMin == nil)
             #expect(entry.valueMax == nil)
         }
+
+        // MARK: - #12 — the hand-off requests the sweep
+
+        private final class KickCounter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var value = 0
+            var kicks: Int {
+                lock.withLock { value }
+            }
+
+            func kick() {
+                lock.withLock { value += 1 }
+            }
+        }
+
+        @Test("#12: handing heart rate to the bucket path requests a bucket sweep")
+        func handOffRequestsSweep() async {
+            let api = CapturingAPI()
+            let counter = KickCounter()
+            let standard = HealthLogStandard()
+            await standard.attachUploader(
+                makeUploader(api: api),
+                featureFlags: FlagStub(hrBucketEnabled: true),
+                hrCutoverGate: cutoverGate(),
+                hrBucketKick: { counter.kick() }
+            )
+
+            await standard.handleNewSamples(
+                [makeHRSample(bpm: 80, endingAt: iso("2026-06-23T11:30:00.000Z"))],
+                ofType: SampleType.heartRate
+            )
+
+            #expect(api.entryCount == 0)
+            #expect(counter.kicks == 1)
+        }
+
+        @Test("#12: a page that keeps its heart rate per sample requests no sweep")
+        func rawHeartRateRequestsNoSweep() async {
+            let api = CapturingAPI()
+            let counter = KickCounter()
+            let standard = HealthLogStandard()
+            await standard.attachUploader(
+                makeUploader(api: api),
+                featureFlags: FlagStub(hrBucketEnabled: true),
+                hrCutoverGate: cutoverGate(),
+                hrBucketKick: { counter.kick() }
+            )
+
+            await standard.handleNewSamples(
+                [makeHRSample(bpm: 72, endingAt: iso("2026-06-21T20:00:00.000Z"))],
+                ofType: SampleType.heartRate
+            )
+
+            #expect(api.entryCount == 1)
+            #expect(counter.kicks == 0)
+        }
     }
 #endif

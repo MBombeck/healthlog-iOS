@@ -35,56 +35,60 @@ struct HLRangeBandTests {
         #expect(RangeBand.tone(pct: 0) == .bad)
     }
 
-    // MARK: - grid band builder
+    // MARK: - target band builder (InsightsTargetRangeBand)
 
     @Test("rangeBand returns nil when no range configured")
     func bandNilWithoutRange() {
-        let band = InsightsTargetTileGrid.rangeBand(
+        let band = InsightsTargetRangeBand.rangeBand(
             range: nil,
             insufficient: false,
             daysInRange30d: 20,
             daysLogged30d: 28,
             unit: "kg",
-            type: "WEIGHT"
+            type: "WEIGHT",
+            units: .standard
         )
         #expect(band == nil)
     }
 
     @Test("rangeBand returns nil when window is insufficient")
     func bandNilWhenInsufficient() {
-        let band = InsightsTargetTileGrid.rangeBand(
+        let band = InsightsTargetRangeBand.rangeBand(
             range: .init(min: 71, max: 74),
             insufficient: true,
             daysInRange30d: 20,
             daysLogged30d: 28,
             unit: "kg",
-            type: "WEIGHT"
+            type: "WEIGHT",
+            units: .standard
         )
         #expect(band == nil)
     }
 
     @Test("rangeBand returns nil when nothing logged in the window")
     func bandNilWhenNothingLogged() {
-        let band = InsightsTargetTileGrid.rangeBand(
+        let band = InsightsTargetRangeBand.rangeBand(
             range: .init(min: 71, max: 74),
             insufficient: false,
             daysInRange30d: 0,
             daysLogged30d: 0,
             unit: "kg",
-            type: "WEIGHT"
+            type: "WEIGHT",
+            units: .standard
         )
         #expect(band == nil)
     }
 
     @Test("rangeBand computes the in-range percentage over logged days")
     func bandComputesPct() {
-        let band = InsightsTargetTileGrid.rangeBand(
+        let band = InsightsTargetRangeBand.rangeBand(
             range: .init(min: 71, max: 74),
             insufficient: false,
             daysInRange30d: 21,
             daysLogged30d: 28,
             unit: "kg",
-            type: "WEIGHT"
+            type: "WEIGHT",
+            units: .standard
         )
         #expect(band != nil)
         // 21 / 28 = 75 %
@@ -94,26 +98,28 @@ struct HLRangeBandTests {
 
     @Test("rangeBand clamps in-range count to logged-day total")
     func bandClampsInRangeToLogged() {
-        let band = InsightsTargetTileGrid.rangeBand(
+        let band = InsightsTargetRangeBand.rangeBand(
             range: .init(min: 60, max: 70),
             insufficient: false,
             daysInRange30d: 40, // malformed payload — more in-range than logged
             daysLogged30d: 28,
             unit: "bpm",
-            type: "RESTING_HR"
+            type: "RESTING_HR",
+            units: .standard
         )
         #expect(band?.pctInRange == 100)
     }
 
     @Test("rangeBand formats integer-metric bounds without decimals")
     func bandIntegerBounds() {
-        let band = InsightsTargetTileGrid.rangeBand(
+        let band = InsightsTargetRangeBand.rangeBand(
             range: .init(min: 60, max: 70),
             insufficient: false,
             daysInRange30d: 14,
             daysLogged30d: 28,
             unit: "bpm",
-            type: "RESTING_HR"
+            type: "RESTING_HR",
+            units: .standard
         )
         #expect(band?.lowerLabel == "60")
         #expect(band?.upperLabel == "70")

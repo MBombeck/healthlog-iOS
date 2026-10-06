@@ -114,11 +114,22 @@ extension IllnessLifecycle {
         case .chronicOngoing: String(localized: "illness.lifecycle.chronicOngoing")
         case .recurring: String(localized: "illness.lifecycle.recurring")
         case .flare: String(localized: "illness.lifecycle.flare")
+        case .unknown: String(localized: "illness.lifecycle.unknown")
         }
     }
 
     var allowsParent: Bool {
         self == .flare || self == .recurring
+    }
+
+    /// The `parentConditionId` an episode edit sends. The PATCH always carries
+    /// the key (a `null` unlinks), so a course that takes no parent sends `nil`.
+    /// A course this build does not know keeps the stored link untouched: the
+    /// app cannot tell whether the server allows a parent there, and unlinking
+    /// would change a record the person never edited.
+    func parentForPatch(chosen: String?, stored: String?) -> String? {
+        if allowsParent { return chosen }
+        return self == .unknown ? stored : nil
     }
 }
 

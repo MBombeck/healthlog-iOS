@@ -9,7 +9,7 @@ import Testing
 /// authoritative phone-side count the snapshot ships; this verifies it counts
 /// only today's entries (caller-locale day) and reflects multiple same-day logs.
 @MainActor
-@Suite("MoodStore — todayCount (watch multi-log)", .serialized)
+@Suite("MoodStore — todayCount (watch multi-log)", .serialized, .mockURLSession)
 struct MoodStoreTodayCountTests {
     private func makeAPI() -> APIClient {
         let keychain = InMemoryKeychain()

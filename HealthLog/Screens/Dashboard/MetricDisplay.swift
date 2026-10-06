@@ -177,37 +177,12 @@ public struct MetricDisplay: Equatable, Sendable {
         // Reject non-finite at the gate; route each integer conversion through
         // `Int(safeServer:)` → em-dash on an unrepresentable value.
         guard latest.isFinite else { return "—" }
-        // v0.11 N1 — re-unitable families convert at display time. Weight
-        // family always renders 1 decimal; glucose is integer for mg/dL and
-        // 1 decimal for mmol/L. All other kinds use the descriptor style.
-        switch kind.unitFamily {
-        case .weight:
-            return units.convertWeight(latest).formatted(.number.precision(.fractionLength(1)))
-        case .glucose:
-            let v = units.convertGlucose(latest)
-            return units.glucose == .mgdL
-                ? v.safeServerIntString()
-                : v.formatted(.number.precision(.fractionLength(1)))
-        case .bloodPressure, .none:
-            break
-        }
-        switch style {
-        case .integer:
-            return latest.safeServerIntString()
-        case .decimal1:
-            return latest.formatted(.number.precision(.fractionLength(1)))
-        case .decimal2:
-            return latest.formatted(.number.precision(.fractionLength(0 ... 2)))
-        case .bloodPressureCompound:
-            // Unreachable for scalar — caller checks `formatStyle` first.
-            return latest.safeServerIntString()
-        case .durationHM:
-            return latest.safeServerSleepDurationHM
-        case .groupedInteger:
-            return latest.safeServerGroupedIntString
-        case .signedDecimal1:
-            // W-B189 (#23) — signed deviation (body-temperature deviation).
-            return MetricKindDescriptor.formatSignedDecimal1(latest)
+        // v0.11 N1 / #115 P2 — re-unitable families convert into the account's
+        // unit through the one central formatter; the identity branch (and
+        // every other kind) keeps the descriptor style. BP is never a scalar
+        // here (the caller checks `formatStyle` first).
+        return MetricValueFormatter.account(latest, kind: kind, units: units) { converted in
+            MetricValueFormatter.styled(converted, style: style)
         }
     }
 

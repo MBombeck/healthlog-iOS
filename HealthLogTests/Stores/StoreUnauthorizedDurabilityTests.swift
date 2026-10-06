@@ -20,7 +20,7 @@ import Testing
 /// enqueued exactly one Outbox row — while still rolling back + NOT enqueuing on
 /// a permanent rejection (422).
 @MainActor
-@Suite("Store durability on .unauthorized (WC2)", .serialized)
+@Suite("Store durability on .unauthorized (WC2)", .serialized, .mockURLSession)
 struct StoreUnauthorizedDurabilityTests {
     // MARK: - Helpers
 
@@ -57,7 +57,7 @@ struct StoreUnauthorizedDurabilityTests {
     func unauthorizedOnCaptureKeepsOptimisticRow() async throws {
         let outbox = try OutboxQueue(inMemory: true)
         let store = makeStore(outbox: outbox, refresh: { .transient })
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, nil)
         }
 
@@ -81,7 +81,7 @@ struct StoreUnauthorizedDurabilityTests {
         let outbox = try OutboxQueue(inMemory: true)
         let store = makeStore(outbox: outbox, refresh: { .transient })
         let body = #"{"error":{"code":"validation.failed","message":"Invalid value"}}"#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
                 Data(body.utf8)

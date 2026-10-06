@@ -13,7 +13,7 @@ import Testing
 /// - SWR cache stale → network fires; stale returned on error
 /// - per-id detail path decode
 /// - empty list decodes cleanly
-@Suite("WorkoutsRepository — wire contract + SWR ladder", .serialized)
+@Suite("WorkoutsRepository — wire contract + SWR ladder", .serialized, .mockURLSession)
 struct WorkoutsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -43,7 +43,7 @@ struct WorkoutsRepositoryTests {
     @Test("list — decodes workouts + meta envelope")
     func listDecodesEnvelope() async throws {
         let repo = try makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "workouts":[{
@@ -75,7 +75,7 @@ struct WorkoutsRepositoryTests {
         // measurement-side decoder silently dropping WHOOP rows, this pins
         // the workout list against the same failure mode.
         let repo = try makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "workouts":[{
@@ -104,7 +104,7 @@ struct WorkoutsRepositoryTests {
     @Test("list — empty payload decodes cleanly")
     func listEmpty() async throws {
         let repo = try makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"workouts":[],"meta":{"total":0,"limit":50,"offset":0,"droppedDuplicates":0}},"error":null}
             """#.utf8)
@@ -119,7 +119,7 @@ struct WorkoutsRepositoryTests {
     func listSWRCacheHit() async throws {
         let repo = try makeRepo()
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — only OUR route counts.
             if req.targets("/api/workouts") { calls += 1 }
             let body = Data(#"""
@@ -141,7 +141,7 @@ struct WorkoutsRepositoryTests {
             clock: { clockBox.now }
         )
         nonisolated(unsafe) var phase = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: only OUR route advances the phase machine.
             if req.targets("/api/workouts") { phase += 1 }
             if phase == 1 {
@@ -172,7 +172,7 @@ struct WorkoutsRepositoryTests {
     @Test("workout(id:) — decodes single entry")
     func workoutDetail() async throws {
         let repo = try makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "id":"w2","sportType":"cycling",
@@ -196,7 +196,7 @@ struct WorkoutsRepositoryTests {
         // to the DTO so the detail screen can render the HR chart +
         // stats grid.
         let repo = try makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "id":"w-rich","sportType":"running",
@@ -224,7 +224,7 @@ struct WorkoutsRepositoryTests {
         // stepCount / elevation are absent. The DTO must decode
         // without errors and surface nil for every optional.
         let repo = try makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "id":"w-min","sportType":"yoga",
@@ -252,7 +252,7 @@ struct WorkoutsRepositoryTests {
         // per-coordinate timestamps. The DTO must decode the geometry
         // verbatim so the map layer can render a polyline.
         let repo = try makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "id":"w-gps","sportType":"running",
@@ -298,7 +298,7 @@ struct WorkoutsRepositoryTests {
           "avgHr":155,"maxHr":172,"source":"APPLE_HEALTH","externalId":null
         },"error":null}
         """#.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: count only the two routes this test drives — the list and
             // the `w1` detail — never a parallel suite's request.
             if req.targets("/api/workouts") || req.targets("/api/workouts/w1") { calls += 1 }
@@ -324,7 +324,7 @@ struct WorkoutsRepositoryTests {
     func storeLoadMirrors() async throws {
         let repo = try makeRepo()
         let store = WorkoutsStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "workouts":[{
@@ -350,7 +350,7 @@ struct WorkoutsRepositoryTests {
         let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { nil })
         await outbox.useCipher(OutboxPayloadCipher(keychain: WorkoutEnqueueFailingKeychain()))
         let repo = WorkoutsRepository(api: makeAPI(), outbox: outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard let url = req.url, let response = HTTPURLResponse(
                 url: url,
                 statusCode: 408,

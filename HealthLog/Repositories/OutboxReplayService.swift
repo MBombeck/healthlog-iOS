@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Replay-Pipeline für die Outbox. Wird vom AppContainer auf Online-Wechsel und beim
 /// Auth-Bootstrap getriggert. Iteriert über alle Operations, ruft den passenden
@@ -92,7 +93,7 @@ public actor OutboxReplayService {
     /// device, User A's queued write surviving into User B's session) and is
     /// dead-lettered instead of replayed under B's bearer token. Defaults to
     /// a live Keychain read; tests inject a deterministic provider.
-    private let currentUserProvider: @Sendable () -> String?
+    let currentUserProvider: @Sendable () -> String?
 
     // MARK: - audit-v0162 H1 / H-4 dependencies
 
@@ -109,15 +110,14 @@ public actor OutboxReplayService {
     /// `internal` for `isOnHoldThisPass` in the `+CoreDispatch` sibling.
     let attemptBackoff: TimeInterval
 
-    /// Injectable clock (age + back-off math). Defaults to wall time; tests pin it.
-    private let clock: @Sendable () -> Date
+    /// Injectable clock (age, back-off and rate-limit hold math); tests pin it.
+    let clock: @Sendable () -> Date
 
-    /// **audit-v0162 H1 (Opt 3) — degraded-server signal.** Returns `true` when
-    /// the server answered our `/api/health` probe but reported `degraded`
-    /// (confirmed-reachable-but-unhealthy). A 5xx/429 replay failure under this
+    /// **audit-v0162 H1 (Opt 3) — degraded-server signal.** `true` when the server
+    /// answered `/api/health` but reported `degraded`. A 5xx replay failure under this
     /// condition is the server's fault, not the write's, so the attempt is NOT
     /// counted toward dead-lettering. Wired to a shared ``ServerHealthSignal`` in
-    /// the composition root (post-construction via ``attachHealthSignal(_:)``);
+    /// the composition root (init parameter, `makeOutboxReplay`);
     /// `nil` (tests / widget) reads as "not degraded".
     private var serverHealthDegraded: (@Sendable () async -> Bool)?
 
@@ -137,6 +137,8 @@ public actor OutboxReplayService {
     /// Audit B-3 — discards from a pass that ran before a sink was attached
     /// (same race, same remedy, as ``deadLetteredBeforeSink``).
     var discardedBeforeSink: [OutboxDiscardNotice] = []
+    /// #10 — see ``setHealthKitDeliveryNotifier(_:)`` (`+HealthKit.swift`).
+    let healthKitDeliverySlot = Mutex<HealthKitDeliveryNotifier?>(nil)
 
     /// **Audit B-2 — operations the server took during THIS process' lifetime.**
     /// Belt to the persisted ``OutboxQueue/Operation/delivered`` brace: when even
@@ -144,10 +146,11 @@ public actor OutboxReplayService {
     /// sending the same operation twice. `internal`, like `idRemap` above.
     var deliveredIDs: Set<UUID> = []
 
-    /// Phase 09 / plan 09-05 — rows dead-lettered by a pass that ran before any
-    /// sink was attached. `internal`, like `measurementsRepo` above, so the
-    /// `+DeadLetterSink.swift` sibling that owns the whole surface can reach it.
+    /// Phase 09 / plan 09-05 — rows dead-lettered by a pass before a sink was attached (`+DeadLetterSink`).
     var deadLetteredBeforeSink = 0
+
+    /// #110 — rate-limit hold and in-pass pause budget (see `+RateLimit`).
+    var rateLimit = OutboxRateLimitState()
 
     /// **audit-v0162 H-4 — in-pass optimistic→server id remap.** Populated when a
     /// queued `create` replays and the server assigns a real id; a dependent
@@ -228,13 +231,6 @@ public actor OutboxReplayService {
         decoder = .hlDefault
     }
 
-    /// Composition-root wiring — attach the shared degraded-server signal after
-    /// construction (the service is built before the ``ServerHealthSignal`` probe
-    /// is set up). Idempotent.
-    public func attachHealthSignal(_ degraded: @escaping @Sendable () async -> Bool) {
-        serverHealthDegraded = degraded
-    }
-
     /// One pass over the outbox. Re-entrant-safe via `isRunning`-Guard.
     public func runOnce() async {
         guard !isRunning else { return }
@@ -242,7 +238,7 @@ public actor OutboxReplayService {
         defer { isRunning = false }
 
         let snapshot = await outbox.snapshot
-        guard !snapshot.isEmpty else { return }
+        guard !snapshot.isEmpty else { return await transferUnconfirmedHealthKitRows(now: clock()) }
 
         HLLog.outbox.info("Outbox-Replay startet (\(snapshot.count, privacy: .public) Operations)")
 
@@ -298,16 +294,16 @@ public actor OutboxReplayService {
                 continue
             }
 
-            // Audit B-2 — the server already has this write; only the local
-            // delete is still owed. Ahead of the hold gate on purpose: a
-            // delivered row is not failing and must never age into the DLQ.
-            if isDelivered(op) {
-                await completeDelivery(op)
-                continue
-            }
-
-            // Over budget, or attempted moments ago (see `isOnHoldThisPass`).
-            if isOnHoldThisPass(op, now: now) { continue }
+            // Rows this pass does not send (`holdsThisPass`, in this order):
+            // Audit B-2 — a row the server already has only owes its local
+            // delete, finished ahead of the hold gate on purpose (a delivered
+            // row is not failing and must never age into the DLQ); C4 — a row
+            // unconfirmed past the server's idempotency window is dead-lettered
+            // before it could go out as a second record; then the budget and
+            // back-off holds of `isOnHoldThisPass`.
+            //
+            // One gate call, so the loop stays inside its complexity budget.
+            if await holdsThisPass(op, now: now) { continue }
 
             // audit-v0162 M2 — dependent-op guard: an earlier op for this entity
             // failed retriably this pass, so skip its dependents entirely.
@@ -315,19 +311,19 @@ public actor OutboxReplayService {
 
             do {
                 lastCreatedServerId = nil
-                try await dispatch(op)
+                try await pausingOnRateLimit(op, passStartedAt: now) { try await dispatch(op) }
                 try await onReplaySuccess(op)
+            } catch let error where Self.isInterruption(error) {
+                return onInterrupted(op) // C4 — "stopped", not "no": row untouched, the pass ends.
             } catch let err as HLError where err.shouldPersistToOutbox {
                 // audit-v0162 M2 — block dependents of this entity for the pass.
                 if let key = op.clientEntityId { blockedEntities.insert(key) }
                 await onRetriableFailure(op, err: err, degraded: degraded)
             } catch let err as DecodingError {
-                // Audit B-3 — the payload we ourselves stored no longer decodes:
-                // this build's word against an older build's, not a server
-                // verdict, so the write is retained rather than deleted.
+                // Audit B-3 — our own stored payload no longer decodes: retained.
                 await onUndecodablePayload(op, error: err, now: now)
             } catch {
-                await onNonRetriable(op, error: error)
+                await blockedEntities.formUnion(holdingDependents(op, afterNonRetriable: error, now: now))
             }
         }
 
@@ -428,7 +424,7 @@ public actor OutboxReplayService {
             // Unreachable: the quarantine gate in `runOnce` skips this row
             // before dispatch. Kept exhaustive and fail-closed so a future
             // refactor cannot route an unnameable row onto a wire path.
-            throw HLError.unknown("Op-Kind \(op.kind.rawValue) ist quarantaeniert und wird nicht repliziert")
+            throw HLError.unknown("Op-Kind \(op.kind.rawValue) is quarantined and is not replayed")
         }
     }
 

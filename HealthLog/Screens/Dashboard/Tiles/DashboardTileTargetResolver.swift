@@ -10,8 +10,8 @@ import Foundation
 ///
 /// - **Averages** ride `ComprehensiveDigest.summaries[key].avg7 / avg30` — the
 ///   exact fields the web tile forwards into `<TrendCard avg7 avg30>`.
-/// - **Band** reuses the SAME `InsightsTargetTileGrid.rangeBand(...)` math the
-///   Insights target tiles use, so the Dashboard and Insights surfaces can
+/// - **Band** reuses the SAME `InsightsTargetRangeBand.rangeBand(...)` math the
+///   Insights target panel uses, so the Dashboard and Insights surfaces can
 ///   never drift on the in-range percentage or the band labels.
 ///
 /// The `MetricKind → server summary key` mapping is the single
@@ -45,20 +45,26 @@ enum DashboardTileTargetResolver {
     /// configured, the window is insufficient, or the kind is the composite
     /// blood-pressure tile (its systolic-only band would misrepresent the
     /// paired reading — the Insights BP panel carries the full sys/dia bands).
+    ///
+    /// **#115 P2** — `units` are the account's display units; the band's
+    /// canonical bounds convert into them, the same way the headline and the
+    /// 7-/30-day averages above it do.
     static func targetBand(
         for kind: MetricKind,
-        targets: InsightsTargetsResponseDTO?
+        targets: InsightsTargetsResponseDTO?,
+        units: UnitPreferences
     ) -> RangeBand? {
         guard kind.descriptor.formatStyle != .bloodPressureCompound else { return nil }
         guard let key = kind.availabilitySummaryKey,
               let target = targets?.targets.first(where: { $0.type == key }) else { return nil }
-        return InsightsTargetTileGrid.rangeBand(
+        return InsightsTargetRangeBand.rangeBand(
             range: target.range,
             insufficient: target.insufficientData,
             daysInRange30d: target.daysInRange30d,
             daysLogged30d: target.daysLogged30d,
             unit: target.unit,
-            type: target.type
+            type: target.type,
+            units: units
         )
     }
 }

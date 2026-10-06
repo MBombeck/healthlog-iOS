@@ -10,7 +10,7 @@ import Testing
 /// PATCHes the per-key body and reconciles the echoed map → ON. Real `APIClient`
 /// + stub `URLProtocol` (the PATCH echoes the resolved `modules`).
 @MainActor
-@Suite("Illness re-enable flow (v1.18.3)", .serialized)
+@Suite("Illness re-enable flow (v1.18.3)", .serialized, .mockURLSession)
 struct IllnessOptInFlowTests {
     private func makeGate() -> ModuleGate {
         let env = AppEnvironment(
@@ -47,7 +47,7 @@ struct IllnessOptInFlowTests {
     @Test("setEnabled(.illness, true) re-enables: PATCHes per-key + reconciles map → ON")
     func reEnableFlipsOn() async {
         nonisolated(unsafe) var patchedBody: [String: Bool]?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/auth/me/modules")
             #expect(req.httpMethod == "PATCH")
             // URLProtocol swaps httpBody into httpBodyStream — re-materialize.
@@ -82,7 +82,7 @@ struct IllnessOptInFlowTests {
 
     @Test("A failed re-enable PATCH restores the previous (disabled) state")
     func reEnableFailureRollsBack() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"boom"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, body)
         }

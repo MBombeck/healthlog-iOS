@@ -18,7 +18,7 @@ import Testing
 ///
 /// `.serialized`, weil die Suite am prozessglobalen `MockURLProtocol.handler`
 /// hängt.
-@Suite("CU-21 — syncTrigger im Batch-Body (Uploader-Pfad)", .serialized)
+@Suite("CU-21 — syncTrigger im Batch-Body (Uploader-Pfad)", .serialized, .mockURLSession)
 struct SyncTriggerBatchBodyTests {
     // MARK: - Fixtures
 
@@ -67,7 +67,7 @@ struct SyncTriggerBatchBodyTests {
     }
 
     static func installRecordingHandler(_ recorder: BodyRecorder) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if let body = req.httpBody ?? req.bodyStreamData() {
                 recorder.record(body)
             }
@@ -139,7 +139,7 @@ struct SyncTriggerBatchBodyTests {
     @Test("Jeder Chunk eines großen Sweeps trägt denselben Auslöser")
     func everyChunkCarriesTheTrigger() async throws {
         let recorder = BodyRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = req.httpBody ?? req.bodyStreamData() ?? Data()
             recorder.record(body)
             let object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]

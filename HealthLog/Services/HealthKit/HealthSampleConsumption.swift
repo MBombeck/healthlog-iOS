@@ -37,6 +37,21 @@
         /// `true` when rows existed before the gates and none survived them, i.e.
         /// the daily-statistics or HR-bucket path owns this read instead.
         let handedToAggregatePath: Bool
+        /// #12 — heart-rate rows the HR-bucket gate took off this page. The
+        /// caller requests a bucket sweep whenever this is non-zero, so the
+        /// hand-off and the sweep that completes it travel together.
+        var heartRateHandedOff = 0
+    }
+
+    /// What the server did with one page's rows, for Sync Diagnostics (#113).
+    ///
+    /// Only `inserted`, `updated` and `duplicate` count as uploaded. A row the
+    /// server refused is `skipped` (and remembered in the skip register); a row
+    /// it could not take yet and that waits in the outbox is `parked`.
+    struct HealthSampleServerTally: Sendable, Equatable {
+        var accepted = 0
+        var skipped = 0
+        var parked = 0
     }
 
     /// The mapping and gate configuration for one page.
@@ -76,10 +91,13 @@
                 afterStatsGate
             }
 
+            let heartRateBefore = afterStatsGate.count(where: { $0.hkIdentifier == HealthKitHRBucketRow.hkIdentifier })
+            let heartRateAfter = entries.count(where: { $0.hkIdentifier == HealthKitHRBucketRow.hkIdentifier })
             return HealthSampleMappingResult(
                 readCount: foreign.count,
                 entries: entries,
-                handedToAggregatePath: entries.isEmpty && !rawEntries.isEmpty
+                handedToAggregatePath: entries.isEmpty && !rawEntries.isEmpty,
+                heartRateHandedOff: heartRateBefore - heartRateAfter
             )
         }
     }
@@ -137,6 +155,13 @@
         /// needs a retry and has nowhere to write it reports `durableRetryFailed`,
         /// so the cursor holds rather than claiming ground it does not have.
         let retry: (any HealthSyncBatchRetryEnqueuing)?
+        /// #113 — where a row the server refused for a deterministic reason
+        /// (`value_out_of_range`, …) is remembered before the cursor may pass it.
+        /// `nil` means there is nowhere to remember it, and a page carrying such a
+        /// refusal then holds instead of dropping the row.
+        var skipRegister: HealthKitSkippedRowRegister?
+        /// The build a registered row is stamped with (the re-offer rule).
+        var build: String = HealthKitSkipRegisterBuild.current
 
         /// Runs the whole transmission half of a page and reports what was proved.
         ///
@@ -162,18 +187,25 @@
             _ mapping: HealthSampleMappingResult,
             admitted lease: HealthSyncAuthenticatedLease?
         ) async -> HealthSyncPageOutcome {
+            await transmitReporting(mapping, admitted: lease).outcome
+        }
+
+        /// ``transmit(_:admitted:)`` plus the honest per-row tally the Sync
+        /// Diagnostics surface counts (#113): only `inserted`, `updated` and
+        /// `duplicate` are "uploaded".
+        func transmitReporting(
+            _ mapping: HealthSampleMappingResult,
+            admitted lease: HealthSyncAuthenticatedLease?
+        ) async -> (outcome: HealthSyncPageOutcome, tally: HealthSampleServerTally) {
             guard !mapping.entries.isEmpty else {
                 // Nothing to post. An empty page is terminally accounted for by
                 // construction, so the cursor may move.
-                return Self.emptyOutcome
+                return (Self.emptyOutcome, HealthSampleServerTally())
             }
-            if let refusal = lease?.refusal {
-                return Self.refusedOutcome(refusal, postedCount: mapping.entries.count)
-            }
-
             let posted = mapping.entries
-            var transportThrew = false
-            var nonterminalIndexes: Set<Int> = []
+            if let refusal = lease?.refusal {
+                return (Self.refusedOutcome(refusal, postedCount: posted.count), HealthSampleServerTally())
+            }
 
             // The uploader's own owner/bearer lease is unchanged from the
             // pre-Phase-07 path: it is what pins the exact credential onto the
@@ -183,70 +215,131 @@
             do {
                 authenticationLease = try await uploader.captureAuthenticationLeaseIfConfigured()
             } catch {
-                return Self.refusedOutcome(.unavailableAuthentication, postedCount: posted.count)
+                return (Self.refusedOutcome(.unavailableAuthentication, postedCount: posted.count), HealthSampleServerTally())
             }
 
+            var verdicts = PageVerdicts()
             do {
                 let outcomes = try await admitting(lease) {
                     try await uploader.upload(posted, requiring: authenticationLease)
                 }
-                // The uploader already ran `MeasurementBatchAcceptance.validate`,
-                // so a returned outcome means every posted index carried terminal
-                // evidence. One reason survives that gate and still is not
-                // progress: the server cannot map the identifier yet.
-                for outcome in outcomes {
-                    for skipped in outcome.skipped
-                        where skipped.reason == HealthKitServerSupportConfig.reasonUnmappableIdentifier
-                    {
-                        nonterminalIndexes.insert(skipped.index)
-                    }
-                }
+                verdicts = PageVerdicts(outcomes)
             } catch let refusal as HealthSyncLeaseRefusal {
-                return Self.refusedOutcome(refusal, postedCount: posted.count)
+                return (Self.refusedOutcome(refusal, postedCount: posted.count), HealthSampleServerTally())
             } catch is CancellationError {
-                return Self.refusedOutcome(.cancelled, postedCount: posted.count)
+                return (Self.refusedOutcome(.cancelled, postedCount: posted.count), HealthSampleServerTally())
             } catch {
                 // A raised transport says nothing about individual rows: the batch
                 // may never have been seen at all. Every index is non-terminal.
-                transportThrew = true
-                nonterminalIndexes = Set(posted.indices)
+                verdicts.transportThrew = true
+                verdicts.nonterminalIndexes = Set(posted.indices)
             }
+            return await settle(posted, verdicts, admitted: lease)
+        }
 
+        /// What one page's responses proved, index by index.
+        ///
+        /// The uploader already ran `MeasurementBatchAcceptance.validate`, so a
+        /// returned outcome means every posted index carried terminal evidence.
+        /// One reason survives that gate and still is not progress: the server
+        /// cannot map the identifier yet. Every other terminal skip is a refusal
+        /// the person must be able to see, so it is collected for the skip
+        /// register (#113).
+        private struct PageVerdicts {
+            var accepted = 0
+            var nonterminalIndexes: Set<Int> = []
+            var refused: [HealthKitSkippedEntry] = []
+            var transportThrew = false
+
+            init() {}
+
+            init(_ outcomes: [BatchUploadOutcome]) {
+                var offset = 0
+                for outcome in outcomes {
+                    for verdict in outcome.rowVerdicts {
+                        if verdict.isStored {
+                            accepted += 1
+                        } else if verdict.status == .skipped {
+                            if verdict.reason == HealthKitServerSupportConfig.reasonUnmappableIdentifier {
+                                nonterminalIndexes.insert(offset + verdict.index)
+                            } else {
+                                refused.append(
+                                    HealthKitSkippedEntry(entry: outcome.chunk[verdict.index], reason: verdict.reason ?? "unknown")
+                                )
+                            }
+                        }
+                    }
+                    offset += outcome.chunk.count
+                }
+            }
+        }
+
+        /// Turns the verdicts into the page outcome: registers the refused rows,
+        /// writes the durable retry for the rest, and tallies what happened.
+        private func settle(
+            _ posted: [HealthKitBatchEntryDTO],
+            _ verdicts: PageVerdicts,
+            admitted lease: HealthSyncAuthenticatedLease?
+        ) async -> (outcome: HealthSyncPageOutcome, tally: HealthSampleServerTally) {
             let entries = posted.indices.map { index in
                 HealthSyncEntryOutcome(
                     index: index,
                     stableIdentity: posted[index].externalId,
-                    classification: nonterminalIndexes.contains(index) ? .nonterminal : .terminalAccepted
+                    classification: verdicts.nonterminalIndexes.contains(index) ? .nonterminal : .terminalAccepted
                 )
             }
-            guard !nonterminalIndexes.isEmpty else {
-                return HealthSyncPageOutcome(
-                    postedCount: posted.count,
-                    entries: entries,
-                    transportThrew: false,
-                    durableRetryPersisted: false,
-                    durableRetryFailed: false,
-                    leaseIsCurrent: lease?.isCurrent ?? true,
-                    wasCancelled: false
-                )
-            }
+
+            // #113 — a refused row may be passed only once it is remembered. If it
+            // cannot be (no register, no owner, a write that did not verify), the
+            // page holds: the next wake re-reads it, the server folds everything it
+            // already stored on `externalId`, and the refusal is tried again.
+            let registered = await registerRefused(verdicts.refused, requiring: lease)
+            var tally = HealthSampleServerTally(accepted: verdicts.accepted, skipped: registered ? verdicts.refused.count : 0)
 
             // Without an admission there is no owner to attribute a retry row to,
             // and stamping the ambient account onto one person's samples is the
             // exact harm Wave 1 closed on the queue. The page then stays
             // unaccounted for and the caller holds.
-            let attempted = lease != nil && retry != nil
-            let pending = nonterminalIndexes.sorted().map { posted[$0] }
+            let pending = verdicts.nonterminalIndexes.sorted().map { posted[$0] }
+            let attempted = !pending.isEmpty && lease != nil && retry != nil
             let persisted = attempted ? await persistRetry(pending, requiring: lease) : false
-            return HealthSyncPageOutcome(
+            if persisted {
+                tally.parked = pending.count
+            }
+            let outcome = HealthSyncPageOutcome(
                 postedCount: posted.count,
                 entries: entries,
-                transportThrew: transportThrew,
+                transportThrew: verdicts.transportThrew,
                 durableRetryPersisted: persisted,
-                durableRetryFailed: attempted && !persisted,
+                durableRetryFailed: (attempted && !persisted) || !registered,
                 leaseIsCurrent: lease?.isCurrent ?? true,
-                wasCancelled: Task.isCancelled
+                wasCancelled: pending.isEmpty ? false : Task.isCancelled
             )
+            return (outcome, tally)
+        }
+
+        /// Writes the page's refused rows into the skip register under the
+        /// admitted owner. `true` when there was nothing to write or the write
+        /// verified.
+        private func registerRefused(
+            _ refused: [HealthKitSkippedEntry],
+            requiring lease: HealthSyncAuthenticatedLease?
+        ) async -> Bool {
+            guard !refused.isEmpty else { return true }
+            guard let skipRegister, let lease else { return false }
+            do {
+                try await lease.admitting {
+                    try await skipRegister.record(refused, ownerID: lease.ownerID, build: build)
+                }
+                return true
+            } catch {
+                // Count only — no value, no identifier, no owner.
+                // swiftlint:disable:next hllog_public_privacy_interpolation
+                HLLog.healthKit.error(
+                    "skip register write failed for \(refused.count, privacy: .public) row(s) — cursor holds"
+                )
+                return false
+            }
         }
 
         /// `HealthSyncAuthenticatedLease.admitting(_:)` when there is an admission,

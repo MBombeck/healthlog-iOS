@@ -15,7 +15,7 @@ import Testing
 /// `selection`. Sending the old body 422'd on the unknown-key check; sending no
 /// selection 422s on the required-field check. Both are asserted, so
 /// reintroducing either shape fails a test instead of a download.
-@Suite("HealthRecordExport", .serialized)
+@Suite("HealthRecordExport", .serialized, .mockURLSession)
 struct HealthRecordExportTests {
     private func makeAPI(keychain: InMemoryKeychain = InMemoryKeychain()) -> APIClient {
         let env = AppEnvironment(
@@ -128,7 +128,7 @@ struct HealthRecordExportTests {
         nonisolated(unsafe) var capturedAccept: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedAccept = req.value(forHTTPHeaderField: "Accept")
             capturedMethod = req.httpMethod
@@ -167,7 +167,7 @@ struct HealthRecordExportTests {
     @Test("non-zip Content-Type is rejected")
     func contentTypeGuard() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(
                 url: req.url!,
                 statusCode: 200,
@@ -187,7 +187,7 @@ struct HealthRecordExportTests {
     @Test("missing Content-Disposition → deterministic local filename")
     func filenameFallback() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(
                 url: req.url!,
                 statusCode: 200,
@@ -207,7 +207,7 @@ struct HealthRecordExportTests {
     @Test("429 surfaces as HLError.rateLimited (shared export bucket)")
     func rateLimited() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 429, httpVersion: nil, headerFields: nil)!
             return (http, Data("{}".utf8))
         }
@@ -224,7 +224,7 @@ struct HealthRecordExportTests {
     @Test("422 export.selection.unknown_leaf maps to the typed contract mismatch")
     func unknownLeafIsTyped() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             let body = """
             {"error":"Unknown selection leaf: NOT_A_LEAF",
@@ -252,7 +252,7 @@ struct HealthRecordExportTests {
     @Test("the same code carried in the bare error string is recognised too")
     func unknownLeafInErrorString() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             return (http, Data(#"{"data":null,"error":"export.selection.unknown_leaf"}"#.utf8))
         }
@@ -267,7 +267,7 @@ struct HealthRecordExportTests {
     @Test("an unrelated 422 keeps its HLError identity — no over-claiming")
     func unrelated422PassesThrough() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             return (http, Data(#"{"error":"Invalid range"}"#.utf8))
         }

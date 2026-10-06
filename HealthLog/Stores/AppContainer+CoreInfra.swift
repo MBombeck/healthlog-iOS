@@ -41,7 +41,8 @@ extension AppContainer {
         keychain: KeychainStoring,
         passkey: PasskeyServiceProtocol,
         unauthorizedRef: UnauthorizedHandlerRef,
-        outboxFactory: OutboxOpenFactory = .live
+        outboxFactory: OutboxOpenFactory = .live,
+        apiSessionConfiguration injectedSessionConfiguration: URLSessionConfiguration? = nil
     ) -> CoreInfraBundle {
         let pinner = CertificatePinner(fromBundle: .main)
 
@@ -75,7 +76,7 @@ extension AppContainer {
         // inherit `protocolClasses`) resolves from bundled JSON with NO network.
         // Debug-only by `#if DEBUG`; the default session config is untouched in
         // Release.
-        let apiSessionConfiguration = URLSessionConfiguration.default
+        let apiSessionConfiguration = injectedSessionConfiguration ?? URLSessionConfiguration.default
         #if DEBUG
             if HermeticUITestSupport.isActive {
                 apiSessionConfiguration.protocolClasses =

@@ -164,8 +164,8 @@ private struct DrugLevelChartView: View {
                 Chart {
                     ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
                         AreaMark(
-                            x: .value("Datum", date(for: sample.tHours)),
-                            y: .value("Spiegel", sample.concentration)
+                            x: .value("Date", date(for: sample.tHours)),
+                            y: .value("medication.drugLevel.chart.level", sample.concentration)
                         )
                         .foregroundStyle(
                             // v0.6.1 mono refresh — Trulicity PK chart drops
@@ -180,8 +180,8 @@ private struct DrugLevelChartView: View {
                             )
                         )
                         LineMark(
-                            x: .value("Datum", date(for: sample.tHours)),
-                            y: .value("Spiegel", sample.concentration)
+                            x: .value("Date", date(for: sample.tHours)),
+                            y: .value("medication.drugLevel.chart.level", sample.concentration)
                         )
                         .foregroundStyle(HLText.primary)
                         .lineStyle(StrokeStyle(lineWidth: HLChartStyle.lineWidth))
@@ -189,8 +189,8 @@ private struct DrugLevelChartView: View {
                     }
                     ForEach(Array(doses.enumerated()), id: \.offset) { _, dose in
                         PointMark(
-                            x: .value("Datum", dose.takenAt),
-                            y: .value("Spiegel", 0)
+                            x: .value("Date", dose.takenAt),
+                            y: .value("medication.drugLevel.chart.level", 0)
                         )
                         .symbol(.circle)
                         .symbolSize(60)
@@ -201,7 +201,7 @@ private struct DrugLevelChartView: View {
                                 .foregroundStyle(HLText.primary)
                         }
                     }
-                    RuleMark(x: .value("Jetzt", asOf))
+                    RuleMark(x: .value("Now", asOf))
                         .foregroundStyle(HLText.tertiary.opacity(0.6))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                         .annotation(position: .top, alignment: .leading) {

@@ -108,7 +108,7 @@ struct MedicationServerRunwayTests {
         // What a single medication-level divisor would have produced from the
         // same containers — still reachable, because container ROWS legitimately
         // convert their own units, and demonstrably not the headline.
-        let localSum = MedicationInventorySection.validatedSum(items, \.unitsRemaining)
+        let localSum = items.compactMap(\.unitsRemaining).reduce(0, +)
         #expect(localSum == 30)
         #expect(MedicationInventorySection.doseString(localSum, unitsPerDose: medication.effectiveUnitsPerDose) == "30")
         #expect(rendered != "30")

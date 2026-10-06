@@ -33,7 +33,7 @@ import Testing
     ///    backup identifiers before re-scheduling.
     @Suite(
         "Notifications — holistic surface (v0.5.4.3 HP5)",
-        .serialized
+        .serialized, .mockURLSession
     )
     @MainActor
     struct NotificationsHolisticTests {
@@ -232,7 +232,7 @@ import Testing
 
             nonisolated(unsafe) var capturedPath: String?
             nonisolated(unsafe) var capturedBody: Data?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // CU-07: the handler is process-global — record only OUR route so
                 // a parallel suite's request cannot overwrite the capture.
                 if req.targets("/api/user/profile") {
@@ -272,7 +272,7 @@ import Testing
             await Self.seedProfile(store: store, enabled: true)
 
             nonisolated(unsafe) var hits = 0
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // CU-07: `hits == 0` only means "the toggle skipped the PATCH" if
                 // a parallel suite's request cannot raise it.
                 // Path only, no method pin: a regression that reached the profile
@@ -455,7 +455,7 @@ import Testing
         /// the /profile GET + calling `load()`.
         @MainActor
         static func seedProfile(store: SettingsStore, enabled: Bool) async {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let path = req.url?.path ?? ""
                 if path == "/api/user/profile" {
                     let body = #"""

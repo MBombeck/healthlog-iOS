@@ -39,14 +39,14 @@ struct SmartReminderPhraseServiceTests {
         #expect(outcome.fallbackReason == .emptyInput)
     }
 
-    @Test("generate — feature flag off short-circuits before any FM work")
+    @Test("generate — briefing disallows on-device → short-circuits before any FM work")
     func featureFlagOffShortCircuits() async {
-        let flags = StubReminderFeatureFlagsService(assistantBriefing: false)
-        let service = SmartReminderPhraseService(featureFlags: flags)
+        let flags = AICaps.reader([.briefing: AICaps.operatorDisabled])
+        let service = SmartReminderPhraseService(aiCapabilities: flags)
         let ctx = ReminderPhraseContext(medicationName: "Trulicity", slot: .noon)
         let outcome = await service.generate(context: ctx)
         #expect(outcome.phrase == nil)
-        #expect(outcome.fallbackReason == .featureFlagDisabled)
+        #expect(outcome.fallbackReason == .capabilityNotAllowed)
     }
 
     // MARK: - Safety filter integration
@@ -98,7 +98,7 @@ struct SmartReminderPhraseServiceTests {
     func fallbackReasonRoundTrip() {
         let cases: [ReminderPhraseOutcome.FallbackReason] = [
             .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady,
-            .featureFlagDisabled, .safetyRefused, .generationFailed,
+            .capabilityNotAllowed, .safetyRefused, .generationFailed,
             .frameworkUnavailable, .emptyInput
         ]
         for c in cases {
@@ -180,25 +180,5 @@ struct SmartReminderPhraseServiceTests {
         )
         let prompt = SmartReminderPhrasePrompt.build(context: ctx, locale: Locale(identifier: "de"))
         #expect(prompt.contains("Streak-Tage (auf 7 begrenzt): 0"))
-    }
-}
-
-/// Minimal stub for the feature-flag service so the smart-reminder
-/// tests can force-disable the assistant briefing flag.
-private struct StubReminderFeatureFlagsService: FeatureFlagsServicing {
-    let assistantBriefing: Bool
-
-    func isEnabled(_ flag: FeatureFlag) -> Bool {
-        switch flag {
-        case .assistantBriefing: assistantBriefing
-        case .assistantCoach,
-             .assistantTrend,
-             .assistantInsights,
-             .enableDailyStats,
-             .enableHRBuckets:
-            true
-        case .cycleTracking:
-            false
-        }
     }
 }

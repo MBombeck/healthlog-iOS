@@ -28,6 +28,9 @@ struct CycleCaptureSheet: View {
     let onDismiss: () -> Void
 
     @State private var date: Date = .now
+    /// #115 P2 — the basal temperature reads in the account's unit; the stepper
+    /// still steps and stores canonical °C.
+    @Environment(\.unitPreferences) private var units
     /// Pending period start/end choice — committed together with the day-log on
     /// "Save", NOT fired on tap. `nil` means "no period change today".
     @State private var periodAction: CyclePeriodAction?
@@ -121,9 +124,10 @@ struct CycleCaptureSheet: View {
             }
         }
         .interactiveDismissDisabled(isSaving)
-        .onAppear {
-            if let initialDate { date = initialDate }
-        }
+        // #115 1.5 — the date picker shows days in the ACCOUNT zone, the zone
+        // `dayKey` cuts the server key in, so the day picked is the day sent.
+        .environment(\.timeZone, ProfileDay.timeZone)
+        .onAppear { if let initialDate { date = initialDate } }
         .task(id: Self.dayKey(date)) {
             await loadDay()
             await store.loadCustomSymptoms()
@@ -145,30 +149,18 @@ struct CycleCaptureSheet: View {
     // MARK: - Sections
 
     private var periodSection: some View {
-        Section {
-            DatePicker("cycle.capture.date", selection: $date, displayedComponents: [.date])
-            Picker("cycle.capture.period.header", selection: $periodAction) {
-                Text("cycle.capture.period.none").tag(CyclePeriodAction?.none)
-                Text("cycle.capture.period.start").tag(CyclePeriodAction?.some(.start))
-                Text("cycle.capture.period.end").tag(CyclePeriodAction?.some(.end))
-            }
-            .pickerStyle(.segmented)
-            .disabled(isSaving)
-        } header: {
-            Text("cycle.capture.period.header")
-        } footer: {
-            Text("cycle.capture.period.footer")
-        }
+        CycleCapturePeriodSection(store: store, date: $date, periodAction: $periodAction, isSaving: isSaving)
     }
 
     private var flowSection: some View {
         Section("cycle.capture.flow.header") {
-            Picker("cycle.capture.flow.header", selection: $flow) {
+            // K1 — „Schmier…" was cut even on the large device; a menu shows
+            // the whole word when the five segments cannot.
+            HLAdaptiveSegmentedPicker("cycle.capture.flow.header", selection: $flow, labels: Self.flowLabels) {
                 ForEach(CycleFlowLevel.allCases, id: \.self) { level in
                     Text(Self.flowLabel(level)).tag(level)
                 }
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
         }
     }
@@ -266,7 +258,7 @@ struct CycleCaptureSheet: View {
             }
             if hasBBT {
                 Stepper(value: $bbt, in: 35.0 ... 39.0, step: 0.05) {
-                    Text(Self.bbtFormatted(bbt))
+                    Text(Self.bbtFormatted(bbt, units: units))
                         .font(.hlSubhead.monospacedDigit())
                 }
                 Toggle(isOn: $temperatureExcluded) {

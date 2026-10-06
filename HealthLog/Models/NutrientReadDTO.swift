@@ -141,13 +141,21 @@ private struct LossyNutrientRow: Decodable {
 // MARK: - EFSA reference (`GET /api/nutrients/daily` → `reference`)
 
 /// The EFSA value kind the server resolved (named in Coach prose later).
-public enum NutrientReferenceKind: String, Codable, Sendable, Equatable {
+public enum NutrientReferenceKind: String, Codable, Sendable, Equatable, TolerantServerEnum {
     /// Population Reference Intake.
     case pri = "PRI"
     /// Adequate Intake.
     case ai = "AI"
     /// Safe-level ceiling (caffeine).
     case safeLevel
+    /// #115 B6 — an EFSA value kind this build does not know. The kind only
+    /// NAMES the value in the headline; the value, its direction and the
+    /// citation still hold, so the reference is kept and shown without a name
+    /// instead of vanishing with the whole reference line.
+    case unknown
+
+    public static let unknownFallback = NutrientReferenceKind.unknown
+    public static let wireVocabulary: StaticString = "nutrient reference kind"
 }
 
 /// Whether the reference is a target intake or a do-not-exceed ceiling.
@@ -246,8 +254,9 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         unit = try c.decodeIfPresent(String.self, forKey: .unit) ?? ""
         windowDays = try c.decodeIfPresent(Int.self, forKey: .windowDays) ?? 0
         days = try c.decodeIfPresent([NutrientDayPointDTO].self, forKey: .days) ?? []
-        // A reference with an unknown kind/direction nils rather than throwing —
-        // the surface simply hides the reference line, honest to "no reference".
+        // An unknown kind decodes to `.unknown` (#115 B6) and keeps the line. An
+        // unknown direction still nils the reference: target vs. ceiling is a
+        // claim, and guessing it would colour the progress wrongly.
         reference = (try? c.decodeIfPresent(NutrientReferenceDTO.self, forKey: .reference)).flatMap { $0 }
     }
 

@@ -39,16 +39,18 @@ public enum EcgSyncSkipReason: String, Sendable, Equatable, CaseIterable {
 /// every one of these cases, so nothing is lost — the next wake resumes from
 /// the same place.
 public enum EcgSyncStopReason: String, Sendable, Equatable, CaseIterable {
-    /// `403` — the `insights` module or the `insightStatus` surface is off.
+    /// `403` — a gate the server applied (an older server's `insights` module or
+    /// `insightStatus` surface; v1.39 gates the ECG route on neither).
     /// Stop; do not retry. The operator turned something off, and hammering the
     /// route would neither change that nor inform anyone.
     case gated
     /// `401` — the session is not (or no longer) authenticated. Stop; the
     /// refresh/re-login path owns the recovery, and the anchor waits.
     case unauthorized
-    /// `429` — too many recordings per minute for this account. Stop and wait;
-    /// `APIClient` already honoured `Retry-After` within the request, so
-    /// reaching here means the budget is genuinely spent.
+    /// `429` — too many recordings per minute for this account, and the wait
+    /// the server named did not fit into this sweep's pause budget (S2). The
+    /// confirmed recordings stay confirmed; the next wake resumes after the
+    /// named instant with the first unconfirmed one.
     case rateLimited
     /// Network failure, offline, 5xx, timeout. Stop; retry on the next wake.
     case transport
@@ -67,19 +69,25 @@ public struct EcgSyncSummary: Sendable, Equatable {
     public var duplicate: Int = 0
     public var skipped: [EcgSyncSkipReason: Int] = [:]
     public var stoppedBecause: EcgSyncStopReason?
+    /// Recordings this pass did not send because the server confirmed them in
+    /// an earlier wake while the anchor was held (S2). They count toward the
+    /// anchor like a success, but are not in ``accepted``.
+    public var alreadyConfirmed: Int = 0
 
     public init(
         inserted: Int = 0,
         updated: Int = 0,
         duplicate: Int = 0,
         skipped: [EcgSyncSkipReason: Int] = [:],
-        stoppedBecause: EcgSyncStopReason? = nil
+        stoppedBecause: EcgSyncStopReason? = nil,
+        alreadyConfirmed: Int = 0
     ) {
         self.inserted = inserted
         self.updated = updated
         self.duplicate = duplicate
         self.skipped = skipped
         self.stoppedBecause = stoppedBecause
+        self.alreadyConfirmed = alreadyConfirmed
     }
 
     public static let zero = EcgSyncSummary()
@@ -100,6 +108,9 @@ public struct EcgSyncSummary: Sendable, Equatable {
         case .inserted: inserted += 1
         case .updated: updated += 1
         case .duplicate: duplicate += 1
+        // Never reached: the coordinator refuses an unconfirmed status before
+        // recording it (#115 · 1.7). Counted as nothing rather than guessed.
+        case .unknown: break
         }
     }
 

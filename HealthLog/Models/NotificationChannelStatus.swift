@@ -20,11 +20,18 @@ public struct NotificationChannelStatus: Codable, Sendable, Equatable, Identifia
     public let lastFailureReason: String?
     public let nextRetryAt: Date?
 
-    public enum ChannelState: String, Codable, Sendable, Equatable {
+    public enum ChannelState: String, Codable, Sendable, Equatable, TolerantServerEnum {
         case active
         case autoDisabled = "auto_disabled"
         case manuallyDisabled = "manually_disabled"
         case sendingPaused = "sending_paused"
+        /// #115 · 1.7 — a channel state this build does not know. Used to fail
+        /// the whole `/api/notifications/status` payload; now the row falls
+        /// back to its static `enabled` flag.
+        case unknown
+
+        public static let unknownFallback = ChannelState.unknown
+        public static let wireVocabulary: StaticString = "notification channel state"
     }
 
     public init(

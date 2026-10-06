@@ -22,13 +22,13 @@ private func makeAPI() -> APIClient {
     return APIClient(environment: env, keychain: kc, sessionConfiguration: .mock())
 }
 
-@Suite("PasskeyRepository — wire contract", .serialized)
+@Suite("PasskeyRepository — wire contract", .serialized, .mockURLSession)
 struct PasskeyRepositoryTests {
     @Test("list — GET /api/auth/passkeys decodes the credential array")
     func listDecodes() async throws {
         let repo = PasskeyRepository(api: makeAPI())
         nonisolated(unsafe) var lastPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             lastPath = req.url?.path
             let body = Data(#"""
             {"data":[{"id":"pk-1","name":"iPhone","credentialDeviceType":"multiDevice","credentialBackedUp":true,"createdAt":"2026-05-01T12:00:00.000Z"}],"error":null}
@@ -47,7 +47,7 @@ struct PasskeyRepositoryTests {
         let repo = PasskeyRepository(api: makeAPI())
         nonisolated(unsafe) var lastMethod: String?
         nonisolated(unsafe) var lastPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             lastMethod = req.httpMethod
             lastPath = req.url?.path
             return (HTTPURLResponse(url: req.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!, Data())
@@ -64,7 +64,7 @@ struct PasskeyRepositoryTests {
         // change to the framework's header policy is caught here.
         let repo = PasskeyRepository(api: makeAPI())
         nonisolated(unsafe) var key: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             key = req.value(forHTTPHeaderField: "Idempotency-Key")
             return (HTTPURLResponse(url: req.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!, Data())
         }
@@ -73,13 +73,13 @@ struct PasskeyRepositoryTests {
     }
 }
 
-@Suite("WithingsRepository — wire contract", .serialized)
+@Suite("WithingsRepository — wire contract", .serialized, .mockURLSession)
 struct WithingsRepositoryTests {
     @Test("status — GET /api/withings/status decodes the connection snapshot")
     func statusDecodes() async throws {
         let repo = WithingsRepository(api: makeAPI())
         nonisolated(unsafe) var lastPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             lastPath = req.url?.path
             let body = Data(#"""
             {"data":{"connected":true,"configured":true,"lastSyncedAt":"2026-05-02T10:00:00.000Z"},"error":null}
@@ -100,7 +100,7 @@ struct WithingsRepositoryTests {
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var key: String?
         nonisolated(unsafe) var bodyContainsMeasure = false
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             method = req.httpMethod
             path = req.url?.path
             key = req.value(forHTTPHeaderField: "Idempotency-Key")
@@ -126,7 +126,7 @@ struct WithingsRepositoryTests {
         nonisolated(unsafe) var method: String?
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var key: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             method = req.httpMethod
             path = req.url?.path
             key = req.value(forHTTPHeaderField: "Idempotency-Key")
@@ -143,7 +143,7 @@ struct WithingsRepositoryTests {
     func syncReplayOverloadPropagatesKey() async throws {
         let repo = WithingsRepository(api: makeAPI())
         nonisolated(unsafe) var key: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             key = req.value(forHTTPHeaderField: "Idempotency-Key")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
         }

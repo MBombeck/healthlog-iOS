@@ -1,7 +1,8 @@
 import Foundation
 
 /// The `from`/`to`/`dayAnchor` triple for a calendar read. Default mirrors the
-/// server window (−90 … +180 days). Computed off the user-tz calendar.
+/// server window (−90 … +180 days). Computed off the profile-zone calendar
+/// (`ProfileDay`, #115 1.5).
 ///
 /// Lives in `Models/Cycle` (Foundation-only) rather than next to `CycleStore`
 /// because `CycleRepository.purgeAll()` (server-parity v1.16) invalidates the
@@ -27,23 +28,15 @@ public struct CycleCalendarWindow: Sendable, Equatable {
         )
     }
 
-    /// `YYYY-MM-DD` for "today" in the device timezone.
-    public static func todayKey(date: Date = .now) -> String {
-        formatter.string(from: date)
+    /// `YYYY-MM-DD` for "today" in the ACCOUNT zone (#115 1.5). The server
+    /// keys the calendar's days in the profile zone; "today" from the device
+    /// zone put the window's anchor (and the grid's today ring) on a day the
+    /// account is not on, for anyone whose phone and account disagree.
+    public static func todayKey(date: Date = .now, timeZone: TimeZone = ProfileDay.timeZone) -> String {
+        ProfileDay.key(for: date, timeZone: timeZone)
     }
 
     private static func shifted(_ day: String, days: Int) -> String {
-        guard let base = formatter.date(from: day),
-              let moved = Calendar.current.date(byAdding: .day, value: days, to: base) else { return day }
-        return formatter.string(from: moved)
+        ProfileDay.key(day, addingDays: days)
     }
-
-    private static let formatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
 }

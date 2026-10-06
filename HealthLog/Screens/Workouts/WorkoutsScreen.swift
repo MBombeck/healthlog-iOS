@@ -36,6 +36,9 @@ struct WorkoutsScreen: View {
         }
         // POLISH-SWEEP: success-tick on pull-to-refresh completion.
         .sensoryFeedback(.success, trigger: refreshTick)
+        // K1 — the banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing (H2).
+        .hlReserveErrorBannerSpace(store.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: store.error) {
                 Task { await store.refresh() }
@@ -254,7 +257,11 @@ public enum WorkoutFormatter {
 
     /// Subtitle stitched together as "<Datum> · <Distanz> · <Energie>".
     /// Skips any segment that's nil so the line never reads "· · 0 kcal".
-    public static func subtitle(_ workout: WorkoutListEntryDTO, locale: Locale = .current) -> String {
+    public static func subtitle(
+        _ workout: WorkoutListEntryDTO,
+        locale: Locale = .current,
+        system: HLUnitPreference = .current()
+    ) -> String {
         var parts: [String] = []
         if let start = workout.startedAt {
             // b215 — day+month, plus the year when the workout isn't in the
@@ -263,7 +270,7 @@ public enum WorkoutFormatter {
             parts.append(HLDateFormat.dayMonth(start, locale: locale))
         }
         if let distance = workout.distanceM, distance > 0 {
-            parts.append(distanceLabel(metres: distance, locale: locale))
+            parts.append(distanceLabel(metres: distance, locale: locale, system: system))
         }
         if let kcal = workout.activeEnergyKcal, kcal > 0 {
             parts.append("\(Int(kcal.rounded())) kcal")
@@ -284,7 +291,19 @@ public enum WorkoutFormatter {
     }
 
     /// `< 1000m` rendered as `820 m`, otherwise `12,3 km`.
-    public static func distanceLabel(metres: Double, locale: Locale = .current) -> String {
+    ///
+    /// **#115 P2** — on an imperial account (`system`, the account's
+    /// `unitPreference` mirror) the distance reads in miles, `3.1 mi`, like
+    /// every other distance in the app.
+    public static func distanceLabel(
+        metres: Double,
+        locale: Locale = .current,
+        system: HLUnitPreference = .current()
+    ) -> String {
+        if system == .imperial {
+            let miles = metres / metresPerMile
+            return "\(HLNumberFormat.decimal(miles, fractionDigits: miles < 10 ? 2 : 1, locale: locale)) mi"
+        }
         if metres < 1000 {
             return "\(Int(metres.rounded())) m"
         }
@@ -295,22 +314,24 @@ public enum WorkoutFormatter {
     /// Metres in one statute mile — the unit conversion factor for pace.
     private static let metresPerMile = 1609.344
 
-    /// True when the locale prefers imperial distance (pace in min/mi).
-    /// `Locale.measurementSystem == .us` → miles; `.metric` / `.uk` → km.
-    /// The UK deliberately runs metric distance despite mixed everyday units,
-    /// matching the server + web (which key pace off the same metric default).
-    static func usesImperialPace(_ locale: Locale) -> Bool {
-        locale.measurementSystem == .us
+    /// True when pace reads in min/mi.
+    ///
+    /// **#115 P2** — the ACCOUNT's unit system decides, not the device locale.
+    /// Keying off `Locale.measurementSystem` gave a US-locale phone "/mi" pace
+    /// next to a "km" distance, and an imperial account on a German phone
+    /// "/km" next to every other value in lb and °F.
+    static func usesImperialPace(_ system: HLUnitPreference) -> Bool {
+        system == .imperial
     }
 
-    /// Pace label from a per-kilometre pace, unit-adapted to the locale:
-    /// `5:30 /km` (metric) or `8:51 /mi` (US). Seconds are rounded to whole
+    /// Pace label from a per-kilometre pace, unit-adapted to the account:
+    /// `5:30 /km` (metric) or `8:51 /mi` (imperial). Seconds are rounded to whole
     /// seconds and formatted `m:ss` (minutes never zero-padded, seconds always
     /// two digits). Returns nil for a non-positive pace so the caller can hide
     /// the value rather than paint `0:00`.
-    public static func paceLabel(secondsPerKm: Double, locale: Locale = .current) -> String? {
+    public static func paceLabel(secondsPerKm: Double, system: HLUnitPreference = .current()) -> String? {
         guard secondsPerKm > 0 else { return nil }
-        let imperial = usesImperialPace(locale)
+        let imperial = usesImperialPace(system)
         // min/mi is the time to cover one mile, i.e. km-pace × (metres/mile ÷ 1000).
         let secondsPerUnit = imperial
             ? secondsPerKm * (metresPerMile / 1000)
@@ -323,13 +344,13 @@ public enum WorkoutFormatter {
     }
 
     /// Pace derived from a distance (metres) + duration (seconds), unit-adapted
-    /// to the locale. Convenience over ``paceLabel(secondsPerKm:locale:)`` for
+    /// to the account. Convenience over ``paceLabel(secondsPerKm:system:)`` for
     /// the workout-summary case where only totals are known. Returns nil when
     /// either input is non-positive (no honest pace to show).
-    public static func paceLabel(metres: Double, durationSec: Int, locale: Locale = .current) -> String? {
+    public static func paceLabel(metres: Double, durationSec: Int, system: HLUnitPreference = .current()) -> String? {
         guard metres > 0, durationSec > 0 else { return nil }
         let secondsPerKm = Double(durationSec) / (metres / 1000)
-        return paceLabel(secondsPerKm: secondsPerKm, locale: locale)
+        return paceLabel(secondsPerKm: secondsPerKm, system: system)
     }
 
     /// Strips the `HKWorkoutActivityType` prefix and lower-cases the

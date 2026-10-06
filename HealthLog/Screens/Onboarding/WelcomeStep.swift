@@ -24,7 +24,7 @@ struct WelcomeStep: View {
                 // fold on a Pro-sized viewport.
                 Image("BrandMark")
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .scaledToFit()
                     .frame(width: 96, height: 96)
                     .clipShape(RoundedRectangle(cornerRadius: HLRadius.lg, style: .continuous))
                     .accessibilityHidden(true)

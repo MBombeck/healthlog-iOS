@@ -23,7 +23,7 @@ import Testing
 ///   3. Store reorder + toggle keep the tiles edit on the wire.
 ///   4. A retriable failure of a sections-less write enqueues a sections-less
 ///      payload for replay (no echo).
-@Suite("InsightsLayout v2 — sections (server-merge, no echo) #19", .serialized)
+@Suite("InsightsLayout v2 — sections (server-merge, no echo) #19", .serialized, .mockURLSession)
 struct InsightsLayoutSectionsEchoTests {
     // MARK: - Helpers
 
@@ -113,7 +113,7 @@ struct InsightsLayoutSectionsEchoTests {
     /// GET → the v2 fixture; PUT → echo the request body back.
     private static func installEchoHandler(_ recorder: Recorder) throws {
         let getData = try #require(v2GETBody.data(using: .utf8))
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             if req.httpMethod == "GET" {
                 return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, getData)
@@ -201,7 +201,7 @@ struct InsightsLayoutSectionsEchoTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let failBody = try JSONSerialization.data(withJSONObject: ["error": "upstream down"])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Every method 503s — a sections-less write must NOT first reach for a GET.
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, failBody)
         }

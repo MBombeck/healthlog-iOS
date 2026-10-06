@@ -22,7 +22,7 @@ import Testing
 ///   `Idempotency-Key`, returnt das aggregierte Domain-Measurement.
 /// - Outbox-Replay re-issuet beide Legs nach App-Restart.
 /// - Non-BP-Edits gehen unverändert durch den Single-PATCH-Pfad.
-@Suite("BP-pair paired-patch (T-1)", .serialized)
+@Suite("BP-pair paired-patch (T-1)", .serialized, .mockURLSession)
 struct BPPairPatchTests {
     // MARK: - Helpers
 
@@ -181,7 +181,7 @@ struct BPPairPatchTests {
     func bpUpdateFanout() async throws {
         let repo = try makeRepo()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             let leg = path.hasSuffix("/srv-sys-1")
@@ -225,7 +225,7 @@ struct BPPairPatchTests {
     func nonBPSinglePatch() async throws {
         let repo = try makeRepo()
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let body =
                 #"{"data":{"id":"srv-w-1","type":"WEIGHT","value":72.4,"measuredAt":"2026-05-01T10:00:00Z","createdAt":"2026-05-01T10:00:00Z","source":"MANUAL","externalId":null,"notes":"updated"}}"#
@@ -270,7 +270,7 @@ struct BPPairPatchTests {
         ))
         // Round-trip through replay confirms both legs go out.
         let recorder = RequestRecorder()
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             let leg = path.hasSuffix("/srv-sys-9")

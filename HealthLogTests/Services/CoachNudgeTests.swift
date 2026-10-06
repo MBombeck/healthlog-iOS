@@ -12,7 +12,7 @@ import Testing
 ///   - defensive decode (null `nudgedAt`, missing `unread` → `false`),
 ///   - the seen POST path + method,
 /// plus the `CoachNudgeStore` logic (unread → dot, gating, optimistic clear).
-@Suite("Coach nudge — wire shape + store logic", .serialized)
+@Suite("Coach nudge — wire shape + store logic", .serialized, .mockURLSession)
 struct CoachNudgeTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -33,7 +33,7 @@ struct CoachNudgeTests {
         let api = makeAPI()
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let payload = #"{"data":{"nudgedAt":"2026-06-11T10:00:00.000Z","unread":true},"error":null}"#
@@ -52,7 +52,7 @@ struct CoachNudgeTests {
     @Test("nudgeStatus decodes a null nudgedAt + unread:false (no nudge waiting)")
     func nudgeStatusEmpty() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":{"nudgedAt":null,"unread":false},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -77,7 +77,7 @@ struct CoachNudgeTests {
         let api = makeAPI()
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let payload = #"{"data":{"seenAt":"2026-06-11T10:00:00.000Z"},"error":null}"#

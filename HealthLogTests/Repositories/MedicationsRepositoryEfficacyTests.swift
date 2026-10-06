@@ -18,7 +18,7 @@ import Testing
 ///   - a `404` (route absent on an older server) resolves to `nil` so the
 ///     section self-suppresses (never a thrown error),
 ///   - the target PUT round-trips both a metric pin and a clear.
-@Suite("MedicationsRepository+Efficacy (v1.28 / GH iOS #45)", .serialized)
+@Suite("MedicationsRepository+Efficacy (v1.28 / GH iOS #45)", .serialized, .mockURLSession)
 struct MedicationsRepositoryEfficacyTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -95,7 +95,7 @@ struct MedicationsRepositoryEfficacyTests {
     func efficacyDTODecodes() async throws {
         let api = makeAPI()
         let repo = try makeRepo(api)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(efficacyJSON.utf8)
@@ -150,7 +150,7 @@ struct MedicationsRepositoryEfficacyTests {
     func efficacy404ResolvesToNil() async throws {
         let api = makeAPI()
         let repo = try makeRepo(api)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"not found"}"#.utf8)
@@ -184,7 +184,7 @@ struct MedicationsRepositoryEfficacyTests {
           "error": null
         }
         """
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(json.utf8)
@@ -203,7 +203,7 @@ struct MedicationsRepositoryEfficacyTests {
         let api = makeAPI()
         let repo = try makeRepo(api)
         let seenMethod = MethodBox()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             seenMethod.set(req.httpMethod)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -221,7 +221,7 @@ struct MedicationsRepositoryEfficacyTests {
     func clearTargetRoundTrips() async throws {
         let api = makeAPI()
         let repo = try makeRepo(api)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":{"ok":true,"cleared":true},"error":null}"#.utf8)

@@ -56,8 +56,8 @@ public actor ExportService {
 
     // MARK: - Full backup (GDPR Art. 20 — JSON / CSV)
 
-    /// The full-backup formats. `rawValue` is the wire `format` value the
-    /// server expects in the `POST /api/export` body.
+    /// The full-backup formats. `rawValue` is the wire `format` query value of
+    /// `GET /api/export`.
     public enum BackupFormat: String, Sendable, CaseIterable {
         case json
         case csv
@@ -77,25 +77,26 @@ public actor ExportService {
         public let fileExtension: String
     }
 
-    /// **AUD-7 H3** — download the full JSON/CSV backup. The endpoint
-    /// (`POST /api/export`) and its encoding/`Accept` header used to be built
-    /// inline in `SettingsExportScreen` (the last in-view API construction, which
-    /// already shipped one wrong-path 404). This actor owns it now, matching the
-    /// layering every other export uses.
+    /// The full JSON/CSV backup: `GET /api/export?format=<json|csv>&type=all`.
     ///
-    /// Server path is `/api/export` (NOT `/api/data/export` — the dead path that
-    /// 404'd, W2a-A2 §8). Shares the `export:<userId>` rate-limit bucket.
-    public func downloadFullBackup(_ format: BackupFormat) async throws -> BackupExport {
-        struct Body: Encodable {
-            let format: String
-        }
-        let body = try JSONEncoder.hlDefault.encode(Body(format: format.rawValue))
+    /// **R2 / #115 A4 — this used to be `POST /api/export` and answered 405.**
+    /// The route exports `GET` only (`src/app/api/export/route.ts`, every tag
+    /// since long before v1.39), so the full-backup card never produced a file.
+    /// From v1.39.3, `type=all` is the whole record and takes the fresh-proof
+    /// gate (`requireRecentProof({ bearer: "elevation" })`): on a Bearer token
+    /// it wants an `X-Step-Up` elevation — from a second-factor or passkey proof
+    /// on an account that has a second factor, any proof otherwise — and
+    /// answers `401 auth.stepup.required` without one. The caller asks for that
+    /// proof on the 401 and passes the minted elevation here.
+    ///
+    /// Shares the `export:<userId>` rate-limit bucket (10/h).
+    public func downloadFullBackup(_ format: BackupFormat, elevation: String? = nil) async throws -> BackupExport {
         let req = APIRequest<Data>(
-            method: .post,
+            method: .get,
             path: "/api/export",
-            body: body,
+            query: [("format", format.rawValue), ("type", "all")],
             extraHeaders: ["Accept": format.acceptHeader]
-        )
+        ).withStepUpElevation(elevation)
         let (data, _) = try await api.download(req)
         return BackupExport(data: data, fileExtension: format.rawValue)
     }
@@ -117,12 +118,16 @@ public actor ExportService {
     ///
     /// **Security (server contract):** the passphrase is sent once in the POST
     /// body and never stored — there is NO server-side recovery, so a forgotten
-    /// passphrase means the archive is unrecoverable. On an MFA-enrolled account
-    /// the server gates this behind a *fresh* second factor (`requireFreshMfaIf`
-    /// `Enrolled`) which a Bearer session cannot satisfy — that surfaces as a
-    /// typed `HLError.server` the caller renders honestly. Shares the
+    /// passphrase means the archive is unrecoverable. Shares the
     /// `export:<userId>` rate-limit bucket (10/h) with every other export.
-    public func downloadEncryptedBackup(passphrase: String) async throws -> EncryptedBackup {
+    ///
+    /// R2 / #115 A3 — on an account with a second factor the server wants a
+    /// second-factor (or passkey) elevation in `X-Step-Up`
+    /// (`requireRecentProof({ bearer: "elevation-if-enrolled" })`, v1.39.3) and
+    /// answers `401 auth.stepup.required` without one; an account without a
+    /// second factor still passes on the token. The caller asks for proof on
+    /// that 401 and retries with `elevation`.
+    public func downloadEncryptedBackup(passphrase: String, elevation: String? = nil) async throws -> EncryptedBackup {
         struct Body: Encodable {
             let passphrase: String
         }
@@ -132,7 +137,7 @@ public actor ExportService {
             path: "/api/export/encrypted",
             body: body,
             extraHeaders: ["Accept": "application/octet-stream"]
-        )
+        ).withStepUpElevation(elevation)
         // The archive is opaque binary — `download` throws a typed `HLError` on
         // any non-2xx (422 not-configured, 403 MFA step-up, 429 rate-limit), so
         // there is no JSON body to guard on the success path.

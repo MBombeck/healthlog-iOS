@@ -181,6 +181,50 @@ public enum SecurityStepUp {
         guard let hl = error as? HLError else { return false }
         return isRequired(hl)
     }
+
+    // MARK: R2 / #115 A3 — the proof family
+
+    /// The two prefixes of the server's "prove it is you" family:
+    /// `auth.stepup.*` (what a Bearer caller gets, e.g. `auth.stepup.required`)
+    /// and `auth.reproof.*` (the browser's `auth.reproof.required` / `.failed` /
+    /// `.too_weak`, same meaning). Server v1.39.3, `src/lib/api-errors.ts`.
+    public static let proofFamilyPrefixes = ["auth.stepup.", "auth.reproof."]
+
+    /// Whether `code` belongs to the proof family.
+    public static func isProofFamily(_ code: String?) -> Bool {
+        guard let code else { return false }
+        return proofFamilyPrefixes.contains { code.hasPrefix($0) }
+    }
+
+    /// Whether a raw error body carries a proof-family code in `meta.errorCode`
+    /// (or the pre-v1.39 top-level `errorCode`). `APIClient` asks this of every
+    /// 401: such a refusal says nothing about the session — the token was
+    /// accepted, the action wants a fresh proof — so it must never enter the
+    /// refresh-then-logout bridge. Before R2 it did: the refresh succeeded, the
+    /// replay met the same 401, the spent refresh budget fired `onUnauthorized`,
+    /// and the person was signed out for asking to share a link.
+    public static func isProofRefusal(body: Data) -> Bool {
+        struct Envelope: Decodable {
+            struct Meta: Decodable {
+                let errorCode: String?
+            }
+
+            let meta: Meta?
+            let errorCode: String?
+        }
+        guard !body.isEmpty, let envelope = try? JSONDecoder().decode(Envelope.self, from: body) else {
+            return false
+        }
+        return isProofFamily(envelope.meta?.errorCode ?? envelope.errorCode)
+    }
+
+    /// Whether a failed record action should ask for proof and retry: a
+    /// proof-family code on the error. `auth.stepup.mfa_not_enrolled` is left
+    /// out — no proof can satisfy it, so asking again would loop.
+    public static func asksForProof(_ error: Error) -> Bool {
+        guard let hl = error as? HLError, case let .server(_, code, _) = hl else { return false }
+        return isProofFamily(code) && code != mfaNotEnrolledCode
+    }
 }
 
 // MARK: - The elevation-accepting operations
@@ -226,6 +270,21 @@ public enum MfaManagementOperation: String, Sendable, Equatable, CaseIterable {
     /// password is refused exactly where a fresh second factor is demanded.
     public var acceptedMethods: [StepUpMethod] {
         StepUpMethod.allCases.filter { !requiresFreshFactor || $0.satisfiesFreshFactor }
+    }
+
+    /// R2 / #115 A3 — server v1.39.3 `requireMfaManagementAuth({
+    /// freshFactorIfEnrolled: true })`: ADDING a factor (TOTP setup, security-key
+    /// registration options) on an account that already has a second factor
+    /// wants the elevation from that factor or a passkey; a password elevation
+    /// gets `401 auth.stepup.required`. Only TOTP setup has a native ceremony.
+    public var requiresFreshFactorIfEnrolled: Bool {
+        self == .totpSetup
+    }
+
+    /// Whether this operation, on an account that does or does not hold a second
+    /// factor (TOTP confirmed or a security key), needs a fresh-factor elevation.
+    public func requiresFreshFactor(accountHasSecondFactor: Bool) -> Bool {
+        requiresFreshFactor || (requiresFreshFactorIfEnrolled && accountHasSecondFactor)
     }
 }
 

@@ -38,20 +38,12 @@ struct MoodInsights: Equatable, Sendable {
     /// Prior-period 30-day mean (the 30 days BEFORE the latest 30), for the
     /// zone-1 "+0,4 vs Vormonat" delta. `nil` when the prior window is empty.
     let avg30PriorPeriod: Double?
-    /// 0…100 stability score (inverse std-dev of daily averages), with band +
-    /// sentence. `nil` when < `stabilityMinDays` daily points.
-    let stability: MoodStability?
     /// Tag → avg-mood delta chips, sample-gated + sorted by |delta| desc.
     let tagDeltas: [MoodTagDelta]
-    /// The full gated correlation-detector set; each self-suppresses.
-    let patterns: [MoodPattern]
     /// Total entry count in the window (multi-entry days counted per entry).
     let entryCount: Int
     /// Distinct days with at least one entry.
     let dayCount: Int
-
-    /// Minimum daily-average days required before the stability gauge renders.
-    static let stabilityMinDays = 7
 
     /// The all-nil insight set. This is the value ``compute(entries:now:calendar:enrichment:)``
     /// has always returned for an empty history; naming it lets a render that is
@@ -67,9 +59,7 @@ struct MoodInsights: Equatable, Sendable {
         slope30: nil,
         slope90: nil,
         avg30PriorPeriod: nil,
-        stability: nil,
         tagDeltas: [],
-        patterns: [],
         entryCount: 0,
         dayCount: 0
     )
@@ -86,38 +76,6 @@ struct MoodDailyAverage: Equatable, Sendable, Identifiable {
 
     var id: Date {
         day
-    }
-}
-
-/// 0…100 stability score + its band + plain-language sentence.
-struct MoodStability: Equatable, Sendable {
-    let score: Int
-    let stdDev: Double
-    let band: Band
-
-    enum Band: String, Equatable, Sendable {
-        case verySteady
-        case steady
-        case variable
-        case unsettled
-        case veryUnsettled
-
-        /// Pure band mapping for the unit-test seam.
-        static func band(forScore score: Int) -> Band {
-            switch score {
-            case 80...: .verySteady
-            case 60 ..< 80: .steady
-            case 40 ..< 60: .variable
-            case 20 ..< 40: .unsettled
-            default: .veryUnsettled
-            }
-        }
-
-        /// `true` when the band is low enough to warm the gauge marker
-        /// (DESIGN-B §3.4 — `statusWarn`, score < 40).
-        var isFlagged: Bool {
-            self == .unsettled || self == .veryUnsettled
-        }
     }
 }
 
@@ -140,42 +98,6 @@ struct MoodTagDelta: Equatable, Sendable, Identifiable {
     }
 }
 
-/// One gated correlation finding — surfaced as a Pattern card.
-struct MoodPattern: Equatable, Sendable, Identifiable {
-    /// Stable id (matches the detector, e.g. `best-day`, `weekend`).
-    let id: String
-    let kind: Kind
-    let strength: Strength
-    let direction: Direction
-    /// Pre-resolved, localized plain-language sentence (de/en via xcstrings).
-    let sentence: String
-    /// SF Symbol for the leading glyph.
-    let icon: String
-
-    enum Strength: Equatable, Sendable {
-        case moderate
-        case strong
-    }
-
-    enum Direction: Equatable, Sendable {
-        case positive
-        case negative
-        case neutral
-    }
-
-    /// Category — drives the uppercase label + grouping.
-    enum Kind: String, Equatable, Sendable {
-        case previousDay
-        case weekend
-        case bestWeekday
-        case tagPositive
-        case tagNegative
-        case notePresence
-        case laggedTag
-        case multiEntry
-    }
-}
-
 // MARK: - Computation
 
 extension MoodInsights {
@@ -185,18 +107,25 @@ extension MoodInsights {
     ///   - entries: the cached `MoodEntry` list (any order).
     ///   - now: the reference "today" (injectable for tests).
     ///   - calendar: local calendar (injectable for tests).
-    ///   - enrichment: optional server `/api/mood/analytics` override —
-    ///     authoritative slopes + prior-period mean when present; client values
-    ///     stand otherwise.
+    ///   - enrichment: the server's daily series (`/api/mood/analytics`) —
+    ///     #115 · 1.3: when it carries days, those profile-zone day means ARE
+    ///     the spine (heatmap, averages, slopes); its summary slopes and
+    ///     prior-period mean win as before. Without it (standalone, a paired
+    ///     device that never reached the series) the day means are bucketed on
+    ///     `calendar` from the entries, as before.
+    ///   - windowDays: the period window, so the server days are cut to the
+    ///     same slice the entries were (`nil` = full history).
     static func compute(
         entries: [MoodEntry],
         now: Date = .now,
         calendar: Calendar = .current,
-        enrichment: MoodAnalyticsEnrichment? = nil
+        enrichment: MoodAnalyticsEnrichment? = nil,
+        windowDays: Int? = nil
     ) -> MoodInsights {
         guard !entries.isEmpty else { return .empty }
 
-        let daily = makeDailyAverages(entries: entries, calendar: calendar)
+        let daily = enrichment.flatMap { $0.dailyAverages(calendar: calendar, windowDays: windowDays, now: now) }
+            ?? makeDailyAverages(entries: entries, calendar: calendar)
         // Audit B-4 — the latest NAMEABLE entry. A newer entry whose level this
         // build cannot name must not displace the person's real latest mood in
         // the one headline slot there is, and it has no score to put there.
@@ -213,11 +142,7 @@ extension MoodInsights {
         let clientSlope30 = slope(daily, days: 30, now: now, calendar: calendar)
         let clientSlope90 = slope(daily, days: 90, now: now, calendar: calendar)
 
-        let stability = makeStability(daily)
         let tagDeltas = makeTagDeltas(entries: entries)
-        let patterns = MoodPatternDetector.detect(
-            entries: entries, daily: daily, calendar: calendar
-        )
 
         return MoodInsights(
             dailyAverages: daily,
@@ -229,9 +154,7 @@ extension MoodInsights {
             slope30: enrichment?.slope30 ?? clientSlope30,
             slope90: enrichment?.slope90 ?? clientSlope90,
             avg30PriorPeriod: enrichment?.avg30LastMonth ?? avg30Prior,
-            stability: stability,
             tagDeltas: tagDeltas,
-            patterns: patterns,
             entryCount: entries.count,
             dayCount: daily.count
         )
@@ -312,22 +235,6 @@ extension MoodInsights {
         return (n * sumXY - sumX * sumY) / denom
     }
 
-    /// Port of MoodLog `computeStability` (L220-259): population std-dev of the
-    /// daily averages → `round(clamp((1 − std/2) × 100, 0, 100))`.
-    static func makeStability(_ daily: [MoodDailyAverage]) -> MoodStability? {
-        guard daily.count >= stabilityMinDays else { return nil }
-        let values = daily.map(\.average)
-        let mean = values.reduce(0, +) / Double(values.count)
-        let variance = values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)
-        let std = variance.squareRoot()
-        let score = Int(max(0, min(100, (1 - std / 2) * 100)).rounded())
-        return MoodStability(
-            score: score,
-            stdDev: std,
-            band: MoodStability.Band.band(forScore: score)
-        )
-    }
-
     /// Port of MoodLog `computeTagStats` (L174-216) + the tag-correlation gate
     /// (L425-461): per tag → mean mood + delta vs overall baseline, gated to
     /// ≥ 3 occurrences AND |delta| ≥ 0.3, sorted by |delta| desc.
@@ -364,44 +271,25 @@ extension MoodInsights {
     }
 }
 
-/// Authoritative `/api/mood/analytics` override fields the engine prefers when
-/// online. Decoded from the server `summary` block (`R-Mood-1` §B). All
-/// optional — a missing field falls back to the client computation.
-struct MoodAnalyticsEnrichment: Decodable, Equatable, Hashable, Sendable {
-    let slope7: Double?
-    let slope30: Double?
-    let slope90: Double?
-    let avg30LastMonth: Double?
-    let avg30LastYear: Double?
-
-    /// Decodes the `{ summary: { … } }` envelope the analytics route returns.
-    init(from decoder: Decoder) throws {
-        let root = try decoder.container(keyedBy: RootKeys.self)
-        let summary = try root.nestedContainer(keyedBy: SummaryKeys.self, forKey: .summary)
-        slope7 = try summary.decodeIfPresent(Double.self, forKey: .slope7)
-        slope30 = try summary.decodeIfPresent(Double.self, forKey: .slope30)
-        slope90 = try summary.decodeIfPresent(Double.self, forKey: .slope90)
-        avg30LastMonth = try summary.decodeIfPresent(Double.self, forKey: .avg30LastMonth)
-        avg30LastYear = try summary.decodeIfPresent(Double.self, forKey: .avg30LastYear)
-    }
-
-    /// Memberwise init for tests / direct construction.
-    init(
-        slope7: Double?,
-        slope30: Double?,
-        slope90: Double?,
-        avg30LastMonth: Double?,
-        avg30LastYear: Double?
-    ) {
-        self.slope7 = slope7
-        self.slope30 = slope30
-        self.slope90 = slope90
-        self.avg30LastMonth = avg30LastMonth
-        self.avg30LastYear = avg30LastYear
-    }
-
-    private enum RootKeys: String, CodingKey { case summary }
-    private enum SummaryKeys: String, CodingKey {
-        case slope7, slope30, slope90, avg30LastMonth, avg30LastYear
+/// #115 · 1.3 — the server series as the engine's day spine.
+extension MoodAnalyticsEnrichment {
+    /// The server day means as the engine's spine, cut to the period window.
+    /// Each `YYYY-MM-DD` key becomes that calendar date's start of day in
+    /// `calendar`, so the heatmap cell for 2026-09-20 is the server's
+    /// 2026-09-20, whatever zone the device is in. `nil` when the series has
+    /// no days (the caller then buckets entries itself).
+    func dailyAverages(calendar: Calendar, windowDays: Int?, now: Date) -> [MoodDailyAverage]? {
+        guard !days.isEmpty else { return nil }
+        let today = calendar.startOfDay(for: now)
+        let cutoff = windowDays.flatMap { calendar.date(byAdding: .day, value: -$0, to: today) }
+        let averages: [MoodDailyAverage] = days.compactMap { day in
+            let parts = day.date.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 3,
+                  let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])),
+                  day.score.isFinite else { return nil }
+            if let cutoff, date < cutoff { return nil }
+            return MoodDailyAverage(day: date, average: day.score, sampleCount: day.samples)
+        }
+        return averages.sorted { $0.day < $1.day }
     }
 }

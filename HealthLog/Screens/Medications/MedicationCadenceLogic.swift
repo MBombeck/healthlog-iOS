@@ -427,6 +427,14 @@ enum MedicationCadenceLogic {
     /// The emitted bare date string carries no time zone; the server's `@db.Date`
     /// stores exactly this calendar day. Mirrors the noon-UTC day anchoring in
     /// ``RecordsDateFormat/onsetInstant(forDay:)``.
+    /// #115 1.5 — the `YYYY-MM-DD` of a course day held as a UTC-midnight day
+    /// anchor (``CourseWindowRow`` / a decoded `Medication.startsOn`). The anchor
+    /// is read back in UTC, the calendar it lives in, so no device zone can
+    /// move the day.
+    static func courseDay(_ anchor: Date) -> String {
+        isoDay(anchor, calendar: ProfileDay.utcCalendar)
+    }
+
     static func isoDay(_ date: Date, calendar: Calendar = .current) -> String {
         let comps = calendar.dateComponents([.year, .month, .day], from: date)
         let y = comps.year ?? 2000

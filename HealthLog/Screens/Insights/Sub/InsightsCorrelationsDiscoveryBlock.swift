@@ -57,6 +57,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
     var onSelectMetric: ((MetricKind) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.appContainer) private var appContainer
     /// **C1** — the id of the pair whose follow-up section is open. One shape for
     /// every entry: the row that looks pursuable is pursuable, and there is
     /// nothing else to learn which rows are which.
@@ -204,7 +205,8 @@ struct InsightsCorrelationsDiscoveryBlock: View {
                 if expandedPairID == pair.id {
                     InsightsCorrelationFollowUpSection(pair: pair, onSelectMetric: onSelectMetric)
                 }
-                if let onAskCoach {
+                // #115 · 0.2 — only while the `coach` capability offers an entry.
+                if let onAskCoach, appContainer.offersCoach {
                     askCoachLink(for: pair, action: onAskCoach)
                         .accessibilityIdentifier("insights.correlations.discovery.askCoach")
                 }

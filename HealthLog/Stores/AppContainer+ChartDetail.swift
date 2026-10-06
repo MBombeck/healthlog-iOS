@@ -18,14 +18,33 @@ public extension AppContainer {
     /// The matched-geometry namespace stays a *screen-level* concern — it is a
     /// `ChartDetailScreen` parameter, not a store input, and only the Dashboard
     /// owns a namespace source — so it is wired at the call-site, not here.
+    /// **#115 B7 — the status family's client consent gate, coupled to `ai`.**
+    ///
+    /// Server v1.39 resolves consent for the per-metric status routes itself
+    /// (`statusText` → `consent_required`, `text: null`), so once it has sent an
+    /// `ai` block the client gate only duplicates it. A server without the block
+    /// (< v1.39) keeps the client consent receipt as the deciding gate, exactly
+    /// as in 1.0.3. The capability gate is read on every evaluation, so a later
+    /// `/api/auth/me` load (or logout) takes effect without re-wiring.
+    static func statusFamilyConsentGate(
+        capabilities: AICapabilityGate,
+        consentGate: @escaping @MainActor () -> Bool
+    ) -> @MainActor () -> Bool {
+        { [weak capabilities] in
+            if capabilities?.reportsCapabilities == true { return true }
+            return consentGate()
+        }
+    }
+
     func makeChartDetailStore(kind: MetricKind) -> ChartDetailStore {
         ChartDetailStore(
             kind: kind,
             measurementsRepo: measurementsRepo,
             insightsRepo: metricInsightsRepo,
             // PB1 H1 — chart-detail "Befunde" respects the same AI-consent
-            // gate as the Insights tab.
-            consentGate: makeAIConsentGate(),
+            // gate as the Insights tab — on servers older than v1.39. A server
+            // that reports `ai` resolves consent itself (#115 B7).
+            consentGate: Self.statusFamilyConsentGate(capabilities: aiCapabilityGate, consentGate: makeAIConsentGate()),
             // v0.6.2.x bug-c10 — cumulative kinds (Steps) POST today's fresh
             // HK day-total before the series fan-out so the chart never paints
             // a stale day-total. `nil` for spot kinds keeps the round-trip

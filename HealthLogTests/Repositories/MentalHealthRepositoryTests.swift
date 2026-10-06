@@ -9,7 +9,7 @@ import Testing
 /// envelope unwrapping for GET history + POST submit, the exact POST request body
 /// shape, and the outbox-enqueue on a retriable failure. Real `APIClient` + stub
 /// `URLProtocol` (no mock server) per PROJECT_GUIDE.md.
-@Suite("Mental-health data layer (v1.25)", .serialized)
+@Suite("Mental-health data layer (v1.25)", .serialized, .mockURLSession)
 struct MentalHealthRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -85,7 +85,7 @@ struct MentalHealthRepositoryTests {
 
     @Test("GET /api/mental-health/assessments unwraps data.assessments")
     func historyEnvelope() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/mental-health/assessments")
             #expect(req.httpMethod == "GET")
             let body = Data(#"""
@@ -123,7 +123,7 @@ struct MentalHealthRepositoryTests {
 
     @Test("Instrument-filtered history sends the exact SCI query")
     func filteredSciHistoryQuery() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/mental-health/assessments")
             let query = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?.queryItems
             #expect(query?.first(where: { $0.name == "instrument" })?.value == "SCI")
@@ -151,7 +151,7 @@ struct MentalHealthRepositoryTests {
     @Test("submit POSTs the exact body { instrument, items, functionalDifficulty?, locale } + an Idempotency-Key")
     func submitRequestShape() async throws {
         let probe = MHRequestProbe()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             probe.capture(req)
             let body = Data(#"""
             {"data":{"assessment":{"id":"mh9","instrument":"PHQ9","locale":"en","version":"standard",
@@ -194,7 +194,7 @@ struct MentalHealthRepositoryTests {
 
     @Test("A retriable (503) submit failure enqueues createMentalHealthAssessment + re-throws")
     func retriableSubmitEnqueues() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }
         let outbox = try OutboxQueue(inMemory: true)

@@ -18,7 +18,7 @@ import Testing
 ///   (a) APIClient-internes Retry (5xx) denselben Key auf allen Versuchen sendet,
 ///   (b) Outbox-Replay nach retriable Fehler denselben Key wie der Erstversuch nutzt,
 ///   (c) erfolgreicher Pfad genau einen Server-Hit erzeugt mit genau einem Key.
-@Suite("Idempotency-Key persistence (H-1 regression)", .serialized)
+@Suite("Idempotency-Key persistence (H-1 regression)", .serialized, .mockURLSession)
 struct IdempotencyKeyPersistenceTests {
     // MARK: - Helpers
 
@@ -97,7 +97,7 @@ struct IdempotencyKeyPersistenceTests {
 
         let recorder = KeyRecorder()
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             let n = attempts.increment()
             if n < 3 {
@@ -129,7 +129,7 @@ struct IdempotencyKeyPersistenceTests {
 
         let recorder = KeyRecorder()
         let phase = Phase() // 0 = first call (always fails), 1 = replay (succeeds)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             if phase.current == 0 {
                 // Server-Fehler 503 → mapped to .server(503,...) → isRetriable
@@ -182,7 +182,7 @@ struct IdempotencyKeyPersistenceTests {
 
         let recorder = KeyRecorder()
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             let n = attempts.increment()
             if n < 2 {
@@ -207,7 +207,7 @@ struct IdempotencyKeyPersistenceTests {
 
         let recorder = KeyRecorder()
         let phase = Phase()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             if phase.current == 0 {
                 return (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
@@ -250,7 +250,7 @@ struct IdempotencyKeyPersistenceTests {
 
         let recorder = KeyRecorder()
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             let n = attempts.increment()
             if n < 3 {
@@ -279,7 +279,7 @@ struct IdempotencyKeyPersistenceTests {
 
         let recorder = KeyRecorder()
         let phase = Phase()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             if phase.current == 0 {
                 return (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
@@ -322,7 +322,7 @@ struct IdempotencyKeyPersistenceTests {
         let repo = MeasurementsRepository(api: api, outbox: outbox)
 
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             let body = #"{"data":{"id":"srv-3","type":"WEIGHT","value":80.5,"unit":"kg","measuredAt":"2026-05-01T10:00:00Z","createdAt":"2026-05-01T10:00:00Z","source":"MANUAL","externalId":null,"note":null}}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))

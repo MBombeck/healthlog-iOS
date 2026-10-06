@@ -38,8 +38,34 @@ public final class DocumentChatStore {
     public enum ErrorState: Equatable, Sendable {
         case notIndexed
         case consentRequired
+        /// #115 · 0.2 — the operator switched reading documents off.
+        case operatorDisabled
+        /// #115 · 0.2 — not admitted for this record.
+        case recordNotPermitted
+        /// #115 · 0.2 — no provider can read documents.
+        case noProvider
         case limitReached
         case generic
+
+        init(_ error: DocumentChatError) {
+            switch error {
+            case .notIndexed: self = .notIndexed
+            case .consentRequired: self = .consentRequired
+            case .operatorDisabled: self = .operatorDisabled
+            case .recordNotPermitted: self = .recordNotPermitted
+            case .noProvider: self = .noProvider
+            case .limitReached: self = .limitReached
+            case .provider, .emptyReply, .decode: self = .generic
+            }
+        }
+
+        /// A gate state nothing typed here can resolve — the composer hides.
+        public var isDeadEnd: Bool {
+            switch self {
+            case .notIndexed, .consentRequired, .operatorDisabled, .recordNotPermitted, .noProvider: true
+            case .limitReached, .generic: false
+            }
+        }
     }
 
     public internal(set) var messages: [Turn] = []
@@ -176,25 +202,12 @@ public final class DocumentChatStore {
     }
 
     private func applyStreamError(_ error: Error) {
-        if let typed = error as? DocumentChatError {
-            switch typed {
-            case .notIndexed: errorState = .notIndexed
-            case .consentRequired: errorState = .consentRequired
-            case .limitReached: errorState = .limitReached
-            case .provider, .emptyReply, .decode: errorState = .generic
-            }
-            return
-        }
-        if case HLError.rateLimited = error { errorState = .limitReached
-            return
-        }
-        if DocumentsRepository.isNotIndexed(error) { errorState = .notIndexed
-            return
-        }
-        if DocumentsRepository.isConsentRequired(error) { errorState = .consentRequired
-            return
-        }
-        errorState = .generic
+        // #115 · 0.2 — one mapping for every failure shape: a typed stream
+        // error, or a transport error the repository's open-mapping types
+        // (429, `notIndexed`, consent, the v1.39 document-AI refusals).
+        let typed = (error as? DocumentChatError)
+            ?? (DocumentsRepository.mapStreamOpenError(error) as? DocumentChatError)
+        errorState = typed.map(ErrorState.init) ?? .generic
     }
 
     // MARK: - Helpers

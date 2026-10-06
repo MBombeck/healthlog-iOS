@@ -131,27 +131,6 @@ extension DashboardStore {
         }
     }
 
-    /// Resolves the dashboard's literal direction indicator from the bounded
-    /// series that is already visible in the tile. Server-provided directions
-    /// stay authoritative. Only the three explicitly requested dashboard kinds
-    /// opt into client derivation; clinical and polarity-aware metrics keep
-    /// `.unknown` rather than silently acquiring new semantics.
-    nonisolated static func dashboardTrend(
-        server: TrendIndicator,
-        kind: MetricKind,
-        visibleValues: [Double]
-    ) -> TrendIndicator {
-        guard server == .unknown else { return server }
-        guard [.weight, .steps, .sleep].contains(kind),
-              visibleValues.count >= 2,
-              visibleValues.allSatisfy(\.isFinite),
-              let first = visibleValues.first,
-              let last = visibleValues.last else { return .unknown }
-        if last > first { return .up }
-        if last < first { return .down }
-        return .flat
-    }
-
     /// b-mood-sparkline — collapse raw mood entries to one `.scalar`
     /// `Measurement` per calendar day, valued at that day's mean score, by
     /// reusing the shared `SeriesDownsampler` daily-mean bucketer (so mood

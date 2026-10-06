@@ -21,7 +21,7 @@ import Testing
     /// parity) + the `onIntakesDidChange` callback fan-out in
     /// `AppContainer` (build-test-time wiring assertion: the closure
     /// captures the live store + service).
-    @Suite("NotificationService — App-Badge hooks", .serialized)
+    @Suite("NotificationService — App-Badge hooks", .serialized, .mockURLSession)
     @MainActor
     struct NotificationServiceBadgeTests {
         private static let env = AppEnvironment(

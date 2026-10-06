@@ -10,7 +10,7 @@ import Testing
 /// set), envelope unwrapping, the CRUD verbs, and the soft-delete
 /// `{deleted:true}` body. Real `APIClient` + stub `URLProtocol` (no mock server)
 /// per PROJECT_GUIDE.md.
-@Suite("Structured-records data layer (v1.25 W-RECORDS)", .serialized)
+@Suite("Structured-records data layer (v1.25 W-RECORDS)", .serialized, .mockURLSession)
 struct RecordsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -75,8 +75,9 @@ struct RecordsRepositoryTests {
         let dto = try JSONDecoder.hlDefault.decode(AllergyDTO.self, from: json)
         #expect(dto.category == .other)
         #expect(dto.type == .allergy)
-        #expect(dto.severity == .mild) // present-but-unknown clamps to a valid member
-        #expect(dto.status == .active)
+        // C1: present-but-unknown stays unknown — never a stated grade or status.
+        #expect(dto.severity == .unknown)
+        #expect(dto.status == .unknown)
     }
 
     // MARK: - Family-history DTO decode
@@ -179,7 +180,7 @@ struct RecordsRepositoryTests {
 
     @Test("GET /api/allergies unwraps the data array + builds includeInactive query")
     func listAllergiesEnvelope() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/allergies")
             #expect(req.url?.query?.contains("includeInactive=false") == true)
             #expect(req.url?.query?.contains("limit=100") == true)
@@ -198,7 +199,7 @@ struct RecordsRepositoryTests {
 
     @Test("POST /api/allergies posts the create body + returns the row (201)")
     func createAllergy() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/allergies")
             #expect(req.httpMethod == "POST")
             let body = Data(#"""
@@ -215,7 +216,7 @@ struct RecordsRepositoryTests {
 
     @Test("PATCH /api/allergies/{id} uses PATCH + returns the updated row")
     func updateAllergy() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/allergies/a1")
             #expect(req.httpMethod == "PATCH")
             let body = Data(#"""
@@ -232,7 +233,7 @@ struct RecordsRepositoryTests {
 
     @Test("DELETE /api/allergies/{id} decodes {deleted:true} (soft, 200 not 204)")
     func deleteAllergy() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/allergies/a1")
             #expect(req.httpMethod == "DELETE")
             let body = Data(#"{"data":{"deleted":true},"error":null}"#.utf8)
@@ -245,7 +246,7 @@ struct RecordsRepositoryTests {
 
     @Test("DELETE tolerates an empty/{}-style body (deleted defaults false)")
     func deleteAllergyTolerant() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(#"{"data":{}}"#.utf8))
         }
         let repo = try makeAllergiesRepo()
@@ -256,7 +257,7 @@ struct RecordsRepositoryTests {
     @Test("Family-history CRUD: list + PATCH route + soft delete")
     func familyCrud() async throws {
         // list
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/family-history")
             let body = Data(#"""
             {"data":[{"id":"f1","relationship":"FATHER","condition":"Hypertension","ageAtOnset":45,
@@ -269,7 +270,7 @@ struct RecordsRepositoryTests {
         #expect(list.first?.relationship == .father)
 
         // PATCH (not PUT)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.httpMethod == "PATCH")
             #expect(req.url?.path == "/api/family-history/f1")
             let body = Data(#"""
@@ -282,7 +283,7 @@ struct RecordsRepositoryTests {
         #expect(updated.ageAtOnset == nil)
 
         // soft delete
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.httpMethod == "DELETE")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -294,7 +295,7 @@ struct RecordsRepositoryTests {
 
     @Test("404 on a tombstoned id is recognised by isNotFound")
     func notFound() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Allergy not found"}"#.utf8)

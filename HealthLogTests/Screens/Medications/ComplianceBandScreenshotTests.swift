@@ -65,7 +65,7 @@ struct ComplianceBandScreenshotTests {
         for sample in Self.samples {
             // 1) Detail KPI tile (the surface that CHANGED — was green-topped).
             let kpi = ComplianceKPISection(
-                state: .server(MedicationDetailStore.ComplianceSummary(inTime: sample.pct, total: 100))
+                state: .server(MedicationDetailStore.ServerAdherence(rate: sample.pct, taken: sample.pct, expected: 100))
             )
             try write(view: surfaceFrame("Detail · ComplianceKPISection", kpi), name: "detail-kpi-\(sample.name)")
 

@@ -40,6 +40,19 @@ enum DocumentAIConsentError: Error, Sendable, Equatable {
     case consentRequired
 }
 
+/// #114 / #115 · 0.2 — the document-AI refusal families the UI words
+/// differently (see ``DocumentsRepository/aiRefusalKind(_:)``).
+public enum DocumentAIRefusalKind: Sendable, Equatable {
+    /// The operator switched reading documents off.
+    case operatorDisabled
+    /// AI work is not admitted for this record (a delegate in somebody else's).
+    case recordNotPermitted
+    /// No provider can read documents.
+    case noProvider
+    /// The server could not check; try later.
+    case unavailable
+}
+
 /// Actor repository for the "Dokumente" document-vault surface — the server's
 /// `/api/documents/inbound*` contract (opt-in `inboundDocuments` module).
 ///
@@ -196,6 +209,25 @@ public actor DocumentsRepository {
                     message.contains("providerUnsupported"))
         }
         return false
+    }
+
+    /// **#114 / #115 · 0.2 — why document AI was refused**, per server code
+    /// (v1.39 `meta.errorCode`): `assistant.disabled.documentAi` (or the overall
+    /// `assistant.disabled.enabled`), `ai.record.notPermitted`,
+    /// `ai.provider.none` (and the older `documents.inbound.providerUnsupported`),
+    /// `ai.unavailable`. `nil` for any other error. Before v1.39 the app knew
+    /// only two codes and every other refusal read as a generic failure.
+    nonisolated static func aiRefusalKind(_ error: Error) -> DocumentAIRefusalKind? {
+        if case let HLError.aiUnavailable(refusal) = error {
+            switch refusal.kind {
+            case .operatorDisabled: return .operatorDisabled
+            case .recordNotPermitted: return .recordNotPermitted
+            case .noProvider: return .noProvider
+            case .moduleDisabled, .consentRequired, .unavailable: return .unavailable
+            }
+        }
+        if isProviderUnsupported(error) { return .noProvider }
+        return nil
     }
 
     // MARK: - Reads

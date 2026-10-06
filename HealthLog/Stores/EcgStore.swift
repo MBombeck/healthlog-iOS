@@ -15,8 +15,11 @@ import Observation
 /// **Regulatory framing.** Everything the store exposes is the RECORDING
 /// DEVICE's own output. HealthLog never re-classifies; see ``EcgListDTO``.
 ///
-/// **Server-derived (paired only).** Pure server read, double-gated
-/// (`insights` module + `insightStatus` assistant surface) — the call site
+/// **Server-derived (paired only).** Pure server read. It used to be
+/// double-gated (`insights` module + `insightStatus` assistant surface); the AI
+/// gate went in server v1.38.24, the module gate in v1.39, and the app gates the
+/// page on the recordings alone (an older server's `403` still reads as
+/// "gated") — the call site
 /// additionally gates on a cloud surface being available so nothing appears in
 /// standalone / no-server.
 @MainActor

@@ -121,210 +121,25 @@ public struct ClinicalBenchmark: Sendable, Equatable {
     }
 }
 
-/// Live clinical-benchmark provider with hardcoded population
-/// references per `MetricKind`. Single source of truth for the
-/// comparison-band data.
+/// Live clinical-benchmark provider — **carries no benchmark (#115 · 1.3).**
 ///
-/// **Data provenance (every figure auditable):**
-/// - `restingHeartRate`: 70 bpm mean, σ ≈ 12. Source: AHA "Target
-///   Heart Rates Chart" + CDC NHANES 2017-2020 resting-pulse
-///   summary (adults 20+). Clinical floor 50 bpm (bradycardia
-///   threshold per Mayo Clinic clinical guideline 2022).
-/// - `bloodPressure` (composite — uses `value` as systolic; the
-///   server PR row for blood pressure is systolic-anchored per
-///   `MetricTypeKindResolver` `BP_SYSTOLIC`/`BLOOD_PRESSURE_SYS`):
-///   120 mmHg mean, σ 12. Source: AHA 2017 guideline "Normal
-///   <120 / <80" + ESH 2023 reference adult population. Clinical
-///   ceiling 140 mmHg (Stage 2 hypertension per AHA 2017).
-/// - `bodyFat`: 25% mean for a general-adult average, σ 6. Source:
-///   ACE Fitness body-fat-percentage chart + ACSM (gender-pooled,
-///   ages 20-60). NOTE: per-gender / per-age tables exist and would
-///   refine this — flagged in the source sheet as "rough average".
-/// - `spo2` (oxygen saturation): 97% mean, σ 2. Clinical floor 95%
-///   (WHO clinical-reference cut-off for normal at sea level).
-/// - `bmi`: 24 mean, σ 4. Source: WHO BMI classification (healthy
-///   band 18.5–24.9). Clinical floor 18.5 (underweight),
-///   clinical ceiling 25 (overweight threshold per WHO 2020).
-/// - `steps`: 7500 steps/day mean, σ 3000. Source: Tudor-Locke
-///   et al. (2011) "How many steps/day are enough?" + CDC adult
-///   physical-activity surveillance reports 2019-2023. Often-cited
-///   10k figure has weak empirical basis; 7500 better reflects
-///   measured adult population means.
-/// - `sleep`: 7 hours mean, σ 1. Source: NSF 2015 sleep duration
-///   recommendations (adult target 7-9h) + CDC BRFSS 2020 average
-///   adult sleep duration (~7.0 h).
+/// Until 1.0.3 this type hard-coded population means, spreads and clinical
+/// floors/ceilings per `MetricKind` (resting HR 70 ± 12, BP 120 ± 12 with a
+/// 140 ceiling, body fat 25 ± 6 %, SpO₂ 97 ± 2 %, BMI 24 ± 4, steps
+/// 7500 ± 3000, sleep 7 ± 1 h) and classified the person's record against
+/// them. None of those figures came from the server, none knew age, sex or the
+/// person's own target, and the classification ("below the typical range",
+/// with a favourability) is a clinical status the app does not own.
 ///
-/// **What we do NOT benchmark (intentional gaps):**
-/// - `pulse` (resting vs. exertional ambiguity — server doesn't
-///   yet flag the PR row context, so a single benchmark would
-///   mislead).
-/// - `hrv` (SDNN values vary 2–3× across age cohorts; without
-///   user's age the band would be misleading).
-/// - `vo2Max` (Cooper benchmark requires age + gender;
-///   single-value would mislead).
-/// - `glucose` (fasting vs. random vs. post-prandial split is
-///   load-bearing for clinical interpretation; single benchmark
-///   would dangerously over-simplify).
-/// - `bodyTemperature` (Fever bounds are clinically meaningful;
-///   population stat would dilute the message — better surfaced
-///   via the existing alert path).
-/// - `weight`, `bodyWater`, `boneMass`, `walkingSpeed`,
-///   `walkingAsymmetry`, `walkingStepLength` (no broadly-applicable
-///   single-value benchmark; height/age/gender split is
-///   load-bearing).
+/// The server publishes no benchmark for a personal record (`GET
+/// /api/personal-records`, v1.39.0), so the live provider answers `nil` for
+/// every kind and the comparison band omits itself — the documented `nil`
+/// path of ``ClinicalBenchmarkProvider``. A server-shipped benchmark plugs in
+/// behind the same protocol (see the B2 report for the issue text).
 public struct LiveClinicalBenchmarkProvider: ClinicalBenchmarkProvider {
     public init() {}
 
-    public func benchmark(for kind: MetricKind) -> ClinicalBenchmark? {
-        switch kind {
-        case .restingHeartRate:
-            ClinicalBenchmark(
-                mean: 70,
-                sigma: 12,
-                clinicalFloor: 50,
-                clinicalCeiling: 100,
-                favorability: .lowerIsBetter,
-                sourceLabel: String(localized: "benchmark.sourceLabel.restingHeartRate")
-            )
-        case .bloodPressure:
-            // Treat the server PR `value` as systolic — `BP_SYSTOLIC`
-            // is the slot the server ships records for. Diastolic
-            // benchmark is carried as a separate constant below but
-            // the screen only surfaces systolic for now.
-            ClinicalBenchmark(
-                mean: 120,
-                sigma: 12,
-                clinicalFloor: 90,
-                clinicalCeiling: 140,
-                favorability: .centered,
-                sourceLabel: String(localized: "benchmark.sourceLabel.bloodPressure")
-            )
-        case .bodyFat:
-            ClinicalBenchmark(
-                mean: 25,
-                sigma: 6,
-                clinicalFloor: nil,
-                clinicalCeiling: nil,
-                favorability: .lowerIsBetter,
-                sourceLabel: String(localized: "benchmark.sourceLabel.bodyFat")
-            )
-        case .spo2:
-            ClinicalBenchmark(
-                mean: 97,
-                sigma: 2,
-                clinicalFloor: 95,
-                clinicalCeiling: nil,
-                favorability: .higherIsBetter,
-                sourceLabel: String(localized: "benchmark.sourceLabel.spo2")
-            )
-        case .bmi:
-            ClinicalBenchmark(
-                mean: 24,
-                sigma: 4,
-                clinicalFloor: 18.5,
-                clinicalCeiling: 25,
-                favorability: .centered,
-                sourceLabel: String(localized: "benchmark.sourceLabel.bmi")
-            )
-        case .steps:
-            ClinicalBenchmark(
-                mean: 7500,
-                sigma: 3000,
-                clinicalFloor: nil,
-                clinicalCeiling: nil,
-                favorability: .higherIsBetter,
-                sourceLabel: String(localized: "benchmark.sourceLabel.steps")
-            )
-        case .sleep:
-            ClinicalBenchmark(
-                mean: 7,
-                sigma: 1,
-                clinicalFloor: 6,
-                clinicalCeiling: 9,
-                favorability: .higherIsBetter,
-                sourceLabel: String(localized: "benchmark.sourceLabel.sleep")
-            )
-        case .weight,
-             .pulse,
-             .glucose,
-             .bodyTemperature,
-             .bodyWater,
-             .boneMass,
-             .hrv,
-             .vo2Max,
-             .walkingSpeed,
-             .walkingAsymmetry,
-             .walkingStepLength,
-             .walkingDoubleSupport,
-             .walkingSteadiness,
-             .respiratoryRate,
-             .audioExposureEnvironment,
-             .audioExposureHeadphone,
-             // v0.8.3 W-D — no population benchmark for these activity aggregates.
-             .activeEnergy,
-             .flightsClimbed,
-             .distanceWalkingRunning,
-             .timeInDaylight,
-             // v0.11 W21 — no broadly-applicable single-value benchmark for the
-             // body-composition + arterial metrics (age/gender split is
-             // load-bearing) or walking-HR.
-             .fatFreeMass,
-             .leanBodyMass,
-             .muscleMass,
-             .skinTemperature,
-             .pulseWaveVelocity,
-             .vascularAge,
-             .visceralFat,
-             .walkingHeartRate,
-             .fatMass,
-             // v0.13.1 IC — no broadly-applicable single-value population
-             // benchmark for the v1.10.0 additive signals (age/fitness split is
-             // load-bearing; the user's own baseline leads, mirroring the
-             // server registry's no-fixed-band stance).
-             .falls,
-             .sixMinuteWalk,
-             .stairAscentSpeed,
-             .stairDescentSpeed,
-             .breathingDisturbances,
-             .cardioRecovery,
-             .wristTemperature,
-             // v0.14.6 — v1.12.8 WHOOP-native types: the user's own baseline
-             // leads (no broadly-applicable single-value population benchmark).
-             .averageHeartRate,
-             .maxHeartRate,
-             .sleepDisturbanceCount,
-             // v0.14.1 W-B189 — v1.17.1 source-fixed signals (#23): vendor-
-             // derived scores + a personal-baseline temperature offset; no fixed
-             // population benchmark (the user's own baseline leads).
-             .ansCharge,
-             .cardioLoad,
-             .sleepScore,
-             .bodyTemperatureDeviation,
-             // v0158 — v1.25 clinical types: no fixed population benchmark wired
-             // yet (the user's own baseline leads); the server bands lead at the
-             // display edge.
-             .painNRS,
-             .gripStrength,
-             .waistCircumference,
-             .waistToHeight,
-             // Build 3 / item 3.3 — the 21 decoder catch-up types. Wearable
-             // scores are vendor-scaled and the screener sums have clinical
-             // cut-offs the SERVER owns, so iOS wires no population benchmark:
-             // the user's own baseline leads.
-             .phq9Score, .gad7Score, .who5Score, .sciScore,
-             .recoveryScore, .stressScore, .strainScore, .hrvRMSSD,
-             .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
-             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
-             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent,
-             // Build 7 / item 7.3 — mood is a subjective daily score with no
-             // population benchmark (the user's own baseline leads).
-             // Audit B-4 — an occurrence flag has nothing to benchmark, and a
-             // kind this build cannot name has no population to compare against.
-             // (Same line as `.mood`: this body sits exactly on the 120-line
-             // SwiftLint error ceiling and one more code line breaks the build.)
-             .mood, .audioExposureEvent, .unknown:
-            nil
-        }
+    public func benchmark(for _: MetricKind) -> ClinicalBenchmark? {
+        nil
     }
 }

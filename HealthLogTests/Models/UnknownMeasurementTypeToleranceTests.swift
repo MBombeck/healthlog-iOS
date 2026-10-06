@@ -23,7 +23,7 @@ import Testing
 /// Real `APIClient` + `MockURLProtocol` so the whole read path runs (PROJECT_GUIDE.md
 /// anti-pattern: no mock-server). `.serialized` because the network assertion
 /// depends on the process-global `MockURLProtocol.handler` (audit-v0162 H2).
-@Suite("Audit B-4 — unknown measurement values degrade instead of dropping", .serialized)
+@Suite("Audit B-4 — unknown measurement values degrade instead of dropping", .serialized, .mockURLSession)
 struct UnknownMeasurementTypeToleranceTests {
     private func makeRepo() throws -> MeasurementsRepository {
         let env = AppEnvironment(
@@ -46,7 +46,7 @@ struct UnknownMeasurementTypeToleranceTests {
 
     private func respond(_ rows: String) {
         let payload = Data("{\"data\":{\"measurements\":[\(rows)]}}".utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
     }

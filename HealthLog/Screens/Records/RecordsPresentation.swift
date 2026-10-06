@@ -34,6 +34,7 @@ extension AllergySeverity {
         case .mild: String(localized: "allergy.severity.mild")
         case .moderate: String(localized: "allergy.severity.moderate")
         case .severe: String(localized: "allergy.severity.severe")
+        case .unknown: String(localized: "allergy.severity.unknown")
         }
     }
 }
@@ -45,6 +46,7 @@ extension AllergyStatus {
         case .active: String(localized: "allergy.status.active")
         case .inactive: String(localized: "allergy.status.inactive")
         case .resolved: String(localized: "allergy.status.resolved")
+        case .unknown: String(localized: "allergy.status.unknown")
         }
     }
 }

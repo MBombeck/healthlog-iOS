@@ -134,7 +134,7 @@ enum MeasurementToFHIRObservation {
         coding.code = FHIRString(loinc.code).asPrimitive()
         coding.display = FHIRString(loinc.display).asPrimitive()
         let concept = CodeableConcept()
-        concept.coding = [coding]
+        concept.coding = [coding] + DoctorReportToFHIRBundle.companionCodings(for: loinc)
         concept.text = FHIRString(loinc.display).asPrimitive()
         return concept
     }

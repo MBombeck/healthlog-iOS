@@ -8,6 +8,8 @@ import SwiftUI
 /// findings; this view just labels + lays them out (neutral). Red flags get an
 /// ESCALATING section ("seek care if this recurs") — never reassuring.
 struct IllnessCorrelationSection: View {
+    /// #115 P2 — a sustained-fever red flag's worst reading, in the account's unit.
+    @Environment(\.unitPreferences) private var units
     let correlation: IllnessCorrelationDTO?
     let isLoading: Bool
 
@@ -277,9 +279,11 @@ struct IllnessCorrelationSection: View {
 
     private func deviationText(_ dev: IllnessVitalDeviation) -> String {
         let sd = abs(dev.deviationSd).formatted(.number.precision(.fractionLength(0 ... 1)))
-        let directionKey = dev.direction == .above
-            ? "illness.correlation.direction.above"
-            : "illness.correlation.direction.below"
+        let directionKey = switch dev.direction {
+        case .above: "illness.correlation.direction.above"
+        case .below: "illness.correlation.direction.below"
+        case .unknown: "illness.correlation.direction.unknown"
+        }
         let direction = String(localized: String.LocalizationValue(directionKey))
         let template = String(localized: "illness.correlation.deviation.value")
         return String(format: template, sd, direction)
@@ -299,7 +303,12 @@ struct IllnessCorrelationSection: View {
     }
 
     private func redFlagDetail(_ flag: IllnessRedFlag) -> String {
-        let value = flag.worstValue.formatted(.number.precision(.fractionLength(0 ... 1)))
+        // #115 P2 — the server's worst value is canonical (°C for a fever run);
+        // an imperial account reads it in °F like every other temperature.
+        let kind: MetricKind? = flag.type.uppercased().contains("TEMPERATURE") || flag.reason == "sustained_fever"
+            ? .bodyTemperature : nil
+        let worst = kind.map { units.displayValue(flag.worstValue, kind: $0) } ?? flag.worstValue
+        let value = worst.formatted(.number.precision(.fractionLength(0 ... 1)))
         // L10N-3 — count-aware "day(s)" via xcstrings plural substitution (the
         // key carries `%@ %lld` so the days arg drives the one/other variation).
         return String(localized: "illness.correlation.redFlags.detail \(value) \(flag.days)")

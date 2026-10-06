@@ -13,7 +13,7 @@ import Testing
 /// outbox replay reusing the persisted Idempotency-Key. Real `APIClient` +
 /// `MockURLProtocol` per PROJECT_GUIDE.md anti-pattern guidance (mock-servers hide
 /// schema drift on the outbox-replay path).
-@Suite("UserThresholds write path", .serialized)
+@Suite("UserThresholds write path", .serialized, .mockURLSession)
 struct UserThresholdsRepositoryTests {
     // MARK: - Helpers
 
@@ -65,7 +65,7 @@ struct UserThresholdsRepositoryTests {
         let outbox = try OutboxQueue(inMemory: true)
         let repo = UserThresholdsRepository(api: api, outbox: outbox)
         let recorder = HeaderRecorder()
-        MockURLProtocol.handler = { [echo = putEcho] req in
+        MockURLProtocol.install { [echo = putEcho] req in
             recorder.record(
                 method: req.httpMethod ?? "",
                 path: req.url?.path ?? "",
@@ -90,7 +90,7 @@ struct UserThresholdsRepositoryTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let repo = UserThresholdsRepository(api: api, outbox: outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // 503 is retriable per HLError.isRetriable (status >= 500).
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
@@ -127,7 +127,7 @@ struct UserThresholdsRepositoryTests {
         )
         try await outbox.enqueue(op)
         let recorder = HeaderRecorder()
-        MockURLProtocol.handler = { [echo = putEcho] req in
+        MockURLProtocol.install { [echo = putEcho] req in
             recorder.record(
                 method: req.httpMethod ?? "",
                 path: req.url?.path ?? "",

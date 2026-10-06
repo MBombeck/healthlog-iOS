@@ -75,10 +75,12 @@ public enum ServerMeasurementSource: String, Codable, Sendable, CaseIterable {
     case mcp = "MCP"
     /// Zeilen, die über ein Ingest-Bearer-Token geschrieben wurden (Home-
     /// Assistant-Bridges, Waagen-Skripte) — Server v1.37.x, Issue #106 /
-    /// Server-PR #892. Server-owned read-only: `EXTERNAL` steht nicht in
+    /// Server-PR #892. Kein Client darf sie nennen: `EXTERNAL` steht nicht in
     /// `WRITABLE_MEASUREMENT_SOURCES`, der Server weist eine client-genannte
     /// Source auf dem Ingest-Pfad mit `measurement.batch.source_not_permitted`
-    /// ab. Kein Client-Write-Pfad. Ohne diesen Case droppt der tolerante
+    /// ab. Den *Wert* einer solchen Zeile darf die Person aber korrigieren
+    /// (#111, `USER_CORRECTABLE_MEASUREMENT_SOURCES`, siehe
+    /// `Measurement.isServerDerivedReadOnly`). Ohne diesen Case droppt der tolerante
     /// List-Decoder jede EXTERNAL-Zeile still (gleiche Failure-Mode wie
     /// COMPUTED #42 und STRAVA/OURA/POLAR/NIGHTSCOUT #46).
     case external = "EXTERNAL"

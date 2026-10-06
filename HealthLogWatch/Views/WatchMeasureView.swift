@@ -25,6 +25,9 @@ struct WatchMeasureKindMeta: Identifiable {
     let defaultValue: Double
     /// For blood pressure: the diastolic field metadata. `nil` for scalar kinds.
     var diastolic: Field?
+    /// #115 B5 — for glucose: the account unit the crown dials in. The value is
+    /// converted to canonical mg/dL before it leaves the wrist. `nil` otherwise.
+    var glucoseUnit: WatchGlucoseUnit?
 
     var id: String {
         kind.id
@@ -34,48 +37,59 @@ struct WatchMeasureKindMeta: Identifiable {
     /// kinds the Digital Crown enters in seconds. `@MainActor` because
     /// `LocalizedStringKey` isn't `Sendable`; the only readers are SwiftUI
     /// view bodies (already MainActor-isolated).
-    @MainActor static let all: [WatchMeasureKindMeta] = [
-        WatchMeasureKindMeta(
-            kind: .weight,
-            title: "Weight",
-            unit: "kg",
-            systemImage: "scalemass",
-            range: 20 ... 300,
-            step: 0.1,
-            defaultValue: 70,
-            diastolic: nil
-        ),
-        WatchMeasureKindMeta(
-            kind: .bloodPressure,
-            title: "Blood pressure",
-            unit: "mmHg",
-            systemImage: "heart.text.square",
-            range: 60 ... 260,
-            step: 1,
-            defaultValue: 120,
-            diastolic: Field(range: 40 ... 160, step: 1, defaultValue: 80)
-        ),
+    ///
+    /// #115 B5 — glucose dials in the account's unit (from the phone's
+    /// snapshot); every other kind is fixed.
+    @MainActor static func all(glucoseUnit: WatchGlucoseUnit) -> [WatchMeasureKindMeta] {
+        [weight, bloodPressure, glucose(in: glucoseUnit), pulse]
+    }
+
+    @MainActor private static let weight = WatchMeasureKindMeta(
+        kind: .weight,
+        title: "Weight",
+        unit: "kg",
+        systemImage: "scalemass",
+        range: 20 ... 300,
+        step: 0.1,
+        defaultValue: 70,
+        diastolic: nil
+    )
+
+    @MainActor private static let bloodPressure = WatchMeasureKindMeta(
+        kind: .bloodPressure,
+        title: "Blood pressure",
+        unit: "mmHg",
+        systemImage: "heart.text.square",
+        range: 60 ... 260,
+        step: 1,
+        defaultValue: 120,
+        diastolic: Field(range: 40 ... 160, step: 1, defaultValue: 80)
+    )
+
+    @MainActor private static func glucose(in unit: WatchGlucoseUnit) -> WatchMeasureKindMeta {
         WatchMeasureKindMeta(
             kind: .glucose,
             title: "Glucose",
-            unit: "mg/dL",
+            unit: LocalizedStringKey(unit.suffix),
             systemImage: "drop",
-            range: 20 ... 600,
-            step: 1,
-            defaultValue: 100,
-            diastolic: nil
-        ),
-        WatchMeasureKindMeta(
-            kind: .pulse,
-            title: "Pulse",
-            unit: "bpm",
-            systemImage: "waveform.path.ecg",
-            range: 30 ... 220,
-            step: 1,
-            defaultValue: 70,
-            diastolic: nil
+            range: unit.entryRange,
+            step: unit.entryStep,
+            defaultValue: unit.entryDefault,
+            diastolic: nil,
+            glucoseUnit: unit
         )
-    ]
+    }
+
+    @MainActor private static let pulse = WatchMeasureKindMeta(
+        kind: .pulse,
+        title: "Pulse",
+        unit: "bpm",
+        systemImage: "waveform.path.ecg",
+        range: 30 ... 220,
+        step: 1,
+        defaultValue: 70,
+        diastolic: nil
+    )
 }
 
 /// Wrist quick-capture: pick one of the four manual kinds, dial the value with
@@ -101,7 +115,7 @@ struct WatchMeasureView: View {
         } else if !client.signedIn {
             WatchMessageState(title: "Sign in on your iPhone", systemImage: "iphone")
         } else {
-            List(WatchMeasureKindMeta.all) { meta in
+            List(WatchMeasureKindMeta.all(glucoseUnit: client.snapshot.glucoseUnit)) { meta in
                 NavigationLink {
                     WatchMeasureEntryView(meta: meta)
                 } label: {
@@ -248,7 +262,9 @@ struct WatchMeasureEntryView: View {
         if isBloodPressure {
             client.logMeasurement(kind: meta.kind, value: value, secondary: diastolic)
         } else {
-            client.logMeasurement(kind: meta.kind, value: value)
+            // #115 B5 — the wire is canonical mg/dL whatever the wrist dialled.
+            let canonical = meta.glucoseUnit?.canonicalMgdL(fromDisplayed: value) ?? value
+            client.logMeasurement(kind: meta.kind, value: canonical)
         }
         WKInterfaceDevice.current().play(.success)
         dismiss()

@@ -30,7 +30,7 @@ import Testing
 ///     thing that distinguishes the two sentences the surface can show.
 ///  3. **A 409 is survivable exactly once.** Same bounded retry as the other
 ///     eight guarded routes.
-@Suite("GH #83 — health-score-config route", .serialized)
+@Suite("GH #83 — health-score-config route", .serialized, .mockURLSession)
 struct HealthScoreConfigRouteTests {
     private static let path = "/api/auth/me/health-score-config"
 
@@ -99,7 +99,7 @@ struct HealthScoreConfigRouteTests {
 
     @Test("GET decodes the resolved composition and keeps 'never chose' distinct from 'chose nothing'")
     func getDecodes() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.ok(req, Self.neverChose)
         }
         let config = try await HealthScoreConfigRepository(api: makeAPI()).fetch()
@@ -112,7 +112,7 @@ struct HealthScoreConfigRouteTests {
 
     @Test("GET tolerates a pillar id this build does not know")
     func getTolerantPillar() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.ok(req, #"{"pillars":["SLEEP","VO2MAX_NEXT"],"excludedPillars":[],"hasSelection":true,"version":3}"#)
         }
         let config = try await HealthScoreConfigRepository(api: makeAPI()).fetch()
@@ -125,7 +125,7 @@ struct HealthScoreConfigRouteTests {
     @Test("first save omits the baseUpdatedAt KEY entirely — a null would be a 422")
     func firstSaveIsUnconditional() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets(Self.path, method: "GET") {
                 rec.noteRead()
                 return Self.ok(req, Self.neverChose)
@@ -158,7 +158,7 @@ struct HealthScoreConfigRouteTests {
     @Test("a save after a selection exists carries the token it was based on")
     func secondSaveIsGuarded() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets(Self.path, method: "GET") {
                 rec.noteRead()
                 return Self.ok(req, """
@@ -186,7 +186,7 @@ struct HealthScoreConfigRouteTests {
     @Test("409 → re-read → the retry lands with the fresh token")
     func conflictRecovers() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets(Self.path, method: "GET") {
                 rec.noteRead()
                 let token = rec.reads == 1 ? "T0" : "T1"
@@ -227,7 +227,7 @@ struct HealthScoreConfigRouteTests {
         ]
     )
     func tooNarrowIsTyped(rawReason: String, expected: HealthScoreBreadthReason) async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else {
                 return Self.ok(req, Self.neverChose)
             }
@@ -248,7 +248,7 @@ struct HealthScoreConfigRouteTests {
 
     @Test("a reason this build does not know still arrives typed, never silently generic")
     func unknownReasonStaysTyped() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else { return Self.ok(req, Self.neverChose) }
             return Self.error(req, status: 422, body: """
             {"data":null,"error":"nope","meta":{"errorCode":"health_score_config.too_narrow",\
@@ -269,7 +269,7 @@ struct HealthScoreConfigRouteTests {
 
     @Test("a malformed body is NOT promoted to a refusal — it stays a plain server error")
     func invalidShapeStaysGeneric() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else { return Self.ok(req, Self.neverChose) }
             return Self.error(req, status: 422, body: """
             {"data":null,"error":"Validation failed","meta":{"errorCode":"health_score_config.invalid"}}
@@ -285,7 +285,7 @@ struct HealthScoreConfigRouteTests {
 
     @Test("a 429 stays a rate-limit, not a refusal")
     func rateLimitStaysRateLimit() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets(Self.path, method: "PATCH") else { return Self.ok(req, Self.neverChose) }
             return Self.error(req, status: 429, body: #"{"data":null,"error":"Too many requests"}"#)
         }
@@ -303,7 +303,7 @@ struct HealthScoreConfigRouteTests {
     func unlistedReasonedCodeIsUntouched() async throws {
         // The document-inbox family has carried `meta.reason` for releases; its
         // callers read `.server`, and this branch must not change under them.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.error(req, status: 422, body: """
             {"data":null,"error":"File too large",\
             "meta":{"errorCode":"documents.inbound.rejected","reason":"fileTooLarge"}}

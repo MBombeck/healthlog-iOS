@@ -19,7 +19,7 @@ import Testing
 ///
 /// `.serialized` — this suite owns the process-global `MockURLProtocol.handler`
 /// for the duration of each test (audit-v0162 H2).
-@Suite("Outbox replay reentrancy guard", .serialized)
+@Suite("Outbox replay reentrancy guard", .serialized, .mockURLSession)
 struct OutboxReplayReentrancyTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -75,7 +75,7 @@ struct OutboxReplayReentrancyTests {
         // caught — the guard itself is set before the first `await`, so the
         // exactly-once property must hold regardless of timing.
         let counter = KeyCounter()
-        MockURLProtocol.handler = { [resp = allergyResponse] req in
+        MockURLProtocol.install { [resp = allergyResponse] req in
             if req.httpMethod == "POST", req.url?.path == "/api/allergies" {
                 counter.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             }
@@ -121,7 +121,7 @@ struct OutboxReplayReentrancyTests {
         ))
 
         let counter = KeyCounter()
-        MockURLProtocol.handler = { [resp = allergyResponse] req in
+        MockURLProtocol.install { [resp = allergyResponse] req in
             if req.httpMethod == "POST", req.url?.path == "/api/allergies" {
                 counter.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             }

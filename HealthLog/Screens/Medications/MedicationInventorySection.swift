@@ -26,6 +26,9 @@ import SwiftUI
 struct MedicationInventorySection: View {
     let medication: Medication
     let items: [MedicationInventoryItemDTO]
+    /// #25 / #115 · 1.3 — the server's `summary` from the same inventory GET
+    /// (dose capacity, expired units). `nil` → the capacity reads "—".
+    var summary: MedicationSupplySummary?
     /// The server's ``Medication/runwayDays`` **after** the display gate in
     /// ``runwayWithinThreshold(_:threshold:)`` — `nil` here means "do not
     /// render a runway row" (tracking off, or comfortably above the user's
@@ -81,27 +84,50 @@ struct MedicationInventorySection: View {
     }
 
     /// Doses remaining — the **server's** `stockDosesRemaining`, never a local
-    /// sum ÷ dose. The trailing "of Y" is the containers' pooled *capacity*,
-    /// which the server publishes no dose-total for, so it stays a local
-    /// conversion of `unitsTotal`; it describes what the packs held when full
-    /// and is not the supply truth the user acts on.
+    /// sum ÷ dose. The trailing "of Y" is the server's `summary.dosesTotal`
+    /// (#25 / #115 · 1.3 — it used to be a local sum of `unitsTotal`); without a
+    /// summary it reads "—". Units in expired containers get their own muted
+    /// line, never folded into the headline.
     private var summaryRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            Image(systemName: "shippingbox")
-                .font(.hlIcon(HLIconSize.md))
-                .foregroundStyle(HLText.secondary)
-            Text(
-                String(
-                    format: String(localized: "med.inventory.summary"),
-                    Self.remainingDoseString(medication.stockDosesRemaining),
-                    Self.doseString(totalUnits, unitsPerDose: unitsPerDose)
+        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+                Image(systemName: "shippingbox")
+                    .font(.hlIcon(HLIconSize.md))
+                    .foregroundStyle(HLText.secondary)
+                Text(
+                    String(
+                        format: String(localized: "med.inventory.summary"),
+                        Self.remainingDoseString(medication.stockDosesRemaining),
+                        Self.capacityDoseString(summary)
+                    )
                 )
-            )
-            .font(.hlHeadline)
-            // (both figures collapse to "—" rather than to a fabricated 0)
-            .foregroundStyle(HLText.primary)
-            .monospacedDigit()
+                .font(.hlHeadline)
+                // (both figures collapse to "—" rather than to a fabricated 0)
+                .foregroundStyle(HLText.primary)
+                .monospacedDigit()
+            }
+            if let expired = Self.expiredUnitsString(summary) {
+                Text(String(format: String(localized: "med.inventory.expiredUnits"), expired))
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
+                    .monospacedDigit()
+                    .accessibilityIdentifier("medications.detail.inventory.expired")
+            }
         }
+    }
+
+    /// The server's dose capacity (`summary.dosesTotal`), "—" without one.
+    nonisolated static func capacityDoseString(_ summary: MedicationSupplySummary?) -> String {
+        guard let summary else { return InventorySanity.placeholder }
+        return doseString(summary.dosesTotal, unitsPerDose: 1)
+    }
+
+    /// The server's `expiredUnits`, or `nil` when there are none to mention
+    /// (or the value is not plausible).
+    nonisolated static func expiredUnitsString(_ summary: MedicationSupplySummary?) -> String? {
+        guard let units = summary?.expiredUnits, units > 0,
+              InventorySanity.validUnits(units) != nil else { return nil }
+        return doseString(units, unitsPerDose: 1)
     }
 
     /// C3 — the server's projected runway, already threshold-filtered.
@@ -173,10 +199,6 @@ struct MedicationInventorySection: View {
             .layoutPriority(1)
     }
 
-    private var totalUnits: Double? {
-        Self.validatedSum(items, \.unitsTotal)
-    }
-
     // MARK: - ROUTE-06 server supply truth (v1.37.19)
 
     /// Render the server's ``Medication/stockDosesRemaining`` headline.
@@ -218,24 +240,6 @@ struct MedicationInventorySection: View {
         guard let threshold, let serverRunwayDays else { return nil }
         guard let days = InventorySanity.validCount(serverRunwayDays) else { return nil }
         return days <= threshold ? days : nil
-    }
-
-    /// Sum a unit field over the AVAILABLE (ACTIVE / IN_USE) items, returning
-    /// `nil` if any contributing value fails the central sanity gate.
-    nonisolated static func validatedSum(
-        _ items: [MedicationInventoryItemDTO],
-        _ field: KeyPath<MedicationInventoryItemDTO, Double?>
-    ) -> Double? {
-        var sum = 0.0
-        for item in items where item.state == "ACTIVE" || item.state == "IN_USE" {
-            // #31 — a nullable UNKNOWN count (`nil`) is treated exactly like a
-            // corrupt one: the whole sum collapses to `nil` (→ "—") rather than
-            // silently omitting the unknown container from the headline figure.
-            guard let raw = item[keyPath: field],
-                  let valid = InventorySanity.validUnits(raw) else { return nil }
-            sum += valid
-        }
-        return sum
     }
 
     /// Convert a unit count into a dose-equivalent string. With `unitsPerDose`

@@ -24,7 +24,7 @@ import Testing
     import AuthenticationServices
 #endif
 
-@Suite("AuthService.persist atomicity", .serialized)
+@Suite("AuthService.persist atomicity", .serialized, .mockURLSession)
 struct AuthServicePersistAtomicTests {
     /// Passkey-Stub: nie aufgerufen, erfüllt nur die Service-Signatur.
     private final class NoopPasskey: PasskeyServiceProtocol, @unchecked Sendable {
@@ -153,7 +153,7 @@ struct AuthServicePersistAtomicTests {
 
         // Server liefert ein frisches Bundle, ABER der Keychain failt beim
         // Write des neuen Refresh-Tokens.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Self.freshLoginResponseBody()
@@ -198,7 +198,7 @@ struct AuthServicePersistAtomicTests {
         // KEIN bestehender Login-Zustand.
         let service = makeService(keychain: kc)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Self.freshLoginResponseBody()
@@ -226,7 +226,7 @@ struct AuthServicePersistAtomicTests {
 
         let service = makeService(keychain: kc)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Self.freshLoginResponseBody()

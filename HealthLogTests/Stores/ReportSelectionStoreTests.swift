@@ -85,7 +85,7 @@ private enum Fixtures {
 ///   - an empty selection is a legal, non-error state,
 ///   - `422 export.selection.unknown_leaf` rebuilds the scope from a fresh
 ///     capabilities read and narrows — never widens — it.
-@Suite("ReportSelectionStore", .serialized)
+@Suite("ReportSelectionStore", .serialized, .mockURLSession)
 @MainActor
 struct ReportSelectionStoreTests {
     private func makeAPI() -> APIClient {
@@ -109,7 +109,7 @@ struct ReportSelectionStoreTests {
 
     @Test("load reads the vocabulary live and adopts the saved profile")
     func loadAdoptsProfile() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON())
             }
@@ -135,7 +135,7 @@ struct ReportSelectionStoreTests {
 
     @Test("profile: null is 'never saved' — nothing is pre-chosen for the user")
     func nullProfileChoosesNothing() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON())
             }
@@ -155,7 +155,7 @@ struct ReportSelectionStoreTests {
 
     @Test("a saved leaf this build's server no longer serves is dropped, and said so")
     func retiredLeafIsDropped() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON())
             }
@@ -171,7 +171,7 @@ struct ReportSelectionStoreTests {
 
     @Test("no vocabulary → unavailable, and NOT a locally invented list")
     func noVocabularyIsUnavailable() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON(leaves: []))
             }
@@ -188,7 +188,7 @@ struct ReportSelectionStoreTests {
 
     @Test("a vocabulary at a grammar version this build does not speak is refused")
     func versionMismatchIsUnavailable() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON(selectionVersion: 3))
             }
@@ -203,7 +203,7 @@ struct ReportSelectionStoreTests {
 
     @Test("a capabilities failure is surfaced, not papered over")
     func capabilitiesFailureIsSurfaced() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
             return (http, Data("{}".utf8))
         }
@@ -222,7 +222,7 @@ struct ReportSelectionStoreTests {
 
     @Test("clear-all, and toggling only ever admits a live leaf")
     func editing() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON())
             }
@@ -259,7 +259,7 @@ struct ReportSelectionStoreTests {
     func saveRoundTrip() async throws {
         nonisolated(unsafe) var putBody: Data?
         nonisolated(unsafe) var putMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON())
             }
@@ -309,7 +309,7 @@ struct ReportSelectionStoreTests {
     @Test("saving an empty selection is a legal write, not an error")
     func saveEmptySelection() async throws {
         nonisolated(unsafe) var putBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON())
             }
@@ -340,7 +340,7 @@ struct ReportSelectionStoreTests {
         // The second capabilities read no longer serves MOOD — the rebuild must
         // narrow to the fresh list and never widen back.
         nonisolated(unsafe) var capabilitiesHits = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 capabilitiesHits += 1
                 let leaves = capabilitiesHits == 1
@@ -366,9 +366,45 @@ struct ReportSelectionStoreTests {
         #expect(store.currentSelection.leaves == Fixtures.leaves.filter { $0 != "MOOD" })
     }
 
+    @Test("#110: a save refused for named leaves narrows by those ids, even when capabilities still list them")
+    func saveRefusedForNamedLeaves() async {
+        // The v1.39.0 wire form of `PUT /api/auth/me/report-selection`:
+        // 422, a sentence in `error`, the token in `meta.errorCode`, the refused
+        // ids in `meta.unknownLeaves`. The capabilities read still lists MOOD —
+        // before #110 the rebuild intersected with that list only, so MOOD stayed
+        // chosen and the next save was refused again.
+        nonisolated(unsafe) var puts = 0
+        MockURLProtocol.install { req in
+            if req.url?.path == "/api/meta/capabilities" {
+                return Fixtures.ok(req, Fixtures.capabilitiesJSON())
+            }
+            if req.httpMethod == "PUT" {
+                puts += 1
+                let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
+                return (http, Data(#"""
+                {"data":null,"error":"Report selection names leaves this build does not know",
+                "meta":{"errorCode":"report-selection.leaves.unknown","unknownLeaves":["MOOD"]}}
+                """#.utf8))
+            }
+            return Fixtures.ok(req, #"{"profile":null}"#)
+        }
+
+        let store = makeStore(makeAPI())
+        await store.loadIfNeeded()
+        store.choose(Fixtures.leaves)
+        await store.save()
+
+        #expect(puts == 1)
+        #expect(store.saveError == nil)
+        #expect(store.phase == .ready)
+        #expect(store.notice == .rebuiltFromCapabilities)
+        #expect(store.isChosen("MOOD") == false)
+        #expect(store.currentSelection.leaves == Fixtures.leaves.filter { $0 != "MOOD" })
+    }
+
     @Test("an unrelated failure is not claimed as a selection problem")
     func unrelatedFailureIsNotHandled() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return Fixtures.ok(req, Fixtures.capabilitiesJSON())
             }

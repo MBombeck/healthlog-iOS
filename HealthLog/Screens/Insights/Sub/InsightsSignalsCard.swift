@@ -92,7 +92,7 @@ private struct SignalRow: View {
         switch signal.tone {
         case .good: HLColor.statusOK
         case .watch: HLColor.statusWarn
-        case .info: HLText.secondary
+        case .info, .unknown: HLText.secondary
         }
     }
 

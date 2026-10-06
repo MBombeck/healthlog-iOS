@@ -21,7 +21,7 @@ import Testing
 /// These tests pin the fixed contract: the BP recent page fetches BOTH type
 /// pages (SYS + DIA), merges them on `measuredAt`, and never loses the
 /// diastolic component.
-@Suite("MeasurementsRepository BP pair-scoped recent page", .serialized)
+@Suite("MeasurementsRepository BP pair-scoped recent page", .serialized, .mockURLSession)
 struct MeasurementsRepositoryBPPairScopedTests {
     private func makeRepo() throws -> MeasurementsRepository {
         let env = AppEnvironment(
@@ -78,7 +78,7 @@ struct MeasurementsRepositoryBPPairScopedTests {
             WireRow(id: "dia-1", type: "BLOOD_PRESSURE_DIA", value: 82, at: t1),
             WireRow(id: "dia-2", type: "BLOOD_PRESSURE_DIA", value: 84, at: t2)
         ])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let url = req.url!
             let type = Self.queryValue(url, "type")
             let payload: Data = switch type {
@@ -139,7 +139,7 @@ struct MeasurementsRepositoryBPPairScopedTests {
             WireRow(id: "sys-1", type: "BLOOD_PRESSURE_SYS", value: 142, at: t1),
             WireRow(id: "dia-1", type: "BLOOD_PRESSURE_DIA", value: 91, at: t1)
         ])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let url = req.url!
             if Self.queryValue(url, "type") != nil {
                 // Older deploy that rejects the `type` filter.

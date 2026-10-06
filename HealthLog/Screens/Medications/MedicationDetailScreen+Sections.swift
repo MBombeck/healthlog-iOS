@@ -13,7 +13,7 @@ struct RetroMutateQueuedBanner: View {
         HStack(spacing: HLSpace.sm) {
             Image(systemName: "arrow.triangle.2.circlepath")
                 .foregroundStyle(HLText.secondary)
-            Text(String(localized: "medication.quick_mark.queued_offline"))
+            Text(String(localized: "medication.quick_mark.queued"))
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.primary)
             Spacer()
@@ -110,6 +110,8 @@ struct MedicationHeroSection: View {
                     if medication.active {
                         HLBadge(String(localized: "Active"), icon: "checkmark", tone: .success)
                     }
+                    if !medication.tracksIntake { RecordOnlyMedicationBadge() }
+                    if let course = MedicationCourseBadge.resolve(medication) { MedicationCourseStatusBadge(badge: course) }
                 }
             }
         }
@@ -145,6 +147,8 @@ struct MedicationHeroSection: View {
     }
 
     private var nextValue: String {
+        // v1.39.1 (#1033) — nothing is due on a medication kept as a record.
+        guard medication.tracksIntake else { return String(localized: "med.card.schedule.not_tracked") }
         guard let next = MedicationCard.computeNextDose(
             medication: medication,
             timeZone: profileTimeZone,

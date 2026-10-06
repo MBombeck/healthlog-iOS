@@ -27,7 +27,7 @@ import Testing
 /// anti-pattern: no mock-server), so a schema drift would actually break it. The
 /// suite is `.serialized` because the network assertion depends on the
 /// process-global `MockURLProtocol.handler` (audit-v0162 H2).
-@Suite("AUDIO_EXPOSURE_EVENT", .serialized)
+@Suite("AUDIO_EXPOSURE_EVENT", .serialized, .mockURLSession)
 struct AudioExposureEventDropTests {
     // MARK: - Unit: the kind it maps to
 
@@ -84,7 +84,7 @@ struct AudioExposureEventDropTests {
             "{\"id\":\"sleep-1\",\"type\":\"SLEEP_DURATION\",\"value\":432,\"unit\":\"minutes\"," +
             "\"measuredAt\":\"\(iso(now.addingTimeInterval(-3600)))\"}]}}"
         let payload = Data(body.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
 

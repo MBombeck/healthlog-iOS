@@ -125,24 +125,112 @@ public struct SessionListResponse: Decodable, Sendable, Equatable {
     }
 }
 
-/// Envelope payload of `DELETE /api/auth/me/sessions` — `{ sessionsRevoked }`.
-/// Counts only the deleted **`Session` rows**; the same transaction also
-/// revokes every unrevoked `RefreshToken` for the user, which the count does
-/// NOT include (`src/lib/auth/session.ts:291-309`). The UI must therefore not
-/// present the number as "devices signed out".
+/// Envelope payload of `DELETE /api/auth/me/sessions`.
+///
+/// `sessionsRevoked` counts only the deleted **`Session` rows** (browser
+/// sign-ins); device logins are revoked too and not counted there, so the UI
+/// must not present the number as "devices signed out".
+///
+/// R2 / #115 A7 — server v1.39.3 widened "sign out everywhere": the same call
+/// now also revokes AI-assistant connections, every API token except the
+/// caller's own access token, every clinician share link (unless
+/// `?keepShareLinks=1`) and pending sharing invitations, and lists the accepted
+/// access grants it deliberately left standing (`grantsKept`). Every field is
+/// decoded tolerantly: an older server sends only `sessionsRevoked`, and a
+/// malformed grant row is dropped rather than failing the whole answer (the
+/// revoke has already happened when this decodes).
 public struct SessionRevokeOthersResponse: Decodable, Sendable, Equatable {
-    public let sessionsRevoked: Int
+    /// One accepted access grant the revoke left standing (server
+    /// `{ id, account: { id, username, displayName }, access }`).
+    public struct KeptGrant: Decodable, Sendable, Equatable, Identifiable {
+        public let id: String
+        public let username: String?
+        public let displayName: String?
+        public let access: String?
 
-    public init(sessionsRevoked: Int) {
+        public init(id: String, username: String? = nil, displayName: String? = nil, access: String? = nil) {
+            self.id = id
+            self.username = username
+            self.displayName = displayName
+            self.access = access
+        }
+
+        /// The name a person recognises: display name, else username.
+        public var label: String? {
+            for candidate in [displayName, username] {
+                if let value = candidate?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+                    return value
+                }
+            }
+            return nil
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            if let account = try? c.nestedContainer(keyedBy: AccountKeys.self, forKey: .account) {
+                username = try? account.decodeIfPresent(String.self, forKey: .username)
+                displayName = try? account.decodeIfPresent(String.self, forKey: .displayName)
+            } else {
+                username = nil
+                displayName = nil
+            }
+            access = try? c.decodeIfPresent(String.self, forKey: .access)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, account, access
+        }
+
+        private enum AccountKeys: String, CodingKey {
+            case username, displayName
+        }
+    }
+
+    public let sessionsRevoked: Int
+    public let accessTokensRevoked: Int?
+    public let connectorsRevoked: Int?
+    public let shareLinksRevoked: Int?
+    public let pendingInvitesRevoked: Int?
+    public let grantsKept: [KeptGrant]
+
+    public init(
+        sessionsRevoked: Int,
+        accessTokensRevoked: Int? = nil,
+        connectorsRevoked: Int? = nil,
+        shareLinksRevoked: Int? = nil,
+        pendingInvitesRevoked: Int? = nil,
+        grantsKept: [KeptGrant] = []
+    ) {
         self.sessionsRevoked = sessionsRevoked
+        self.accessTokensRevoked = accessTokensRevoked
+        self.connectorsRevoked = connectorsRevoked
+        self.shareLinksRevoked = shareLinksRevoked
+        self.pendingInvitesRevoked = pendingInvitesRevoked
+        self.grantsKept = grantsKept
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        sessionsRevoked = try c.decodeIfPresent(Int.self, forKey: .sessionsRevoked) ?? 0
+        sessionsRevoked = (try? c.decodeIfPresent(Int.self, forKey: .sessionsRevoked)) ?? 0
+        accessTokensRevoked = try? c.decodeIfPresent(Int.self, forKey: .accessTokensRevoked)
+        connectorsRevoked = try? c.decodeIfPresent(Int.self, forKey: .connectorsRevoked)
+        shareLinksRevoked = try? c.decodeIfPresent(Int.self, forKey: .shareLinksRevoked)
+        pendingInvitesRevoked = try? c.decodeIfPresent(Int.self, forKey: .pendingInvitesRevoked)
+        // Lossy per row: one malformed grant must not hide the others.
+        let rows = (try? c.decodeIfPresent([LossyGrant].self, forKey: .grantsKept)) ?? []
+        grantsKept = rows.compactMap(\.value)
+    }
+
+    private struct LossyGrant: Decodable {
+        let value: KeptGrant?
+        init(from decoder: Decoder) throws {
+            value = try? KeptGrant(from: decoder)
+        }
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sessionsRevoked
+        case sessionsRevoked, accessTokensRevoked, connectorsRevoked
+        case shareLinksRevoked, pendingInvitesRevoked, grantsKept
     }
 }

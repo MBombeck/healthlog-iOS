@@ -7,11 +7,10 @@ import Testing
 /// Verifies that `MedicationsStore.refreshCardComplianceSnapshot(for:)`
 /// hits `/api/medications/[id]/compliance`, decodes the server's
 /// `compliance7` + `compliance30` rate ints, patches them into
-/// `complianceCardSnapshots`, and that `cardComplianceSnapshot(for:windowIntakes:)`
-/// prefers the cached value over the local-algorithm fallback. Also
-/// verifies the failure path: a thrown HLError leaves the dict
-/// untouched so the previous-good value (or the local fallback) keeps
-/// rendering.
+/// `complianceCardSnapshots`, and that `cardComplianceSnapshot(for:)`
+/// prefers the cached value. Also verifies the failure path: a thrown
+/// HLError leaves the dict untouched so the previous-good value keeps
+/// rendering, and without one the card reads "unknown" (#115 B7).
 @Suite("MedicationsStore — server-canonical card compliance")
 @MainActor
 struct MedicationsStoreServerComplianceTests {
@@ -62,7 +61,7 @@ struct MedicationsStoreServerComplianceTests {
         #expect(store.error == nil, "compliance fetch failure must not surface as a store error banner")
     }
 
-    @Test("cardComplianceSnapshot prefers server cache over local fallback")
+    @Test("cardComplianceSnapshot prefers the server cache")
     func cardSnapshotPrefersServerCache() throws {
         let api = StubAPIClient()
         let outbox = try OutboxQueue(inMemory: true)
@@ -72,15 +71,12 @@ struct MedicationsStoreServerComplianceTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let med = Self.makeWeeklyMedication(id: "trulicity")
 
-        // No today-intakes seeded — local-algorithm fallback would
+        // No today-intakes seeded — a device-side count would
         // divide 0 taken / 7 effective days → 0%. The server cache
         // carries 100%; the accessor must return the server value.
         store._testForceSet(cardSnapshot: .init(rate7: 100, rate30: 100), for: med.id)
 
-        let snapshot = store.cardComplianceSnapshot(
-            for: med,
-            windowIntakes: []
-        )
+        let snapshot = store.cardComplianceSnapshot(for: med)
 
         _ = now
         #expect(snapshot?.rate7 == 100)
@@ -101,15 +97,12 @@ struct MedicationsStoreServerComplianceTests {
         // the local algorithm (that interim value would jump on server
         // arrival — the operator's 100→60→50 flicker). The card paints a
         // skeleton from `nil`.
-        let snapshot = store.cardComplianceSnapshot(
-            for: med,
-            windowIntakes: []
-        )
+        let snapshot = store.cardComplianceSnapshot(for: med)
         #expect(snapshot == nil, "pending fetch must paint a skeleton, never the local interim value")
     }
 
-    @Test("W-COMPLIANCE-INV: failed fetch unlocks the clearly-marked local offline fallback")
-    func cardSnapshotFailedFetchFallsBackToLocal() async throws {
+    @Test("#115 B7: a failed fetch reads as unknown, never as a device-computed rate")
+    func cardSnapshotFailedFetchIsUnknown() async throws {
         let api = StubAPIClient()
         let outbox = try OutboxQueue(inMemory: true)
         let repo = MedicationsRepository(api: api, outbox: outbox)
@@ -121,16 +114,34 @@ struct MedicationsStoreServerComplianceTests {
         }
         await store.refreshCardComplianceSnapshot(for: med.id)
 
-        // Fetch settled with a failure + no cached value → the local
-        // algorithm runs as the offline fallback (rates non-nil for a
-        // scheduled med).
-        let snapshot = store.cardComplianceSnapshot(
-            for: med,
-            windowIntakes: []
-        )
-        #expect(snapshot != nil)
-        #expect(snapshot?.rate7 != nil)
-        #expect(snapshot?.rate30 != nil)
+        // Fetch settled with a failure + no cached value. Until B7 the local
+        // port of calculateCompliance ran here and painted its own 7/30-day
+        // rates as if they were the server's. Now the slot says "unknown".
+        let snapshot = try #require(store.cardComplianceSnapshot(for: med))
+        #expect(snapshot.serverUnavailable)
+        #expect(snapshot.rate7 == nil)
+        #expect(snapshot.rate30 == nil)
+        #expect(snapshot.displayRows.isEmpty, "no bar may be painted without a server rate")
+        #expect(snapshot == .unavailable)
+    }
+
+    @Test("#115 B7: a previous server answer still wins over unknown after a failed refresh")
+    func cachedServerValueSurvivesFailure() async throws {
+        let api = StubAPIClient()
+        let outbox = try OutboxQueue(inMemory: true)
+        let repo = MedicationsRepository(api: api, outbox: outbox)
+        let store = MedicationsStore(repo: repo)
+
+        let med = Self.makeDailyMedication(id: "lisinopril")
+        store._testForceSet(cardSnapshot: .init(rate7: 71, rate30: 64), for: med.id)
+        await api.setHandler { _ in
+            throw HLError.server(status: 500, code: "INTERNAL", message: "boom")
+        }
+        await store.refreshCardComplianceSnapshot(for: med.id)
+
+        let snapshot = store.cardComplianceSnapshot(for: med)
+        #expect(snapshot?.rate30 == 64)
+        #expect(snapshot?.serverUnavailable == false)
     }
 
     @Test("W-COMPLIANCE-INV: a later successful fetch clears the failure marker")
@@ -152,7 +163,7 @@ struct MedicationsStoreServerComplianceTests {
         #expect(store.complianceCardSnapshots["srv-1"]?.rate30 == 92)
     }
 
-    @Test("PRN medication (no schedule) keeps nil rates via the offline fallback")
+    @Test("PRN medication (no schedule) keeps the as-needed slot when the fetch failed")
     func cardSnapshotPrnFallback() async throws {
         let api = StubAPIClient()
         let outbox = try OutboxQueue(inMemory: true)
@@ -166,13 +177,11 @@ struct MedicationsStoreServerComplianceTests {
         }
         await store.refreshCardComplianceSnapshot(for: med.id)
 
-        let snapshot = store.cardComplianceSnapshot(
-            for: med,
-            windowIntakes: []
-        )
+        let snapshot = store.cardComplianceSnapshot(for: med)
         #expect(snapshot != nil)
         #expect(snapshot?.rate7 == nil)
         #expect(snapshot?.rate30 == nil)
+        #expect(snapshot?.serverUnavailable == false, "no schedule is a fact, not an unknown rate")
     }
 
     @Test("clearOnLogout empties the snapshot dict")

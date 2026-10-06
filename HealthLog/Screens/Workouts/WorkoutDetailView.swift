@@ -105,21 +105,21 @@ struct WorkoutDetailView: View {
             }
             if let kcal = resolved.activeEnergyKcal, kcal > 0 {
                 StatTile(
-                    label: "Kalorien",
+                    label: "workout.stat.calories",
                     value: "\(Int(kcal.rounded())) kcal",
                     icon: "flame.fill"
                 )
             }
             if let avg = resolved.avgHr, avg > 0 {
                 StatTile(
-                    label: "Ø Puls",
+                    label: "workout.stat.avgHeartRate",
                     value: "\(Int(avg.rounded())) bpm",
                     icon: "heart.fill"
                 )
             }
             if let max = resolved.maxHr, max > 0 {
                 StatTile(
-                    label: "Max Puls",
+                    label: "workout.stat.maxHeartRate",
                     value: "\(Int(max.rounded())) bpm",
                     icon: "bolt.heart.fill"
                 )
@@ -237,14 +237,14 @@ struct WorkoutDetailView: View {
         }
     }
 
-    /// Builds an a11y summary like "Herzfrequenz, 412 Messpunkte, von 96
-    /// bis 178 bpm." so VoiceOver users get a description instead of
-    /// drowning in the chart axis.
+    /// Builds an a11y summary like "Heart rate, 412 data points, from 96 to
+    /// 178 bpm." so VoiceOver users get a description instead of drowning in
+    /// the chart axis. L1 — catalog copy (was a fixed German sentence).
     static func hrAccessibilityLabel(samples: [WorkoutHRSample]) -> String {
-        guard !samples.isEmpty else { return "Herzfrequenz nicht verfügbar" }
+        guard !samples.isEmpty else { return String(localized: "workout.hr.a11y.unavailable") }
         let min = Int((samples.map(\.bpm).min() ?? 0).rounded())
         let max = Int((samples.map(\.bpm).max() ?? 0).rounded())
-        return "Herzfrequenz, \(samples.count) Messpunkte, von \(min) bis \(max) bpm."
+        return String(localized: "workout.hr.a11y.summary \(samples.count) \(min) \(max)")
     }
 
     // MARK: - Route map section (v0.5.4-SP5)
@@ -322,30 +322,19 @@ struct WorkoutDetailView: View {
     }
 
     /// Maps the wire `APPLE_HEALTH` / `WITHINGS` / `MANUAL` enum onto a
-    /// human-readable German label.
+    /// human-readable label (brand names verbatim, "Manual" from the catalog).
+    ///
+    /// **#115 R3 (server v1.39.6)** — one table for every source surface:
+    /// the brands, `EXTERNAL` ("External" / "Extern", a workout posted through
+    /// the narrow `workouts:write` bridge token) and the neutral "Unknown
+    /// source" for a token this build cannot name all come from
+    /// `SourcePriorityRow.displayLabel(forSource:)`. Only `MANUAL` is resolved
+    /// here, because this surface renders a plain `String` and the shared table
+    /// hands back the catalogue key for `LocalizedStringKey` consumers.
     static func sourceLabel(_ raw: String) -> String {
-        switch raw.uppercased() {
-        case "APPLE_HEALTH": "Apple Health"
-        case "WITHINGS": "Withings"
-        case "MANUAL": "Manuell"
-        case "IMPORT": "Import"
-        // v0.14.8 W-WORKOUT-E2E — the server ingests workouts from WHOOP
-        // (v1.11.0) + Fitbit (v1.12.0); brand spellings, not `.capitalized`.
-        case "WHOOP": "WHOOP"
-        case "FITBIT": "Fitbit"
-        // #42 (server v1.27.x) — the Google Health API provider (Fitbit +
-        // Pixel Watch). Distinct from the classic `FITBIT` Web-API source; the
-        // wire token `GOOGLE_HEALTH` would otherwise fall through to
-        // `.capitalized` → "Google_health".
-        case "GOOGLE_HEALTH": "Google Health"
-        // #46 (server v1.28.11) — workout ingest also carries Strava / Oura /
-        // Polar / Nightscout provenance; pin the brand spellings explicitly.
-        case "STRAVA": "Strava"
-        case "OURA": "Oura"
-        case "POLAR": "Polar"
-        case "NIGHTSCOUT": "Nightscout"
-        default: raw.capitalized
-        }
+        raw.uppercased() == "MANUAL"
+            ? String(localized: "Manual")
+            : SourcePriorityRow.displayLabel(forSource: raw)
     }
 
     private static let heroDateFormatter: DateFormatter = {
@@ -409,7 +398,7 @@ struct HRChart: View {
         Chart {
             ForEach(samples) { sample in
                 LineMark(
-                    x: .value("Zeit", sample.timestamp),
+                    x: .value("Time", sample.timestamp),
                     y: .value("HR", sample.bpm)
                 )
                 .interpolationMethod(.monotone)
@@ -417,7 +406,7 @@ struct HRChart: View {
                 .lineStyle(StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
             }
             if let avg, avg > 0 {
-                RuleMark(y: .value("Ø", avg))
+                RuleMark(y: .value("Average", avg))
                     .foregroundStyle(HLChartTints.seriesLow)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     .annotation(position: .trailing, alignment: .leading) {
@@ -492,7 +481,7 @@ struct HRChart: View {
             let count = samples.count
             if let avg, avg > 0 {
                 return String(
-                    localized: "\(count) Herzfrequenz-Werte · Ø \(Int(avg.rounded())) bpm"
+                    localized: "workout.hr.chart.summary \(count) \(Int(avg.rounded()))"
                 )
             }
             return String(localized: "\(count) heart rate values")
@@ -529,11 +518,11 @@ struct RouteMap: View {
             MapPolyline(coordinates: coordinates)
                 .stroke(HLChartTints.series, lineWidth: 4)
             if let first = coordinates.first {
-                Marker("Start", systemImage: "flag.fill", coordinate: first)
+                Marker("workout.route.start", systemImage: "flag.fill", coordinate: first)
                     .tint(HLColor.statusOK)
             }
             if let last = coordinates.last, coordinates.count > 1 {
-                Marker("Ziel", systemImage: "flag.checkered", coordinate: last)
+                Marker("workout.route.finish", systemImage: "flag.checkered", coordinate: last)
                     .tint(HLColor.statusBad)
             }
         }

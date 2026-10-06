@@ -24,7 +24,7 @@
         import AuthenticationServices
     #endif
 
-    @Suite("Web-handoff login store leg (#65)", .serialized)
+    @Suite("Web-handoff login store leg (#65)", .serialized, .mockURLSession)
     struct WebLoginStoreTests {
         // MARK: - Fixtures
 
@@ -119,7 +119,7 @@
             )
             store.oidcAuthenticator = authenticator
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.bundleBody())
             }
             await store.loginWithWebLogin(anchor: StubAnchor())
@@ -208,7 +208,7 @@
             let store = AuthStore(auth: service, keychain: kc)
             let callback = try #require(URL(string: "healthlog://login-callback?code=hlh_used0000000000000000000000000000000000000"))
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"Invalid code"}"#.utf8)
@@ -230,7 +230,7 @@
             let (service, _) = makeService(kc)
             let store = AuthStore(auth: service, keychain: kc)
             nonisolated(unsafe) var handlerHits = 0
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 handlerHits += 1
                 return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.bundleBody())
             }
