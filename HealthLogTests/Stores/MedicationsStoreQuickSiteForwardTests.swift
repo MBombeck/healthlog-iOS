@@ -18,7 +18,7 @@ import Testing
 ///    an injection-tracked med is eligible (→ picker), an oral med is not
 ///    (→ immediate record, no popup). This is the predicate every quick path
 ///    consults before presenting the site sheet, so Lisinopril stays popup-free.
-@Suite("MedicationsStore — quick-path injection-site forwarding (#60)", .serialized)
+@Suite("MedicationsStore — quick-path injection-site forwarding (#60)", .serialized, .mockURLSession)
 struct MedicationsStoreQuickSiteForwardTests {
     private static let scheduled = Date(timeIntervalSince1970: 1_714_550_400)
     private static let now = scheduled.addingTimeInterval(3600)
@@ -89,7 +89,7 @@ struct MedicationsStoreQuickSiteForwardTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = Self.bodyData(req)
             return (Self.ok(req), Data(Self.takenResponseBody.utf8))
         }
@@ -119,7 +119,7 @@ struct MedicationsStoreQuickSiteForwardTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = Self.bodyData(req)
             return (Self.ok(req), Data(Self.takenResponseBody.utf8))
         }

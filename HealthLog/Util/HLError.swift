@@ -8,17 +8,16 @@ public enum HLError: Error, Sendable, Equatable {
     case rateLimited(retryAfter: TimeInterval?)
     case offline
     case canceled
-    /// Server returned `403` with
-    /// `errorCode: "assistant.disabled.<surface>"` (server brief
-    /// v1.4.31 §5 + cross-coordination audit §c.1). The caller is
-    /// expected to mirror the operator-state into
-    /// `FeatureFlagsStore` and render the matching surface
-    /// placeholder. Dispatch refers to this as
-    /// `ServerError.assistantDisabled(surface:)` — we house it on
-    /// `HLError` so the existing `APIClient` rejection path
-    /// (`ensureSuccess` / `decodePayload`) and `HLErrorBanner` chain
-    /// keep their single error type.
-    case assistantDisabled(FeatureFlag)
+    /// #114 / #115 · 0.2 — the server refused an AI action because its
+    /// capability is unavailable: `assistant.disabled.<switch>` (403),
+    /// `ai.record.notPermitted` (403), `ai.provider.none` (422, or 503 on
+    /// `medications/extract`) or `ai.unavailable` (503), read from
+    /// `meta.errorCode` with `meta.capability` / `meta.reason` / `meta.module`.
+    /// `APIClient` mirrors it into ``AICapabilityGate`` on the same tick, so the
+    /// surface follows until the next `/api/auth/me` load. Replaces the
+    /// pre-v1.39 `assistantDisabled(FeatureFlag)`, which read only the
+    /// top-level code and only four invented surface names.
+    case aiUnavailable(AIRefusal)
     /// #30 / v1.18.0 — server returned `403` with `meta.errorCode ==
     /// "module.disabled"` + `meta.module: "<key>"`. The caller is expected to
     /// treat the associated module as *off* (hide its surface), NOT as a
@@ -100,6 +99,15 @@ public enum HLError: Error, Sendable, Equatable {
         case connectionLost
         case dnsFailure
         case sslPinning
+        /// E1 — a write request was cut off on the wire (`URLError.cancelled`)
+        /// while the task that sent it was NOT cancelled: an app suspend, the
+        /// end of a background window, or a failed certificate pin. Nothing
+        /// says the server refused it, so it is queued like any other transport
+        /// failure (``HLError/shouldPersistToOutbox``) under the same
+        /// idempotency key. Not retried inside the request: a pin failure
+        /// repeats at once, and a suspended app has no time for it. Only
+        /// `APIClient` produces it, and only for a non-GET, non-auth request.
+        case writeCancelled
         case other(String)
     }
 }
@@ -129,6 +137,8 @@ public extension HLError {
 
     var isRetriable: Bool {
         switch self {
+        case .network(.writeCancelled):
+            false
         case .network, .offline:
             true
         case let .server(status, _, _):
@@ -169,7 +179,7 @@ public extension HLError {
     /// the write never reached the server *authenticated*, and the idempotency
     /// key makes a later successful replay safe against double-write.
     ///
-    /// **Why NOT `.decoding` / non-401 4xx / `.canceled` / `.assistantDisabled`
+    /// **Why NOT `.decoding` / non-401 4xx / `.canceled` / `.aiUnavailable`
     /// / `.unknown`:** these are ambiguous or permanent. A 403/404/409/422 says
     /// the request was *understood and rejected* (forbidden / gone / conflict /
     /// invalid) — replaying it forever, or worse re-writing after the server
@@ -177,7 +187,9 @@ public extension HLError {
     /// error. `.decoding` means we couldn't even read the response, so we don't
     /// know whether the write landed — enqueuing risks an unbounded replay of a
     /// request the server may have already applied. `.canceled` is user/system
-    /// intent, not a failure to persist.
+    /// intent, not a failure to persist. E1 — a write cut off on the wire while
+    /// its task was still running arrives as `.network(.writeCancelled)` instead
+    /// and IS persisted: nothing cancelled it on purpose.
     /// `true` for a `403 + errorCode: "module.disabled"`.
     ///
     /// Server brief #56 (backend v1.30.19) made three aggregate surfaces honour
@@ -190,12 +202,21 @@ public extension HLError {
     }
 
     var shouldPersistToOutbox: Bool {
-        isRetriable || self == .unauthorized
+        isRetriable || self == .unauthorized || self == .network(.writeCancelled)
     }
 
+    /// The detailed sentence for this error. Kept for logs and for the few
+    /// surfaces that still show it; a surface should prefer
+    /// ``userFacingDescription`` (or ``signInFacingDescription`` on sign-in).
+    ///
+    /// L1 — localized. These sentences were fixed German, and a dozen screens
+    /// (sessions, passkeys, integrations, edit sheets, the Health Score tile)
+    /// put them on screen, so the English UI showed "Netzwerk-Fehler: …".
     var localizedDescription: String {
         switch self {
-        case let .network(u): "Netzwerk-Fehler: \(u)"
+        case let .network(u):
+            let detail = "\(u)"
+            return String(localized: "error.detail.network \(detail)")
         // v0.14.1 #3 — defense in depth: a 5xx carries an internal server
         // message (e.g. a leaked JS "x.map is not a function" TypeError) that
         // must never reach a user-facing surface. Mirror `userFacingDescription`
@@ -203,20 +224,20 @@ public extension HLError {
         // also gets a generic 5xx string; 4xx envelopes stay verbatim because
         // they carry server-localised, user-safe copy.
         case let .server(status, _, m):
-            (500 ... 599).contains(status) ? userFacingDescription : m
-        case let .decoding(s): "Server-Antwort konnte nicht gelesen werden: \(s)"
-        case .unauthorized: "Bitte erneut anmelden."
-        case .rateLimited: "Zu viele Anfragen. Versuch es später erneut."
-        case .idempotencyReplayInFlight: "Wird noch verarbeitet. Wird automatisch erneut versucht."
-        case .offline: "Kein Netzwerk."
-        case .canceled: "Abgebrochen."
-        case let .assistantDisabled(flag): "Funktion deaktiviert: \(flag.rawValue)"
-        case let .moduleDisabled(module): "Modul deaktiviert: \(module)"
-        case let .notPersisted(s): "Konnte nicht gespeichert werden: \(s)"
-        case let .writeConflictUnresolved(code): "Schreibkonflikt ungelöst: \(code)"
-        case let .refusedWithReason(code, reason): "Abgelehnt: \(code)/\(reason)"
-        case .serverNotConfigured: "Kein Server eingerichtet."
-        case let .unknown(s): s
+            return (500 ... 599).contains(status) ? userFacingDescription : m
+        case let .decoding(s): return String(localized: "error.detail.decoding \(s)")
+        case .unauthorized: return String(localized: "error.detail.unauthorized")
+        case .rateLimited: return String(localized: "error.detail.rateLimited")
+        case .idempotencyReplayInFlight: return String(localized: "error.detail.replayInFlight")
+        case .offline: return String(localized: "error.detail.offline")
+        case .canceled: return String(localized: "error.detail.canceled")
+        case let .aiUnavailable(refusal): return String(localized: "error.detail.aiUnavailable \(refusal.errorCode)")
+        case let .moduleDisabled(module): return String(localized: "error.detail.moduleDisabled \(module)")
+        case let .notPersisted(s): return String(localized: "error.detail.notPersisted \(s)")
+        case let .writeConflictUnresolved(code): return String(localized: "error.detail.writeConflict \(code)")
+        case let .refusedWithReason(code, reason): return String(localized: "error.detail.refused \(code) \(reason)")
+        case .serverNotConfigured: return String(localized: "error.detail.serverNotConfigured")
+        case let .unknown(s): return s
         }
     }
 
@@ -256,7 +277,7 @@ public extension HLError {
             // CRITICAL: never expose raw DecodingError text. The full text is
             // still logged via HLLog.api elsewhere with `LogSanitizer.redact`.
             String(localized: "Couldn't read the data. Please try again.")
-        case .assistantDisabled:
+        case .aiUnavailable:
             // Surface placeholder owns the user-facing copy
             // (`feature_disabled.title` / `feature_disabled.subtitle`).
             // Banner copy stays neutral so it can't render twice if a

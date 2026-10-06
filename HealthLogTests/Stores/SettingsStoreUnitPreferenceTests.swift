@@ -15,7 +15,7 @@ import Testing
 /// over the same `UserDefaults`), no-ping-pong, no-upload-for-defaults,
 /// tolerant-decode, the `weightUnit` derivation, and logout hygiene.
 @MainActor
-@Suite("SettingsStore unitPreference (Build 9)", .serialized)
+@Suite("SettingsStore unitPreference (Build 9)", .serialized, .mockURLSession)
 struct SettingsStoreUnitPreferenceTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -74,7 +74,7 @@ struct SettingsStoreUnitPreferenceTests {
         "locale":"de","timezone":"Europe/Berlin","moodReminderEnabled":false},"error":null}
         """
         let hkJSON = #"{"data":{"entries":[],"lastSyncedAt":null},"error":null}"#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             func ok(_ body: String) -> (HTTPURLResponse, Data?) {
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))

@@ -51,14 +51,14 @@ struct MoodStoreTagSuggestionsTests {
         #expect(outcome?.fallbackReason == .emptyInput)
     }
 
-    @Test("suggestTags — feature flag off short-circuits before any FM work")
+    @Test("suggestTags — statusText disallows on-device → short-circuits before any FM work")
     func suggestTagsFeatureFlagOff() async throws {
-        let stubFlags = StubFeatureFlagsService(assistantTrend: false)
-        let extraction = MoodTagExtractionService(featureFlags: stubFlags)
+        let stubFlags = AICaps.reader([.statusText: AICaps.operatorDisabled])
+        let extraction = MoodTagExtractionService(aiCapabilities: stubFlags)
         let store = try makeStore(tagExtraction: extraction)
         let outcome = await store.suggestTags(forNote: "Heute war hart.")
         #expect(outcome?.suggestions == nil)
-        #expect(outcome?.fallbackReason == .featureFlagDisabled)
+        #expect(outcome?.fallbackReason == .capabilityNotAllowed)
     }
 
     @Test("suggestTags — passes existing tags through so suggestions de-dupe against them")
@@ -96,24 +96,5 @@ struct MoodStoreTagSuggestionsTests {
         let outbox = try OutboxQueue(inMemory: true)
         let repo = MoodRepository(api: api, outbox: outbox)
         return MoodStore(repo: repo, tagExtraction: tagExtraction)
-    }
-}
-
-private struct StubFeatureFlagsService: FeatureFlagsServicing {
-    let assistantTrend: Bool
-
-    func isEnabled(_ flag: FeatureFlag) -> Bool {
-        switch flag {
-        case .assistantTrend:
-            assistantTrend
-        case .assistantBriefing,
-             .assistantCoach,
-             .assistantInsights,
-             .enableDailyStats,
-             .enableHRBuckets:
-            true
-        case .cycleTracking:
-            false
-        }
     }
 }

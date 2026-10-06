@@ -10,7 +10,7 @@ import Testing
 /// the episode CRUD + resolve (incl. 422 chronic), the day-log upsert (200/201),
 /// and the `403 illness.disabled` discriminator. Real `APIClient` + stub
 /// `URLProtocol` (no mock server) per PROJECT_GUIDE.md.
-@Suite("Illness data layer (v1.18.1 W-B)", .serialized)
+@Suite("Illness data layer (v1.18.1 W-B)", .serialized, .mockURLSession)
 struct IllnessRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -47,7 +47,7 @@ struct IllnessRepositoryTests {
         #expect(dto.note == "bedrest")
     }
 
-    @Test("Unknown type/lifecycle fall back to OTHER/ACUTE (tolerant)")
+    @Test("Unknown type/lifecycle fall back to OTHER/unknown (tolerant)")
     func decodeUnknownEnums() throws {
         let json = Data(#"""
         {"id":"e2","label":"Mystery","type":"NEW_SERVER_TYPE","lifecycle":"NEW_CYCLE",
@@ -57,7 +57,7 @@ struct IllnessRepositoryTests {
         """#.utf8)
         let dto = try JSONDecoder.hlDefault.decode(IllnessEpisodeDTO.self, from: json)
         #expect(dto.type == .other)
-        #expect(dto.lifecycle == .acute)
+        #expect(dto.lifecycle == .unknown) // C1: an unknown course is not claimed to be acute
         #expect(!dto.isActive) // resolvedAt set
     }
 
@@ -137,7 +137,7 @@ struct IllnessRepositoryTests {
 
     @Test("Insights sends includeRecoveryGap=false by default")
     func insightsDefaultsToCheapQuery() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let items = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?.queryItems
             #expect(items?.first(where: { $0.name == "includeRecoveryGap" })?.value == "false")
             let body = Data(
@@ -151,7 +151,7 @@ struct IllnessRepositoryTests {
 
     @Test("Insights sends includeRecoveryGap=true only when explicitly requested")
     func insightsIncludesRecoveryGapOnDemand() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let items = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?.queryItems
             #expect(items?.first(where: { $0.name == "includeRecoveryGap" })?.value == "true")
             #expect(items?.first(where: { $0.name == "windowDays" })?.value == "90")
@@ -168,7 +168,7 @@ struct IllnessRepositoryTests {
 
     @Test("GET /api/illness/episodes unwraps the data array + builds the query")
     func listEpisodesEnvelope() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/illness/episodes")
             #expect(req.url?.query?.contains("includeResolved=false") == true)
             let body = Data(#"""
@@ -188,7 +188,7 @@ struct IllnessRepositoryTests {
 
     @Test("GET day-logs (no date) decodes the v1.18.3 LIST envelope + meta")
     func dayLogListEnvelope() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/illness/episodes/e1/day-logs")
             // No `date` param → list mode; default query carries limit/offset.
             #expect(req.url?.query?.contains("date=") != true)
@@ -216,7 +216,7 @@ struct IllnessRepositoryTests {
 
     @Test("dayLogs passes sortDir through the query when supplied")
     func dayLogListSortDir() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.query?.contains("sortDir=asc") == true)
             let body = Data(#"{"data":{"dayLogs":[],"meta":{"total":0,"limit":50,"offset":0}},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -229,7 +229,7 @@ struct IllnessRepositoryTests {
 
     @Test("GET day-logs decodes null (nothing logged that day)")
     func dayLogNull() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/illness/episodes/e1/day-logs")
             let body = Data(#"{"data":null,"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -241,7 +241,7 @@ struct IllnessRepositoryTests {
 
     @Test("GET day-logs decodes a present row (data not null)")
     func dayLogPresent() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"id":"d1","episodeId":"e1","date":"2026-06-02","functionalImpact":2,
              "feverC":38.1,"symptoms":[{"key":"cough","severity":1}],"note":"x",
@@ -260,7 +260,7 @@ struct IllnessRepositoryTests {
 
     @Test("POST episode posts the create body + returns the row")
     func createEpisode() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/illness/episodes")
             #expect(req.httpMethod == "POST")
             let body = Data(#"""
@@ -284,14 +284,14 @@ struct IllnessRepositoryTests {
         """#.utf8)
         let repo = try makeRepo()
         // 201 insert.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/illness/episodes/e1/day-logs")
             return (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, dayLogBody)
         }
         let inserted = try await repo.upsertDayLog(episodeId: "e1", IllnessDayLogUpsert(date: "2026-06-02", functionalImpact: 1))
         #expect(inserted.id == "d1")
         // 200 update.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, dayLogBody)
         }
         let updated = try await repo.upsertDayLog(episodeId: "e1", IllnessDayLogUpsert(date: "2026-06-02", functionalImpact: 1))
@@ -300,7 +300,7 @@ struct IllnessRepositoryTests {
 
     @Test("DELETE decodes the v1.18.3 {deleted:true} body (200, not 204)")
     func deleteReturnsDeletedTrue() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/illness/episodes/e1")
             #expect(req.httpMethod == "DELETE")
             let body = Data(#"{"data":{"deleted":true},"error":null}"#.utf8)
@@ -313,7 +313,7 @@ struct IllnessRepositoryTests {
 
     @Test("DELETE tolerates an empty/204-style body (deleted defaults false)")
     func deleteToleratesEmptyBody() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":{},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -324,7 +324,7 @@ struct IllnessRepositoryTests {
 
     @Test("POST restore re-surfaces the SAME episode id + day-logs (lossless)")
     func restoreReturnsSameEpisode() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/illness/episodes/e1/restore")
             #expect(req.httpMethod == "POST")
             let body = Data(#"""
@@ -366,7 +366,7 @@ struct IllnessRepositoryTests {
 
     @Test("resolve 422 chronic-no-resolve is recognised")
     func resolveChronic() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/illness/episodes/e1/resolve")
             let body = Data(#"""
             {"data":null,"error":"Ongoing condition cannot be resolved",
@@ -388,7 +388,7 @@ struct IllnessRepositoryTests {
 
     @Test("403 illness.disabled is recognised by isIllnessDisabled")
     func illnessDisabled() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Server stamps meta.errorCode: illness.disabled (NOT module.disabled),
             // so APIClient surfaces a generic 403 — the repo classifier handles it.
             let body = Data(#"""
@@ -408,7 +408,7 @@ struct IllnessRepositoryTests {
 
     @Test("A 404 on the correlation endpoint is tolerated as not-found")
     func correlationNotFound() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"Not found"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, body)
         }

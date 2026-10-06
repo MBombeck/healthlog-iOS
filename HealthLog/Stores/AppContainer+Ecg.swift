@@ -26,29 +26,17 @@ public extension AppContainer {
         healthKit: AnyHealthKitWriter?,
         repo: EcgRepository,
         keychain: KeychainStoring,
-        moduleGate: ModuleGate,
         authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry
     ) -> EcgCluster {
         #if canImport(HealthKit)
             guard healthKit != nil else {
                 return EcgCluster(sync: nil, store: EcgHealthSyncStore(healthKit: healthKit, sync: nil))
             }
-            let coordinator = EcgSyncCoordinator(
+            let coordinator = makeEcgCoordinator(
                 source: EcgHealthKitSource(store: HKHealthStore()),
                 repo: repo,
                 keychain: keychain,
-                isOptedIn: { EcgHealthSyncStore.isOptedIn() },
-                isModuleEnabled: { [moduleGate] in
-                    // The SAME module that gates the ECG reads — the server
-                    // gates the write behind it too, so the client must not
-                    // pretend otherwise.
-                    await MainActor.run { moduleGate.isEnabled(.insights) }
-                },
-                // Plan 07-06 — the account authority the reset's partition is
-                // named by. Passed at construction rather than bound later:
-                // a coordinator that learns its account after its first sweep
-                // has already had a window in which it had none.
-                admission: .keychainBound(keychain: keychain, registry: authenticatedSessionRegistry)
+                authenticatedSessionRegistry: authenticatedSessionRegistry
             )
             return EcgCluster(
                 sync: coordinator,
@@ -61,9 +49,37 @@ public extension AppContainer {
         #else
             _ = repo
             _ = keychain
-            _ = moduleGate
+            _ = authenticatedSessionRegistry
             return EcgCluster(sync: nil, store: EcgHealthSyncStore(healthKit: healthKit, sync: nil))
         #endif
+    }
+
+    /// The production coordinator wiring, apart from the HealthKit source.
+    ///
+    /// **No module gate** (server v1.39). The ECG routes carry no AI gate and no
+    /// module gate; the `insights` module means "AI analysis" only. Build 279
+    /// gated this sweep on `insights`, which migration 0343 switched off for
+    /// every "Hide Coach" account — their recordings waited behind the held
+    /// anchor and upload on the first sweep after this build lands.
+    internal static func makeEcgCoordinator(
+        source: any EcgRecordingSource,
+        repo: EcgRepository,
+        keychain: KeychainStoring,
+        authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry,
+        defaultsProvider: @escaping @Sendable () -> UserDefaults = { .standard }
+    ) -> EcgSyncCoordinator {
+        EcgSyncCoordinator(
+            source: source,
+            repo: repo,
+            keychain: keychain,
+            isOptedIn: { EcgHealthSyncStore.isOptedIn(in: defaultsProvider()) },
+            defaultsProvider: defaultsProvider,
+            // Plan 07-06 — the account authority the reset's partition is
+            // named by. Passed at construction rather than bound later:
+            // a coordinator that learns its account after its first sweep
+            // has already had a window in which it had none.
+            admission: .keychainBound(keychain: keychain, registry: authenticatedSessionRegistry)
+        )
     }
 }
 

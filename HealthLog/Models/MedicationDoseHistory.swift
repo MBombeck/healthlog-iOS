@@ -21,10 +21,16 @@ import Foundation
 /// Wire envelope of `GET /api/medications/{id}/dose-history`.
 /// Server source: `src/app/api/medications/[id]/dose-history/route.ts`.
 public struct MedicationDoseHistoryEnvelope: Codable, Sendable, Equatable {
-    /// Resolved window start (server clamps to `max(requested, createdAt,
-    /// to − 366 d)`).
+    /// Start of the window recorded doses were read over: the requested
+    /// `from` after the span clamp (server v1.39 semantics).
+    ///
+    /// **Informational only — nothing on iOS reads it**, and nothing may: the
+    /// KPI and the glyph track derive from `rows` alone (pinned by
+    /// `MedicationDetailStoreLedgerTests.envelopeWindowIsNotRead`).
     public let from: Date
-    /// Resolved window end (defaults to server `now`).
+    /// End of that window: the requested `to`, or — since v1.39 — the slot time
+    /// of a dose recorded ahead of its slot when that lies later (at most one
+    /// day after the requested `to`). Informational only, like ``from``.
     public let to: Date
     /// Band family the slots were minted from: `daily | weekly | one_shot |
     /// none`. Raw string — informational only on iOS.

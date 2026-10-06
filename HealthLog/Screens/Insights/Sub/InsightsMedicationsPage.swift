@@ -164,10 +164,7 @@ struct InsightsMedicationsPage: View {
     }
 
     private func medicationCard(_ medication: Medication) -> some View {
-        let snapshot = store.cardComplianceSnapshot(
-            for: medication,
-            windowIntakes: store.derivedTodayIntakes
-        )
+        let snapshot = store.cardComplianceSnapshot(for: medication)
         // v0.12 W4-2 — the whole card is a tap target into the detail screen
         // (was a plain HLCard dead-end). `.buttonStyle(.plain)` keeps the card
         // chrome flat — no list-row tint — while the NavigationLink supplies the
@@ -201,7 +198,13 @@ struct InsightsMedicationsPage: View {
                                 rate: row.rate
                             )
                         }
-                        if snapshot.displayRows.isEmpty {
+                        if snapshot.serverUnavailable {
+                            // #115 B7 — the server gave no answer; say so
+                            // instead of computing a rate on the device.
+                            Text("med.compliance.unavailable")
+                                .font(.hlCaption)
+                                .foregroundStyle(HLText.tertiary)
+                        } else if snapshot.displayRows.isEmpty {
                             // PRN / schedule-less medication — no rate to show.
                             Text("insights.compliance.prn")
                                 .font(.hlCaption)

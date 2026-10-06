@@ -44,9 +44,9 @@ struct EcgUploadAuthenticationLease: Sendable {
 ///     decrypted, min/max-decimated trace.
 ///
 /// A thin read-only `actor` over the shared `APIClient`, mirroring
-/// ``RhythmEventsRepository`` — the two surfaces sit behind the SAME server
-/// gates (`insights` module AND the `insightStatus` assistant surface), so they
-/// fail closed the same way.
+/// ``RhythmEventsRepository`` — the two surfaces share the same server gating
+/// (none since v1.39; an older server's `insights` / `insightStatus` 403), so
+/// they fail closed the same way.
 ///
 /// **Cache strategy.** The LIST routes through the Berlin-day-anchored
 /// `.insightsEcg` SWR ladder: recordings arrive a handful of times a year, so

@@ -38,6 +38,11 @@ struct TrendChip: View {
         case polarityAware
         /// Dashboard-only literal presentation requested by the operator.
         case dashboardDirection
+        /// #115 · 1.1 — the server's own verdict on which way is progress
+        /// (weight: `tiles.weightTrend.direction`). Colour comes from
+        /// ``TrendDirectionSentiment/tone(for:)`` and nothing else; `nil`
+        /// (no snapshot yet, offline) colours nothing.
+        case serverSentiment(TrendDirectionSentiment?)
     }
 
     enum ColorRole: String, Sendable {
@@ -106,6 +111,23 @@ struct TrendChip: View {
             case .flat: return .textSecondary
             case .unknown: return .none
             }
+        case let .serverSentiment(sentiment):
+            guard let sentiment, let change = Self.change(for: trend) else { return .textSecondary }
+            switch sentiment.tone(for: change) {
+            case .favorable: return .statusOK
+            case .adverse: return .statusBad
+            case .neutral: return .textSecondary
+            }
+        }
+    }
+
+    /// The observed direction in the sentiment table's vocabulary.
+    static func change(for trend: TrendIndicator) -> TrendDirectionSentiment.Change? {
+        switch trend {
+        case .up: .rising
+        case .down: .falling
+        case .flat: .level
+        case .unknown: nil
         }
     }
 
@@ -119,16 +141,20 @@ struct TrendChip: View {
 }
 
 extension DashboardMetric {
-    /// Direction shown by dashboard surfaces. The server wins whenever it has
-    /// a direction; otherwise only weight, steps, and sleep derive one from the
-    /// bounded visible sparkline.
+    /// Direction shown by dashboard surfaces: the server's, as sent. Without
+    /// one the tile shows no arrow. Steps and sleep used to derive a direction
+    /// from the first and last sparkline point (weight until #115 · 1.1); that
+    /// guess is gone since #115 B7.
     var dashboardTrend: TrendIndicator {
-        DashboardStore.dashboardTrend(server: trend, kind: kind, visibleValues: sparkline)
+        trend
     }
 
-    /// Literal green/up and red/down is scoped to the three requested Home
-    /// metrics. Every other kind retains the established polarity-aware mode.
-    var dashboardTrendMode: TrendChip.Mode {
-        [.weight, .steps, .sleep].contains(kind) ? .dashboardDirection : .polarityAware
+    /// #115 · 1.1 — weight is coloured by the server's target-aware verdict
+    /// (`tiles.weightTrend`), never by a client rule. Literal green/up and
+    /// red/down stays scoped to steps and sleep; every other kind keeps the
+    /// established polarity-aware mode.
+    func dashboardTrendMode(weightSentiment: TrendDirectionSentiment?) -> TrendChip.Mode {
+        if kind == .weight { return .serverSentiment(weightSentiment) }
+        return [.steps, .sleep].contains(kind) ? .dashboardDirection : .polarityAware
     }
 }

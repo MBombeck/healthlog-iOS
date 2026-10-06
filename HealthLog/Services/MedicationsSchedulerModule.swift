@@ -90,54 +90,79 @@
         /// truth.
         func reconcile(medications: [Medication], now: Date = .now) {
             var desiredTaskIDs: Set<String> = []
-            for medication in medications where medication.active && medication.notificationsEnabled {
-                let projections = Self.projections(for: medication, now: now)
-                for projection in projections {
-                    let taskID = Self.taskID(medicationID: medication.id, slotKey: projection.slotKey)
-                    desiredTaskIDs.insert(taskID)
-                    do {
-                        try scheduler.createOrUpdateTask(
-                            id: taskID,
-                            title: Self.localizedTitle(for: medication),
-                            instructions: Self.localizedInstructions(for: medication),
-                            category: .medication,
-                            schedule: projection.schedule,
-                            completionPolicy: .sameDay,
-                            scheduleNotifications: true,
-                            notificationThread: .task,
-                            tags: ["medication", "schedule:\(projection.slotKey)"],
-                            shadowedOutcomesHandling: .delete
-                        )
-                    } catch {
-                        HLLog.notifications.error(
-                            "MedicationsSchedulerModule: createOrUpdateTask failed id=\(taskID, privacy: .private) err=\(LogSanitizer.redact(String(describing: error)), privacy: .private)"
-                        )
-                    }
+            for planned in Self.plannedProjections(for: medications, now: now) {
+                let medication = medications.first { $0.id == planned.medicationID }
+                guard let medication else { continue }
+                let projection = planned.projection
+                let taskID = Self.taskID(medicationID: medication.id, slotKey: projection.slotKey)
+                desiredTaskIDs.insert(taskID)
+                var tags = ["medication", "schedule:\(projection.slotKey)"]
+                if projection.isRunwayTail { tags.append(Self.runwayTailTag) }
+                do {
+                    try scheduler.createOrUpdateTask(
+                        id: taskID,
+                        title: Self.localizedTitle(for: medication),
+                        instructions: Self.localizedInstructions(for: medication),
+                        category: .medication,
+                        schedule: projection.schedule,
+                        completionPolicy: .sameDay,
+                        scheduleNotifications: true,
+                        notificationThread: .task,
+                        tags: tags,
+                        shadowedOutcomesHandling: .delete
+                    )
+                } catch {
+                    HLLog.notifications.error(
+                        "MedicationsSchedulerModule: createOrUpdateTask failed id=\(taskID, privacy: .private) err=\(LogSanitizer.redact(String(describing: error)), privacy: .private)"
+                    )
                 }
             }
-            // v0.14.1 notifications-bug H4 — budget telemetry. Each desired task
-            // is one prospective pending local notification drawing from the
-            // shared 64-request cap (SpeziScheduler capped at 48). When the
-            // projected set approaches the cap, log it: SpeziScheduler schedules
-            // earliest-first up to its limit and registers a background top-up for
-            // the tail, so the overflow is DEFERRED, not silently dropped — but a
-            // persistently high count is the operator-visible signal that the H3
-            // pre-arm depth / horizon may need trimming.
-            if desiredTaskIDs.count >= Self.budgetTelemetryThreshold {
+            // v0.14.1 notifications-bug H4 — budget telemetry. R5 fills the
+            // runways up to the SpeziScheduler budget on purpose, so a full set
+            // is the normal case. Only a set ABOVE the budget is a signal: the
+            // repeating triggers plus one next dose per runway entry no longer
+            // fit, and SpeziScheduler's round robin may skip a task.
+            if desiredTaskIDs.count > MedicationReminderRunway.notificationBudget {
                 // Slot count is not PII — public is intentional (operator-grade).
                 // swiftlint:disable:next hllog_public_privacy_interpolation
                 HLLog.notifications.warning(
-                    "MedicationsSchedulerModule: \(desiredTaskIDs.count, privacy: .public) reminder slots projected — approaching the shared local-notification budget (SpeziScheduler cap 48); tail is background-topped-up, not dropped"
+                    "MedicationsSchedulerModule: \(desiredTaskIDs.count, privacy: .public) reminder slots projected — above the SpeziScheduler budget"
                 )
             }
             purgeOrphanedTasks(keeping: desiredTaskIDs)
         }
 
-        /// Threshold at which `reconcile` emits the budget-telemetry warning.
-        /// Set below the SpeziScheduler cap (48) so the operator log surfaces a
-        /// crowding trend before the tail actually spills to the background
-        /// top-up path.
-        static let budgetTelemetryThreshold = 40
+        /// Whether `reconcile` arms any reminder task for `medication`.
+        ///
+        /// **v1.39.1 (#1033)** — a medication kept as a record (`trackIntake:
+        /// false`) never reminds, whatever its schedule says. Leaving it out of
+        /// the desired set is also what REMOVES reminders armed before the
+        /// switch: `purgeOrphanedTasks` drops every `med-` task this set does
+        /// not name.
+        ///
+        /// **N1** — one predicate with ``MedicationReminderDeliveryPolicy``, so
+        /// the `clientManaged` claim never asserts a reminder this pass skips.
+        static func plansReminders(for medication: Medication) -> Bool {
+            MedicationReminderDeliveryPolicy.plansLocalReminder(for: medication)
+        }
+
+        /// The task ids one reconcile pass wants to exist — the pure half of
+        /// `reconcile`, so the set can be asserted without a live `Scheduler`.
+        static func desiredTaskIDs(
+            for medications: [Medication],
+            now: Date,
+            timeZone: TimeZone = .current
+        ) -> Set<String> {
+            Set(plannedProjections(for: medications, now: now, timeZone: timeZone).map {
+                taskID(medicationID: $0.medicationID, slotKey: $0.projection.slotKey)
+            })
+        }
+
+        /// The stored `med-` tasks a reconcile pass deletes: every medication
+        /// task the desired set does not name.
+        static func orphanTaskIDs(existing: Set<String>, desired: Set<String>) -> Set<String> {
+            existing.filter { $0.hasPrefix(taskIDPrefix) }.subtracting(desired)
+        }
 
         /// One projected SpeziScheduler task for a medication. `slotKey`
         /// uniquely identifies the (entry × weekday × time) slot within the
@@ -146,10 +171,25 @@
         struct Projection {
             let slotKey: String
             let schedule: Schedule
+            /// R5 — the last armed occurrence of a runway whose course goes on.
+            var isRunwayTail = false
         }
 
         /// **v0.10 R1 §3.4 — project a medication's `ScheduleEntry` rows onto
-        /// SpeziScheduler tasks.**
+        /// SpeziScheduler tasks.** The single-medication view of
+        /// ``plannedProjections(for:now:timeZone:)`` — the medication planned as
+        /// if it were the only one, so it may use the whole budget.
+        static func projections(for medication: Medication, now: Date, timeZone: TimeZone = .current) -> [Projection] {
+            plannedProjections(for: [medication], now: now, timeZone: timeZone).map(\.projection)
+        }
+
+        /// One projection together with the medication it belongs to.
+        struct PlannedProjection {
+            let medicationID: String
+            let projection: Projection
+        }
+
+        /// **All tasks one reconcile arms, across every medication.**
         ///
         /// Per entry, by cadence:
         /// - `daily` → one repeating `.daily` task per time-of-day.
@@ -160,67 +200,92 @@
         ///   `yearly` (stable month/day, unbounded) → an OS-delivered REPEATING
         ///   calendar trigger (`.monthly` / `.yearly`, `repeats: true`) that
         ///   survives background / force-quit with zero re-arm (v0.14.1 H1).
-        /// - `everyNWeeks(interval > 1)` / `everyNMonths(interval > 1)` /
-        ///   `rolling` / `oneShot` / `cyclic` / day-29–31 monthly / Feb-29 yearly
-        ///   / bounded (`startsOn`/`endsOn`) schedules → cannot be a single
-        ///   repeating trigger, so PRE-ARM a runway of the next occurrences
-        ///   (`engine.nextOccurrence`) as one-off `.once` tasks (v0.14.1 H3),
-        ///   re-armed + extended on every reconcile. Honours `startsOn`/`endsOn`.
-        static func projections(for medication: Medication, now: Date) -> [Projection] {
-            let context = MedicationRecurrenceEngine.Context(
-                medication: medication,
-                timeZone: .current,
-                now: now
-            )
-            var result: [Projection] = []
-            for (entryIndex, entry) in medication.schedule.entries.enumerated() {
-                switch entry.cadence {
-                case .daily:
-                    appendDaily(entry: entry, entryIndex: entryIndex, into: &result)
-                case let .weekdays(days):
-                    appendWeekly(entry: entry, entryIndex: entryIndex, days: days, interval: 1, into: &result)
-                case let .everyNWeeks(interval, days):
-                    // v0.14.1 notifications-bug H3 — interval > 1 is a single-slot
-                    // cadence (`isSingleSlotCadence` agrees). A recurring Spezi
-                    // `.weekly(interval:N, startingAt: .now)` would anchor the
-                    // N-week phase on reconcile-time, NOT the server's Sunday-
-                    // rooted schedule phase — firing a week out of sync from
-                    // `nextDueAt` + the compliance grid. Pre-arm a RUNWAY of the
-                    // next phase-correct occurrences (was a single next occurrence)
-                    // via the engine instead, so a backgrounded / force-quit app
-                    // keeps iOS-delivered notifications queued. Plain weekly
-                    // (interval == 1) stays a recurring `.weekly` rule.
-                    if max(1, interval) > 1 {
-                        appendPreArmedOccurrences(entry: entry, entryIndex: entryIndex, context: context, now: now, into: &result)
+        /// - everything else (`everyNWeeks(interval > 1)`, `everyNMonths(interval
+        ///   > 1)`, `rolling`, `oneShot`, `cyclic`, day-29–31 monthly, Feb-29
+        ///   yearly, and — R1 — a daily/weekly course that has not started or
+        ///   ends within the horizon) → single occurrences as one-off `.once`
+        ///   tasks, re-armed and extended on every reconcile (v0.14.1 H3).
+        ///
+        /// **R5 — the runway depth is the budget, not a constant.** Which
+        /// occurrences are armed comes from ``MedicationReminderRunway/plan(for:now:timeZone:budget:)``:
+        /// the repeating triggers are reserved first, every entry keeps its next
+        /// dose, and the rest of the 48 SpeziScheduler slots go to the earliest
+        /// occurrences across all medications. Up to R5 each entry got a fixed
+        /// eight, which for three doses a day is under three days of reminders.
+        /// The last armed occurrence of an entry whose course goes on is tagged
+        /// ``runwayTailTag``; its banner asks the user to open the app.
+        static func plannedProjections(
+            for medications: [Medication],
+            now: Date,
+            timeZone: TimeZone = .current
+        ) -> [PlannedProjection] {
+            let plan = MedicationReminderRunway.plan(for: medications, now: now, timeZone: timeZone)
+            var result: [PlannedProjection] = []
+            for medication in medications where plansReminders(for: medication) {
+                let context = MedicationRecurrenceEngine.Context(medication: medication, timeZone: timeZone, now: now)
+                // R1 — a repeating daily/weekly trigger knows neither a first nor
+                // a last day: it fired before `startsOn` and kept firing after
+                // `endsOn`, on days the server lists no dose. Such a course rides
+                // the engine runway instead, which honours both calendar days.
+                let repeats = MedicationRecurrenceEngine.repeatingRuleFits(
+                    context: context, now: now, endHorizon: preArmHorizon
+                )
+                var projections: [Projection] = []
+                for (entryIndex, entry) in medication.schedule.entries.enumerated() where entry.cadence != .asNeeded {
+                    if MedicationReminderRunway.ridesRunway(entry, repeats: repeats, context: context, now: now) {
+                        let key = MedicationReminderRunway.EntryKey(medicationID: medication.id, entryIndex: entryIndex)
+                        appendRunway(plan.runways[key], entryIndex: entryIndex, into: &projections)
                     } else {
-                        appendWeekly(
-                            entry: entry, entryIndex: entryIndex,
-                            days: days, interval: 1, into: &result
-                        )
+                        appendRepeating(entry: entry, entryIndex: entryIndex, now: now, into: &projections)
                     }
-                case let .legacy(days, intervalWeeks):
-                    if let days, !days.isEmpty {
-                        appendWeekly(
-                            entry: entry, entryIndex: entryIndex,
-                            days: days, interval: max(1, intervalWeeks), into: &result
-                        )
-                    } else if intervalWeeks > 1 {
-                        appendPreArmedOccurrences(entry: entry, entryIndex: entryIndex, context: context, now: now, into: &result)
-                    } else {
-                        appendDaily(entry: entry, entryIndex: entryIndex, into: &result)
-                    }
-                case .monthly, .everyNMonths, .yearly, .rolling, .oneShot, .cyclic:
-                    // v0.14.1 notifications-bug H1/H3 — monthly/yearly may lift to
-                    // an OS-repeating trigger; the rest pre-arm an engine runway.
-                    // Dispatched in a dedicated helper so this switch stays within
-                    // the cyclomatic-complexity budget.
-                    appendLowFrequencyProjections(entry: entry, entryIndex: entryIndex, context: context, now: now, into: &result)
-                case .asNeeded:
-                    // PRN / as-needed — no reminder task is ever armed.
-                    continue
                 }
+                result += projections.map { PlannedProjection(medicationID: medication.id, projection: $0) }
             }
             return result
+        }
+
+        /// The repeating trigger(s) of an entry that does not ride the runway.
+        private static func appendRepeating(
+            entry: ScheduleEntry,
+            entryIndex: Int,
+            now: Date,
+            into result: inout [Projection]
+        ) {
+            switch entry.cadence {
+            case .daily:
+                appendDaily(entry: entry, entryIndex: entryIndex, into: &result)
+            case let .weekdays(days), let .everyNWeeks(_, days):
+                // `everyNWeeks` only gets here with interval 1 — a recurring
+                // Spezi `.weekly(interval: N)` would anchor the N-week phase on
+                // reconcile time, so interval > 1 rides the runway (H3).
+                appendWeekly(entry: entry, entryIndex: entryIndex, days: days, interval: 1, into: &result)
+            case let .legacy(days, intervalWeeks):
+                if let days, !days.isEmpty {
+                    appendWeekly(entry: entry, entryIndex: entryIndex, days: days, interval: max(1, intervalWeeks), into: &result)
+                } else {
+                    appendDaily(entry: entry, entryIndex: entryIndex, into: &result)
+                }
+            case let .monthly(day), let .everyNMonths(_, day):
+                for (timeIndex, time) in entry.effectiveTimes.enumerated() {
+                    result.append(Projection(
+                        slotKey: "e\(entryIndex)-m-t\(timeIndex)",
+                        schedule: .monthly(interval: 1, day: day, hour: time.hour, minute: time.minute, startingAt: now)
+                    ))
+                }
+            case let .yearly(month, day):
+                for (timeIndex, time) in entry.effectiveTimes.enumerated() {
+                    result.append(Projection(
+                        slotKey: "e\(entryIndex)-y-t\(timeIndex)",
+                        schedule: .yearly(
+                            interval: 1, month: month, day: day,
+                            hour: time.hour, minute: time.minute, startingAt: now
+                        )
+                    ))
+                }
+            case .rolling, .oneShot, .cyclic, .asNeeded:
+                // Always a runway (or nothing) — `ridesRunway` never sends these here.
+                break
+            }
         }
 
         private static func appendDaily(
@@ -260,197 +325,33 @@
             }
         }
 
-        /// **v0.14.1 notifications-bug H3 — pre-arm depth.** How many future
-        /// occurrences to pre-schedule for a cadence that cannot be expressed as
-        /// a single OS-repeating trigger (everyNWeeks > 1, everyNMonths > 1,
-        /// rolling, cyclic, day-29–31 monthly, Feb-29 yearly, bounded schedules).
-        /// Each becomes one `.once` Spezi task, so a backgrounded / force-quit
-        /// app keeps a runway of iOS-delivered notifications instead of a single
-        /// next occurrence that fires once and then goes silent (the operator
-        /// bug). Bounded to protect the shared 64-pending budget — SpeziScheduler
-        /// is capped at 48 (`LocalNotificationBudget.speziNotificationLimit`) and
-        /// round-robins the slots across tasks earliest-first, so a heavy runway
-        /// never starves the daily/weekly repeating triggers.
-        static let maxPreArmedOccurrences = 8
+        /// Tag on the last armed occurrence of a runway whose course goes on.
+        /// `HealthLogStandard` adds the "open the app" line to that banner.
+        static let runwayTailTag = "runway-tail"
 
-        /// The forward window over which pre-armed occurrences are materialized.
+        /// The forward window over which single occurrences are materialized.
         /// Kept in lock-step with `SchedulerNotifications.schedulingInterval`
-        /// (8 weeks, `HealthLogSpeziDelegate`) so every pre-armed `.once` task
-        /// falls inside the window SpeziScheduler turns into a pending
-        /// `UNNotificationRequest` — a horizon deeper than the scheduling window
-        /// would just leave the tail unscheduled until the next background
-        /// refresh. The immediate next occurrence is always armed even if it is
-        /// past the horizon (preserving the pre-H3 "next dose is always queued"
-        /// guarantee); only the ADDITIONAL runway is horizon-capped.
-        static let preArmHorizon: TimeInterval = 8 * 7 * 24 * 60 * 60
+        /// (8 weeks, `HealthLogSpeziDelegate`) so every armed `.once` task falls
+        /// inside the window SpeziScheduler turns into a pending
+        /// `UNNotificationRequest`. The immediate next occurrence is always
+        /// armed even if it lies past the horizon (the pre-H3 "next dose is
+        /// always queued" guarantee); only the additional runway is capped.
+        static let preArmHorizon: TimeInterval = MedicationReminderRunway.horizon
 
-        /// Dispatch the low-frequency cadences (`monthly` / `everyNMonths` /
-        /// `yearly` / `rolling` / `oneShot` / `cyclic`) onto their projection.
-        /// Monthly + yearly may lift to an OS-repeating trigger (H1); rolling /
-        /// one-shot / cyclic always pre-arm an engine runway (H3). Extracted from
-        /// the `projections` switch to keep that switch within the
-        /// cyclomatic-complexity budget. Only invoked for those six cadences —
-        /// the `default` arm is the pre-arm runway shared by rolling/oneShot/cyclic.
-        private static func appendLowFrequencyProjections(
-            entry: ScheduleEntry,
+        /// The armed occurrences of one runway entry as `.once` tasks.
+        private static func appendRunway(
+            _ runway: MedicationReminderRunway.Runway?,
             entryIndex: Int,
-            context: MedicationRecurrenceEngine.Context,
-            now: Date,
             into result: inout [Projection]
         ) {
-            switch entry.cadence {
-            case let .monthly(day):
-                appendMonthlyOrPreArm(
-                    entry: entry, entryIndex: entryIndex,
-                    day: day, interval: 1, context: context, now: now, into: &result
-                )
-            case let .everyNMonths(interval, day):
-                appendMonthlyOrPreArm(
-                    entry: entry, entryIndex: entryIndex,
-                    day: day, interval: max(1, interval), context: context, now: now, into: &result
-                )
-            case let .yearly(month, day):
-                appendYearlyOrPreArm(
-                    entry: entry, entryIndex: entryIndex,
-                    month: month, day: day, context: context, now: now, into: &result
-                )
-            default:
-                // rolling / oneShot / cyclic — no single OS-repeating trigger can
-                // express these (rolling re-anchors on each intake; cyclic on/off
-                // -weeks + one-shot have no calendar-trigger form). Off-weeks / a
-                // past one-shot emit no occurrence → no slot.
-                appendPreArmedOccurrences(entry: entry, entryIndex: entryIndex, context: context, now: now, into: &result)
-            }
-        }
-
-        /// Monthly / every-N-months projection. **H1:** an interval-1 cadence
-        /// whose day-of-month exists in every month (≤ 28) on an unbounded,
-        /// already-started schedule is lifted to an OS-delivered REPEATING
-        /// `.monthly` calendar trigger (`repeats: true`) — no re-arm, survives
-        /// background / force-quit / Background-App-Refresh-off. Everything else
-        /// (interval > 1, day 29–31 where the server-parity clamp must be
-        /// preserved rather than skipping short months, or a bounded schedule a
-        /// repeating trigger can't fence) falls back to the H3 engine runway.
-        private static func appendMonthlyOrPreArm(
-            entry: ScheduleEntry,
-            entryIndex: Int,
-            day: Int,
-            interval: Int,
-            context: MedicationRecurrenceEngine.Context,
-            now: Date,
-            into result: inout [Projection]
-        ) {
-            guard interval == 1, day <= 28, boundsAllowRepeatingTrigger(context: context, now: now) else {
-                appendPreArmedOccurrences(entry: entry, entryIndex: entryIndex, context: context, now: now, into: &result)
-                return
-            }
-            for (timeIndex, time) in entry.effectiveTimes.enumerated() {
+            guard let runway else { return }
+            let lastIndex = runway.occurrences.count - 1
+            for (index, instant) in runway.occurrences.enumerated() {
                 result.append(Projection(
-                    slotKey: "e\(entryIndex)-m-t\(timeIndex)",
-                    schedule: .monthly(
-                        interval: 1,
-                        day: day,
-                        hour: time.hour,
-                        minute: time.minute,
-                        startingAt: now
-                    )
+                    slotKey: "e\(entryIndex)-once-\(index)",
+                    schedule: Schedule(startingAt: instant, recurrence: nil),
+                    isRunwayTail: runway.continuesAfterLast && index == lastIndex
                 ))
-            }
-        }
-
-        /// Yearly projection. **H1:** an annual cadence on a `(month, day)` that
-        /// exists every year, on an unbounded already-started schedule, is lifted
-        /// to an OS-delivered REPEATING `.yearly` calendar trigger. Feb-29 (and
-        /// any day beyond the month's common-year length) or a bounded schedule
-        /// falls back to the H3 engine runway.
-        private static func appendYearlyOrPreArm(
-            entry: ScheduleEntry,
-            entryIndex: Int,
-            month: Int,
-            day: Int,
-            context: MedicationRecurrenceEngine.Context,
-            now: Date,
-            into result: inout [Projection]
-        ) {
-            guard isStableYearlyDay(month: month, day: day),
-                  boundsAllowRepeatingTrigger(context: context, now: now) else
-            {
-                appendPreArmedOccurrences(entry: entry, entryIndex: entryIndex, context: context, now: now, into: &result)
-                return
-            }
-            for (timeIndex, time) in entry.effectiveTimes.enumerated() {
-                result.append(Projection(
-                    slotKey: "e\(entryIndex)-y-t\(timeIndex)",
-                    schedule: .yearly(
-                        interval: 1,
-                        month: month,
-                        day: day,
-                        hour: time.hour,
-                        minute: time.minute,
-                        startingAt: now
-                    )
-                ))
-            }
-        }
-
-        /// A repeating `UNCalendarNotificationTrigger` fires indefinitely and
-        /// cannot express a start floor or an end cap. So only lift a cadence to
-        /// a repeating trigger when the medication has already started (no future
-        /// `startsOn`) and never ends (`endsOn == nil`); bounded schedules ride
-        /// the engine pre-arm, which honours `startsOn` / `endsOn`.
-        static func boundsAllowRepeatingTrigger(
-            context: MedicationRecurrenceEngine.Context,
-            now: Date
-        ) -> Bool {
-            if context.endsOn != nil { return false }
-            if let startsOn = context.startsOn, startsOn > now { return false }
-            return true
-        }
-
-        /// Whether `(month, day)` occurs in every common (non-leap) year, so a
-        /// yearly repeating calendar trigger fires exactly on it. Feb-29 and any
-        /// day beyond the month's common-year length are excluded (they'd skip
-        /// years, diverging from the server-parity clamp).
-        static func isStableYearlyDay(month: Int, day: Int) -> Bool {
-            let commonYearDays = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-            guard (1 ... 12).contains(month), day >= 1 else { return false }
-            return day <= commonYearDays[month - 1]
-        }
-
-        /// **v0.14.1 notifications-bug H3 — pre-arm the next occurrences as a
-        /// runway.** Walks the server-parity `MedicationRecurrenceEngine` forward
-        /// (phase-, DST-, clamp-, `startsOn`/`endsOn`-, `serverNextDueAt`-correct),
-        /// feeding each occurrence's instant back as the floor for the next, and
-        /// emits up to `maxPreArmedOccurrences` one-off `.once` tasks. The
-        /// immediate next occurrence is ALWAYS armed (matching the pre-H3
-        /// guarantee); additional runway occurrences are capped at `preArmHorizon`
-        /// so the tail can't outrun SpeziScheduler's materialization window.
-        /// Rolling / one-shot naturally yield a single slot (a rolling anchor only
-        /// projects one forward slot; a one-shot has exactly one occurrence).
-        private static func appendPreArmedOccurrences(
-            entry: ScheduleEntry,
-            entryIndex: Int,
-            context: MedicationRecurrenceEngine.Context,
-            now: Date,
-            into result: inout [Projection]
-        ) {
-            let horizonEnd = now.addingTimeInterval(preArmHorizon)
-            var cursor = now
-            var count = 0
-            while count < maxPreArmedOccurrences {
-                guard let next = MedicationRecurrenceEngine.nextOccurrence(
-                    after: cursor,
-                    entry: entry,
-                    context: context
-                ) else { break }
-                // Always arm the immediate next occurrence; horizon-cap the rest.
-                if count > 0, next.at > horizonEnd { break }
-                result.append(Projection(
-                    slotKey: "e\(entryIndex)-once-\(count)",
-                    schedule: Schedule(startingAt: next.at, recurrence: nil)
-                ))
-                cursor = next.at
-                count += 1
             }
         }
 
@@ -475,12 +376,10 @@
                 let lowerBound = calendar.date(byAdding: .year, value: -5, to: now) ?? .distantPast
                 let upperBound = calendar.date(byAdding: .year, value: 5, to: now) ?? .distantFuture
                 let allTasks = try scheduler.queryTasks(for: lowerBound ..< upperBound)
-                let medicationTaskIDs = Set(
-                    allTasks
-                        .map { (task: SpeziScheduler.Task) -> String in task.id }
-                        .filter { (id: String) -> Bool in id.hasPrefix(Self.taskIDPrefix) }
+                let toPurge = Self.orphanTaskIDs(
+                    existing: Set(allTasks.map { (task: SpeziScheduler.Task) -> String in task.id }),
+                    desired: desiredTaskIDs
                 )
-                let toPurge = medicationTaskIDs.subtracting(desiredTaskIDs)
                 for staleID in toPurge {
                     do {
                         try scheduler.deleteAllVersions(ofTask: staleID)
@@ -640,6 +539,24 @@
             // the strings catalog mid-marathon. The follow-up ticket
             // moves both title + body to dedicated xcstrings keys.
             String.LocalizationValue(stringLiteral: medication.dose)
+        }
+    }
+
+    /// Course-bound checks of the projection, outside the module's type body
+    /// (type_body_length discipline).
+    extension MedicationsSchedulerModule {
+        /// A repeating calendar trigger cannot fence a course; see
+        /// ``MedicationReminderRunway/boundsAllowRepeatingTrigger(context:now:)``.
+        static func boundsAllowRepeatingTrigger(
+            context: MedicationRecurrenceEngine.Context,
+            now: Date
+        ) -> Bool {
+            MedicationReminderRunway.boundsAllowRepeatingTrigger(context: context, now: now)
+        }
+
+        /// See ``MedicationReminderRunway/isStableYearlyDay(month:day:)``.
+        static func isStableYearlyDay(month: Int, day: Int) -> Bool {
+            MedicationReminderRunway.isStableYearlyDay(month: month, day: day)
         }
     }
 #endif

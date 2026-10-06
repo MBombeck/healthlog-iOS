@@ -33,9 +33,15 @@
             featureFlags: any FeatureFlagsServicing,
             userIDProvider: @escaping @Sendable () -> String?,
             deletionReconciler: (any MeasurementDeletionReconciler)?,
-            retryQueue: (any HealthSyncBatchRetryEnqueuing)? = nil
+            retryQueue: (any HealthSyncBatchRetryEnqueuing)? = nil,
+            hrBucketSync: (any HealthKitHRBucketSyncing)? = nil
         ) {
-            Task {
+            // #12 — every hand-off of heart rate requests the bucket sweep.
+            var hrBucketKick: (@Sendable () -> Void)?
+            if let hrBucketSync {
+                hrBucketKick = { @Sendable in hrBucketSync.requestHRBucketSweep() }
+            }
+            Task { [hrBucketKick] in
                 guard let spezi = SpeziAppDelegate.spezi else {
                     HLLog.healthKit
                         .info("Spezi not booted — HealthLogStandard.attachUploader skipped")
@@ -57,11 +63,15 @@
                 // userIDProvider drives the HR-bucket cutover partition
                 // (W-HR-BUCKET-UPLOAD / GH #34) so the per-sample HR gate reads
                 // the same per-User cutover boundary the bucket sweep arms.
+                // #113 — a row the server refuses is remembered in the skip
+                // register before the cursor may pass it.
                 await standard.attachUploader(
                     uploader,
                     featureFlags: featureFlags,
                     userIDProvider: userIDProvider,
-                    retryQueue: retryQueue
+                    retryQueue: retryQueue,
+                    skipRegister: .shared,
+                    hrBucketKick: hrBucketKick
                 )
                 // A360-5 M-1 — hand the server-deletion reconciler to the
                 // Standard so `handleDeletedObjects` can mirror Apple-Health

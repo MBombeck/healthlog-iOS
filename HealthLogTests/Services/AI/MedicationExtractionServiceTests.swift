@@ -35,13 +35,13 @@ struct MedicationExtractionServiceTests {
         #expect(outcome.fallbackReason == .emptyInput)
     }
 
-    @Test("extract — feature flag off short-circuits before any FM work")
+    @Test("extract — medicationExtract disallows on-device → short-circuits before any FM work")
     func featureFlagOffShortCircuit() async {
-        let flags = StubFeatureFlagsService(assistantBriefing: false)
-        let service = MedicationExtractionService(featureFlags: flags)
+        let flags = AICaps.reader([.medicationExtract: AICaps.operatorDisabled])
+        let service = MedicationExtractionService(aiCapabilities: flags)
         let outcome = await service.extract(from: "Metformin 500 mg")
         #expect(outcome.draft == nil)
-        #expect(outcome.fallbackReason == .featureFlagDisabled)
+        #expect(outcome.fallbackReason == .capabilityNotAllowed)
     }
 
     // MARK: - Safety filter integration
@@ -111,31 +111,11 @@ struct MedicationExtractionServiceTests {
     func fallbackReasonRoundTrip() {
         let cases: [MedicationExtractionOutcome.FallbackReason] = [
             .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady,
-            .featureFlagDisabled, .safetyRefused, .generationFailed,
+            .capabilityNotAllowed, .safetyRefused, .generationFailed,
             .frameworkUnavailable, .emptyInput
         ]
         for c in cases {
             #expect(MedicationExtractionOutcome.FallbackReason(rawValue: c.rawValue) == c)
-        }
-    }
-}
-
-/// Minimal stub for the feature-flag service so the extraction-service
-/// tests can force-disable the assistant briefing flag.
-private struct StubFeatureFlagsService: FeatureFlagsServicing {
-    let assistantBriefing: Bool
-
-    func isEnabled(_ flag: FeatureFlag) -> Bool {
-        switch flag {
-        case .assistantBriefing: assistantBriefing
-        case .assistantCoach,
-             .assistantTrend,
-             .assistantInsights,
-             .enableDailyStats,
-             .enableHRBuckets:
-            true
-        case .cycleTracking:
-            false
         }
     }
 }

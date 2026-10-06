@@ -22,7 +22,7 @@ import Testing
 /// belong to the v0.5.3 EN-sprint.
 @Suite("v0.5.2 i18n reconcile keys — catalog presence + DE/EN parity")
 struct V052I18nKeysTests {
-    /// The 27 keys added by the R4 reconcile pass. After the v0.7.2 source-
+    /// The keys added by the R4 reconcile pass (27, minus "Weekdays", #115 1.3). After the v0.7.2 source-
     /// language flip (de → en) the catalogue keys are the English source
     /// strings; the regression intent is unchanged (catalogue presence +
     /// DE/EN parity), only the key spelling is now English.
@@ -55,7 +55,8 @@ struct V052I18nKeysTests {
         "At least one time. Up to eight per day.",
         "No medications yet",
         "Optional: photograph the packaging to suggest name and dose. The image never leaves the device.",
-        "Weekdays",
+        // #115 1.3 — "Weekdays" left the catalogue with the last screen that
+        // used it (the device-calendar mood pattern cards).
         // AI consent
         "Accept",
         "Enable assistant insights",
@@ -64,9 +65,9 @@ struct V052I18nKeysTests {
         "Dark"
     ]
 
-    @Test("R4 added exactly 27 keys — list-size lock")
-    func keyCountIsTwentySeven() {
-        #expect(Self.r4Keys.count == 27)
+    @Test("R4 keys still in the catalogue — list-size lock (27 minus the retired \"Weekdays\")")
+    func keyCountIsTwentySix() {
+        #expect(Self.r4Keys.count == 26)
     }
 
     @Test("Every R4 key resolves to a non-empty German value")

@@ -35,8 +35,8 @@ struct ComplianceKPISection: View {
     /// **W-COMPLIANCE-INV** — the tile renders a paint STATE, not a bare
     /// summary: `.pending` paints an em-dash placeholder until the server
     /// round-trip settles (kills the 100→60→50 value-jump), `.server` paints
-    /// the canonical number, `.localFallback` paints the local estimate with
-    /// an explicit offline marker line.
+    /// the server's `compliance30` verbatim; `.notApplicable` / `.unavailable`
+    /// say why there is no number (#115 · 1.3 — no local estimate any more).
     let state: MedicationDetailStore.ComplianceKPIState
 
     /// v0.8.5 WFIX-COMPLIANCE fix 1 — when non-nil the tile becomes a
@@ -88,17 +88,10 @@ struct ComplianceKPISection: View {
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
                         .monospacedDigit()
-                    if isLocalFallback {
-                        // W-COMPLIANCE-INV — clearly-marked offline fallback:
-                        // the number is a local estimate, not the server's
-                        // dose-history-ledger compliance.
-                        Text(String(localized: "med.compliance.local_estimate"))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                    }
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: HLSpace.sm)
-                Text(String(localized: "med.compliance.window"))
+                Text(String(localized: "med.compliance.window.taken"))
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
                     .multilineTextAlignment(.trailing)
@@ -113,33 +106,32 @@ struct ComplianceKPISection: View {
         }
     }
 
-    /// The summary backing the painted number — `nil` while `.pending`.
-    private var summary: MedicationDetailStore.ComplianceSummary? {
-        switch state {
-        case .pending: nil
-        case let .server(summary), let .localFallback(summary): summary
-        }
-    }
-
-    private var isLocalFallback: Bool {
-        if case .localFallback = state { return true }
-        return false
+    /// The server figures backing the painted number — `nil` unless `.server`.
+    private var adherence: MedicationDetailStore.ServerAdherence? {
+        if case let .server(adherence) = state { return adherence }
+        return nil
     }
 
     private var percentageLabel: String {
-        guard let summary else { return "—" }
-        return HLNumberFormat.percent(summary.percentage)
+        guard let adherence else { return "—" }
+        return HLNumberFormat.percent(adherence.rate)
     }
 
+    /// #115 · 1.3 — "N of M taken" (the server's own denominator), or a
+    /// sentence saying why there is no number.
     private var captionLabel: String {
-        guard let summary else {
-            return String(localized: "med.compliance.loading")
+        switch state {
+        case .pending:
+            String(localized: "med.compliance.loading")
+        case let .server(adherence):
+            String(format: String(localized: "med.compliance.caption.taken"), adherence.taken, adherence.expected)
+        case .notApplicable:
+            String(localized: "med.compliance.notApplicable")
+        case .notTracked:
+            String(localized: "med.compliance.notTracked")
+        case .unavailable:
+            String(localized: "med.compliance.unavailable")
         }
-        return String(
-            format: String(localized: "med.compliance.caption"),
-            summary.inTime,
-            summary.total
-        )
     }
 
     /// v0.12 W4-1 — routed through the single `ComplianceBand` source of truth
@@ -154,19 +146,17 @@ struct ComplianceKPISection: View {
     /// number and its colour could disagree by one band. Feeding the band the
     /// displayed integer makes that impossible — one rounded source of truth.
     private var bandColor: Color {
-        guard let summary else { return HLText.tertiary }
-        return ComplianceBand.band(forPercent: summary.percentage).color
+        guard let adherence else { return HLText.tertiary }
+        return ComplianceBand.band(forPercent: adherence.rate).color
     }
 
     private var accessibilityLabel: String {
-        guard let summary else {
-            return String(localized: "med.compliance.loading")
-        }
+        guard let adherence else { return captionLabel }
         return String(
-            format: String(localized: "med.compliance.a11y"),
-            summary.percentage,
-            summary.inTime,
-            summary.total
+            format: String(localized: "med.compliance.a11y.taken"),
+            adherence.rate,
+            adherence.taken,
+            adherence.expected
         )
     }
 }

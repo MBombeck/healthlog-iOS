@@ -19,7 +19,7 @@ import Testing
 /// - Outbox-replay path (`replay(_:idempotencyKey:)`) invalidates too — this
 ///   is the most common write surface for cached data (offline-create then
 ///   network-replay).
-@Suite("MeasurementsRepository SWR-wrap", .serialized)
+@Suite("MeasurementsRepository SWR-wrap", .serialized, .mockURLSession)
 struct MeasurementsRepositorySWRTests {
     private struct StubReach: ReachabilityProviding, @unchecked Sendable {
         let online: Bool
@@ -72,7 +72,7 @@ struct MeasurementsRepositorySWRTests {
     func seriesUsesCache() async throws {
         let (repo, swr) = try makeRepoWithCache()
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — count only the series
             // endpoint so a parallel suite's request cannot move this counter.
             if req.targets("/api/measurements/series") { calls += 1 }
@@ -93,7 +93,7 @@ struct MeasurementsRepositorySWRTests {
     func recentUsesCache() async throws {
         let (repo, swr) = try makeRepoWithCache()
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: count only the recent-list GET — a request from a suite
             // running in parallel must not be attributed to this assertion.
             if req.targets("/api/measurements", method: "GET") { calls += 1 }
@@ -130,7 +130,7 @@ struct MeasurementsRepositorySWRTests {
         // Pre-warm cache by going online first…
         let onlineRepo = try makeRepo(cache: cache, online: true)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: count only the recent-list GET — a request from a suite
             // running in parallel must not be attributed to this assertion.
             if req.targets("/api/measurements", method: "GET") { calls += 1 }
@@ -149,7 +149,7 @@ struct MeasurementsRepositorySWRTests {
     func replayInvalidatesCache() async throws {
         let (repo, swr) = try makeRepoWithCache()
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: this test counts both surfaces it drives — the series GET
             // and the replay POST — and nothing else.
             if req.targets("/api/measurements/series") || req.targets("/api/measurements", method: "POST") {
@@ -227,7 +227,7 @@ struct MeasurementsRepositorySWRTests {
         }
         #expect(await cache.read(.dashboardSummary(day: profileDay), as: Probe.self) != nil)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let echoJSON =
                 #"{"data":{"id":"srv-2","userId":null,"type":"WEIGHT","value":80.0,"#
                     + #""measuredAt":"2026-05-15T10:00:00Z","notes":null,"source":"MANUAL","#

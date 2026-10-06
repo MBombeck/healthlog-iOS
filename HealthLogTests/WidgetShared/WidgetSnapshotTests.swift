@@ -388,12 +388,13 @@ struct WidgetSnapshotTests {
         #expect(abs(glance.fraction - 0.84) < 0.0001)
     }
 
-    @Test("HealthScoreGlance falls back to the numeric band when server omits one")
-    func healthScoreGlanceBandFallback() throws {
-        // No server band → displayBand uses the 67/34 numeric thresholds.
+    @Test("HealthScoreGlance carries no band when the server omits one (#115 B7)")
+    func healthScoreGlanceNoBandWithoutServer() throws {
+        // No server band → no band; the widget stays neutral instead of the
+        // former 67/34 numeric thresholds.
         let lowScore = HealthScore(score: 20, band: nil, delta: nil)
         let glance = try #require(WidgetSnapshot.HealthScoreGlance.make(from: lowScore))
-        #expect(glance.band == "red")
+        #expect(glance.band == nil)
     }
 
     @Test("HealthScoreGlance clamps the score + fraction into range")

@@ -170,6 +170,10 @@ import Foundation
             // über die Isolationsgrenze gereicht werden müsste.
             SyncTriggerContext.shared.begin(.push)
             defer { SyncTriggerContext.shared.end(.push) }
+            // R5 — every silent push extends the local medication reminders
+            // from the cached list (no request), not only the intake-sync push
+            // below. A push is a wake the app gets without being opened.
+            await backgroundSync?.runReminderTopUp()
             let answered = await backgroundSync?
                 .runHealthSyncPass(HealthSyncTrigger.silentPush) ?? []
             let didSync = !answered.isEmpty

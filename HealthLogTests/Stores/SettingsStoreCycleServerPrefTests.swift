@@ -14,7 +14,7 @@ import Testing
 /// explicit toggle, and logout hygiene. The full CycleGate server×local matrix
 /// lives in `CycleGateTests`.
 @MainActor
-@Suite("SettingsStore cycle server-pref (Build 9)", .serialized)
+@Suite("SettingsStore cycle server-pref (Build 9)", .serialized, .mockURLSession)
 struct SettingsStoreCycleServerPrefTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -77,7 +77,7 @@ struct SettingsStoreCycleServerPrefTests {
         "locale":"de","timezone":"Europe/Berlin","moodReminderEnabled":false},"error":null}
         """
         let hkJSON = #"{"data":{"entries":[],"lastSyncedAt":null},"error":null}"#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             func ok(_ body: String) -> (HTTPURLResponse, Data?) {
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
@@ -216,7 +216,7 @@ struct SettingsStoreCycleServerPrefTests {
         await store.load()
 
         // Reinstall a router whose cycle-prefs PATCH 422s.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/auth/me/cycle-prefs" {
                 let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
                 return (http, Data(#"{"data":null,"error":"nope"}"#.utf8))

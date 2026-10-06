@@ -73,14 +73,13 @@ public extension AppContainer {
         let serverService = CoachServerService(api: api)
         // Consent gate: the server path sends health data off-device, so
         // it must respect the same per-provider AI-consent gate the
-        // `/api/insights/*` surfaces use. The feature flag is folded in
-        // too — when the operator disabled the Coach surface the gate
-        // returns `false` and the sheet surfaces the disabled state
-        // rather than transmitting. Reads both lazily so a mid-session
-        // provider switch / flag change is picked up on the next send.
+        // `/api/insights/*` surfaces use. Consent ONLY: whether the Coach is
+        // available at all is the `coach` capability (#115 · 0.2), checked per
+        // arm by the store — folding it in here made an operator-disabled Coach
+        // ask for consent. Read lazily so a mid-session provider switch is
+        // picked up on the next send.
         let consentStore = aiConsentStore
         let providerStore = aiProviderStore
-        let flagsStore = featureFlagsStore
         // **v0.13 W4 — BYO-key arm.** The client-side device→provider service.
         // Its consent gate is the per-provider BYO grant (Apple 5.1.2(i)) read
         // from the same `AIConsentStore` — so `generate` throws before any
@@ -110,13 +109,8 @@ public extension AppContainer {
             },
             persistence: persistence,
             serverService: serverService,
-            serverConsentGate: { [weak consentStore, weak providerStore, weak flagsStore] in
+            serverConsentGate: { [weak consentStore, weak providerStore] in
                 guard let consentStore, let providerStore else { return false }
-                // Operator can disable the Coach surface app-wide — never
-                // transmit when the flag is off.
-                if let flagsStore, !flagsStore.isEnabled(.assistantCoach) {
-                    return false
-                }
                 guard let config = providerStore.config else { return false }
                 return AppContainer.hasRequiredServerAIConsent(config: config, consentStore: consentStore)
             },
@@ -152,6 +146,8 @@ public extension AppContainer {
         // consent CTA instead of silently routing on-device. Consent stays
         // fail-closed: `serverConsentGate` still gates every actual transmission, so
         // this only *prefers* the arm, it never bypasses the grant.
+        // #115 · 0.2 — the server-resolved `coach` capability, checked per arm.
+        created.aiCapabilities = aiCapabilityGate.reader
         created.prefersServerArm = { [weak consentStore] in
             guard let consentStore else { return false }
             // The grant landed → External AI is the active arm.

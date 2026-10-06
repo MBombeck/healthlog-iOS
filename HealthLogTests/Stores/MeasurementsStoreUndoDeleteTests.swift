@@ -12,7 +12,7 @@ import Testing
 /// `MockURLProtocol` so the DELETE + the restore POST exercise the real wire
 /// (PROJECT_GUIDE.md: never a mock server on the outbox-replay path).
 @MainActor
-@Suite("MeasurementsStore — delete undo", .serialized)
+@Suite("MeasurementsStore — delete undo", .serialized, .mockURLSession)
 struct MeasurementsStoreUndoDeleteTests {
     private func makeAPI() -> APIClient {
         let keychain = InMemoryKeychain()
@@ -45,7 +45,7 @@ struct MeasurementsStoreUndoDeleteTests {
     /// parallel series-hydration fetch which our handler tolerates (returns
     /// an empty series for non-`/measurements` reads).
     private func seedOneWeight(store: MeasurementsStore, id: String) async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path.contains("/series") == true {
                 return (Self.response(200, request: req), Data(#"{"data":{"points":[]}}"#.utf8))
             }
@@ -68,7 +68,7 @@ struct MeasurementsStoreUndoDeleteTests {
         await seedOneWeight(store: store, id: "m-1")
         let row = try #require(store.recent.first { $0.id == "m-1" })
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (Self.response(200, request: req), Data("{}".utf8))
         }
         let ok = await store.delete(row)
@@ -88,7 +88,7 @@ struct MeasurementsStoreUndoDeleteTests {
         await seedOneWeight(store: store, id: "m-1")
         let row = try #require(store.recent.first { $0.id == "m-1" })
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.httpMethod == "DELETE" {
                 return (Self.response(200, request: req), Data("{}".utf8))
             }

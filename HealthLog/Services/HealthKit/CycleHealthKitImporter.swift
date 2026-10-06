@@ -63,6 +63,9 @@ import Foundation
         let defaults: UserDefaults
         let admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)?
         let cursors: DurableHealthCursorStore?
+        /// #115 1.5 — the zone a sample's day is cut in: the account's
+        /// (``ProfileDay``). Injectable for tests.
+        let profileTimeZone: @Sendable () -> TimeZone
         private var observers: [HKObserverQuery] = []
         /// N5.3 — serializes sweeps per category type: actor reentrancy would
         /// otherwise let two rapid observer fires interleave two sweeps from
@@ -95,13 +98,15 @@ import Foundation
             userID: String?,
             defaults: UserDefaults = .standard,
             admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)? = nil,
-            cursors: DurableHealthCursorStore? = nil
+            cursors: DurableHealthCursorStore? = nil,
+            profileTimeZone: @escaping @Sendable () -> TimeZone = { ProfileDay.timeZone }
         ) {
             self.store = store
             self.repo = repo
             self.defaults = defaults
             self.admission = admission
             self.cursors = cursors
+            self.profileTimeZone = profileTimeZone
             partitionToken = HealthKitService.partitionToken(for: userID)
             anchorPrefix = "hl.cycle.hk.anchor." + partitionToken + "."
         }
@@ -248,6 +253,7 @@ import Foundation
         /// No iOS-18 gate needed — uses only the pure mapping + base HK category
         /// sample API (the surrounding sweep is `#available`-guarded).
         func buildWrites(from samples: [HKCategorySample], identifier: String) -> [CycleDayLogWrite] {
+            let timeZone = profileTimeZone()
             var byDate: [String: CycleDayLogWrite] = [:]
             for sample in samples {
                 // Echo guard (W-HK-RELIABILITY G-7) — skip only OUR own write
@@ -262,7 +268,7 @@ import Foundation
                     protectionUsed: protection
                 )
                 guard case let .dayLog(fields) = route else { continue }
-                let dateKey = Self.dateFormatter.string(from: sample.startDate)
+                let dateKey = Self.dayKey(start: sample.startDate, end: sample.endDate, timeZone: timeZone)
                 let loggedAt = Self.isoFormatter.string(from: sample.startDate)
                 var write = byDate[dateKey] ?? CycleDayLogWrite(
                     date: dateKey,
@@ -315,14 +321,31 @@ import Foundation
             }
         }
 
-        private static let dateFormatter: DateFormatter = {
-            let f = DateFormatter()
-            f.calendar = Calendar(identifier: .gregorian)
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.timeZone = .current
-            f.dateFormat = "yyyy-MM-dd"
-            return f
-        }()
+        /// **#115 1.5 — the day a cycle sample belongs to, and with it the
+        /// `cycle-hk:<day>` externalId.**
+        ///
+        /// Cut in the ACCOUNT zone, the zone the server keys cycle days in. The
+        /// old key used a formatter that froze the device zone at first use.
+        ///
+        /// A whole-day sample (what the Health app writes for flow, symptoms and
+        /// most reproductive entries: local midnight to the next local midnight
+        /// of the zone it was LOGGED in) is keyed by its MIDPOINT. Noon of the
+        /// logged day lands on that same calendar day in any zone within ±12 h,
+        /// so the day the person tapped survives a phone that has since moved
+        /// zones — and it is exactly the key the old code produced whenever the
+        /// import ran in the zone the sample was logged in, which is how nearly
+        /// every existing `cycle-hk:` id was minted. That keeps existing ids
+        /// stable: a re-import re-posts the same `(source, externalId)` and the
+        /// server's upsert (`upsertCycleDayLog`, `userId_source_externalId`,
+        /// falling back to the one-row-per-`(userId, date)` constraint) answers
+        /// `duplicate`/`updated`, never a second row. A point-in-time sample
+        /// (sexual activity, a test result) is keyed by its instant.
+        static func dayKey(start: Date, end: Date, timeZone: TimeZone) -> String {
+            let span = end.timeIntervalSince(start)
+            let isWholeDay = span >= 20 * 3600 && span <= 28 * 3600
+            let anchor = isWholeDay ? start.addingTimeInterval(span / 2) : start
+            return ProfileDay.key(for: anchor, timeZone: timeZone)
+        }
 
         /// Immutable after init + used read-only; the codebase annotates ISO8601
         /// statics `nonisolated(unsafe)` (e.g. ShareWithClinicianScreen).

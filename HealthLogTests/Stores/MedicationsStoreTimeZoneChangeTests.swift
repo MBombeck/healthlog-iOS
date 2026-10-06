@@ -74,6 +74,34 @@ struct MedicationsStoreTimeZoneChangeTests {
         #expect(reconciles == 2, "travelling back is a change again")
     }
 
+    /// 1.0.4 (INT-A) — the system may post the change from any thread. The
+    /// observer is registered on the main queue, so a background post still
+    /// reconciles exactly once, on the main thread, and the post returns only
+    /// after the reconcile ran (no unowned task left behind).
+    @Test("a change posted off the main thread reconciles once, on the main thread")
+    func backgroundPostReconcilesOnMain() async throws {
+        let berlin = try #require(TimeZone(identifier: "Europe/Berlin"))
+        let newYork = try #require(TimeZone(identifier: "America/New_York"))
+        let box = ZoneBox(berlin)
+        let center = NotificationCenter()
+        let store = try makeStore()
+
+        var reconciles = 0
+        var ranOnMain = false
+        store.onMedicationsDidChange = { _ in
+            reconciles += 1
+            ranOnMain = Thread.isMainThread
+        }
+        store.startObservingSystemTimeZoneChanges(center: center, currentTimeZone: { box.zone })
+
+        box.zone = newYork
+        await Task.detached {
+            center.post(name: .NSSystemTimeZoneDidChange, object: nil)
+        }.value
+        #expect(reconciles == 1, "the background post must reconcile before it returns")
+        #expect(ranOnMain, "the reconcile must run on the main thread")
+    }
+
     @Test("removing the returned token stops the observation")
     func removingTheTokenStopsObserving() throws {
         let berlin = try #require(TimeZone(identifier: "Europe/Berlin"))

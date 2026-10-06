@@ -112,6 +112,10 @@ struct NtfyChannelCard: View {
                 testOkRow
             }
 
+            if let failure = store.ntfyTestFailure {
+                ChannelTestFailureRow(failure: failure, identifier: "notifications.ntfy.testFailure")
+            }
+
             if let error = store.ntfyError {
                 // v0.14.1 #3 — generic copy for 5xx; never raw server text.
                 Text(error.userFacingDescription)

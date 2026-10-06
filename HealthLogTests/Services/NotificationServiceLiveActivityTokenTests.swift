@@ -18,7 +18,7 @@ import Testing
     ///     unchanged token does not (idempotent — no spam).
     ///   - The silent `MEDICATION_INTAKE_SYNC` push parses + dispatches a
     ///     force-reconcile (the inbound side the server already drives).
-    @Suite("NotificationService — Live-Activity push-token registration (W-B189 #22)", .serialized)
+    @Suite("NotificationService — Live-Activity push-token registration (W-B189 #22)", .serialized, .mockURLSession)
     @MainActor
     struct NotificationServiceLiveActivityTokenTests {
         private static let env = AppEnvironment(
@@ -102,7 +102,7 @@ import Testing
         @Test("POST /api/devices includes liveActivityPushToken when a token is cached")
         func bodyIncludesLiveActivityToken() async {
             let recorder = BodyRecorder()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if let body = req.httpBody ?? req.bodyStreamData() {
                     recorder.record(body)
                 }
@@ -129,7 +129,7 @@ import Testing
         @Test("POST /api/devices omits liveActivityPushToken when none is cached")
         func bodyOmitsTokenWhenAbsent() async {
             let recorder = BodyRecorder()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if let body = req.httpBody ?? req.bodyStreamData() {
                     recorder.record(body)
                 }
@@ -151,7 +151,7 @@ import Testing
         @Test("A new LA token after APNs registration re-fires POST /api/devices")
         func newTokenReRegisters() async {
             let recorder = BodyRecorder()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if let body = req.httpBody ?? req.bodyStreamData() {
                     recorder.record(body)
                 }
@@ -174,7 +174,7 @@ import Testing
         @Test("An unchanged LA token does not re-fire POST /api/devices (idempotent)")
         func unchangedTokenDoesNotSpam() async {
             let recorder = BodyRecorder()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if let body = req.httpBody ?? req.bodyStreamData() {
                     recorder.record(body)
                 }
@@ -209,7 +209,7 @@ import Testing
 
         @Test("MEDICATION_INTAKE_SYNC silent push parses payload + triggers reconcile")
         func intakeSyncTriggersReconcile() async {
-            MockURLProtocol.handler = { req in (Self.okResponse(req), Data()) }
+            MockURLProtocol.install { req in (Self.okResponse(req), Data()) }
 
             let coordinator = BackgroundSyncCoordinator(healthKit: nil)
             let reconcileRan = ReconcileFlag()
@@ -245,7 +245,7 @@ import Testing
 
         @Test("Non-intake silent push does not trigger reconcile")
         func unrelatedSilentPushIsNoop() async {
-            MockURLProtocol.handler = { req in (Self.okResponse(req), Data()) }
+            MockURLProtocol.install { req in (Self.okResponse(req), Data()) }
 
             let coordinator = BackgroundSyncCoordinator(healthKit: nil)
             let reconcileRan = ReconcileFlag()

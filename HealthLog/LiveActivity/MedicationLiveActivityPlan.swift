@@ -68,6 +68,10 @@ enum MedicationLiveActivityPlan {
         for medication in medications
             where medication.active
             && medication.notificationsEnabled
+            // v1.39.1 (#1033) — nothing is ever due on a medication kept as a
+            // record; v1.39.4 (#1040) — nor offered on one the server calls not
+            // actionable today.
+            && medication.offersIntakeActions
             && isLiveActivityEnabled(medication.id)
         {
             guard let occurrence = nextOrCurrentOccurrence(

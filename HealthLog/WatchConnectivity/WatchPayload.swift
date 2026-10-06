@@ -51,6 +51,62 @@ public enum WatchMeasurementKind: String, Codable, Sendable, Hashable, CaseItera
     }
 }
 
+/// **#115 B5 — the unit the wrist enters glucose in: the account's.** Raw values
+/// match the app's `GlucoseUnit`. The WIRE stays canonical: the watch converts
+/// to mg/dL itself (``canonicalMgdL(fromDisplayed:)``) before it sends, so a
+/// phone on any build stores what the wrist showed. A unit flag on the action
+/// instead would let an older phone file 5.3 mmol/L as 5.3 mg/dL.
+public enum WatchGlucoseUnit: String, Codable, Sendable, Hashable {
+    case mgdL
+    case mmolL
+
+    /// mg/dL per mmol/L — the app's `UnitPreferences.mgdLToMmolL` factor
+    /// inverted, and the server's `MGDL_PER_MMOL`.
+    public static let mgdlPerMmol = 18.0182
+
+    /// The unit label under the dialled value.
+    public var suffix: String {
+        switch self {
+        case .mgdL: "mg/dL"
+        case .mmolL: "mmol/L"
+        }
+    }
+
+    /// Digital Crown bounds: the same 20…600 mg/dL band in either unit.
+    public var entryRange: ClosedRange<Double> {
+        switch self {
+        case .mgdL: 20 ... 600
+        case .mmolL: 1.1 ... 33.3
+        }
+    }
+
+    /// Crown step: whole mg/dL, tenths of mmol/L.
+    public var entryStep: Double {
+        switch self {
+        case .mgdL: 1
+        case .mmolL: 0.1
+        }
+    }
+
+    /// Where the crown starts.
+    public var entryDefault: Double {
+        switch self {
+        case .mgdL: 100
+        case .mmolL: 5.5
+        }
+    }
+
+    /// The dialled value in canonical mg/dL — the phone entry path's arithmetic
+    /// (`UnitPreferences.canonicalGlucose`: divide by `1 / 18.0182`), unrounded,
+    /// so wrist and sheet store the identical number and it reads back as dialled.
+    public func canonicalMgdL(fromDisplayed displayed: Double) -> Double {
+        switch self {
+        case .mgdL: displayed
+        case .mmolL: displayed / (1.0 / Self.mgdlPerMmol)
+        }
+    }
+}
+
 /// The glanceable state the phone pushes to the watch. Small, `Codable`,
 /// `Sendable`. Carries only what the watch renders — no tokens, no server
 /// URL, no note/tag free-text (PHI-adjacent).
@@ -105,8 +161,8 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         /// Composite Personal Health Score, clamped 0…100 on construction.
         public let score: Int
         /// Server band token (`"green"` / `"yellow"` / `"red"`), or `nil` when
-        /// the server emitted no band — the complication then derives the signal
-        /// from the numeric thresholds (≥ 70 ok / ≥ 40 warn / else bad).
+        /// the server emitted no band — the complication then stays neutral
+        /// (#115 B7; it used to derive ≥ 70 / ≥ 40 thresholds of its own).
         public let band: String?
 
         public init(score: Int, band: String?) {
@@ -120,15 +176,15 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         }
 
         /// Resolved band token (`"green"` / `"yellow"` / `"red"`) the
-        /// complication colours its signal by: prefer the server band, else
-        /// derive from the numeric thresholds (≥ 70 green / ≥ 40 yellow / else
-        /// red) — the SAME banding as the in-app `HLScoreRing` / phone widget.
+        /// complication colours its signal by: the server band, or `nil`
+        /// (neutral) when there is none or it is unknown. #115 B7 removed the
+        /// numeric fallback (≥ 70 / ≥ 40) — a verdict the server never made.
         /// Pulled into the shared contract so it's unit-testable without a
         /// WidgetKit host (the complication itself isn't reachable from tests).
-        public var signalBand: String {
+        public var signalBand: String? {
             switch band {
-            case "green", "yellow", "red": band ?? "red"
-            default: score >= 70 ? "green" : (score >= 40 ? "yellow" : "red")
+            case "green", "yellow", "red": band
+            default: nil
             }
         }
     }
@@ -203,6 +259,9 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
     /// `MetricKindDescriptor` formatter so it matches the dashboard tile) plus
     /// its unit + symbol + timestamp. `nil` until a measurement has loaded.
     public let latestMeasurement: LatestMeasurement?
+    /// **#115 B5** — the account's glucose unit, which the wrist enters glucose
+    /// in. mg/dL when the phone did not say (a blob from an older phone build).
+    public let glucoseUnit: WatchGlucoseUnit
     /// When the snapshot was generated (staleness / debugging).
     public let generatedAt: Date
 
@@ -215,6 +274,7 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         signedIn: Bool,
         healthScore: HealthScoreGlance? = nil,
         latestMeasurement: LatestMeasurement? = nil,
+        glucoseUnit: WatchGlucoseUnit = .mgdL,
         generatedAt: Date
     ) {
         self.doses = doses
@@ -225,6 +285,7 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         self.signedIn = signedIn
         self.healthScore = healthScore
         self.latestMeasurement = latestMeasurement
+        self.glucoseUnit = glucoseUnit
         self.generatedAt = generatedAt
     }
 
@@ -245,6 +306,11 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
             ?? false
         healthScore = try c.decodeIfPresent(HealthScoreGlance.self, forKey: .healthScore)
         latestMeasurement = try c.decodeIfPresent(LatestMeasurement.self, forKey: .latestMeasurement)
+        // #115 B5 — absent (older phone) or a unit this build does not know:
+        // mg/dL, the unit every earlier wrist entered in.
+        glucoseUnit = (try? c.decodeIfPresent(String.self, forKey: .glucoseUnit))
+            .flatMap { $0 }
+            .flatMap(WatchGlucoseUnit.init(rawValue:)) ?? .mgdL
         generatedAt = try c.decodeIfPresent(Date.self, forKey: .generatedAt) ?? .distantPast
     }
 
@@ -261,12 +327,13 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         try c.encode(signedIn, forKey: .canLog)
         try c.encodeIfPresent(healthScore, forKey: .healthScore)
         try c.encodeIfPresent(latestMeasurement, forKey: .latestMeasurement)
+        try c.encode(glucoseUnit, forKey: .glucoseUnit)
         try c.encode(generatedAt, forKey: .generatedAt)
     }
 
     private enum CodingKeys: String, CodingKey {
         case doses, scheduledCount, takenCount, recentMoodScore, moodCountToday, signedIn, canLog
-        case healthScore, latestMeasurement, generatedAt
+        case healthScore, latestMeasurement, glucoseUnit, generatedAt
     }
 
     /// Fraction taken, clamped `0...1`. A day with no scheduled doses reads
@@ -382,7 +449,8 @@ public enum WatchActionKind: Codable, Sendable, Equatable {
     /// Quick-log a mood (1…5). No note / tags from the watch.
     case logMood(score: Int, at: Date)
     /// Quick-capture a manual measurement at the wrist. `value` is the primary
-    /// scalar (weight kg, glucose mg/dL, pulse bpm, or BP systolic). `secondary`
+    /// scalar (weight kg, glucose mg/dL, pulse bpm, or BP systolic) — always the
+    /// canonical unit; the wrist converts an mmol/L entry (#115 B5). `secondary`
     /// carries the BP diastolic and is `nil` for every scalar kind. The phone
     /// bridges `kind` onto `MetricKind` and funnels the value into the SAME
     /// `MeasurementsStore` capture path the app's `MeasureSheet` uses (server

@@ -53,12 +53,11 @@
         ) async {
             guard !deletedObjects.isEmpty else { return }
             let identifier = sampleType.hkSampleType.identifier
-            let externalIDs: [String] = deletedObjects.compactMap { deleted in
-                guard HealthKitSampleOwnership.isAppMintedDeletion(metadata: deleted.metadata) else {
-                    return nil
-                }
-                return deleted.metadata?[HKMetadataKeyExternalUUID] as? String
-            }
+            let externalIDs = HealthKitMirrorTombstones.mintedIDs(fromDeletedMetadata: deletedObjects.map(\.metadata))
+            // S1 / public #11 — the server keeps a non-Apple-Health row when its
+            // sample is deleted here, so remember the id: the server→Health
+            // mirror must not write the reading straight back.
+            HealthKitMirrorTombstones().record(externalIDs)
             guard !externalIDs.isEmpty else {
                 HLLog.healthKit
                     .debug(

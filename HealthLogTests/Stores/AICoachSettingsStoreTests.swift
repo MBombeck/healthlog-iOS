@@ -13,7 +13,7 @@ import Testing
 /// plus the store's optimistic-write + revert-on-rejection semantics and the
 /// tolerant load path (a missing field must not blank the control or crash).
 @MainActor
-@Suite("AICoachSettingsStore", .serialized)
+@Suite("AICoachSettingsStore", .serialized, .mockURLSession)
 struct AICoachSettingsStoreTests {
     private func makeStore(defaults: UserDefaults? = nil) -> AICoachSettingsStore {
         let env = AppEnvironment(
@@ -65,7 +65,7 @@ struct AICoachSettingsStoreTests {
     @Test("load hydrates both flags from their own routes")
     func loadHydratesBoth() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             switch req.url?.path {
             case "/api/auth/me/documents-auto-ai-read":
                 Self.ok(req, #"{"data":{"documentsAutoAiRead":true},"error":null}"#)
@@ -85,7 +85,7 @@ struct AICoachSettingsStoreTests {
     @Test("load tolerates a documents route that omits the field → OFF, no crash")
     func loadToleratesMissingDocumentsField() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             switch req.url?.path {
             case "/api/auth/me/documents-auto-ai-read":
                 // Older / partial payload — field absent.
@@ -111,7 +111,7 @@ struct AICoachSettingsStoreTests {
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
         nonisolated(unsafe) var capturedKey: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -135,7 +135,7 @@ struct AICoachSettingsStoreTests {
     func setDocumentsRevertsOnError() async {
         let store = makeStore()
         // Seed: server currently OFF.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             switch req.url?.path {
             case "/api/auth/me/documents-auto-ai-read":
                 Self.ok(req, #"{"data":{"documentsAutoAiRead":false},"error":null}"#)
@@ -148,7 +148,7 @@ struct AICoachSettingsStoreTests {
 
         // The PATCH is rejected with a non-retriable 422 → the optimistic ON
         // must roll back to OFF so the UI never lies about persisted state.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             return (http, Data(#"{"data":null,"error":"Invalid request"}"#.utf8))
         }
@@ -167,7 +167,7 @@ struct AICoachSettingsStoreTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -189,7 +189,7 @@ struct AICoachSettingsStoreTests {
         let store = makeStore()
         // Store starts on the default `aggregated`; a rejected PUT to `raw` must
         // roll back to `aggregated`.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             return (http, Data(#"{"data":null,"error":"Invalid privacy mode"}"#.utf8))
         }
@@ -204,7 +204,7 @@ struct AICoachSettingsStoreTests {
     @Test("clearOnLogout resets both flags to their defaults")
     func clearOnLogoutResets() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             switch req.url?.path {
             case "/api/auth/me/documents-auto-ai-read":
                 Self.ok(req, #"{"data":{"documentsAutoAiRead":true},"error":null}"#)
@@ -235,7 +235,7 @@ struct AICoachSettingsStoreTests {
         defaults.set(false, forKey: "hl.coach.cadenceSuggestions.enabled")
         nonisolated(unsafe) var patchCount = 0
         nonisolated(unsafe) var putCount = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.httpMethod == "PATCH" { patchCount += 1 }
             if req.httpMethod == "PUT" { putCount += 1 }
             switch req.url?.path {
@@ -260,7 +260,7 @@ struct AICoachSettingsStoreTests {
     @Test("server disableCoach:true maps to coachDisabled == true and mirrors")
     func semanticMapping() async {
         let defaults = freshDefaults()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             switch req.url?.path {
             case "/api/auth/me/disable-coach":
                 Self.ok(req, #"{"data":{"disableCoach":true},"error":null}"#)
@@ -282,7 +282,7 @@ struct AICoachSettingsStoreTests {
     func rmwEndToEnd() async throws {
         let defaults = freshDefaults()
         nonisolated(unsafe) var putBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.httpMethod == "PUT", req.url?.path == "/api/auth/me/coach-prefs" {
                 putBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
                 return Self.ok(req, #"{"data":{"ok":true},"error":null}"#)
@@ -337,13 +337,13 @@ struct AICoachSettingsStoreTests {
                 }
             }
         }
-        MockURLProtocol.handler = handler(disableJSON: #"{"data":{"disableCoach":false},"error":null}"#)
+        MockURLProtocol.install(handler(disableJSON: #"{"data":{"disableCoach":false},"error":null}"#))
         let store = makeStore(defaults: defaults)
         await store.load()
         #expect(store.coachDisabled == false)
 
         // Web-side change: re-install the handler with the new server value.
-        MockURLProtocol.handler = handler(disableJSON: #"{"data":{"disableCoach":true},"error":null}"#)
+        MockURLProtocol.install(handler(disableJSON: #"{"data":{"disableCoach":true},"error":null}"#))
         await store.load()
         #expect(store.coachDisabled == true)
         #expect(counters.patch == 0)
@@ -353,7 +353,7 @@ struct AICoachSettingsStoreTests {
     @Test("disable-coach 500 leaves coachDisabled nil; absent reminderSuggestions → true")
     func tolerantLoad() async {
         let defaults = freshDefaults()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             switch req.url?.path {
             case "/api/auth/me/disable-coach":
                 let http = HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
@@ -375,7 +375,7 @@ struct AICoachSettingsStoreTests {
     @Test("clearOnLogout resets the coach flags + removes the mirror keys")
     func coachLogoutClears() async {
         let defaults = freshDefaults()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             switch req.url?.path {
             case "/api/auth/me/disable-coach":
                 Self.ok(req, #"{"data":{"disableCoach":true},"error":null}"#)

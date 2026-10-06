@@ -311,14 +311,14 @@ struct HealthScoreComplication: Widget {
 }
 
 /// Maps the resolved band (shared `HealthScoreGlance.signalBand`, tested in
-/// `HealthLogTests`) onto the signal colour, mirroring the in-app `HLScoreRing`
-/// / phone score widget: green ≥ 70 / yellow ≥ 40 / red.
+/// `HealthLogTests`) onto the signal colour. No server band → neutral (#115 B7).
 enum WatchHealthScoreSignal {
     static func color(for glance: WatchSnapshot.HealthScoreGlance) -> Color {
         switch glance.signalBand {
         case "green": LAColor.success
         case "yellow": LAColor.warn
-        default: LAColor.danger
+        case "red": LAColor.danger
+        default: LAColor.textSecondary
         }
     }
 }

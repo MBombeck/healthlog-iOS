@@ -57,7 +57,7 @@
 
     /// C3: “`X-Step-Up: hle_…` verbatim, kein Schema-Präfix, neben
     /// `Authorization: Bearer`.”
-    @Suite("CU-22 — X-Step-Up header contract", .serialized)
+    @Suite("CU-22 — X-Step-Up header contract", .serialized, .mockURLSession)
     struct StepUpHeaderContractTests {
         /// Captured per request so one sweep can assert on all nine routes.
         private struct Seen {
@@ -71,7 +71,7 @@
         ) async throws -> [String: Seen] {
             let repo = try StepUpAuditFixture.makeRepo()
             nonisolated(unsafe) var seen: [String: Seen] = [:]
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 seen[req.url?.path ?? ""] = Seen(
                     stepUp: req.value(forHTTPHeaderField: "X-Step-Up"),
                     authorization: req.value(forHTTPHeaderField: "Authorization"),
@@ -120,7 +120,7 @@
             let repo = try StepUpAuditFixture.makeRepo()
 
             nonisolated(unsafe) var setup: (String?, String)?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // CU-07: the handler is process-global — record only OUR route so
                 // a parallel suite's request cannot overwrite the capture.
                 if req.targets("/api/auth/me/mfa/totp/setup") {
@@ -133,7 +133,7 @@
             #expect(setup?.1 == "POST")
 
             nonisolated(unsafe) var confirm: String?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.targets("/api/auth/me/mfa/totp/confirm") {
                     confirm = req.value(forHTTPHeaderField: "X-Step-Up")
                 }
@@ -146,7 +146,7 @@
             #expect(confirm == token)
 
             nonisolated(unsafe) var rename: (String?, String)?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.targets("/api/auth/me/mfa/webauthn/k1") {
                     rename = (req.value(forHTTPHeaderField: "X-Step-Up"), req.httpMethod ?? "")
                 }
@@ -161,7 +161,7 @@
         func mintRoutesCarryNoElevation() async throws {
             let repo = try StepUpAuditFixture.makeRepo()
             nonisolated(unsafe) var seen: [String: (String?, String?)] = [:]
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 seen[req.url?.path ?? ""] = (
                     req.value(forHTTPHeaderField: "X-Step-Up"),
                     req.value(forHTTPHeaderField: "Authorization")
@@ -194,7 +194,7 @@
 
     /// C3: TTL 300 s, single-use, token-bound, overwritten by a re-mint;
     /// `satisfiesFreshFactor` false for `password`; recovery codes not accepted.
-    @Suite("CU-22 — mint contract")
+    @Suite("CU-22 — mint contract", .mockURLSession)
     struct StepUpMintContractTests {
         @Test("The TTL the server publishes is 300 seconds", arguments: StepUpMethod.allCases)
         func ttlIsFiveMinutes(_ method: StepUpMethod) throws {
@@ -274,7 +274,7 @@
 
     /// C3's starred operations. Verified against the server source rather than
     /// the brief's prose — see ``MfaManagementOperation`` for the citations.
-    @Suite("CU-22 — fresh-factor route map")
+    @Suite("CU-22 — fresh-factor route map", .mockURLSession)
     struct FreshFactorRouteMapTests {
         @Test("Exactly three reachable operations demand a fresh second factor")
         func threeFreshRoutes() {
@@ -310,7 +310,7 @@
 
     /// C3: “Die Ablehnung ist absichtlich uniform — bei `auth.stepup.required`
     /// die gecachte Elevation wegwerfen und neu minten, nicht diagnostizieren.”
-    @Suite("CU-22 — step-up rejection classification")
+    @Suite("CU-22 — step-up rejection classification", .mockURLSession)
     struct StepUpRejectionTests {
         private func serverError(_ status: Int, _ code: String?, _ message: String = "x") -> HLError {
             .server(status: status, code: code, message: message)
@@ -353,7 +353,7 @@
 
     // MARK: - Single-use + the rate-limit-aware hand-back
 
-    @Suite("CU-22 — elevation lifecycle")
+    @Suite("CU-22 — elevation lifecycle", .mockURLSession)
     struct ElevationLifecycleTests {
         private func makeElevation(_ token: String = "hle_one") -> ConsumableElevation {
             ConsumableElevation(StepUpElevation(token: token, method: .totp, satisfiesFreshFactor: true))
@@ -399,7 +399,7 @@
 
     /// The clauses that only show up end-to-end: which failures cost the user a
     /// re-mint, and which error gets which sentence.
-    @Suite("CU-22 — management-action outcomes", .serialized)
+    @Suite("CU-22 — management-action outcomes", .serialized, .mockURLSession)
     @MainActor
     struct StepUpActionOutcomeTests {
         private func makeStore() throws -> AccountSecurityStore {
@@ -417,7 +417,7 @@
         func wrongCodeKeepsElevation() async throws {
             let store = try makeStore()
             let elevation = freshElevation()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // `…/mfa/disable/route.ts:82` — 401 "Invalid code", NO errorCode,
                 // thrown before `commitElevation()` at `:87`.
                 StepUpAuditFixture.response(req, 401, #"{"data":null,"error":"Invalid code","meta":{}}"#)
@@ -434,7 +434,7 @@
         func rateLimitKeepsElevation() async throws {
             let store = try makeStore()
             let elevation = freshElevation()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 StepUpAuditFixture.response(req, 429, #"{"data":null,"error":"Too many requests","meta":{}}"#)
             }
             await store.regenerateRecoveryCodes(elevation: elevation)
@@ -445,7 +445,7 @@
         func unprocessableKeepsElevation() async throws {
             let store = try makeStore()
             let elevation = freshElevation()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 StepUpAuditFixture.response(req, 422, #"{"data":null,"error":"Invalid request","meta":{}}"#)
             }
             await store.renameSecurityKey(id: "k1", name: "Key", elevation: elevation)
@@ -456,7 +456,7 @@
         func stepUpRequiredSpendsAndReverifies() async throws {
             let store = try makeStore()
             let elevation = freshElevation()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 StepUpAuditFixture.response(
                     req, 401,
                     #"{"data":null,"error":"Recent second-factor verification required","meta":{"errorCode":"auth.stepup.required"}}"#
@@ -474,7 +474,7 @@
         func notEnrolledGetsItsOwnMessage() async throws {
             let store = try makeStore()
             let elevation = freshElevation()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 StepUpAuditFixture.response(
                     req, 401,
                     #"{"data":null,"error":"Recent second-factor verification required","meta":{"errorCode":"auth.stepup.mfa_not_enrolled"}}"#
@@ -492,7 +492,7 @@
             let elevation = freshElevation()
             _ = elevation.consume()
             nonisolated(unsafe) var hits = 0
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // CU-07: `hits == 0` only means something when a parallel suite's
                 // request cannot raise it — scope to the route this action uses.
                 if req.targets("/api/auth/me/mfa/webauthn/k1") { hits += 1 }
@@ -507,7 +507,7 @@
         func successSpends() async throws {
             let store = try makeStore()
             let elevation = freshElevation()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 StepUpAuditFixture.ok(req, #"{"data":{"recoveryCodes":["a-b"],"recoveryCodesRemaining":1},"error":null}"#)
             }
             await store.regenerateRecoveryCodes(elevation: elevation)
@@ -520,7 +520,7 @@
         func totpArmTracksStatus() async throws {
             let store = try makeStore()
             #expect(store.isTotpEnabled == false, "idle must not claim a factor exists")
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.url?.path == "/api/version" {
                     return StepUpAuditFixture.ok(req, #"{"data":{"version":"1.34.3"},"error":null}"#)
                 }
@@ -539,13 +539,13 @@
     /// C3: an elevation is “an genau das mintende Token gebunden” and “wird von
     /// einem Re-Mint überschrieben”. The client half of that is simply: never
     /// hold one. Each mint is its own object; nothing memoises.
-    @Suite("CU-22 — no client-side elevation cache", .serialized)
+    @Suite("CU-22 — no client-side elevation cache", .serialized, .mockURLSession)
     struct ElevationCachingTests {
         @Test("Two mints yield two independent single-use elevations")
         func remintIsIndependent() async throws {
             let repo = try StepUpAuditFixture.makeRepo()
             nonisolated(unsafe) var counter = 0
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // CU-07: only the mint route advances the counter.
                 if req.targets("/api/auth/step-up") { counter += 1 }
                 return StepUpAuditFixture.ok(

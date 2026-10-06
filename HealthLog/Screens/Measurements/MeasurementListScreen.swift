@@ -57,6 +57,9 @@ struct MeasurementListScreen: View {
     /// to `Double?` at filter time. Applied client-side on the loaded rows
     /// (the SWR cache the list already paints from), composing with the
     /// source chip + search needle. Empty fields = open-ended bound.
+    /// #115 P2 — the value-range filter is typed in the unit the rows show
+    /// (the account's) and inverted to canonical before it compares.
+    @Environment(\.unitPreferences) var unitPreferences
     @State private var valueMinText: String = ""
     @State private var valueMaxText: String = ""
     @State private var showValueRange: Bool = false
@@ -143,7 +146,7 @@ struct MeasurementListScreen: View {
                         isExpanded: $showValueRange,
                         minText: $valueMinText,
                         maxText: $valueMaxText,
-                        unit: kind.unit
+                        unit: unitPreferences.unitLabel(for: kind)
                     )
                     .listRowInsets(EdgeInsets(top: 0, leading: HLSpace.lg, bottom: HLSpace.xs, trailing: HLSpace.lg))
                     .listRowBackground(Color.clear)
@@ -612,8 +615,11 @@ extension MeasurementListScreen {
         // A360-5 H-4 — locale-aware parse (de "5,5" + grouped "1.234,5" both
         // resolve); a non-empty-but-unparseable bound surfaces visibly via
         // `ValueRangeFilterControl` rather than silently dropping the filter.
-        let lo = LocaleDecimalParser.parse(valueMinText)
-        let hi = LocaleDecimalParser.parse(valueMaxText)
+        // #115 P2 — the bounds are typed in the account's unit; the rows are
+        // canonical SI. Invert once here so "150" on a lb account filters at
+        // 68.04 kg, not at 150 kg.
+        let lo = LocaleDecimalParser.parse(valueMinText).map { unitPreferences.canonicalValue(fromDisplayed: $0, kind: kind) }
+        let hi = LocaleDecimalParser.parse(valueMaxText).map { unitPreferences.canonicalValue(fromDisplayed: $0, kind: kind) }
         if selectedSource != nil, let serverRows = sourceFilteredRows {
             return MeasurementListFilter.apply(
                 serverRows,

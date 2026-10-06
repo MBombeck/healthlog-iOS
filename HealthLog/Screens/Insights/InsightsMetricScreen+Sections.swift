@@ -54,14 +54,19 @@ extension InsightsMetricScreen {
             // therefore shown unconditionally — the SHEET decides the arm, not this
             // button, so there is no longer a `.none`-mode hide or an on-device
             // assistant-insight fallback branch here.
-            InsightsHeaderActionCircle(
-                systemImage: "sparkles",
-                accessibilityLabelText: String(localized: "Ask the coach"),
-                accessibilityIdentifier: "insights.metric.coach.\(kind.rawValue)"
-            ) {
-                presentAskCoach = true
+            // #115 · 0.2 — hidden once a decision (operator, record, module, the
+            // person's own switch) closed the `coach` capability; a missing
+            // provider or consent keeps it (the sheet routes those).
+            if appContainer.offersCoach {
+                InsightsHeaderActionCircle(
+                    systemImage: "sparkles",
+                    accessibilityLabelText: String(localized: "Ask the coach"),
+                    accessibilityIdentifier: "insights.metric.coach.\(kind.rawValue)"
+                ) {
+                    presentAskCoach = true
+                }
+                .hlPressable()
             }
-            .hlPressable()
         }
     }
 
@@ -169,7 +174,10 @@ extension InsightsMetricScreen {
             // v0.14.4 D1 — the same in-range chart values the detail chart draws
             // (`displaySeries` → `recentInRange` fallback), so the card's
             // target-less Verlauf matches the line below for non-targeted kinds.
-            sparklineValues: store.chartPoints.map(\.value)
+            sparklineValues: store.chartPoints.map(\.value),
+            // #115 P2 — the headline, its unit and the target band read in the
+            // account's unit, with glucose pinned to the series' unit.
+            units: store.effectiveUnits(settingsStore.unitPreferences)
         )
     }
 
@@ -526,13 +534,15 @@ extension InsightsMetricScreen {
 
     /// W5-3 — "vs prior <range>" caption from the already-loaded series (no new
     /// server contract). Self-suppresses when `MetricRangeDelta.resolve` finds no
-    /// coherent prior window. Target-band metrics pass `.neutral` (web rule).
+    /// coherent prior window. #115 · 1.3 — colour only from a server verdict:
+    /// weight reads `tiles.weightTrend.direction` off the snapshot the briefing
+    /// store already holds; every other metric stays neutral.
     @ViewBuilder
     var rangeDeltaSlot: some View {
         if let points = store.displaySeries?.points, !points.isEmpty {
             MetricRangeDelta(
                 points: points,
-                polarity: targetItem?.range != nil ? .neutral : kind.descriptor.trendPolarity,
+                sentiment: kind == .weight ? briefingStore.snapshotBriefing?.weightTrend?.direction : nil,
                 range: store.range
             )
         }

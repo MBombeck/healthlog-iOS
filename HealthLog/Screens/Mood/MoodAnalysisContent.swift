@@ -25,6 +25,12 @@ import SwiftUI
 /// can never diverge on the maths.
 struct MoodAnalysisContent<Section: View>: View {
     @Environment(MoodStore.self) private var store
+    /// #115 · 1.3 — the server's stability rides the relations payload
+    /// (`GET /api/mood/insights`, SWR-cached, already loaded by the Insights
+    /// host; the More → Stimmung host loads it here).
+    /// Optional so a host without the store (previews, render tests) still
+    /// draws; the section then shows no stability, never a computed one.
+    @Environment(MoodRelationsStore.self) private var relationsStore: MoodRelationsStore?
 
     /// The host-owned period selection (drives the windowed slice).
     let period: MoodPeriod
@@ -49,7 +55,7 @@ struct MoodAnalysisContent<Section: View>: View {
     var analysis: MoodAnalysisEngine = .live
     /// Per-section decorator: the host wraps each section in its own entrance
     /// motion (zone stagger) or renders it verbatim. `index` is the section's
-    /// position (0…6) so a staggered host can offset its delay.
+    /// position (0…5) so a staggered host can offset its delay.
     @ViewBuilder let section: (_ index: Int, _ content: AnyView) -> Section
 
     /// **Phase 09 / plan 09-04.** The analysis this body draws, published on the
@@ -81,7 +87,7 @@ struct MoodAnalysisContent<Section: View>: View {
                 periodDays: period.rawValue,
                 dayStart: dayStart,
                 calendar: calendar,
-                enrichment: nil
+                enrichment: store.dailySeries
             ),
             fullHistory: heatmapDrivenByPeriod ? nil : MoodAnalysisKey(
                 revision: revision,
@@ -89,7 +95,7 @@ struct MoodAnalysisContent<Section: View>: View {
                 periodDays: nil,
                 dayStart: dayStart,
                 calendar: calendar,
-                enrichment: nil
+                enrichment: store.dailySeries
             )
         )
     }
@@ -145,9 +151,12 @@ struct MoodAnalysisContent<Section: View>: View {
         section(2, AnyView(trendSection))
         section(3, AnyView(stabilitySection))
         section(4, AnyView(MoodTagInsightSection(deltas: insights.tagDeltas)))
-        section(5, AnyView(MoodPatternSection(patterns: insights.patterns)))
+        // #115 · 1.3 — the pattern cards (previous day, weekend, best weekday,
+        // notes, lagged tags, multi-entry days) were detected on the device
+        // calendar and have no server source yet; they are gone until the
+        // server publishes them (see the B2 report for the issue text).
         if showsRecentSection {
-            section(6, AnyView(recentSection))
+            section(5, AnyView(recentSection))
         }
     }
 
@@ -166,6 +175,12 @@ struct MoodAnalysisContent<Section: View>: View {
             MoodHeroSummary(insights: insights)
         }
         .task(id: key) { await loadAnalysis(key) }
+        // #115 · 1.3 — the server's day means and stability. Re-read when the
+        // entries move (a write drops the series' SWR row); not on launch.
+        .task(id: store.entriesRevision) {
+            await store.loadDailySeries()
+            if let relationsStore, relationsStore.response == nil { await relationsStore.load() }
+        }
     }
 
     private var heatmapSection: some View {
@@ -191,7 +206,7 @@ struct MoodAnalysisContent<Section: View>: View {
 
     private var stabilitySection: some View {
         MoodStabilitySection(
-            stability: insights.stability,
+            stability: relationsStore?.response?.stability,
             entryCount: insights.entryCount,
             windowLabel: windowLabel
         )

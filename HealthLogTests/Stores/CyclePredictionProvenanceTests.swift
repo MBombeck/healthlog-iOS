@@ -21,7 +21,7 @@ import Testing
 /// Real `APIClient` + `MockURLProtocol` per the test doctrine — never a mock
 /// server. `.serialized` because the handler is global.
 @MainActor
-@Suite("CU-25 — prediction provenance", .serialized)
+@Suite("CU-25 — prediction provenance", .serialized, .mockURLSession)
 struct CyclePredictionProvenanceTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -40,13 +40,8 @@ struct CyclePredictionProvenanceTests {
     }
 
     private func makeFlagsEnabled() async -> FeatureFlagsStore {
-        let repo = FeatureFlagsRepository(api: makeClient())
-        let store = FeatureFlagsStore(repo: repo)
-        MockURLProtocol.handler = { req in
-            let body = Data(#"{"data":{"flags":{"cycle.tracking":true}},"error":null}"#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
-        }
-        await store.refresh()
+        let store = FeatureFlagsStore()
+        store.setOverride(.cycleTracking, enabled: true)
         return store
     }
 
@@ -59,7 +54,7 @@ struct CyclePredictionProvenanceTests {
         """
         let meJSON = #"{"data":{"id":"u1","username":"u","email":"u@example.com","avatarUrl":null},"error":null}"#
         let hkJSON = #"{"data":{"entries":[],"lastSyncedAt":null},"error":null}"#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: String
             switch path {
@@ -96,7 +91,7 @@ struct CyclePredictionProvenanceTests {
         "typicalCycleLength":null,"typicalPeriodLength":null,"lutealPhaseLength":null,\
         "secondarySymptom":"MUCUS","updatedAt":"2026-06-10T00:00:00.000Z"},"error":null}
         """
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: String = switch path {
             case "/api/cycle/calendar": calendarJSON

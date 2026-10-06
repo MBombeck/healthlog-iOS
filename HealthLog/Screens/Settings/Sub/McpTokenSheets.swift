@@ -68,16 +68,21 @@ struct McpTokenMintSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
-                        Task {
-                            let ok = await store.mintToken(name: name, scope: scope)
-                            if ok { dismiss() }
-                        }
+                        Task { await mint() }
                     }
                     .disabled(trimmedName.isEmpty || store.isMinting)
                     .accessibilityIdentifier("settings.mcp.mint.submit")
                 }
             }
+            // R2 / #115 A3 — a mint the server wants a fresh proof for:
+            // confirm, then mint again with the elevation.
+            .stepUpConfirmation(store.stepUp) { await mint() }
         }
+    }
+
+    private func mint() async {
+        let ok = await store.mintToken(name: name, scope: scope)
+        if ok { dismiss() }
     }
 
     private var trimmedName: String {

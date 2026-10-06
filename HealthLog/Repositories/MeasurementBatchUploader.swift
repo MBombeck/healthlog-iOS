@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Current account credentials used to create an ephemeral measurement-upload
 /// lease. Values are read from Keychain at the composition boundary and are
@@ -75,12 +76,23 @@ public actor MeasurementBatchUploader {
     /// verbiegen.
     private let syncTrigger: SyncTriggerContext
 
-    /// Optional Hook der nach jedem erfolgreichen Batch-POST aufgerufen wird —
-    /// vom Composition-Root gesetzt damit `HKReadinessStore.noteSuccessfulSync`
-    /// die "Zuletzt synchronisiert"-Zeit in Settings → Health aktualisieren
-    /// kann (F7-Plan §5). Closure ist `@Sendable` damit sie via Actor zu
-    /// `@MainActor` springen kann.
-    private var successNotifier: (@Sendable (Date) async -> Void)?
+    /// Hook, der nach jedem akzeptierten Batch-POST aufgerufen wird, mit dem
+    /// Zeitpunkt und dem Konto, dessen Lease den POST getragen hat (`nil` nur
+    /// für einen Uploader ohne Lease-Quelle, also direkte Unit-Tests).
+    public typealias SuccessNotifier = @Sendable (_ syncedAt: Date, _ ownerUserID: String?) async -> Void
+
+    /// Vom Composition-Root gesetzt (`AppContainer.configureRuntimeWiring`),
+    /// damit `HKReadinessStore` die "Zuletzt synchronisiert"-Zeit in
+    /// Settings → Apple Health bewegt (F7-Plan §5).
+    ///
+    /// **#10 — bis 1.1.0 (284) setzte das niemand außer den Tests.** Die Anzeige
+    /// stand deshalb dauerhaft auf "Not synced yet", und `isConnected` konnte den
+    /// Abgelehnt-Fehlalarm für Nur-Lese-Nutzer nie unterdrücken. Der Slot ist
+    /// seitdem ein `Mutex` statt Actor-Zustand, damit der Composition-Root ihn
+    /// **synchron** im selben Init-Tick setzt: ein Hintergrund-Wake, der direkt
+    /// nach dem Kaltstart hochlädt, findet ihn schon vor, statt gegen einen
+    /// losgelassenen `Task` zu laufen.
+    private let successNotifierSlot = Mutex<SuccessNotifier?>(nil)
 
     // MARK: - F8 hotfix Backoff-State (v0.4.1.1)
 
@@ -117,9 +129,10 @@ public actor MeasurementBatchUploader {
 
     /// Setter-Injection (statt Constructor-Inject), weil der Composition-Root
     /// den Uploader baut BEVOR der HKReadinessStore existiert (gleiche Reihen-
-    /// folge wie `HealthKitService.setUploader`).
-    public func setSuccessNotifier(_ notifier: (@Sendable (Date) async -> Void)?) {
-        successNotifier = notifier
+    /// folge wie `HealthKitService.setUploader`). `nonisolated` und synchron,
+    /// siehe ``successNotifierSlot``.
+    public nonisolated func setSuccessNotifier(_ notifier: SuccessNotifier?) {
+        successNotifierSlot.withLock { $0 = notifier }
     }
 
     /// Sendet alle `entries` als ein oder mehrere Batches. Liefert einen Outcome
@@ -179,42 +192,19 @@ public actor MeasurementBatchUploader {
         for chunk in entries.chunks(of: Self.maxEntriesPerBatch) {
             try await throttle.acquire()
             try authLease?.validate()
-
-            // CU-21 (1): der tatsächliche Auslöser DIESES Sweeps. Nicht geraten —
-            // `SyncTriggerContext` trägt das Fenster, das der auslösende Pfad
-            // (BGProcessing / BGAppRefresh / Silent-Push / HK-Background-
-            // Delivery) um seine Arbeit gelegt hat; ohne offenes Fenster ist der
-            // Sweep per Restmenge ein Vordergrund-Pull.
-            let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: syncTrigger.current)
-            let base: APIRequest<HealthKitBatchResponseDTO> = try .post(
-                "/api/measurements/batch",
-                body: payload,
-                encoder: encoder,
-                idempotencyKey: IdempotencyKey()
-            )
-            let req = APIRequest<HealthKitBatchResponseDTO>(
-                method: base.method,
-                path: base.path,
-                query: base.query,
-                body: base.body,
-                extraHeaders: authLease.map { ["Authorization": $0.authorizationHeader] } ?? base.extraHeaders,
-                idempotencyKey: base.idempotencyKey,
-                maxRetries: authLease == nil ? base.maxRetries : 0,
-                failFast: base.failFast,
-                streaming: base.streaming,
-                allowsAuthenticationRecovery: authLease == nil
-            )
             do {
-                let response = try await api.send(req)
-                try authLease?.validate()
-                // The submitted external ids travel with the count: they are what
-                // makes `superseded_in_batch` verifiable rather than assumed.
-                try MeasurementBatchAcceptance.validate(
-                    postedCount: chunk.count,
-                    postedExternalIds: chunk.map(\.externalId),
-                    response: response,
-                    policy: .deployedMeasurementRoute
-                )
+                let response: HealthKitBatchResponseDTO
+                do {
+                    response = try await post(chunk, requiring: authLease)
+                } catch let invalid as MeasurementBatchInvalid {
+                    // E1 — v1.39.1 named the entries it refused: they go into
+                    // the skip register, the rest goes out once more on its own.
+                    response = try await invalid.split(chunk, ownerID: authLease?.ownerUserID) { rest in
+                        try await throttle.acquire()
+                        try authLease?.validate()
+                        return try await post(rest, requiring: authLease)
+                    }
+                }
                 outcomes.append(BatchUploadOutcome(chunk: chunk, response: response))
                 // First success → Backoff komplett resetten.
                 resetBackoffOnSuccess()
@@ -222,8 +212,10 @@ public actor MeasurementBatchUploader {
                 // Notifier feuert pro erfolgreichem Chunk: der "Zuletzt synchroni-
                 // siert"-Surface soll Live-Updates während eines grossen Backfills
                 // zeigen, nicht erst nach 1200 Samples.
-                if let notifier = successNotifier {
-                    await notifier(Date())
+                // #10 — mit dem Lease-Eigentümer, damit der Empfänger einen
+                // Upload des vorigen Kontos nach Abmelden/Kontowechsel verwirft.
+                if let notifier = successNotifierSlot.withLock({ $0 }) {
+                    await notifier(clock(), authLease?.ownerUserID)
                 }
             } catch {
                 try authLease?.validate()
@@ -233,6 +225,49 @@ public actor MeasurementBatchUploader {
         }
         try authLease?.validate()
         return outcomes
+    }
+
+    /// One `POST /api/measurements/batch` for `chunk` under a fresh idempotency
+    /// key, validated by the acceptance gate.
+    private func post(
+        _ chunk: [HealthKitBatchEntryDTO],
+        requiring authLease: MeasurementUploadAuthenticationLease?
+    ) async throws -> HealthKitBatchResponseDTO {
+        // CU-21 (1): der tatsächliche Auslöser DIESES Sweeps. Nicht geraten —
+        // `SyncTriggerContext` trägt das Fenster, das der auslösende Pfad
+        // (BGProcessing / BGAppRefresh / Silent-Push / HK-Background-
+        // Delivery) um seine Arbeit gelegt hat; ohne offenes Fenster ist der
+        // Sweep per Restmenge ein Vordergrund-Pull.
+        let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: syncTrigger.current)
+        let base: APIRequest<HealthKitBatchResponseDTO> = try .post(
+            "/api/measurements/batch",
+            body: payload,
+            encoder: encoder,
+            idempotencyKey: IdempotencyKey()
+        )
+        let req = APIRequest<HealthKitBatchResponseDTO>(
+            method: base.method,
+            path: base.path,
+            query: base.query,
+            body: base.body,
+            extraHeaders: authLease.map { ["Authorization": $0.authorizationHeader] } ?? base.extraHeaders,
+            idempotencyKey: base.idempotencyKey,
+            maxRetries: authLease == nil ? base.maxRetries : 0,
+            failFast: base.failFast,
+            streaming: base.streaming,
+            allowsAuthenticationRecovery: authLease == nil
+        )
+        let response = try await api.send(req)
+        try authLease?.validate()
+        // The submitted external ids travel with the count: they are what
+        // makes `superseded_in_batch` verifiable rather than assumed.
+        try MeasurementBatchAcceptance.validate(
+            postedCount: chunk.count,
+            postedExternalIds: chunk.map(\.externalId),
+            response: response,
+            policy: .deployedMeasurementRoute
+        )
+        return response
     }
 
     private nonisolated static func canonical(_ value: String?) -> String {

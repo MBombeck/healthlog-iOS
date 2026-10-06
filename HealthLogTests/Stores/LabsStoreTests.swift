@@ -49,7 +49,7 @@ private enum LabsTestJSON {
 /// undo-restore round-trip, and the `403 module.disabled` → `isDisabled` branch.
 /// Real `APIClient` + stub `URLProtocol` (no mock server).
 @MainActor
-@Suite("LabsStore (v1.18.1 W-LABS)", .serialized)
+@Suite("LabsStore (v1.18.1 W-LABS)", .serialized, .mockURLSession)
 struct LabsStoreTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -75,7 +75,7 @@ struct LabsStoreTests {
             LabsTestJSON.row(id: "b", panel: nil, analyte: "Custom"),
             LabsTestJSON.row(id: "c", panel: "CBC", analyte: "Hemoglobin")
         ]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body: Data = req.url?.path == "/api/biomarkers"
                 ? LabsTestJSON.emptyBiomarkers
                 : LabsTestJSON.labsList(rows)
@@ -96,7 +96,7 @@ struct LabsStoreTests {
     @Test("optimistic delete removes the row + enqueues an undo action")
     func optimisticDelete() async throws {
         let rows = [LabsTestJSON.row(id: "a", panel: "Metabolic", analyte: "Glucose")]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: Data = if path == "/api/biomarkers" {
                 LabsTestJSON.emptyBiomarkers
@@ -128,7 +128,7 @@ struct LabsStoreTests {
         // the next load. Mirror MeasurementsStore/MedicationsStore: keep the
         // optimistic removal + keep the undo affordance live.
         let rows = [LabsTestJSON.row(id: "a", panel: "Metabolic", analyte: "Glucose")]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             if path == "/api/biomarkers" {
                 return (
@@ -168,7 +168,7 @@ struct LabsStoreTests {
         // "couldn't delete" state rather than a silently vanished row that never
         // syncs.
         let rows = [LabsTestJSON.row(id: "a", panel: "Metabolic", analyte: "Glucose")]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             if path == "/api/biomarkers" {
                 return (
@@ -204,7 +204,7 @@ struct LabsStoreTests {
     func undoRestore() async throws {
         let rows = [LabsTestJSON.row(id: "a", panel: "Metabolic", analyte: "Glucose")]
         nonisolated(unsafe) var restoreCalled = false
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: Data
             if path == "/api/biomarkers" {
@@ -236,7 +236,7 @@ struct LabsStoreTests {
 
     @Test("biomarker catalog: empty list + not loading drives the empty state")
     func biomarkerCatalogEmptyState() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body: Data = req.url?.path == "/api/biomarkers"
                 ? LabsTestJSON.emptyBiomarkers
                 : LabsTestJSON.labsList([])
@@ -256,7 +256,7 @@ struct LabsStoreTests {
             LabsTestJSON.biomarker(id: "2", name: "ferritin"),
             LabsTestJSON.biomarker(id: "3", name: "Albumin")
         ]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body: Data = req.url?.path == "/api/biomarkers"
                 ? LabsTestJSON.biomarkers(markers)
                 : LabsTestJSON.labsList([])
@@ -274,7 +274,7 @@ struct LabsStoreTests {
 
     @Test("403 module.disabled flips isDisabled + clears data")
     func moduleDisabled() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Module disabled","meta":{"errorCode":"module.disabled","module":"labs"}}
             """#.utf8)
@@ -305,7 +305,7 @@ struct LabsStoreTests {
 /// `APIClient` + stub `URLProtocol` (per the no-mock-server doctrine); a
 /// retriable 503 routes the write into the outbox and the store reports success.
 @MainActor
-@Suite("LabsStore offline create (audit H-2)", .serialized)
+@Suite("LabsStore offline create (audit H-2)", .serialized, .mockURLSession)
 struct LabsStoreOfflineTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -321,7 +321,7 @@ struct LabsStoreOfflineTests {
 
     /// 503 on every request → retriable → the repo enqueues + re-throws.
     private func install503() {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }
     }
@@ -373,7 +373,7 @@ struct LabsStoreOfflineTests {
 /// ``LabsStore/sortedByDate`` (the "chronological" mode). Pure derivations over a
 /// seeded in-memory snapshot — no network round-trip needed.
 @MainActor
-@Suite("LabsStore sort modes (LR1)", .serialized)
+@Suite("LabsStore sort modes (LR1)", .serialized, .mockURLSession)
 struct LabsSortModeTests {
     private func makeStore() throws -> LabsStore {
         let env = AppEnvironment(

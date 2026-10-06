@@ -11,7 +11,7 @@ import Testing
 /// the FindingsList beneath them already shows "Noch keine Befunde". The
 /// store collapses to `.empty(.noData)` so the screen paints its empty-state
 /// view instead of spinners-forever.
-@Suite("ChartDetailStore — empty-state collapse on fan-out exhaustion", .serialized)
+@Suite("ChartDetailStore — empty-state collapse on fan-out exhaustion", .serialized, .mockURLSession)
 @MainActor
 struct ChartDetailStoreEmptyStateTests {
     private func makeAPIClient() -> APIClient {
@@ -56,7 +56,7 @@ struct ChartDetailStoreEmptyStateTests {
         let store = try makeStore(kind: .weight, api: api)
         let emptySeries = emptySeriesPayload(kindKey: "weight")
         let emptyMeasurements = emptyMeasurementsPayload()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let path = request.url?.path ?? ""
             if path.contains("/api/insights/") {
                 let response = HTTPURLResponse(
@@ -94,7 +94,7 @@ struct ChartDetailStoreEmptyStateTests {
     func bothEndpointsFailingCollapsesToEmpty() async throws {
         let api = makeAPIClient()
         let store = try makeStore(kind: .weight, api: api)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 500,
@@ -120,7 +120,7 @@ struct ChartDetailStoreEmptyStateTests {
     func bodyTemperatureCollapsesToEmpty() async throws {
         let api = makeAPIClient()
         let store = try makeStore(kind: .bodyTemperature, api: api)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -146,7 +146,7 @@ struct ChartDetailStoreEmptyStateTests {
     func floorsNoSeriesSettlesToEmpty() async throws {
         let api = makeAPIClient()
         let store = try makeStore(kind: .flightsClimbed, api: api)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -178,7 +178,7 @@ struct ChartDetailStoreEmptyStateTests {
                 + "{\"id\":\"w1\",\"at\":\"2026-06-01T08:00:00Z\",\"value\":81.0},"
                 + "{\"id\":\"w2\",\"at\":\"2026-06-02T08:00:00Z\",\"value\":80.0}"
                 + "],\"stats\":{\"mean\":80.5,\"min\":80,\"max\":81,\"stdDev\":0.5,\"count\":2}}}").utf8)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -207,7 +207,7 @@ struct ChartDetailStoreEmptyStateTests {
         let weightSeries = Data(("{\"data\":{\"kind\":\"weight\",\"points\":["
                 + "{\"id\":\"w1\",\"at\":\"2026-06-01T08:00:00Z\",\"value\":81.0}"
                 + "],\"stats\":{\"mean\":81,\"min\":81,\"max\":81,\"stdDev\":0,\"count\":1}}}").utf8)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,

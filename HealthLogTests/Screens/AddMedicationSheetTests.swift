@@ -60,7 +60,7 @@ struct AddMedicationSheetFormLogicTests {
         let expected: Set = [
             "BLOOD_PRESSURE", "VITAMIN", "SUPPLEMENT", "PAIN_RELIEF",
             "ALLERGY", "DIGESTIVE", "THYROID", "HORMONE", "SKIN",
-            "SLEEP_AID", "OTHER"
+            "SLEEP_AID", "DIABETES", "ANTIBIOTIC", "MENTAL_HEALTH", "OTHER"
         ]
         #expect(Set(MedicationCategoryOption.allCases.map(\.wireValue)) == expected)
     }

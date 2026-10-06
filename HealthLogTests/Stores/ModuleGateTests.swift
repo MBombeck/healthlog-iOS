@@ -21,7 +21,7 @@ import Testing
 
 // MARK: - 1. Decode
 
-@Suite("AuthMeModules — decode tolerance")
+@Suite("AuthMeModules — decode tolerance", .mockURLSession)
 struct AuthMeModulesDecodeTests {
     @Test("Missing modules field → nil (all modules on)")
     func missingFieldDecodesNil() throws {
@@ -50,7 +50,7 @@ struct AuthMeModulesDecodeTests {
 // MARK: - 2. Gate logic
 
 @MainActor
-@Suite("ModuleGate — isEnabled resolution")
+@Suite("ModuleGate — isEnabled resolution", .mockURLSession)
 struct ModuleGateLogicTests {
     @Test("Absent map → every module on, incl. illness (default-on; v1.18.3)")
     func absentMapDefaults() {
@@ -143,7 +143,7 @@ struct ModuleGateLogicTests {
 
 // MARK: - 3. 403 handling
 
-@Suite("APIClient — module-disabled envelope (#30)", .serialized)
+@Suite("APIClient — module-disabled envelope (#30)", .serialized, .mockURLSession)
 struct APIClientModuleDisabledTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -158,7 +158,7 @@ struct APIClientModuleDisabledTests {
     @Test("403 + meta.errorCode module.disabled → HLError.moduleDisabled(module)")
     func surfacesTypedError() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Module disabled","meta":{"errorCode":"module.disabled","module":"cycle"}}
             """#.utf8)
@@ -178,7 +178,7 @@ struct APIClientModuleDisabledTests {
     @Test("403 without meta → generic HLError.server (no false-positive typing)")
     func plain403StaysGeneric() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"Forbidden"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -196,7 +196,7 @@ struct APIClientModuleDisabledTests {
     @Test("Non-403 with module.disabled meta → generic server error (status gates typing)")
     func nonForbiddenStaysGeneric() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Validation","meta":{"errorCode":"module.disabled","module":"cycle"}}
             """#.utf8)
@@ -222,7 +222,7 @@ struct APIClientModuleDisabledTests {
         await api.setModuleDisabledHandler { @Sendable module in
             await received.set(module)
         }
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Module disabled","meta":{"errorCode":"module.disabled","module":"workouts"}}
             """#.utf8)
@@ -243,7 +243,7 @@ struct APIClientModuleDisabledTests {
 
 // MARK: - 4. Surface gating mapping
 
-@Suite("ModuleKey — surface mapping (#30)")
+@Suite("ModuleKey — surface mapping (#30)", .mockURLSession)
 struct ModuleKeySurfaceMappingTests {
     @Test("sleep / glucose own their dashboard metric kinds")
     func metricOwningModules() {
@@ -272,7 +272,7 @@ struct ModuleKeySurfaceMappingTests {
 
 // MARK: - 5. PATCH body shape (v1.18.1 §4 Q3)
 
-@Suite("ModulesPatchDTO — per-key body encoding")
+@Suite("ModulesPatchDTO — per-key body encoding", .mockURLSession)
 struct ModulesPatchDTOEncodingTests {
     private func encode(_ changes: [String: Bool]) throws -> [String: Bool] {
         let data = try JSONEncoder().encode(ModulesPatchDTO(changes: changes))
@@ -304,7 +304,7 @@ struct ModulesPatchDTOEncodingTests {
 // MARK: - 6. Settings switchboard offered-set (v1.18.1 §4)
 
 @MainActor
-@Suite("SettingsModulesScreen — offered toggle set")
+@Suite("SettingsModulesScreen — offered toggle set", .mockURLSession)
 struct SettingsModulesOfferedSetTests {
     @Test("Offered set excludes the delegated cycle/coach keys")
     func excludesNonToggleable() {
@@ -338,7 +338,7 @@ struct SettingsModulesOfferedSetTests {
 // MARK: - 7. setEnabled — single-key PATCH + 422-guard
 
 @MainActor
-@Suite("ModuleGate — setEnabled per-key PATCH")
+@Suite("ModuleGate — setEnabled per-key PATCH", .mockURLSession)
 struct ModuleGateSetEnabledTests {
     @Test("Delegated/core keys are rejected without a network hop")
     func rejectsNonToggleable() {

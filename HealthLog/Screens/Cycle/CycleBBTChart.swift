@@ -88,6 +88,19 @@ struct CycleBBTChartModel: Equatable {
         )
     }
 
+    /// #115 P2 — the same chart with every reading mapped through `display`
+    /// (°C → the account's unit). Segments, phases and ovulation stay as built.
+    func converted(_ display: (Double) -> Double) -> CycleBBTChartModel {
+        func map(_ point: Point) -> Point {
+            Point(day: point.day, date: point.date, value: display(point.value), phase: point.phase, excluded: point.excluded)
+        }
+        return CycleBBTChartModel(
+            points: points.map(map),
+            lineSegments: lineSegments.map { LineSegment(id: $0.id, points: $0.points.map(map)) },
+            ovulation: ovulation
+        )
+    }
+
     private static func chartDate(_ key: String) -> Date? {
         guard let milliseconds = CyclePredictionEngine.parseDayMs(key) else { return nil }
         return Date(timeIntervalSince1970: milliseconds / 1000)
@@ -96,14 +109,19 @@ struct CycleBBTChartModel: Equatable {
 
 struct CycleBBTChart: View {
     @Environment(\.colorScheme) private var colorScheme
+    /// #115 P2 — the basal temperature reads in the account's unit (°F on an
+    /// imperial account); the logged value stays canonical °C.
+    @Environment(\.unitPreferences) private var units
     let days: [CalendarDayDTO]
     let cycles: [MenstrualCycleDTO]
     let prediction: CyclePredictionDTO?
     let rawMode: Bool
     let today: String
 
+    /// #115 P2 — built canonical (°C), plotted in the account's unit.
     private var model: CycleBBTChartModel {
         CycleBBTChartModel.build(days: days, cycles: cycles, prediction: prediction, today: today)
+            .converted { [units] in units.displayValue($0, kind: .bodyTemperature) }
     }
 
     var body: some View {
@@ -156,8 +174,14 @@ struct CycleBBTChart: View {
             }
         }
         .frame(minHeight: 220)
-        .chartYAxisLabel("cycle.bbt.axis.celsius")
+        .chartYAxisLabel { axisUnitLabel }
         .accessibilityChartDescriptor(ChartDescriptor(descriptor: descriptor))
+    }
+
+    /// "°C" from the catalogue on a metric account, else the account's label.
+    private var axisUnitLabel: Text {
+        guard let suffix = units.transform(for: .bodyTemperature).suffix else { return Text("cycle.bbt.axis.celsius") }
+        return Text(verbatim: suffix)
     }
 
     private func pointColor(_ point: CycleBBTChartModel.Point) -> Color {
@@ -190,7 +214,12 @@ struct CycleBBTChart: View {
             yAxisTitle: String(localized: "cycle.bbt.axis.temperature"),
             seriesName: String(localized: "cycle.bbt.series"),
             points: points,
-            yValueLabel: { value in String(format: String(localized: "cycle.bbt.value"), value) }
+            yValueLabel: { [units] value in
+                guard let suffix = units.transform(for: .bodyTemperature).suffix else {
+                    return String(format: String(localized: "cycle.bbt.value"), value)
+                }
+                return "\(value.formatted(.number.precision(.fractionLength(2)))) \(suffix)"
+            }
         )
     }
 }

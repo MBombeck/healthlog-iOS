@@ -77,8 +77,15 @@ struct TotpEnableSheet: View {
     private var stepBody: some View {
         switch step {
         case .verifySetup:
-            // setup is non-fresh; TOTP is not active yet → password/passkey only.
-            StepUpArmPicker(operation: .totpSetup, hasTotp: false) { elevation in
+            // TOTP is not active yet → no app-code arm. Setup is non-fresh on an
+            // account without a second factor; on a security-key-only account
+            // server v1.39.3 wants the key or a passkey (R2 / #115 A3), so the
+            // password arm is hidden there.
+            StepUpArmPicker(
+                requiresFresh: MfaManagementOperation.totpSetup
+                    .requiresFreshFactor(accountHasSecondFactor: store.hasSecondFactor),
+                hasTotp: false
+            ) { elevation in
                 await store.beginTotpSetup(elevation: elevation)
                 if store.pendingTotpSetup != nil { step = .scan }
             }

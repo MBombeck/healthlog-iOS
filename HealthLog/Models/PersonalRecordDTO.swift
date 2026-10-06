@@ -29,9 +29,15 @@ public struct PersonalRecordDTO: Decodable, Sendable, Equatable, Identifiable {
     public let externalId: String?
     public let createdAt: Date
 
-    public enum Direction: String, Decodable, Sendable, Equatable {
+    public enum Direction: String, Decodable, Sendable, Equatable, TolerantServerEnum {
         case max = "MAX"
         case min = "MIN"
+        /// #115 · 1.7 — unrecognised record direction; the record still shows
+        /// its value, without claiming "highest" or "lowest".
+        case unknown
+
+        public static let unknownFallback = Direction.unknown
+        public static let wireVocabulary: StaticString = "personal record direction"
     }
 
     public init(
@@ -60,5 +66,35 @@ public struct PersonalRecordDTO: Decodable, Sendable, Equatable, Identifiable {
         self.source = source
         self.externalId = externalId
         self.createdAt = createdAt
+    }
+}
+
+// MARK: - Account unit (#115 P2)
+
+public extension PersonalRecordDTO {
+    /// **#115 P2** — `GET /api/personal-records` hands back the stored row:
+    /// canonical value, canonical unit ("kg", "°C", "mg/dL", "m"). The record
+    /// surfaces printed both verbatim, so an imperial account read its best
+    /// weight in kg next to a dashboard in lb. This is the record's transform
+    /// into the account's unit — and only when the row's unit IS the kind's
+    /// canonical unit, so a row stamped in anything else is never rescaled.
+    func accountTransform(_ units: UnitPreferences) -> UnitDisplayTransform {
+        let kind = metricType.uppercased() == "WALKING_RUNNING_DISTANCE"
+            ? MetricKind.distanceWalkingRunning
+            : MetricTypeKindResolver.kind(forMetricType: metricType)
+        guard let kind, kind.unitFamily != .bloodPressure else { return .identity }
+        let stamped = unit.trimmingCharacters(in: .whitespaces)
+        guard stamped.isEmpty || stamped == kind.unit else { return .identity }
+        return units.transform(for: kind)
+    }
+
+    /// The record value in the account's unit.
+    func displayValue(_ units: UnitPreferences) -> Double {
+        accountTransform(units).display(value)
+    }
+
+    /// The unit label the record reads in.
+    func displayUnit(_ units: UnitPreferences) -> String {
+        accountTransform(units).suffix ?? unit
     }
 }

@@ -40,6 +40,11 @@ public final class NotificationServicesStore {
     public private(set) var ntfyTestSucceeded = false
     public private(set) var telegramTestSucceeded = false
     public private(set) var webhookTestSucceeded = false
+    /// #112 — why the last ntfy / webhook test failed, when the server named it
+    /// (relay status, SMTP code, the relay's own words). Cleared on the next
+    /// action, like the success flag.
+    public private(set) var ntfyTestFailure: NotificationChannelTestFailure?
+    public private(set) var webhookTestFailure: NotificationChannelTestFailure?
 
     private let repo: NotificationServicesRepository
 
@@ -126,6 +131,7 @@ public final class NotificationServicesStore {
         ntfyWorking = true
         ntfyError = nil
         ntfyTestSucceeded = false
+        ntfyTestFailure = nil
         defer { ntfyWorking = false }
         do {
             try await repo.saveNtfy(
@@ -146,10 +152,13 @@ public final class NotificationServicesStore {
         ntfyWorking = true
         ntfyError = nil
         ntfyTestSucceeded = false
+        ntfyTestFailure = nil
         defer { ntfyWorking = false }
         do {
             let result = try await repo.testNtfy()
             ntfyTestSucceeded = result.sent
+        } catch let failure as APIRefusalDetail {
+            ntfyTestFailure = NotificationChannelTestFailure(failure)
         } catch let err as HLError {
             ntfyError = err
         } catch {
@@ -196,17 +205,26 @@ public final class NotificationServicesStore {
     /// Saves the webhook config, then re-loads so `hasHeaderValue` + persisted
     /// values reflect the server. `headerValue` (write-only secret) is
     /// forwarded only when the user entered one; it is never retained here.
-    public func saveWebhook(enabled: Bool, url: String, headerName: String?, headerValue: String?) async {
+    /// `format` (#112) is forwarded only when it is a known choice.
+    public func saveWebhook(
+        enabled: Bool,
+        url: String,
+        headerName: String?,
+        headerValue: String?,
+        format: WebhookFormat? = nil
+    ) async {
         webhookWorking = true
         webhookError = nil
         webhookTestSucceeded = false
+        webhookTestFailure = nil
         defer { webhookWorking = false }
         do {
             try await repo.saveWebhook(
                 enabled: enabled,
                 url: url,
                 headerName: headerName,
-                headerValue: headerValue
+                headerValue: headerValue,
+                format: format
             )
             await loadWebhook()
         } catch let err as HLError {
@@ -220,10 +238,13 @@ public final class NotificationServicesStore {
         webhookWorking = true
         webhookError = nil
         webhookTestSucceeded = false
+        webhookTestFailure = nil
         defer { webhookWorking = false }
         do {
             let result = try await repo.testWebhook()
             webhookTestSucceeded = result.sent
+        } catch let failure as APIRefusalDetail {
+            webhookTestFailure = NotificationChannelTestFailure(failure)
         } catch let err as HLError {
             webhookError = err
         } catch {
@@ -244,5 +265,7 @@ public final class NotificationServicesStore {
         ntfyTestSucceeded = false
         telegramTestSucceeded = false
         webhookTestSucceeded = false
+        ntfyTestFailure = nil
+        webhookTestFailure = nil
     }
 }

@@ -130,11 +130,11 @@ public enum MiniCoachPrompt {
         let lines = history.compactMap { line -> String? in
             switch line.role {
             case .user:
-                return language == "en" ? "User: \(line.text)" : "Nutzer: \(line.text)"
+                language == "en" ? "User: \(line.text)" : "Nutzer: \(line.text)"
             case .assistant:
-                return language == "en" ? "Coach: \(line.text)" : "Coach: \(line.text)"
+                language == "en" ? "Coach: \(line.text)" : "Coach: \(line.text)"
             case .refused:
-                return nil
+                nil
             }
         }
         guard !lines.isEmpty else { return "" }

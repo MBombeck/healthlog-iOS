@@ -32,7 +32,7 @@ import Testing
 ///
 /// **This suite does not close the ticket.** The reporter confirms on TestFlight;
 /// see the walkthrough checklist in the CU-24 report.
-@Suite("CU-24 — Medikamenten-Logging: leere Liste vs. nichts fällig", .serialized)
+@Suite("CU-24 — Medikamenten-Logging: leere Liste vs. nichts fällig", .serialized, .mockURLSession)
 @MainActor
 struct MedicationLoggingEmptyStateTests {
     // MARK: - Fixtures
@@ -64,7 +64,7 @@ struct MedicationLoggingEmptyStateTests {
     /// intake set is empty in every case here, because that is precisely the
     /// situation in which the two empty states used to be indistinguishable.
     private func installHandler(medicationsJSON: String) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let query = req.url?.query ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {

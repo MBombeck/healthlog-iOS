@@ -40,6 +40,13 @@ struct DashboardTileRouter: View {
     /// renders exactly as pre-7.1.
     var digest: ComprehensiveDigest?
     var targets: InsightsTargetsResponseDTO?
+    /// #115 · 1.1 — the snapshot's `tiles.weightTrend.direction`, forwarded to
+    /// the weight tile. `nil` before the snapshot landed.
+    var weightTrendSentiment: TrendDirectionSentiment?
+
+    /// #115 P2 — the account's display units (the same environment value the
+    /// tile formats its headline with) so the target band converts alongside.
+    @Environment(\.unitPreferences) private var unitPreferences
 
     var body: some View {
         switch metric.kind {
@@ -67,7 +74,12 @@ struct DashboardTileRouter: View {
                 liveTodayStepsOverride: liveTodayStepsOverride,
                 avg7: averages?.avg7,
                 avg30: averages?.avg30,
-                targetBand: DashboardTileTargetResolver.targetBand(for: metric.kind, targets: targets)
+                targetBand: DashboardTileTargetResolver.targetBand(
+                    for: metric.kind,
+                    targets: targets,
+                    units: unitPreferences
+                ),
+                weightTrendSentiment: weightTrendSentiment
             )
         }
     }

@@ -42,8 +42,16 @@ public actor ShareLinkRepository {
     /// - Throws: ``ShareLinkError`` when the server refuses the *selection*
     ///   (`422 share-link.selection.*`); any other failure passes through as the
     ///   original ``HLError``.
-    public func create(_ body: CreateShareLinkBody) async throws -> ShareLinkDTO {
-        let req: APIRequest<ShareLinkDTO> = try .post("/api/share-links", body: body)
+    ///
+    /// R2 / #115 A3 — `elevation` is a single-use step-up elevation sent as
+    /// `X-Step-Up`. Server v1.39.3 still accepts the token alone here
+    /// (`requireRecentProof({ bearer: "token" })`) and will require the
+    /// elevation once a build that can answer `401 auth.stepup.required` is
+    /// the minimum; this build asks for proof on that 401 and retries with it.
+    public func create(_ body: CreateShareLinkBody, elevation: String? = nil) async throws -> ShareLinkDTO {
+        let req: APIRequest<ShareLinkDTO> = try APIRequest<ShareLinkDTO>
+            .post("/api/share-links", body: body)
+            .withStepUpElevation(elevation)
         let link: ShareLinkDTO
         do {
             link = try await api.send(req)

@@ -46,6 +46,19 @@ public final class HealthScoreStore {
     private let repo: AnalyticsRepository
     private let swr: SWRCoordinator?
 
+    /// Seams for the `+CompositionNotice` extension (#115 B6).
+    var analyticsRepository: AnalyticsRepository {
+        repo
+    }
+
+    var swrCoordinator: SWRCoordinator? {
+        swr
+    }
+
+    func applyDismissedCompositionNotice() {
+        score = score?.withCompositionNoticeDismissed()
+    }
+
     public init(repo: AnalyticsRepository, swr: SWRCoordinator? = nil) {
         self.repo = repo
         self.swr = swr

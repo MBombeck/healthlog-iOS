@@ -19,7 +19,7 @@ import Testing
 ///
 /// `.serialized` because every case installs the process-global
 /// ``MockURLProtocol/handler``.
-@Suite("ServerCapabilitiesRepository — /api/meta/capabilities contract", .serialized)
+@Suite("ServerCapabilitiesRepository — /api/meta/capabilities contract", .serialized, .mockURLSession)
 struct ServerCapabilitiesRepositoryTests {
     private func makeRepo() -> ServerCapabilitiesRepository {
         let env = AppEnvironment(
@@ -34,7 +34,7 @@ struct ServerCapabilitiesRepositoryTests {
     }
 
     private func respond(_ json: String, capturing path: @escaping @Sendable (String) -> Void = { _ in }) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             path(req.url?.path ?? "")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

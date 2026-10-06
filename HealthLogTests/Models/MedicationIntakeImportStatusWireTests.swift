@@ -23,7 +23,7 @@ import Testing
 /// 1. `status == "done"` garantiert **nicht** `result != nil`.
 /// 2. `reason` ist ein toleranter String, kein geschlossenes Enum.
 /// 3. `progress` kann `{}` sein (Spalten-Default, ungeprüft durchgereicht).
-@Suite("CU-18 — Medikamenten-Import-Job-Status", .serialized)
+@Suite("CU-18 — Medikamenten-Import-Job-Status", .serialized, .mockURLSession)
 struct MedicationIntakeImportStatusWireTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -38,7 +38,7 @@ struct MedicationIntakeImportStatusWireTests {
     }
 
     private func respond(_ json: String, status: Int = 200) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!,
                 Data(json.utf8)

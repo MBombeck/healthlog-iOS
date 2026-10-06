@@ -2,8 +2,9 @@ import Foundation
 
 /// Compile-time, client-side UI gates that are NOT operator-controlled.
 ///
-/// Distinct from `FeatureFlagsStore` (server-driven AI/insight surface
-/// guards): these are local product decisions baked into the build. Keep
+/// Distinct from `FeatureFlagsStore` (local HealthKit / cycle defaults) and
+/// from `AICapabilityGate` (server-resolved AI availability): these are local
+/// product decisions baked into the build. Keep
 /// this list tiny and well-documented — each flag must fully restore prior
 /// behaviour when flipped, so we gate (hide entry points) rather than delete
 /// the underlying runtime code.

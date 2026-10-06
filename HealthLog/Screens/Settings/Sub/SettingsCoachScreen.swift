@@ -32,9 +32,6 @@ struct SettingsCoachScreen: View {
     @Environment(\.appContainer) private var appContainer
     /// COACH-COIN (v0.5.5.7) — drives the "Hero-Karte wiederherstellen" row.
     @Environment(SettingsStore.self) private var settingsStore
-    /// SET-V2-C — server kill-switch gate for the toggle card (moved here
-    /// together with the toggle from `SettingsAIScreen`).
-    @Environment(FeatureFlagsStore.self) private var featureFlags
     /// SET-V2-C — gates the About-me card (server-backed editor).
     @Environment(BackendAvailability.self) private var backend
 
@@ -62,11 +59,13 @@ struct SettingsCoachScreen: View {
         let _ = appContainer?.aiConsentStore.revision
         HLSettingsPage(title: "Coach") {
             if isOnDeviceMode {
-                if featureFlags.isEnabled(.assistantCoach) {
+                // #115 · 0.2 — the on-device Coach runs only while the server's
+                // `coach` capability allows on-device work.
+                if appContainer?.aiCapabilityGate.allowsOnDevice(.coach) ?? true {
                     coachToggleCard
                 } else {
-                    // Caption rendered when the server kill-switch is OFF —
-                    // same copy + shape it had on `SettingsAIScreen`.
+                    // Caption naming the server's reason (operator, record,
+                    // module, the person's own switch).
                     killSwitchCaption
                 }
             }
@@ -80,8 +79,8 @@ struct SettingsCoachScreen: View {
             }
             // #30 — proactive cadence-suggestions opt-in, now server-backed
             // (`reminderSuggestions.enabled`). Shown when the coach is reachable
-            // (server present + flag on) and the value has resolved.
-            if backend.hasServer, featureFlags.isEnabled(.assistantCoach),
+            // (server present + `coach` capability offered) and the value has resolved.
+            if backend.hasServer, appContainer.offersCoach,
                let store = appContainer?.aiCoachSettingsStore, store.reminderSuggestionsEnabled != nil
             {
                 cadenceSuggestionsCard(store: store)
@@ -178,11 +177,18 @@ struct SettingsCoachScreen: View {
 
     /// SET-V2-C — rendered instead of the toggle card when the server-side
     /// `assistant.coach` kill-switch is OFF (moved from `SettingsAIScreen`).
+    /// #115 · 0.2 — the server's reason, one sentence (shared with the Coach sheet).
+    private var killSwitchText: String {
+        let state = appContainer?.aiCapabilityGate.state(.coach)
+            ?? AICapabilityState(available: false, reason: .operatorDisabled, onDeviceAllowed: false)
+        return AskCoachSheet.coachRefusalCopy(AIRefusal.implied(by: state, for: .coach))
+    }
+
     private var killSwitchCaption: some View {
         HStack(spacing: HLSpace.sm) {
             Image(systemName: "switch.2")
                 .foregroundStyle(HLText.tertiary)
-            Text(String(localized: "Coach is disabled by the operator."))
+            Text(killSwitchText)
                 .font(.hlCaption)
                 .foregroundStyle(HLText.tertiary)
                 .fixedSize(horizontal: false, vertical: true)

@@ -14,7 +14,7 @@ import Foundation
 /// every anti-duplicate / idempotency / share-auth invariant is reused verbatim.
 ///
 /// **Invariants reused from the b198 mirror (no reinvention):**
-/// - Source whitelist `.withings` / `.import_` only — via the shared
+/// - Source whitelist `.withings` / `.import_` / `.manual` — via the shared
 ///   `MeasurementSource.serverMirrorEligible` policy the mirror also reads.
 /// - `HKMetadataKeyExternalUUID = measurement.id` on every sample (anti-dup;
 ///   the read foreign-filter drops it on read-back → no echo loop).
@@ -42,8 +42,13 @@ public extension MeasurementsStore {
     /// that last completed; the gate re-runs whenever the stored value is below
     /// this. Bump to force a one-shot re-run (e.g. when a new mirror-writable
     /// kind is added to `MetricKind.serverMirrorWritableKinds`).
+    ///
+    /// v2 (S1 / public #11): `.manual` joined the mirror's source policy, so a
+    /// user whose v1 pass already completed re-runs once to pick up manual
+    /// rows typed on the web or another device. The mirror's dedup keeps the
+    /// rows this app already wrote at create-time out of the second pass.
     private static var historicalBackfillSchemaVersion: Int {
-        1
+        2
     }
 
     /// Builds a marker from the owner captured before the task's first await.

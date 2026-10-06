@@ -23,7 +23,7 @@ import Testing
 ///
 /// `.serialized` because the handler is a process-global and several tests count
 /// requests: a parallel suite writing the closure would make the counts lie.
-@Suite("CU-35 — manual sync trigger", .serialized)
+@Suite("CU-35 — manual sync trigger", .serialized, .mockURLSession)
 struct ManualSyncTriggerTests {
     // MARK: - Fixtures
 
@@ -69,7 +69,7 @@ struct ManualSyncTriggerTests {
     /// Answers `/sync` with `status` + `json`, and every other path with a
     /// connected `/status` snapshot so the stores' post-sync re-read succeeds.
     private static func install(log: RequestLog?, status: Int, json: String) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log?.record(req)
             let path = req.url?.path ?? ""
             if path.hasSuffix("/sync") {

@@ -7,7 +7,7 @@ import Foundation
 
 // One type holds the whole transport contract on purpose. The 09-10 properties
 // and the 09-13 routing properties share the same fixtures — the responder, the
-// two-party barrier, the overlap round, the poison-and-restore pair — and every
+// two-party barrier, the overlap round — and every
 // case is asserted through both channels against the same session shape.
 // Splitting them into two suites would duplicate that scaffolding and let the
 // two halves drift, which is the failure this file exists to prevent.
@@ -16,20 +16,18 @@ import Testing
 
 /// The isolation contract for ``MockURLProtocolSession`` (Plan 09-10, issue #82).
 ///
-/// The property under test is **not** "a counter cannot be moved by a foreign
-/// request" — endpoint-scoping already buys that, and the inventoried legacy
-/// files rely on it.
-/// It is the mirror image, which nothing short of session ownership buys:
-/// *my* request must be answered by *my* handler, even while another live
-/// session has installed a different one.
+/// The property under test is that *my* request is answered by *my* handler,
+/// even while another live session has installed a different one — and that
+/// nothing answers a request no session owns. Since C2 there is no
+/// process-global slot left to fall back to.
 ///
 /// The failure is made deterministic rather than probabilistic. A schedule
 /// race would produce a test that is red on this machine and green on the
 /// next, which is not a proof of anything. Instead the install order is fixed
 /// — A, then B — and only the two *requests* are made to overlap, behind a
-/// barrier that releases them together. Under one process-global slot the
-/// second install wins for both sessions on every one of the 100 rounds, so
-/// the count of wrong answers is exactly 100, never 0, and never 37.
+/// barrier that releases them together. Under the old process-global slot the
+/// second install won for both sessions on every one of the 100 rounds, so
+/// the count of wrong answers was exactly 100, never 0, and never 37.
 @Suite("MockURLProtocol session isolation", .serialized)
 struct MockURLProtocolIsolationTests {
     /// Overlap rounds. Large enough that a lucky ordering cannot carry the
@@ -79,19 +77,27 @@ struct MockURLProtocolIsolationTests {
     /// is asserted twice rather than once through whichever channel happens to
     /// be present.
     ///
-    /// * `.header` — the shared `mock.invalid` host, reached through the
-    ///   session's own tagged configuration. No URL convention involved.
+    /// * `.configuration` — the shared `mock.invalid` host, reached through the
+    ///   session's own configuration (its per-session protocol class). No URL
+    ///   convention involved.
     /// * `.host` — the session's own opaque address, reached through a
-    ///   completely **untagged** `URLSessionConfiguration.mock()`. No header
-    ///   involved, which is what makes it survive `APIClient`.
+    ///   configuration that carries only the bare `MockURLProtocol` and so
+    ///   names no session at all.
     private enum Channel {
-        case header
+        case configuration
         case host
+    }
+
+    /// A configuration bound to no session: the bare base class.
+    private func unboundConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        return configuration
     }
 
     private func url(for session: MockURLProtocolSession, path: String, via channel: Channel) -> URL {
         switch channel {
-        case .header: URL(string: "https://mock.invalid" + path)!
+        case .configuration: URL(string: "https://mock.invalid" + path)!
         case .host: URL(string: session.baseURL.absoluteString + path)!
         }
     }
@@ -99,12 +105,12 @@ struct MockURLProtocolIsolationTests {
     private func body(
         from session: MockURLProtocolSession,
         path: String,
-        via channel: Channel = .header,
+        via channel: Channel = .configuration,
         after barrier: Barrier? = nil
     ) async throws -> String {
         let configuration: URLSessionConfiguration = switch channel {
-        case .header: session.configuration
-        case .host: .mock()
+        case .configuration: session.configuration
+        case .host: unboundConfiguration()
         }
         let urlSession = URLSession(configuration: configuration)
         defer { urlSession.finishTasksAndInvalidate() }
@@ -154,7 +160,7 @@ struct MockURLProtocolIsolationTests {
         var wrongForB = 0
         var firstAnswerToA = ""
         for round in 0 ..< Self.rounds {
-            let answers = try await overlapRound(sessionA, sessionB, via: .header)
+            let answers = try await overlapRound(sessionA, sessionB, via: .configuration)
             if round == 0 { firstAnswerToA = answers.a }
             if answers.a != "A" { wrongForA += 1 }
             if answers.b != "B" { wrongForB += 1 }
@@ -190,16 +196,23 @@ struct MockURLProtocolIsolationTests {
         }
     }
 
-    @Test("a session hands out a mock-routed ephemeral configuration")
+    @Test("a session hands out a configuration carrying its own protocol class")
     func configurationRoutesThroughTheMockProtocol() throws {
         let session = MockURLProtocolSession()
-        defer { session.invalidate() }
+        let other = MockURLProtocolSession()
+        defer {
+            session.invalidate()
+            other.invalidate()
+        }
         let classes = try #require(session.configuration.protocolClasses)
-        #expect(classes.contains { $0 == MockURLProtocol.self })
+        #expect(classes.count == 1)
+        #expect(classes.contains { ObjectIdentifier($0) == ObjectIdentifier(session.protocolClass) })
+        let superclass: AnyClass = try #require(class_getSuperclass(session.protocolClass))
+        #expect(ObjectIdentifier(superclass) == ObjectIdentifier(MockURLProtocol.self))
+        #expect(ObjectIdentifier(session.protocolClass) != ObjectIdentifier(other.protocolClass))
+        #expect(MockURLProtocolSession.owner(forProtocolClass: session.protocolClass) === session)
         #expect(!session.token.isEmpty)
-        #expect(MockURLProtocolSession().token != session.token)
-        let headers = try #require(session.configuration.httpAdditionalHeaders)
-        #expect(headers[MockURLProtocolSession.tokenHeader] as? String == session.token)
+        #expect(other.token != session.token)
     }
 
     @Test("replacing or invalidating one session cannot alter another")
@@ -249,30 +262,25 @@ struct MockURLProtocolIsolationTests {
         #expect(answer == "FRESH")
     }
 
-    /// Neither session channel reads the legacy slot — and the slot is proven
-    /// *reachable* in the same test, so neither assertion can pass vacuously
-    /// because the poison never took.
-    @Test("a tagged request is never answered by the legacy global slot")
-    func aTaggedRequestNeverReadsTheLegacyGlobalSlot() async throws {
-        let previous = poisonTheGlobalSlot(for: "/legacy-poison")
-        defer { restoreTheGlobalSlot(previous) }
-
+    /// There is no fallback. A request that names no session — the bare base
+    /// class, the shared host — is refused even while a live session with a
+    /// handler exists, and that session is not consulted.
+    @Test("a request bound to no session fails closed")
+    func aRequestBoundToNoSessionFailsClosed() async throws {
         let session = MockURLProtocolSession()
         defer { session.invalidate() }
         session.install(responder("SESSION"))
 
-        // Control: an untagged request to the shared host still reads the slot,
-        // which is the compatibility path the inventoried legacy files rely on.
-        let legacy = URLSession(configuration: .mock())
-        defer { legacy.finishTasksAndInvalidate() }
-        let legacyURL = try #require(URL(string: "https://mock.invalid/legacy-poison"))
-        let (data, _) = try await legacy.data(from: legacyURL)
+        let unbound = URLSession(configuration: unboundConfiguration())
+        defer { unbound.finishTasksAndInvalidate() }
+        let sharedURL = try #require(URL(string: "https://mock.invalid/nobody"))
+        await #expect(throws: (any Error).self) {
+            _ = try await unbound.data(from: sharedURL)
+        }
 
-        let viaHeader = try await body(from: session, path: "/legacy-poison", via: .header)
-        let viaHost = try await body(from: session, path: "/legacy-poison", via: .host)
-
-        #expect(String(bytes: data, encoding: .utf8) == "LEGACY-GLOBAL")
-        #expect(viaHeader == "SESSION")
+        let viaConfiguration = try await body(from: session, path: "/mine", via: .configuration)
+        let viaHost = try await body(from: session, path: "/mine", via: .host)
+        #expect(viaConfiguration == "SESSION")
         #expect(viaHost == "SESSION")
     }
 
@@ -311,55 +319,9 @@ struct MockURLProtocolIsolationTests {
         }
     }
 
-    /// Answers `path` with `LEGACY-GLOBAL` on the process-global slot and
-    /// delegates every other path to whatever was installed before, so a suite
-    /// running in parallel is no worse off than the single global slot already
-    /// leaves it. The caller restores `previous`.
-    private func poisonTheGlobalSlot(for path: String) -> MockURLProtocol.Handler? {
-        let previous = MockURLProtocol.handler
-        MockURLProtocol.handler = { req in
-            guard req.url?.path == path else {
-                guard let previous else { throw URLError(.unknown) }
-                return try previous(req)
-            }
-            let response = HTTPURLResponse(
-                url: req.url!,
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (response, Data("LEGACY-GLOBAL".utf8))
-        }
-        return previous
-    }
-
-    /// Restores the process-global slot. This exists as a function rather than
-    /// as `defer { restoreTheGlobalSlot(previous) }` written inline for a
-    /// reason worth keeping: the audit scanner finds a handler's "closure
-    /// region" by brace-balancing forward from the assignment, and a bare
-    /// assignment opens no closure — so an inline restore runs the region on
-    /// into whatever code follows it and attributes that code's locals to a
-    /// handler. Keeping the assignment in a two-line function bounds the region
-    /// to those two lines and keeps this file's inventory row honest. See
-    /// `deferred-items.md` D-09-13-A.
-    private func restoreTheGlobalSlot(_ handler: MockURLProtocol.Handler?) {
-        MockURLProtocol.handler = handler
-    }
-
-    /// The case Plan 09-10 was missing. All eight of its contract cases build a
-    /// bare `URLSession(configuration: session.configuration)`, so the token
-    /// channel was never exercised against the one client every migration
-    /// target uses — and `APIClient.init` assigns `httpAdditionalHeaders`
-    /// **wholesale** on the caller's own configuration object, which destroys
-    /// the token before its `URLSession` exists. The global slot is poisoned for
-    /// this one path so the failure names its own mechanism: an untagged request
-    /// takes the compatibility path and is answered by whatever the last writer
-    /// installed.
+    /// The one client every suite uses, addressed through the session's host.
     @Test("a real APIClient is answered by its own session")
     func aRealAPIClientIsAnsweredByItsOwnSession() async {
-        let previous = poisonTheGlobalSlot(for: "/api/session-routed")
-        defer { restoreTheGlobalSlot(previous) }
-
         let session = MockURLProtocolSession()
         defer { session.invalidate() }
         session.install(responder("SESSION-ROUTED"))
@@ -374,8 +336,7 @@ struct MockURLProtocolIsolationTests {
 
     /// The address is an exact, opaque namespace: one label per session, below
     /// a suffix no production code names. The bare `mock.invalid` is **not** a
-    /// session host — that is what keeps 09-10's legacy-path cases, and the 248
-    /// inventoried files, on the compatibility path.
+    /// session host.
     @Test("a session address is an opaque per-session host")
     func aSessionAddressIsAnOpaquePerSessionHost() {
         let session = MockURLProtocolSession()
@@ -400,11 +361,11 @@ struct MockURLProtocolIsolationTests {
     }
 
     /// The host channel's isolation property, proven the same way 09-10 proved
-    /// the header channel's: fixed install order, only the two requests
+    /// the configuration channel's: fixed install order, only the two requests
     /// overlapping behind a two-party barrier, so the result is deterministic
     /// instead of a schedule race that is red here and green on the next
-    /// machine. Both configurations are untagged `.mock()` here — nothing but
-    /// the address distinguishes the two requests.
+    /// machine. Both configurations are unbound here — nothing but the address
+    /// distinguishes the two requests.
     @Test("two concurrent sessions keep distinct host-routed handlers")
     func twoConcurrentSessionsKeepDistinctHostRoutedHandlers() async throws {
         let sessionA = MockURLProtocolSession()
@@ -426,25 +387,23 @@ struct MockURLProtocolIsolationTests {
         #expect(wrongForB == 0)
     }
 
-    /// Fail-closed, host edition. An address whose owner is gone is refused
-    /// exactly like an expired token — it does not fall through to the global
-    /// slot, and the control request proves the slot was answering all along.
-    @Test("an unresolvable session host fails closed instead of reading the slot")
+    /// Fail-closed, host edition. An address whose owner is gone is refused,
+    /// even through a configuration that belongs to a live session with a
+    /// handler — the address is resolved first and names nobody.
+    @Test("an unresolvable session host fails closed")
     func anUnresolvableSessionHostFailsClosed() async throws {
         let stale = MockURLProtocolSession()
         stale.install(responder("STALE"))
         let staleBase = stale.baseURL
         stale.invalidate()
 
-        let previous = poisonTheGlobalSlot(for: "/gone")
-        defer { restoreTheGlobalSlot(previous) }
+        let live = MockURLProtocolSession()
+        defer { live.invalidate() }
+        live.install(responder("LIVE"))
 
-        let plain = URLSession(configuration: .mock())
+        let plain = URLSession(configuration: live.configuration)
         defer { plain.finishTasksAndInvalidate() }
-        let sharedURL = try #require(URL(string: "https://mock.invalid/gone"))
         let staleURL = try #require(URL(string: staleBase.absoluteString + "/gone"))
-        let (data, _) = try await plain.data(from: sharedURL)
-        #expect(String(bytes: data, encoding: .utf8) == "LEGACY-GLOBAL")
 
         await #expect(throws: (any Error).self) {
             _ = try await plain.data(from: staleURL)
@@ -453,11 +412,10 @@ struct MockURLProtocolIsolationTests {
 
     /// Resolution order, pinned. The two channels normally name the same
     /// session because they come from the same object; crossing them on purpose
-    /// is the only way to observe the order, and the address wins. The address
-    /// is what the test author wrote at the call site and the only half that
-    /// survives an intermediary rewriting the configuration.
-    @Test("the host channel is resolved before the header channel")
-    func theHostChannelIsResolvedBeforeTheHeaderChannel() async throws {
+    /// is the only way to observe the order, and the address wins, because it
+    /// is what the test author wrote at the call site.
+    @Test("the host channel is resolved before the protocol-class channel")
+    func theHostChannelIsResolvedBeforeTheProtocolClassChannel() async throws {
         let sessionA = MockURLProtocolSession()
         let sessionB = MockURLProtocolSession()
         defer {
@@ -467,7 +425,7 @@ struct MockURLProtocolIsolationTests {
         sessionA.install(responder("A"))
         sessionB.install(responder("B"))
 
-        // A's address, B's tagged configuration.
+        // A's address, B's configuration.
         let crossed = URLSession(configuration: sessionB.configuration)
         defer { crossed.finishTasksAndInvalidate() }
         let crossedURL = try #require(URL(string: sessionA.baseURL.absoluteString + "/x"))
@@ -476,11 +434,9 @@ struct MockURLProtocolIsolationTests {
         #expect(String(bytes: data, encoding: .utf8) == "A")
     }
 
-    /// `APIClient.init` mutates the configuration object it is handed. If this
-    /// session handed out one stored instance, building a client would strip
-    /// the token from it permanently and silently disarm the header channel for
-    /// every later consumer — including a migrating suite that builds a client
-    /// and a bare `URLSession` from the same session.
+    /// `APIClient.init` mutates the configuration object it is handed. The
+    /// session hands out a fresh one every time, so building a client leaves
+    /// every later consumer of the same session routed.
     @Test("constructing an APIClient does not disarm the session")
     func constructingAnAPIClientDoesNotDisarmTheSession() async throws {
         let session = MockURLProtocolSession()
@@ -489,11 +445,11 @@ struct MockURLProtocolIsolationTests {
 
         let api = client(for: session)
         let viaClient = await body(from: api, path: "/api/via-client")
-        let viaHeader = try await body(from: session, path: "/after-client", via: .header)
+        let viaConfiguration = try await body(from: session, path: "/after-client", via: .configuration)
         let viaHost = try await body(from: session, path: "/after-client", via: .host)
 
         #expect(viaClient == "STILL-MINE")
-        #expect(viaHeader == "STILL-MINE")
+        #expect(viaConfiguration == "STILL-MINE")
         #expect(viaHost == "STILL-MINE")
     }
 
@@ -509,25 +465,14 @@ struct MockURLProtocolIsolationTests {
         #expect(MockURLProtocolSession.liveSessionCount < whileLive)
     }
 
-    /// The trap a migrating suite must not fall into, pinned rather than only
-    /// described in a doc comment.
-    ///
-    /// Swapping `.mock()` for `session.configuration` while keeping a
-    /// hard-coded host is **not** a migration. `APIClient` strips the token,
-    /// `test.healthlog.local` is not a session host, and the request lands on
-    /// the process-global slot — the exact behaviour the migration exists to
-    /// remove, now wearing a session's clothes and passing every assertion that
-    /// only looks at the response body. The base URL is the load-bearing half.
-    ///
-    /// If this case ever reads `SESSION`, `APIClient` has started preserving
-    /// the caller's `httpAdditionalHeaders`. That is an improvement, not a
-    /// regression: the header channel would then survive on its own, and this
-    /// case should be updated to say so rather than anything being reverted.
-    @Test("a session configuration alone does not migrate a client")
-    func aSessionConfigurationAloneDoesNotMigrateAClient() async {
-        let previous = poisonTheGlobalSlot(for: "/api/hard-coded-host")
-        defer { restoreTheGlobalSlot(previous) }
-
+    /// Until C2 this case pinned the opposite: a session configuration with a
+    /// hard-coded host was *not* routed, because `APIClient.init` replaces the
+    /// caller's `httpAdditionalHeaders` and the token rode in a header. The
+    /// per-session protocol class rides in `protocolClasses`, which the client
+    /// copies to all its sessions, so the configuration alone is now enough —
+    /// which is what lets `.mock()` bind a suite without touching its base URL.
+    @Test("a session configuration alone routes a real APIClient")
+    func aSessionConfigurationAloneRoutesAClient() async {
         let session = MockURLProtocolSession()
         defer { session.invalidate() }
         session.install(responder("SESSION"))
@@ -545,10 +490,7 @@ struct MockURLProtocolIsolationTests {
         )
         let observed = await body(from: api, path: "/api/hard-coded-host")
 
-        #expect(
-            observed == "LEGACY-GLOBAL",
-            "a foreign base URL must not be routed to the session; observed \(observed)"
-        )
+        #expect(observed == "SESSION", "a hard-coded base URL was not routed to the session; observed \(observed)")
     }
 }
 

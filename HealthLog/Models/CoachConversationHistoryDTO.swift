@@ -12,7 +12,7 @@ import Foundation
 // **Auth + gate.** Both handlers are `requireAuth()` (cookie OR Bearer) then
 // `await requireAssistantSurface("coach")`. A disabled Coach surface throws
 // `403 + errorCode: "assistant.disabled.coach"`, which ``APIClient`` already maps
-// to ``HLError/assistantDisabled(.assistantCoach)`` — the same kill-switch the
+// to ``HLError/aiUnavailable(_:)`` — the same kill-switch the
 // rest of the Coach stack honours. A foreign / unknown id maps to **404** on the
 // detail route (the existence channel never leaks across accounts).
 //

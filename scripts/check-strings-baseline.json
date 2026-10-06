@@ -59,7 +59,6 @@
     "Sources without values are still shown so you can set the order before a sensor first syncs.",
     "Streak: %lld days",
     "Tag already exists.",
-    "Tiles",
     "chart.axis.scale.linear",
     "chart.axis.scale.logarithmic",
     "chart.axis.y.label",

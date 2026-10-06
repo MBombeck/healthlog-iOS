@@ -22,7 +22,7 @@ import Testing
 ///
 /// Echter `APIClient` über `MockURLProtocol`, damit die Zusicherung am echten
 /// Decoding-Pfad hängt und nicht an einem handgebauten `JSONDecoder`.
-@Suite("CU-21 — Skip-Reason-Toleranz der Batch-Response", .serialized)
+@Suite("CU-21 — Skip-Reason-Toleranz der Batch-Response", .serialized, .mockURLSession)
 struct BatchSkipReasonToleranceTests {
     private static let env = AppEnvironment(
         baseURL: URL(string: "https://test.healthlog.local")!,
@@ -56,7 +56,7 @@ struct BatchSkipReasonToleranceTests {
     }
 
     private func respond(_ json: String) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let response = HTTPURLResponse(
                 url: req.url!,
                 statusCode: 200,

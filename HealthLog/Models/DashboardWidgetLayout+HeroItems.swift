@@ -26,12 +26,15 @@ public extension DashboardWidgetLayout {
     /// byte-equal to what the next GET echoes.
     func settingEnabledHeroItemKinds(_ kinds: [HeroItemKind]) -> DashboardWidgetLayout {
         let enabled = Set(kinds)
+        // #115 B6 — kinds this build cannot name stay enabled: the picker never
+        // showed them, so saving it must not switch them off on the server.
+        let unknownKept = unknownRawValues(enabledHeroItemKinds) { HeroItemKind(rawValue: $0) != nil }
         return DashboardWidgetLayout(
             version: version,
             widgets: widgets,
             enabledHeroItemKinds: HeroItemKind.allCases
                 .filter(enabled.contains)
-                .map(\.rawValue)
+                .map(\.rawValue) + unknownKept
         )
     }
 

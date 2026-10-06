@@ -81,13 +81,13 @@ public actor AuthService {
             // explicit error instead of falling through to the old "no Bearer
             // token" message (which misleads the user into a credentials retry).
             guard let ticket = meta.mfaTicket else {
-                throw HLError.unknown("Malformed MFA challenge: server requested a second factor without a ticket.")
+                throw HLError.unknown(String(localized: "auth.error.incompleteResponse")) // mfaRequired, no ticket
             }
             let methods = (meta.methods ?? []).compactMap(MfaMethod.init(rawValue:))
             return .mfaRequired(ticket: ticket, methods: methods)
         }
         guard let payload else {
-            throw HLError.unknown("Server hat keinen Bearer-Token zurückgegeben (X-Client-Type: native fehlt?)")
+            throw HLError.unknown(String(localized: "auth.error.incompleteResponse")) // no token in the body
         }
         let session = try payload.asAuthSession()
         try persist(session)
@@ -303,7 +303,7 @@ public actor AuthService {
         case let .session(session):
             return session
         case .mfaRequired:
-            throw HLError.unknown("Unexpected MFA challenge on a freshly registered account.")
+            throw HLError.unknown(String(localized: "auth.error.incompleteResponse")) // MFA on a new account
         }
     }
 
@@ -713,15 +713,15 @@ public actor AuthService {
         // und ein zweiter Request mit demselben one-time-use-Token wäre ein
         // sofortiger 401 + revokeAllForUser. Wir müssen jeden Refresh als
         // genau einen Network-Call halten.
-        // #96 — refresh rides the fail-fast auth session too: a no-connectivity
-        // refresh fails immediately (→ `.transient`) instead of stalling the
-        // cold-launch door on the 60 s outbox resource timeout.
-        guard let req: APIRequest<NativeLoginResponse> = try? .post(
-            "/api/auth/refresh",
-            body: Body(refreshToken: refreshToken),
-            maxRetries: 0,
-            failFast: true
-        ) else {
+        // #96 — fail-fast auth session (no-connectivity → `.transient` at once).
+        // R2 / #115 A6 — never without `X-Device-Id` (v1.39.3 answers a device-
+        // bound token without it `401 auth.refresh.invalid` → sign-out).
+        guard let deviceID = await deviceIDForRefresh(),
+              let req: APIRequest<NativeLoginResponse> = try? Self.refreshRequest(
+                  body: Body(refreshToken: refreshToken),
+                  deviceID: deviceID
+              ) else
+        {
             return .transient
         }
         do {

@@ -53,18 +53,44 @@ enum VorsorgeNextDue {
     /// due reminders the soonest `nextDueAt` leads (overdue items sort first,
     /// being the smallest dates). `nil` ⇒ the tile self-suppresses (no dead/empty
     /// slab), exactly as before — just gated on due-now instead of has-a-date.
+    ///
+    /// **v1.39.2.** A check-up on a cycle longer than a week now keeps its
+    /// `nextDueAt` after its reminder went out, so an overdue one stays here
+    /// until it is done, skipped or snoozed instead of vanishing into its next
+    /// cycle. "Today" is the account's day (``ProfileDay``), the same day the
+    /// digest's `preventive_care` item is cut on.
     static func nextDueNow(
         from reminders: [MeasurementReminderRow],
-        now: Date = .now
+        now: Date = .now,
+        calendar: Calendar = ProfileDay.calendar()
     ) -> MeasurementReminderRow? {
         reminders
             .compactMap { row -> (Date, MeasurementReminderRow)? in
                 guard row.enabled, let due = row.nextDueAt else { return nil }
-                guard VorsorgeCard.dueBucket(nextDueAt: due, now: now).isDue else { return nil }
+                guard VorsorgeCard.dueBucket(nextDueAt: due, now: now, calendar: calendar).isDue else { return nil }
                 return (due, row)
             }
             .min { $0.0 < $1.0 }
             .map(\.1)
+    }
+
+    /// **v1.39.2 — the reminder a rail item's `checkup.view` action leads to**,
+    /// or `nil` when it should open the Vorsorge list instead.
+    ///
+    /// Two rail kinds carry `checkup.view`: `preventive_care` (a due check-up —
+    /// straight to doing it, the b198 doctrine) and, since v1.39.2 up to twice a
+    /// day, `upcoming_visit` (a booked visit today or in the next two days). A
+    /// visit is not a reminder, so its tap must not land on whichever check-up
+    /// happens to be due: it opens the list. The kind is compared as the raw
+    /// token, so a future kind that reuses the intent opens the list too.
+    static func frontDoorReminder(
+        forRailKind kind: String,
+        reminders: [MeasurementReminderRow],
+        now: Date = .now,
+        calendar: Calendar = ProfileDay.calendar()
+    ) -> MeasurementReminderRow? {
+        guard kind == DailyPriorityItem.Kind.preventiveCare.rawValue else { return nil }
+        return nextDueNow(from: reminders, now: now, calendar: calendar)
     }
 
     /// Maps a server reminder `measurementType` (UPPER_SNAKE) onto the

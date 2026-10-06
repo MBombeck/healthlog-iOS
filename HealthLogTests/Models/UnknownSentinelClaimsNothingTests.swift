@@ -19,7 +19,7 @@ private typealias Measurement = HealthLog.Measurement
 /// different server types this build cannot name, so any figure derived across
 /// them — a mean, a min/max band, a "your latest reading" headline — is a
 /// number about nothing. These cases pin the four surfaces where it still spoke.
-@Suite("Audit B-4 — the unknown sentinel claims nothing")
+@Suite("Audit B-4 — the unknown sentinel claims nothing", .mockURLSession)
 struct UnknownSentinelClaimsNothingTests {
     private static let now = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -276,8 +276,6 @@ struct UnknownSentinelClaimsNothingTests {
             appVersion: "0.5.0",
             measurements: measurements,
             medications: [],
-            compliance: [],
-            intakes: [],
             moodEntries: []
         )
     }

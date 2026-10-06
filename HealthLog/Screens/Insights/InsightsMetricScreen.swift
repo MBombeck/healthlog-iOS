@@ -51,7 +51,7 @@ struct InsightsMetricScreen: View {
     /// `InsightsMetricScreen+Sections.swift` (file_length split, pure code
     /// movement). Members below that are internal instead of `private` are
     /// accessed from that sibling extension file.
-    @Environment(SettingsStore.self) private var settingsStore
+    @Environment(SettingsStore.self) var settingsStore
     @Environment(InsightsTargetsStore.self) var insightsTargetsStore
     /// v0.11 W35 — the BP rich status card (`BPStatusCard`) was relocated here
     /// off the Insights overview. It reads the server `comprehensive` digest
@@ -59,6 +59,8 @@ struct InsightsMetricScreen: View {
     /// page needs the `InsightsStore`. Injected at the app root, available on
     /// every pushed Insights screen.
     @Environment(InsightsStore.self) var insightsStore
+    /// #115 · 1.3 — the snapshot slot carries the server's weight verdict.
+    @Environment(DailyBriefingStore.self) var briefingStore
     @Environment(BackendAvailability.self) var backend
     /// P8 (v0141 parity) — the ECG recording list. Drives the pulse page's
     /// data-gated cross-link into the ECG surface (`ecgCrossLinkRow`); app-root
@@ -132,6 +134,10 @@ struct InsightsMetricScreen: View {
     @State private var didRewarmTargets = false
     /// v0.14.6 N3 — gates the activation scroll-reset animation.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// #115 · 1.1 T1 — observed only to retire the zoom cover when its source
+    /// card leaves the window (see the `.onChange` beside the cover). Optional so
+    /// previews and hosts without a router keep working.
+    @Environment(AppRouter.self) private var router: AppRouter?
     /// W22-W2 — a distinct zoom namespace + id from `ChartDetailScreen` so the
     /// two screens' fullscreen covers never share a transition source.
     @Namespace var fullscreenZoomNamespace
@@ -460,6 +466,9 @@ struct InsightsMetricScreen: View {
                 await insightsTargetsStore.load()
             }
         }
+        // K1 — the banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing (H2).
+        .hlReserveErrorBannerSpace(store.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: store.error) {
                 Task { await store.load() }
@@ -470,6 +479,19 @@ struct InsightsMetricScreen: View {
         .fullScreenCover(isPresented: $presentFullscreenChart) {
             FullscreenChartCover(kind: kind, store: store, selectedDate: $selectedDate)
                 .navigationTransition(.zoom(sourceID: Self.zoomSourceID, in: fullscreenZoomNamespace))
+        }
+        // #115 · 1.1 T1 — the cover zooms back into the chart card on dismiss.
+        // A deep link, notification or Quick Action that switches the tab while
+        // the cover is up takes that card out of the window; an animated zoom
+        // dismissal from a detached source aborts inside UIKit's morph
+        // (`_morphPreviewFromCurrentState`, the 286 crash). Retire the cover
+        // without animation the moment the Insights tab is left, so no zoom
+        // morph ever runs against a vanished source.
+        .onChange(of: router?.selectedTab) { _, tab in
+            guard presentFullscreenChart, let tab, tab != .insights else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { presentFullscreenChart = false }
         }
         // v0152 C4 — the inline per-page Coach button opens the canonical
         // `AskCoachSheet` (same sheet as the overview); it routes per user. A360 H2

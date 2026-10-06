@@ -64,10 +64,11 @@ struct MeasurementReminderPatchTests {
     // MARK: - Cadence exclusivity + switching
 
     /// The original regression: an rrule reminder edited for its label only must
-    /// NOT carry `intervalDays` (that clobbered the schedule). On the RRULE path
-    /// the interval is omitted; the rule is sent explicitly (the form can now
-    /// edit it), which is what carries an edit or a switch onto a schedule.
-    @Test("RRULE reminder, label-only edit: interval absent, rrule set")
+    /// NOT carry `intervalDays` (that clobbered the schedule). Since server
+    /// v1.39.2 the untouched rule is omitted too: an older server recomputes
+    /// `nextDueAt` on any cadence key, so a label edit sends the label alone
+    /// (``CheckupStaysDueV1392Tests``). A changed rule is still sent explicitly.
+    @Test("RRULE reminder, label-only edit: interval and rule absent, label set")
     func rruleLabelEditOmitsInterval() throws {
         let patch = MeasurementReminderRow.editingPatch(
             for: row(rrule: "FREQ=YEARLY;BYMONTH=3"),
@@ -81,7 +82,7 @@ struct MeasurementReminderPatchTests {
         )
         let json = try encoded(patch)
         #expect(isAbsent(json, "intervalDays"), "interval must be omitted so the server's exclusivity clears it")
-        #expect(json["rrule"] as? String == "FREQ=YEARLY;BYMONTH=3")
+        #expect(isAbsent(json, "rrule"), "an untouched rule is not resent")
         #expect(json["label"] as? String == "Zahnarzt (neu)")
     }
 
@@ -240,7 +241,7 @@ struct MeasurementReminderPatchTests {
 
     // MARK: - enabled (per-reminder toggle)
 
-    @Test("enabled is always carried on an edit")
+    @Test("a changed enabled flag is carried on an edit")
     func enabledCarried() throws {
         let patch = MeasurementReminderRow.editingPatch(
             for: row(intervalDays: 30),

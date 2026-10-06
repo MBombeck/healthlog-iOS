@@ -46,20 +46,11 @@ struct ActiveMedicationsSection: View {
     /// **15-04 (E3)** — long-press on a card's Genommen CTA. The host opens the
     /// existing free-intake dialog, preselected on this medication.
     let onDeviatingDose: (MedicationCardActions.DeviatingDose) -> Void
-    /// Pre-merged today + recent-history intakes used by each card's
-    /// compliance computation. The parent screen passes the SWR-served
-    /// today list; the per-card history fetch lives in a future
-    /// extension when the operator surfaces a real need for live 30-day
-    /// bars (today the rate divides by `effectiveDays` which clamps to
-    /// the medication's earliest seen intake, so a fresh medication
-    /// still reads sensibly).
-    let windowIntakes: [MedicationIntake]
 
     /// **v0.6.1.4 Y4.2** — the store carries the per-medication
     /// server-canonical compliance cache. Read via
-    /// `cardComplianceSnapshot(for:windowIntakes:)` which returns the
-    /// cached value or falls back to the local algorithm. The
-    /// `windowIntakes` argument keeps the fallback path lossless.
+    /// `cardComplianceSnapshot(for:)`, which returns the cached server value,
+    /// or "unknown" once the fetch failed — never a device-computed rate.
     @Environment(MedicationsStore.self) private var store
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -76,16 +67,12 @@ struct ActiveMedicationsSection: View {
                         MedicationCard(
                             medication: med,
                             displayState: .from(medication: med),
-                            scheduleSummary: Self.scheduleSummary(med.schedule),
-                            // v0.6.1.4 Y4.2 — prefer the server-canonical
-                            // snapshot cached on the store. Falls back to
-                            // the local-algorithm port for the brief window
-                            // before the per-medication fetch lands (cold
-                            // cache, offline). The card never paints blank.
-                            compliance: store.cardComplianceSnapshot(
-                                for: med,
-                                windowIntakes: windowIntakes
-                            ),
+                            // v1.39.1 — a record shows its stored schedule as information.
+                            scheduleSummary: Self.scheduleSummary(med.displaySchedule),
+                            // v0.6.1.4 Y4.2 — the server-canonical snapshot
+                            // cached on the store; skeleton while pending,
+                            // "unknown" when the fetch failed (#115 B7).
+                            compliance: store.cardComplianceSnapshot(for: med),
                             lastTakenAt: med.lastTakenAt,
                             onHistory: { onHistory(med) },
                             onComplianceTap: { onComplianceTap(med) },

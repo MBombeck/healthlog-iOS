@@ -40,6 +40,12 @@ public final class DailyBriefingStore {
     /// entirely — that hole is closed in v0.5.0+.
     public var consentGate: (@MainActor () -> Bool)?
 
+    /// **#114 / #115 · 0.2 — the `briefing` capability** (`/api/auth/me` `ai`).
+    /// While it is unavailable the server refuses `insights/generate`, so the
+    /// store asks for nothing and drops any briefing it still holds (a cached
+    /// one included). `nil` (unit tests) reads as available.
+    public var briefingAvailable: (@MainActor () -> Bool)?
+
     /// **v1.16.x (GH issue #15)** — best-effort fetch of the briefing slot on
     /// `GET /api/dashboard/snapshot`. Injected as a closure (AppContainer
     /// wires `DashboardRepository.snapshotBriefing`) so the store stays
@@ -82,6 +88,17 @@ public final class DailyBriefingStore {
         return consentGate()
     }
 
+    /// #115 · 0.2 — `false` → the briefing capability is off: clear what is
+    /// shown and skip the generate call.
+    private func admitsBriefing() -> Bool {
+        guard briefingAvailable?() ?? true else {
+            response = nil
+            isShowingStaleCache = false
+            return false
+        }
+        return true
+    }
+
     /// Refreshes ``snapshotBriefing`` from the injected `snapshotFetch`.
     /// Best-effort + additive: a failed read keeps the last known slot and
     /// never surfaces an error — the generate-path response stays the
@@ -116,6 +133,10 @@ public final class DailyBriefingStore {
             isLoading = false
         }
         await loadSnapshotBriefing()
+        guard admitsBriefing() else {
+            HLLog.ui.info("DailyBriefingStore.load: briefing capability unavailable — skipped")
+            return
+        }
         guard isConsentGateOpen() else {
             HLLog.ui.info("DailyBriefingStore.load gated by AI consent — skipped")
             return
@@ -162,6 +183,10 @@ public final class DailyBriefingStore {
     /// fresh result back into the SWR cache so subsequent observes get the
     /// new value as cached-arm.
     public func refresh() async {
+        guard admitsBriefing() else {
+            HLLog.ui.info("DailyBriefingStore.refresh: briefing capability unavailable — skipped")
+            return
+        }
         guard isConsentGateOpen() else {
             HLLog.ui.info("DailyBriefingStore.refresh gated by AI consent — skipped")
             return

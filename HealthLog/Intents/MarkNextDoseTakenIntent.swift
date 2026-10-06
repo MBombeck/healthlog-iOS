@@ -65,7 +65,7 @@ struct MarkNextDoseTakenIntent: AppIntent {
             )
         } catch let error as HLError where error.shouldPersistToOutbox {
             // Durably enqueued (incl. a transient-refresh 401) — saved, not lost.
-            return .result(dialog: IntentCopy.queuedOffline)
+            return .result(dialog: IntentCopy.queued(after: error))
         } catch {
             return .result(dialog: IntentCopy.writeFailed)
         }

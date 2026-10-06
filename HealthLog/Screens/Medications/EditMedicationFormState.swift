@@ -9,7 +9,11 @@ struct EditMedicationFormState: Equatable {
     var name: String
     var dose: String
     var times: [TimeOfDay]
-    var category: MedicationCategoryOption
+    /// `nil` when the stored category is one this build has no row for — it
+    /// opens as itself and an untouched save never names it (server v1.39.4).
+    var category: MedicationCategoryOption?
+    /// The picker row for such a category, labelled with the server's token.
+    var unknownCategoryLabel: String?
     var treatmentClass: MedicationTreatmentClassOption
     var dosesPerUnitText: String
     var unitsPerDose: MedicationUnitsPerDose
@@ -34,8 +38,22 @@ struct EditMedicationFormState: Equatable {
     var endsOn: Date?
     var isOneShot: Bool
     var graceMinutes: Int?
+    /// v1.39.1 (#1033) — the intake-tracking switch as the form shows it.
+    var trackIntake: Bool
+    /// The server's own `trackIntake`, or `nil` when the server does not know
+    /// the field (older than v1.39.1). The editor offers the switch, and ever
+    /// sends the field, only when this is non-nil.
+    var serverTrackIntake: Bool?
 
-    init(from medication: Medication) {
+    init(from served: Medication) {
+        // v1.39.1 (#1033) — a medication kept as a record is served with an
+        // empty `schedules` and its stored schedule in `recordedSchedules`. The
+        // form opens on the stored one: prefilling from the empty live schedule
+        // would show a daily-08:00 plan the person never chose, and a schedule
+        // save would then write it.
+        let medication = served.replacingSchedule(served.displaySchedule)
+        trackIntake = served.tracksIntake
+        serverTrackIntake = served.trackIntake
         name = medication.name
         dose = medication.dose
         // PRN carries no schedule times; otherwise pre-fill from the schedule.
@@ -54,8 +72,12 @@ struct EditMedicationFormState: Equatable {
         slotUnitsPerDose = MedicationCadenceLogic.rawSlotUnitsPerDose(from: medication.schedule.entries)
         serverEffectiveUnitsPerDose = MedicationCadenceLogic
             .serverEffectiveUnitsPerDose(from: medication.schedule.entries)
-        if let raw = medication.category, let opt = MedicationCategoryOption(rawValue: raw) {
-            category = opt
+        // Server v1.39.4 (#1041) — an unknown category is NOT "Other": mapping
+        // it there made every save store OTHER. No category at all still opens
+        // on "Other", the server default.
+        if let raw = medication.category {
+            category = MedicationCategoryOption(rawValue: raw)
+            unknownCategoryLabel = category == nil ? MedicationCard.localizedCategory(raw) : nil
         } else {
             category = .other
         }
@@ -88,6 +110,42 @@ struct EditMedicationFormState: Equatable {
     private static func uniqueSorted(_ times: [TimeOfDay]) -> [TimeOfDay] {
         var seen: Set<TimeOfDay> = []
         return times.filter { seen.insert($0).inserted }.sorted()
+    }
+}
+
+/// **v1.39.1 (#1033) — what `trackIntake` a medication PUT carries.**
+///
+/// The server leaves `trackIntake` alone when a write omits it, and on a
+/// medication kept as a record it also ignores `schedules`, `asNeeded` and
+/// `oneShot` unless the write names `trackIntake` (a client that does not know
+/// the field cannot have seen the stored schedule). So the editor names it
+/// exactly when it means it:
+///
+/// - never against a server that does not know the field (`server == nil`);
+/// - when the person flipped the switch;
+/// - echoed as `false` when the person edited the schedule of a record, so the
+///   edit applies instead of being dropped.
+///
+/// Every other save omits it, so no edit can reset the switch by accident.
+enum MedicationTrackIntakeWrite {
+    static func value(server: Bool?, edited: Bool, scheduleChanged: Bool) -> Bool? {
+        guard let server else { return nil }
+        if edited != server { return edited }
+        if !server, scheduleChanged { return false }
+        return nil
+    }
+
+    static func value(_ form: MedicationTrackIntakeFormValue, scheduleChanged: Bool) -> Bool? {
+        value(server: form.server, edited: form.tracked, scheduleChanged: scheduleChanged)
+    }
+
+    /// E1 — the add sheet's `trackIntake`: against a server that knows the
+    /// field (``Medication/serverKnowsTrackIntake(_:)``) a new medication starts
+    /// from the server default, tracked, so only a switch turned off is sent;
+    /// against any other server the field is never sent.
+    static func create(switchOn: Bool, served medications: [Medication]) -> Bool? {
+        guard Medication.serverKnowsTrackIntake(medications) else { return nil }
+        return value(server: true, edited: switchOn, scheduleChanged: false)
     }
 }
 

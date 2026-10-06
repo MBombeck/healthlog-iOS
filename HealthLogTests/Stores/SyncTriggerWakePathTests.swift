@@ -22,7 +22,7 @@
     ///
     /// `.serialized`, weil sowohl der `MockURLProtocol.handler` als auch der
     /// prozessweite Trigger-Kontext geteilt sind.
-    @Suite("CU-21 — syncTrigger pro Weck-Pfad (BGTask / Push)", .serialized)
+    @Suite("CU-21 — syncTrigger pro Weck-Pfad (BGTask / Push)", .serialized, .mockURLSession)
     @MainActor
     struct SyncTriggerWakePathTests {
         private static let env = AppEnvironment(
@@ -73,7 +73,7 @@
         }
 
         private func installHandler(_ recorder: TriggerRecorder) {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if let body = req.httpBody ?? req.bodyStreamData() {
                     recorder.record(body)
                 }

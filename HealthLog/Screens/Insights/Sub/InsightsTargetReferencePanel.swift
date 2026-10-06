@@ -52,6 +52,9 @@ struct InsightsTargetReferencePanel: View {
     /// Refreshes the read-only targets payload after an edit so this panel —
     /// and the Insights tiles — repaint against the new band.
     @Environment(InsightsTargetsStore.self) private var targetsStore
+    /// #115 P2 — the account's display units; the canonical payload converts
+    /// into them (``TargetUnitDisplay``).
+    @Environment(\.unitPreferences) private var unitPreferences
 
     /// Editable threshold metrics behind this target type (empty → no editor).
     private var editableMetrics: [ThresholdMetric] {
@@ -151,13 +154,14 @@ struct InsightsTargetReferencePanel: View {
     /// reads identically to the metric tile + the BP card.
     @ViewBuilder
     private func rail(range: InsightsTargetsResponseDTO.TargetItem.Range) -> some View {
-        if let band = InsightsTargetTileGrid.rangeBand(
+        if let band = InsightsTargetRangeBand.rangeBand(
             range: range,
             insufficient: target.insufficientData,
             daysInRange30d: target.daysInRange30d,
             daysLogged30d: target.daysLogged30d,
             unit: railUnit,
-            type: target.type
+            type: target.type,
+            units: unitPreferences
         ) {
             // I-0 Item 2 — when the server carries an authoritative pct (BP), the
             // rail trusts it so this number matches the top `BPStatusCard` (one
@@ -227,6 +231,12 @@ struct InsightsTargetReferencePanel: View {
         isBP ? "mmHg" : target.unit
     }
 
+    /// #115 P2 — the payload in the account's unit (identity for BP, pulse,
+    /// steps and every other target without a display transform).
+    private var display: TargetUnitDisplay {
+        TargetUnitDisplay(type: target.type, serverUnit: railUnit, units: unitPreferences)
+    }
+
     /// Status pill mirroring the web `TargetStatusPill` — the classification
     /// category coloured by signal (in-band green / near-band warn / else bad).
     /// Suppressed when the server emits no classification.
@@ -246,29 +256,32 @@ struct InsightsTargetReferencePanel: View {
             case .inBand: return .success
             case .nearBand: return .warning
             case .outBand: return .critical
+            case .unknown: return .neutral
             }
         }
         return .neutral
     }
 
     private func rangeLabel(_ range: InsightsTargetsResponseDTO.TargetItem.Range) -> String {
-        let unit = railUnit
+        let unit = display.unit
         if isBP, let dia = bpDiastolic?.range {
             return String(
                 format: String(localized: "Target: %@–%@ / %@–%@ %@"),
                 fmt(range.min), fmt(range.max), fmt(dia.min), fmt(dia.max), unit
             )
         }
+        let lo = fmt(display.value(range.min))
+        let hi = fmt(display.value(range.max))
         if unit.isEmpty {
-            return String(format: String(localized: "Target: %@–%@"), fmt(range.min), fmt(range.max))
+            return String(format: String(localized: "Target: %@–%@"), lo, hi)
         }
-        return String(format: String(localized: "Target: %@–%@ %@"), fmt(range.min), fmt(range.max), unit)
+        return String(format: String(localized: "Target: %@–%@ %@"), lo, hi, unit)
     }
 
     /// "30-day average: 72.8 kg" (BP stitches `S/D`). nil when no average.
     private var average30Text: String? {
         guard let avg = target.average30, avg.isFinite else { return nil }
-        let unit = railUnit
+        let unit = display.unit
         let avgValue: String = if isBP, let diaAvg = bpDiastolic?.average30,
                                   let sys = Int(safeServer: avg), let dia = Int(safeServer: diaAvg)
         {
@@ -278,7 +291,7 @@ struct InsightsTargetReferencePanel: View {
             // of trapping.
             "\(sys)/\(dia)"
         } else {
-            avg.formatted(.number.precision(.fractionLength(0 ... 1)))
+            display.value(avg).formatted(.number.precision(.fractionLength(0 ... 1)))
         }
         let prefix = String(localized: "30-day average:")
         return unit.isEmpty ? "\(prefix) \(avgValue)" : "\(prefix) \(avgValue) \(unit)"

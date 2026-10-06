@@ -87,6 +87,9 @@ public struct HLDashboardTile: View {
     /// range-coloured averages + the Insights target tiles). `nil` → no band,
     /// exactly as BP omits it when no target is configured.
     let targetBand: RangeBand?
+    /// #115 · 1.1 — the server's weight verdict (`tiles.weightTrend.direction`);
+    /// read by the weight tile only, `nil` = no snapshot yet → no colour.
+    let weightTrendSentiment: TrendDirectionSentiment?
 
     @ScaledMetric(relativeTo: .title2) private var primaryValueSize: CGFloat = 28
 
@@ -113,7 +116,8 @@ public struct HLDashboardTile: View {
         liveTodayStepsOverride: Double? = nil,
         avg7: Double? = nil,
         avg30: Double? = nil,
-        targetBand: RangeBand? = nil
+        targetBand: RangeBand? = nil,
+        weightTrendSentiment: TrendDirectionSentiment? = nil
     ) {
         self.metric = metric
         descriptor = metric.kind.descriptor
@@ -124,6 +128,7 @@ public struct HLDashboardTile: View {
         self.avg7 = avg7
         self.avg30 = avg30
         self.targetBand = targetBand
+        self.weightTrendSentiment = weightTrendSentiment
     }
 
     public var body: some View {
@@ -149,8 +154,8 @@ public struct HLDashboardTile: View {
                 // Build 7 / item 7.1 — 7-/30-day averages + target band, the
                 // web dashboard tile's secondary stats. Gated on a non-empty
                 // tile so a "no data yet" card stays calm (no averages against
-                // an em-dash headline). Order mirrors `HLMetricTile` (Insights):
-                // stats caption, then the BP-style in-range rail.
+                // an em-dash headline). Order: stats caption, then the
+                // BP-style in-range rail.
                 if !isEmptyForDisplay, hasAverages {
                     averagesRow
                 }
@@ -192,7 +197,7 @@ public struct HLDashboardTile: View {
             TrendChip(
                 trend: metric.dashboardTrend,
                 polarity: descriptor.trendPolarity,
-                mode: metric.dashboardTrendMode
+                mode: metric.dashboardTrendMode(weightSentiment: weightTrendSentiment)
             )
         }
     }
@@ -297,7 +302,12 @@ public struct HLDashboardTile: View {
     /// when no same-day sample exists we fall back to `latest.primaryValue`
     /// so the tile never silently blanks before today's HK upload has
     /// landed.
-    private var formattedValueText: String {
+    var formattedValueText: String {
+        // H2 (1.1.0) — a resolved-empty tile shows the dash, exactly like
+        // `MetricDisplay` (hero + list). Before, the grey tint and the "No data
+        // yet" line came from `.empty` while the number still came from the
+        // summary snapshot: "8,421 steps · No data yet".
+        if case .empty = dataState { return "—" }
         if case let .ready(latest, samples) = dataState {
             // BP composite needs the diastolic peer from the summary —
             // `MeasurementValue.bloodPressure` carries both, scalar does
@@ -344,8 +354,8 @@ public struct HLDashboardTile: View {
     /// when the value lands via `MetricDataState` instead of the summary
     /// endpoint.
     ///
-    /// v0.11 N1 — the re-unitable families (weight / glucose) convert at
-    /// display time via `unitPreferences`. Blood-pressure is handled in
+    /// v0.11 N1 / #115 P2 — every re-unitable family converts at display
+    /// time via `unitPreferences`. Blood-pressure is handled in
     /// `formattedValueText` (composite path) so it never reaches here.
     ///
     /// v0.16 Build 7 / item 7.1 — `internal` (not `private`) so the
@@ -357,35 +367,10 @@ public struct HLDashboardTile: View {
         // Reject non-finite at the gate; route each conversion through
         // `Int(safeServer:)` → em-dash on an unrepresentable value.
         guard latest.isFinite else { return "—" }
-        switch metric.kind.unitFamily {
-        case .weight:
-            return unitPreferences.convertWeight(latest).formatted(.number.precision(.fractionLength(1)))
-        case .glucose:
-            let v = unitPreferences.convertGlucose(latest)
-            return unitPreferences.glucose == .mgdL
-                ? v.safeServerIntString()
-                : v.formatted(.number.precision(.fractionLength(1)))
-        case .bloodPressure, .none:
-            break
-        }
-        switch descriptor.formatStyle {
-        case .integer:
-            return latest.safeServerIntString()
-        case .decimal1:
-            return latest.formatted(.number.precision(.fractionLength(1)))
-        case .decimal2:
-            return latest.formatted(.number.precision(.fractionLength(0 ... 2)))
-        case .bloodPressureCompound:
-            // Unreachable — `formattedValueText` short-circuits earlier for
-            // composite metrics. Defensive fallback to single integer.
-            return latest.safeServerIntString()
-        case .durationHM:
-            return latest.safeServerSleepDurationHM
-        case .groupedInteger:
-            return latest.safeServerGroupedIntString
-        case .signedDecimal1:
-            // W-B189 (#23) — signed deviation (body-temperature deviation).
-            return MetricKindDescriptor.formatSignedDecimal1(latest)
+        // #115 P2 — one central account-unit formatter; the identity branch
+        // keeps the descriptor style (BP never reaches here, see above).
+        return MetricValueFormatter.account(latest, kind: metric.kind, units: unitPreferences) { converted in
+            MetricValueFormatter.styled(converted, style: descriptor.formatStyle)
         }
     }
 

@@ -21,7 +21,7 @@ import Testing
 ///
 /// `.serialized` — every network case installs the process-global
 /// `MockURLProtocol.handler`, which parallel cases would race on.
-@Suite("ShareLinkRepository", .serialized)
+@Suite("ShareLinkRepository", .serialized, .mockURLSession)
 struct ShareLinkRepositoryTests {
     private func makeAPI(keychain: InMemoryKeychain = InMemoryKeychain()) -> APIClient {
         let env = AppEnvironment(
@@ -144,7 +144,7 @@ struct ShareLinkRepositoryTests {
         let token = "hls_0123456789abcdef0123456789abcdef0123456789abcdef"
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let payload = """
@@ -184,7 +184,7 @@ struct ShareLinkRepositoryTests {
         let passphrase = "ABCD-EFGH-IJKL-MNOP"
         let shareURL = "https://test.healthlog.local/c/\(token)"
         let qrURL = "\(shareURL)#k=\(passphrase)"
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":{"id":"sl_2","label":"Dr. Protected","rangeStart":"2026-03-01T00:00:00Z",\
             "rangeEnd":null,"resourceTypes":[],"allowFhirApi":false,"expiresAt":"2026-07-01T00:00:00Z",\
@@ -277,7 +277,7 @@ struct ShareLinkRepositoryTests {
     @Test("CU-12: 422 forbidden_leaf maps to ShareLinkError.forbiddenLeaf with readable copy")
     func forbiddenLeafMapsToTypedError() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":null,"error":"share-link.selection.forbidden_leaf"}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -304,7 +304,7 @@ struct ShareLinkRepositoryTests {
     @Test("CU-12: another share-link.selection.* 422 maps to selectionRejected, still readable")
     func otherSelectionRefusalMapsToTypedError() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":null,"error":"share-link.selection.unknown_leaf"}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -331,7 +331,7 @@ struct ShareLinkRepositoryTests {
     @Test("CU-12: a 422 that is not about the selection passes through untouched")
     func unrelated422PassesThrough() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":null,"error":"Label must be 1–120 characters"}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -375,7 +375,7 @@ struct ShareLinkRepositoryTests {
     @Test("list decodes data.shareLinks[] with token == nil")
     func listDecodesWithoutToken() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":{"shareLinks":[{"id":"sl_1","label":"Dr. A","rangeStart":"2026-03-01T00:00:00Z",\
             "rangeEnd":null,"resourceTypes":["Observation"],"allowFhirApi":false,\
@@ -398,7 +398,7 @@ struct ShareLinkRepositoryTests {
     @Test("revoke maps a 404 (already revoked / gone) to success — no throw")
     func revoke404IsSuccess() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":null,"error":"Share link not found"}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -411,7 +411,7 @@ struct ShareLinkRepositoryTests {
     @Test("revoke surfaces a genuine non-404 server error")
     func revokeOtherErrorThrows() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":null,"error":"boom"}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))

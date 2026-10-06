@@ -48,4 +48,20 @@ public extension HKReadinessStore {
         if case let .partiallyGranted(missing) = state { return missing }
         return []
     }
+
+    /// #10 — welcher Zeitpunkt unter "Last synced" steht.
+    ///
+    /// Zuerst der eigene Stempel dieses Geräts (``lastSyncedAt``), sonst der des
+    /// Servers (`GET /api/integrations/healthkit` → `lastSyncedAt`, gestempelt bei
+    /// jedem angenommenen HealthKit-Batch). Der Rückfall trägt die Anzeige über
+    /// eine Neuinstallation, die den lokalen Stempel mit den `UserDefaults`
+    /// verliert, und über die Zeit bis zum ersten Upload nach einer Anmeldung.
+    ///
+    /// **Nur für die Anzeige.** ``isConnected`` liest den Server-Wert bewusst
+    /// nicht: er ist kontoweit und wird auch von einem anderen Gerät desselben
+    /// Kontos gestempelt, beweist also nicht, dass **dieses** Gerät Apple Health
+    /// lesen darf — genau das soll die Abgelehnt-Warnung aber beantworten.
+    func displayedLastSyncedAt(serverLastSyncedAt: Date?) -> Date? {
+        lastSyncedAt ?? serverLastSyncedAt
+    }
 }

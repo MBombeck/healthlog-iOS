@@ -204,9 +204,16 @@ public struct MoodTagCategoryDTO: Codable, Sendable, Equatable, Identifiable {
 /// absent toggle chip every tag already renders; `rated` = a factor the user
 /// scores per entry (a `scaleMin…scaleMax` slider / segmented control).
 /// Defaults to `binary` so a catalog that predates the field decodes unchanged.
-public enum MoodTagKind: String, Codable, Sendable, Equatable {
+public enum MoodTagKind: String, Codable, Sendable, Equatable, TolerantServerEnum {
     case binary = "BINARY"
     case rated = "RATED"
+    /// #115 · 1.7 — a tag kind this build does not know. The tag keeps its
+    /// place in the catalog; it is not offered as a rated factor (no scale is
+    /// invented for it) — `isRated` stays `false`.
+    case unknown
+
+    public static let unknownFallback = MoodTagKind.unknown
+    public static let wireVocabulary: StaticString = "mood tag kind"
 }
 
 public struct MoodTagDTO: Codable, Sendable, Equatable, Identifiable {

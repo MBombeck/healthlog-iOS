@@ -156,7 +156,9 @@ struct AllergyRow: View {
             HStack(spacing: HLSpace.xs) {
                 HLBadge(record.category.localizedLabel, tone: .neutral)
                 if let severity = record.severity {
-                    HLBadge(severity.localizedLabel, tone: .info)
+                    // A grade this build does not know reads as unknown, in the
+                    // neutral tone — never as a severity the server did not state.
+                    HLBadge(severity.localizedLabel, tone: severity == .unknown ? .neutral : .info)
                 }
                 if record.status != .active {
                     HLBadge(record.status.localizedLabel, tone: .neutral)

@@ -29,6 +29,22 @@ public struct DoctorReportSpec: Sendable, Equatable {
     /// `illness` module is off or there are no episodes.
     public let illnesses: IllnessBlock?
     public let footer: Footer
+    /// **#115 B5** — the account's glucose unit, for the PDF only: the vitals
+    /// table and the glucose chart print in it. Every glucose value in this spec
+    /// stays canonical mg/dL, because the FHIR bundle built from the same spec
+    /// must carry UCUM mg/dL (`DoctorReportToFHIRBundle` never reads this).
+    public let glucoseUnit: GlucoseUnit
+    /// **#115 P2** — the account's unit system and weight unit, for the PDF
+    /// only: weight, temperature and waist print in them on an imperial
+    /// account. Values stay canonical here for the same FHIR reason.
+    public let accountUnits: UnitPreferences
+
+    /// The units the PDF prints in: the account's, glucose from
+    /// ``glucoseUnit``, blood pressure always mmHg (the clinical convention the
+    /// report keeps whatever the device pick).
+    public var printUnits: UnitPreferences {
+        UnitPreferences(weight: accountUnits.weight, bloodPressure: .mmHg, glucose: glucoseUnit, system: accountUnits.system)
+    }
 
     public init(
         cover: Cover,
@@ -39,7 +55,9 @@ public struct DoctorReportSpec: Sendable, Equatable {
         mood: MoodBlock?,
         labs: LabsBlock? = nil,
         illnesses: IllnessBlock? = nil,
-        footer: Footer
+        footer: Footer,
+        glucoseUnit: GlucoseUnit = .mgdL,
+        accountUnits: UnitPreferences = .standard
     ) {
         self.cover = cover
         self.vitals = vitals
@@ -50,6 +68,8 @@ public struct DoctorReportSpec: Sendable, Equatable {
         self.labs = labs
         self.illnesses = illnesses
         self.footer = footer
+        self.glucoseUnit = glucoseUnit
+        self.accountUnits = accountUnits
     }
 
     // MARK: - Cover
@@ -211,34 +231,71 @@ public struct DoctorReportSpec: Sendable, Equatable {
 
     // MARK: - Adherence
 
+    /// **#115 · 1.2 — adherence is the server's, for the window the server
+    /// computes.** The report used to divide today's intakes by today's slots
+    /// and print that as the adherence of a 30- to 365-day period. It now
+    /// carries the server's cadence-aware `compliance30` per medication
+    /// (`GET /api/medications/compliance`) with its window stated, and says
+    /// so when the report period differs or the server could not be reached.
+    /// Nothing here is computed on the device, and there is no invented
+    /// "overall" figure: the server publishes none.
     public struct AdherenceBlock: Sendable, Equatable {
-        public let perMedication: [Row]
-        public let overall: Double
+        public enum Availability: Sendable, Equatable {
+            /// Rows come from the server.
+            case server
+            /// The server could not be asked (offline, standalone) — the
+            /// section says adherence is not available instead of computing it.
+            case unavailable
+        }
 
-        public init(perMedication: [Row], overall: Double) {
+        public let availability: Availability
+        /// The window the server's rates cover (`compliance30` → 30).
+        public let windowDays: Int
+        /// The report period the reader chose.
+        public let periodDays: Int
+        public let perMedication: [Row]
+
+        public init(availability: Availability, windowDays: Int, periodDays: Int, perMedication: [Row]) {
+            self.availability = availability
+            self.windowDays = windowDays
+            self.periodDays = periodDays
             self.perMedication = perMedication
-            self.overall = overall
+        }
+
+        /// `false` → the section states that the server's window is not the
+        /// report period.
+        public var windowMatchesPeriod: Bool {
+            windowDays == periodDays
         }
 
         public struct Row: Sendable, Equatable, Identifiable {
             public let medicationId: String
             public let medicationName: String
-            public let scheduled: Int
-            public let taken: Int
+            /// `false` → NO_LOCAL_SCHEDULE: no rate exists for this medication.
+            public let applicable: Bool
+            /// The server's rounded rate, taken and `taken + missed`.
+            public let rate: Int?
+            public let taken: Int?
+            public let expected: Int?
 
             public var id: String {
                 medicationId
             }
 
-            public var rate: Double {
-                scheduled == 0 ? 1 : Double(taken) / Double(scheduled)
-            }
-
-            public init(medicationId: String, medicationName: String, scheduled: Int, taken: Int) {
+            public init(
+                medicationId: String,
+                medicationName: String,
+                applicable: Bool,
+                rate: Int?,
+                taken: Int?,
+                expected: Int?
+            ) {
                 self.medicationId = medicationId
                 self.medicationName = medicationName
-                self.scheduled = scheduled
+                self.applicable = applicable
+                self.rate = rate
                 self.taken = taken
+                self.expected = expected
             }
         }
     }

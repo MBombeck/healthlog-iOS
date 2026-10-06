@@ -144,6 +144,10 @@
         private let cursors: DurableHealthCursorStore
         private let admission: @Sendable () throws -> HealthSyncAuthenticatedLease
         private let cutoff: @Sendable () -> Date
+        /// #113 — offers the skip register's rows again (`force` = all rows, not
+        /// only those this build has not offered). `nil` where no uploader is
+        /// composed; the register then simply waits.
+        private let reoffer: (@Sendable (HealthSyncAuthenticatedLease, Bool) async -> HealthKitSkippedRowReoffer.Summary)?
 
         /// Owners whose partitions have already been established in this process.
         /// The store refuses a repeated migration anyway; this only avoids walking
@@ -155,12 +159,14 @@
             collector: AnchoredHealthSampleCollector,
             cursors: DurableHealthCursorStore,
             admission: @escaping @Sendable () throws -> HealthSyncAuthenticatedLease,
-            cutoff: @escaping @Sendable () -> Date
+            cutoff: @escaping @Sendable () -> Date,
+            reoffer: (@Sendable (HealthSyncAuthenticatedLease, Bool) async -> HealthKitSkippedRowReoffer.Summary)? = nil
         ) {
             self.collector = collector
             self.cursors = cursors
             self.admission = admission
             self.cutoff = cutoff
+            self.reoffer = reoffer
         }
 
         /// One bounded pass for `trigger`, with a name for what it did.
@@ -193,6 +199,11 @@
                 migratedOwners.insert(lease.ownerID)
             }
 
+            // #113 — once per installation and account, after the migration has
+            // established the partitions and before the first query reads them.
+            // After the first run this is two marker reads per pass.
+            await HealthKitPercentScaleCursorReset.apply(store: cursors, requiring: lease)
+
             if !observing {
                 observing = true
                 await collector.startObserving(
@@ -208,10 +219,21 @@
                 notBefore: window,
                 requiring: lease
             )
+            // #113 — rows the server refused under an older build get one new
+            // offer per build. After that first pass this is one register read.
+            _ = await reoffer?(lease, false)
             // `ran`, not `succeeded`: the collector commits per type through the
             // shared cursor rule, and a page it held is still owed. Claiming
             // success here would be the overstatement this phase removes.
             return .ran(.speziSampleCollection)
+        }
+
+        /// "Resend skipped" in Sync Diagnostics: every register row of the
+        /// signed-in account, under a fresh admission. `nil` when signed out or
+        /// when no re-offer is composed.
+        func resendSkipped() async -> HealthKitSkippedRowReoffer.Summary? {
+            guard let reoffer, let lease = try? admission() else { return nil }
+            return await reoffer(lease, true)
         }
 
         /// Maps the lease vocabulary onto the pass vocabulary. Exhaustive, so a

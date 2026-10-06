@@ -13,7 +13,7 @@ import Testing
 /// - a `>0 → 0` outbox drain arms the short "Daten übermittelt ✓" beat,
 ///   any new backlog (or logout) disarms it.
 @MainActor
-@Suite("SyncStateStore — sync progress aggregation", .serialized)
+@Suite("SyncStateStore — sync progress aggregation", .serialized, .mockURLSession)
 struct SyncStateStoreProgressTests {
     private func makeStore(hold: Duration = .seconds(2.5)) -> SyncStateStore {
         let env = AppEnvironment(
@@ -175,7 +175,7 @@ private final class AlwaysOnlineReach: ReachabilityProviding, @unchecked Sendabl
 /// Phase 07 / plan 07-07 — the named HealthKit sync truth the same store now
 /// carries, and the three claims it is forbidden from making.
 @MainActor
-@Suite("SyncStateStore — named HealthKit sync truth", .serialized)
+@Suite("SyncStateStore — named HealthKit sync truth", .serialized, .mockURLSession)
 struct SyncStateStoreHealthSyncTests {
     // swiftlint:disable:next force_unwrapping
     private static let baseURL = URL(string: "https://test.healthlog.local")!

@@ -136,7 +136,7 @@ extension WorkoutDetailView {
                             )
                         }
                         if let hr = ctx.avgAvgHr, hr > 0 {
-                            sportContextStat(labelKey: "Ø Puls", value: "\(Int(hr.rounded())) bpm")
+                            sportContextStat(labelKey: "workout.stat.avgHeartRate", value: "\(Int(hr.rounded())) bpm")
                         }
                     }
                 }

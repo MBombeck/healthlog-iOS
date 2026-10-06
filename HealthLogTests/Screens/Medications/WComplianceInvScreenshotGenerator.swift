@@ -14,7 +14,8 @@ import Testing
 /// 100 → 60 → 50 now paints: placeholder → server value (one numeric paint):
 ///   - `kpi-1-pending.png` — em-dash placeholder while the fetch is pending,
 ///   - `kpi-2-server.png` — the server-canonical (ledger) number,
-///   - `kpi-3-offline-fallback.png` — the clearly-marked local estimate,
+///   - `kpi-3-offline-unknown.png` — offline: adherence unknown, no local
+///     estimate (#115 1.3 removed the fallback number),
 ///   - `card-1-pending-skeleton.png` / `card-2-server.png` — same contract
 ///     on the medication card's compliance bars.
 ///
@@ -45,18 +46,22 @@ struct WComplianceInvScreenshotGenerator {
 
     @Test("generate W-COMPLIANCE-INV screenshots")
     func generateScreenshots() {
+        // Start from an empty directory: the file check below must see this
+        // run's output, not a PNG a previous run left in /tmp.
+        try? FileManager.default.removeItem(at: outDir)
+
         // — Task 1: KPI load progression —
         write(
             ComplianceKPISection(state: .pending),
             name: "kpi-1-pending"
         )
         write(
-            ComplianceKPISection(state: .server(.init(inTime: 14, total: 28))),
+            ComplianceKPISection(state: .server(.init(rate: 50, taken: 14, expected: 28))),
             name: "kpi-2-server"
         )
         write(
-            ComplianceKPISection(state: .localFallback(.init(inTime: 14, total: 28))),
-            name: "kpi-3-offline-fallback"
+            ComplianceKPISection(state: .unavailable),
+            name: "kpi-3-offline-unknown"
         )
 
         // — Task 1: medication-card compliance bars —
@@ -93,7 +98,7 @@ struct WComplianceInvScreenshotGenerator {
         let files = (try? FileManager.default.contentsOfDirectory(atPath: outDir.path)) ?? []
         #expect(files.contains("kpi-1-pending.png"))
         #expect(files.contains("kpi-2-server.png"))
-        #expect(files.contains("kpi-3-offline-fallback.png"))
+        #expect(files.contains("kpi-3-offline-unknown.png"))
         #expect(files.contains("card-1-pending-skeleton.png"))
         #expect(files.contains("card-2-server.png"))
         #expect(files.contains("inventory-tablet.png"))

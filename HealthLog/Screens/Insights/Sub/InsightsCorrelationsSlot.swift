@@ -31,17 +31,17 @@ import SwiftUI
 // section catalog is mirrored element-wise (a test pins it), so extending it is
 // not an option.
 
-// MARK: - Correlations slot (CorrelationsDiscoveryStore + Backend + module gate)
+// MARK: - Correlations slot (CorrelationsDiscoveryStore + Backend)
 
 /// Owns the ZUSAMMENHÄNGE IN DEINEN DATEN block. Store-scoped leaf in the same
 /// idiom as `InsightsOverviewSlots.swift`: it reads ONLY
-/// `CorrelationsDiscoveryStore` + `BackendAvailability` + the `insights` module
-/// gate, so a correlations refresh (or a relevance statement round-trip)
+/// `CorrelationsDiscoveryStore` + `BackendAvailability`, so a correlations refresh (or a relevance statement round-trip)
 /// invalidates this slot alone rather than the whole overview.
 ///
-/// Gating matches the block's previous host exactly (`backend.hasServer` +
-/// `insights` module), and the block itself still self-suppresses to nothing when
-/// the server returned no surviving pair.
+/// Gated on `backend.hasServer` alone (server v1.39: correlations are
+/// statistics, not AI, and channels whose module is off are filtered
+/// server-side), and the block itself still self-suppresses to nothing when the
+/// server returned no surviving pair.
 ///
 /// **CU-33 lives here now.** The block used to be mounted with a hardcoded
 /// `correlations: []` (the same dead-mount bug Build-4 item 4.6 fixed for
@@ -61,7 +61,7 @@ struct InsightsCorrelationsSlot: View {
     @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.insightsModuleEnabled(appContainer) {
+        if backend.hasServer, InsightsOverviewGate.isVisible(.correlations, appContainer) {
             InsightsCorrelationsDiscoveryBlock(
                 pairs: correlationsStore.presentable,
                 pairsTested: correlationsStore.response?.pairsTested ?? 0,

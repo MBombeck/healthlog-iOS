@@ -6,85 +6,76 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// Tests that `SmartReminderPhraseService` honours the
-/// `assistant.briefing` operator-control flag (R5 — single AI-surface
-/// flag gates BOTH server-AI AND on-device AI paths).
+/// Tests that `SmartReminderPhraseService` honours the server-resolved
+/// `briefing` AI capability (#114 / #115 · 0.2: `onDeviceAllowed`), which
+/// replaced the never-delivered `assistant.briefing` flag.
 ///
 /// The companion-service tests already cover the short-circuit when the
-/// flag is off; this suite locks the wiring guarantees:
+/// capability is closed; this suite locks the wiring guarantees:
 ///
-///   * `FeatureFlagsStoreSnapshot` reads through `isEnabled(_:)`.
-///   * `LiveFeatureFlagsService` evaluates the closure on every call —
-///     a flag flipped mid-session is honoured on the next `generate(...)`.
-///   * The factory tuple emitted by AppContainer's
-///     `makeAssistantServices(store:)` returns a wired
-///     `SmartReminderPhraseService` so production paths never accidentally
-///     fall back to the `UserDefaultsFeatureFlagsService` default.
-@Suite("SmartReminderPhraseService — assistant.briefing flag-gate (D-1)")
+///   * A fixed capability map reads through `allowsOnDevice(_:)`.
+///   * The live ``AICapabilityGate`` reader is evaluated on every call — a
+///     capability the next `/api/auth/me` load closes is honoured on the next
+///     `generate(...)`.
+///   * `AppContainer.makeAssistantServices(aiCapabilities:)` returns a service
+///     wired to the reader it was handed.
+@Suite("SmartReminderPhraseService — briefing capability gate (D-1, #115 0.2)")
 @MainActor
 struct SmartReminderFeatureFlagGateTests {
-    @Test("FeatureFlagsStoreSnapshot off → SmartReminderPhraseService short-circuits")
+    private let ctx = ReminderPhraseContext(medicationName: "Trulicity", slot: .noon)
+
+    @Test("briefing onDeviceAllowed=false → SmartReminderPhraseService short-circuits")
     func snapshotOffShortCircuits() async {
-        let snapshot = FeatureFlagsStoreSnapshot(flags: [.assistantBriefing: false])
-        let service = SmartReminderPhraseService(featureFlags: snapshot)
-        let ctx = ReminderPhraseContext(medicationName: "Trulicity", slot: .noon)
+        let service = SmartReminderPhraseService(aiCapabilities: AICaps.reader([.briefing: AICaps.operatorDisabled]))
         let outcome = await service.generate(context: ctx)
-        #expect(outcome.fallbackReason == .featureFlagDisabled)
+        #expect(outcome.fallbackReason == .capabilityNotAllowed)
     }
 
-    @Test("FeatureFlagsStoreSnapshot missing flag falls back to default (ON)")
+    @Test("A missing server provider keeps the on-device phrase (onDeviceAllowed=true)")
+    func noProviderStillRunsOnDevice() async {
+        let service = SmartReminderPhraseService(aiCapabilities: AICaps.reader([.briefing: AICaps.noProvider]))
+        let outcome = await service.generate(context: ctx)
+        #expect(outcome.fallbackReason != .capabilityNotAllowed)
+    }
+
+    @Test("No ai block (server < v1.39) → not short-circuited")
     func snapshotMissingFlagDefaultsToOn() async {
-        // Empty snapshot — the snapshot's `isEnabled(_:)` returns
-        // `flag.defaultValue` (`true` for `.assistantBriefing`). The service
-        // should NOT short-circuit on `.featureFlagDisabled`; it instead
-        // hands off to the FM path which (in CI, on the simulator without
-        // Apple Intelligence) reports `.deviceIneligible`.
-        let snapshot = FeatureFlagsStoreSnapshot(flags: [:])
-        let service = SmartReminderPhraseService(featureFlags: snapshot)
-        let ctx = ReminderPhraseContext(medicationName: "Trulicity", slot: .noon)
+        // CI simulators have no Apple Intelligence, so the FM path reports
+        // `.deviceIneligible` — the point is that it is NOT the capability.
+        let service = SmartReminderPhraseService(aiCapabilities: LegacyAICapabilities())
         let outcome = await service.generate(context: ctx)
-        #expect(outcome.fallbackReason != .featureFlagDisabled)
+        #expect(outcome.fallbackReason != .capabilityNotAllowed)
     }
 
-    @Test("LiveFeatureFlagsService re-evaluates on every call (mid-session toggle)")
+    @Test("The live gate reader re-evaluates on every call (mid-session change)")
     func liveFlagsHonourMidSessionToggle() async {
-        // Box around a Bool so we can flip it after the service is built.
-        // `nonisolated(unsafe)` is fine in test scope — there's no concurrent
-        // writer racing the toggle in the test body.
-        nonisolated(unsafe) var enabled = true
-        let live = LiveFeatureFlagsService { flag in
-            switch flag {
-            case .assistantBriefing: enabled
-            default: true
-            }
-        }
-        let service = SmartReminderPhraseService(featureFlags: live)
-        let ctx = ReminderPhraseContext(medicationName: "Trulicity", slot: .noon)
+        let gate = AICapabilityGate()
+        let service = SmartReminderPhraseService(aiCapabilities: gate.reader)
 
-        // Flag-ON: not flag-disabled (will fall back for other reasons in CI).
         let on = await service.generate(context: ctx)
-        #expect(on.fallbackReason != .featureFlagDisabled)
+        #expect(on.fallbackReason != .capabilityNotAllowed)
 
-        // Toggle off → next call sees the new value.
-        enabled = false
+        gate.apply(AICaps.block([.briefing: AICaps.userDisabled]))
         let off = await service.generate(context: ctx)
-        #expect(off.fallbackReason == .featureFlagDisabled)
+        #expect(off.fallbackReason == .capabilityNotAllowed)
 
-        // Toggle back on → next call recovers (still falls back, but not on
-        // the flag — proves the closure is invoked every call, not cached).
-        enabled = true
+        gate.apply(AICaps.block())
         let backOn = await service.generate(context: ctx)
-        #expect(backOn.fallbackReason != .featureFlagDisabled)
+        #expect(backOn.fallbackReason != .capabilityNotAllowed)
     }
 
-    @Test("Snapshot.allCases covers .assistantBriefing for D-1")
-    func featureFlagEnumContainsAssistantBriefing() {
-        // Regression-anchor: if a future refactor renames or removes
-        // `.assistantBriefing`, the smart-reminder gate breaks silently.
-        // This test pins the case is in the enum + the rawValue is the
-        // server wire-key.
-        #expect(FeatureFlag.allCases.contains(.assistantBriefing))
-        #expect(FeatureFlag.assistantBriefing.rawValue == "assistant.briefing")
-        #expect(FeatureFlag.assistantBriefing.defaultValue == true)
+    @Test("makeAssistantServices wires every on-device assistant to the handed reader")
+    func factoryWiresReader() async {
+        let gate = AICapabilityGate(account: AICaps.block([
+            .briefing: AICaps.operatorDisabled,
+            .statusText: AICaps.operatorDisabled
+        ]))
+        let bundle = AppContainer.makeAssistantServices(aiCapabilities: gate.reader)
+        let reminder = await bundle.smartReminder.generate(context: ctx)
+        #expect(reminder.fallbackReason == .capabilityNotAllowed)
+        let briefing = await bundle.briefing.generate(measurements: [], healthScore: nil, locale: Locale(identifier: "de_DE"))
+        #expect(briefing.fallbackReason == .capabilityNotAllowed)
+        let trend = await bundle.trend.observe(metric: .pulse, series: [], locale: Locale(identifier: "de_DE"))
+        #expect(trend.fallbackReason == .capabilityNotAllowed)
     }
 }

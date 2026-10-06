@@ -17,7 +17,7 @@ import Testing
 ///   (the store's `presentable` is empty, the block hides) — never fabricated
 /// - the store's strongest-first ordering + non-causal direction/strength
 ///   derivation
-@Suite("CorrelationsDiscovery — wire contract + operator-gated + honest-only", .serialized)
+@Suite("CorrelationsDiscovery — wire contract + operator-gated + honest-only", .serialized, .mockURLSession)
 struct CorrelationsDiscoveryRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -32,7 +32,7 @@ struct CorrelationsDiscoveryRepositoryTests {
     @Test("fetch — decodes a populated discovery response (pairs + footer fields)")
     func fetchPopulated() async throws {
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path.hasSuffix("/insights/correlations") == true)
             let body = Data(#"""
             {"data":{
@@ -74,7 +74,7 @@ struct CorrelationsDiscoveryRepositoryTests {
     @Test("fetch — empty discovered array decodes (honest 'nothing defensible')")
     func fetchEmptyDiscovered() async throws {
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"discovered":[],"pairsTested":42,"fdrQ":0.1,"minPairs":20},"error":null}
             """#.utf8)
@@ -89,7 +89,7 @@ struct CorrelationsDiscoveryRepositoryTests {
     @Test("fetch — 404 (route absent) → nil → block hides gracefully")
     func fetch404IsNil() async throws {
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch() == nil)
@@ -98,7 +98,7 @@ struct CorrelationsDiscoveryRepositoryTests {
     @Test("fetch — 422 (operator-gated surface off) → nil → block hides, no error")
     func fetch422IsNil() async throws {
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch() == nil)
@@ -111,9 +111,9 @@ struct CorrelationsDiscoveryRepositoryTests {
         // `errorCode: "assistant.disabled.correlations"`. `correlations` is not a
         // known iOS `FeatureFlag` surface, so `APIClient` surfaces it as
         // `HLError.server(403, "assistant.disabled.correlations")` (NOT the typed
-        // `assistantDisabled`) — the repository now folds it into the hide arm.
+        // `aiUnavailable`) — the repository now folds it into the hide arm.
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Correlations disabled by operator","errorCode":"assistant.disabled.correlations"}
             """#.utf8)
@@ -127,7 +127,7 @@ struct CorrelationsDiscoveryRepositoryTests {
         // Only `assistant.disabled.*` 403s hide; a real auth 403 must surface so
         // the caller does not mistake a permission failure for an empty block.
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"Forbidden"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -140,7 +140,7 @@ struct CorrelationsDiscoveryRepositoryTests {
     @Test("store — gated-off (nil) → presentable empty + block self-suppresses")
     func storeGatedOffSelfSuppresses() async {
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         let store = CorrelationsDiscoveryStore(repo: repo, patterns: PatternsRepository(api: makeAPI()))
@@ -154,7 +154,7 @@ struct CorrelationsDiscoveryRepositoryTests {
     @Test("store — orders strongest association first (|r| descending)")
     func storeOrdersStrongestFirst() async {
         let repo = CorrelationsDiscoveryRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "discovered":[

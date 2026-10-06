@@ -13,7 +13,7 @@ import Testing
 /// had already moved past them. These tests pin the four properties that make
 /// the row a real retry: exact wire bytes, one stable identity across restart,
 /// exact indexed acceptance, and an owner gate ahead of the wire.
-@Suite("Outbox HealthKit batch replay", .serialized)
+@Suite("Outbox HealthKit batch replay", .serialized, .mockURLSession)
 struct OutboxHealthKitBatchReplayTests {
     private static let acceptedBody = Data(
         #"""
@@ -168,7 +168,7 @@ struct OutboxHealthKitBatchReplayTests {
         )
 
         let recorder = Recorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets("/api/measurements/batch") {
                 recorder.record(
                     key: request.value(forHTTPHeaderField: "Idempotency-Key"),
@@ -201,7 +201,7 @@ struct OutboxHealthKitBatchReplayTests {
             requiringCurrentOwner: "user-a"
         )
 
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (
                 HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Self.partialBody
@@ -213,6 +213,95 @@ struct OutboxHealthKitBatchReplayTests {
         let remaining = try #require(await outbox.snapshot.first)
         #expect(remaining.idempotencyKey == key, "the row keeps its identity for the next attempt")
         #expect(remaining.attempts == 1)
+    }
+
+    /// #115 / 0.3 — the row the importers park for an unmappable identifier.
+    /// The acceptance gate calls that skip terminal for the envelope, which is
+    /// why the 279 replay drained it: the row was deleted and the reading, whose
+    /// anchor had already moved, was gone.
+    private static let stillUnmappableBody = Data(
+        #"""
+        {"data":{"processed":2,"inserted":1,"duplicates":0,
+        "skipped":[{"index":1,"reason":"unmappable_identifier"}],
+        "entries":[{"index":0,"status":"inserted"},
+        {"index":1,"status":"skipped","reason":"unmappable_identifier"}]},"error":null}
+        """#.utf8
+    )
+
+    @Test("a row the server still cannot map stays parked — uncounted, same key — and lands once mapped")
+    func stillUnmappableRowStaysParked() async throws {
+        let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { "user-a" })
+        let key = try stableKey(owner: "user-a", identity: "hk:sample-1")
+        try await outbox.enqueueHealthKitBatch(
+            Self.entries,
+            encoder: .hlBatch,
+            idempotencyKey: key,
+            requiringCurrentOwner: "user-a"
+        )
+
+        let serverMaps = LockedFlag()
+        let recorder = Recorder()
+        MockURLProtocol.install { request in
+            recorder.record(key: request.value(forHTTPHeaderField: "Idempotency-Key"), body: nil)
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                serverMaps.value ? Self.acceptedBody : Self.stillUnmappableBody
+            )
+        }
+        let api = makeAPI()
+        let replay = makeReplay(api: api, outbox: outbox, currentUser: { "user-a" })
+
+        await replay.runOnce()
+        await replay.runOnce()
+
+        let parked = try #require(await outbox.snapshot.first, "a still-unmappable row must not be drained")
+        #expect(parked.idempotencyKey == key)
+        #expect(parked.attempts == 0, "a missing server mapping is not this write failing")
+        #expect(parked.lastAttemptAt != nil, "the attempt is stamped, so the back-off still applies")
+        #expect(await outbox.deadLetterCount == 0)
+        let payload = try JSONDecoder.hlDefault.decode(HealthKitBatchPayload.self, from: parked.payload)
+        #expect(payload.entries.map(\.externalId) == ["hk:sample-1", "hk:sample-2"])
+
+        // The server learns the identifier: the next pass lands the row.
+        serverMaps.value = true
+        await replay.runOnce()
+        #expect(await outbox.snapshot.isEmpty)
+        #expect(recorder.recordedKeys == [key, key, key])
+    }
+
+    /// #115 / 0.3 — a State-of-Mind sample the importer queued (anchor
+    /// committed) must not be deleted because the mood module is off when the
+    /// row replays: the row is that reading's only copy.
+    @Test("a queued mood write parks on 403 module.disabled and lands once the module is on")
+    func moodWriteParksWhileModuleIsOff() async throws {
+        let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { "user-a" })
+        let entry = MoodEntry(id: "local-hk-1", recordedAt: Date(timeIntervalSince1970: 1_788_000_000), score: 4)
+        try await outbox.enqueue(
+            .init(kind: .logMood, payload: JSONEncoder.hlDefault.encode(entry), idempotencyKey: "idem-mood-hk-1")
+        )
+
+        let moduleOn = LockedFlag()
+        MockURLProtocol.install { request in
+            let on = moduleOn.value
+            let body = on
+                ? #"{"data":{"id":"srv-mood-1","mood":"GUT","tags":[],"moodLoggedAt":"2026-09-01T08:00:00.000Z","source":"MANUAL","note":null},"error":null}"#
+                : #"{"data":null,"error":"Module \"mood\" is not enabled","meta":{"errorCode":"module.disabled","module":"mood"}}"#
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: on ? 201 : 403, httpVersion: nil, headerFields: nil)!,
+                Data(body.utf8)
+            )
+        }
+        let api = makeAPI()
+        let replay = makeReplay(api: api, outbox: outbox, currentUser: { "user-a" })
+
+        await replay.runOnce()
+        let parked = try #require(await outbox.snapshot.first, "a module-off refusal must not delete the reading")
+        #expect(parked.attempts == 0)
+        #expect(parked.lastAttemptAt != nil, "the attempt is stamped, so the back-off still applies")
+
+        moduleOn.value = true
+        await replay.runOnce()
+        #expect(await outbox.snapshot.isEmpty)
     }
 
     @Test("a foreign-owned batch never reaches the wire")
@@ -227,7 +316,7 @@ struct OutboxHealthKitBatchReplayTests {
         )
 
         let recorder = Recorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(key: request.value(forHTTPHeaderField: "Idempotency-Key"), body: nil)
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -287,7 +376,7 @@ struct OutboxHealthKitBatchReplayTests {
             currentAuthTokenProvider: sessionToken
         )
         let recorder = Recorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets("/api/measurements/batch") {
                 recorder.record(key: request.value(forHTTPHeaderField: "Idempotency-Key"), body: nil)
             }
@@ -318,6 +407,94 @@ struct OutboxHealthKitBatchReplayTests {
         #expect(op.ownerUserID == "user-a", "the enqueue chokepoint still stamps the live owner")
         let decoded = try JSONDecoder.hlDefault.decode(HealthKitBatchPayload.self, from: op.payload)
         #expect(decoded.entries.count == 2)
+    }
+}
+
+/// A `Sendable` switch the mock server reads per request.
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+
+    var value: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return flag
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            flag = newValue
+        }
+    }
+}
+
+// MARK: - #10 — a replayed batch stamps "Last synced"
+
+extension OutboxHealthKitBatchReplayTests {
+    private actor DeliveryLog {
+        private(set) var owners: [String] = []
+        func append(_ owner: String) {
+            owners.append(owner)
+        }
+    }
+
+    /// A replayed HealthKit batch is a delivered HealthKit sync like the live
+    /// POST; the readiness store hears about it with the row's owner.
+    @Test("an accepted replay reports the delivery with the row's owner (#10)")
+    func acceptedReplayReportsDelivery() async throws {
+        let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { "user-a" })
+        try await outbox.enqueueHealthKitBatch(
+            Self.entries,
+            encoder: .hlBatch,
+            idempotencyKey: stableKey(owner: "user-a", identity: "hk:sample-1"),
+            requiringCurrentOwner: "user-a"
+        )
+        MockURLProtocol.install { request in
+            (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Self.acceptedBody
+            )
+        }
+        let replay = makeReplay(api: makeAPI(), outbox: outbox, currentUser: { "user-a" })
+        let log = DeliveryLog()
+        replay.setHealthKitDeliveryNotifier { _, owner in
+            await log.append(owner)
+        }
+
+        await replay.runOnce()
+
+        #expect(await outbox.snapshot.isEmpty)
+        #expect(await log.owners == ["user-a"])
+    }
+
+    /// Only proven acceptance counts: a page that stays retryable was not
+    /// delivered, so it must not move "Last synced".
+    @Test("a replay that stays retryable reports nothing (#10)")
+    func retryableReplayReportsNothing() async throws {
+        let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { "user-a" })
+        try await outbox.enqueueHealthKitBatch(
+            Self.entries,
+            encoder: .hlBatch,
+            idempotencyKey: stableKey(owner: "user-a", identity: "hk:sample-1"),
+            requiringCurrentOwner: "user-a"
+        )
+        MockURLProtocol.install { request in
+            (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Self.partialBody
+            )
+        }
+        let replay = makeReplay(api: makeAPI(), outbox: outbox, currentUser: { "user-a" })
+        let log = DeliveryLog()
+        replay.setHealthKitDeliveryNotifier { _, owner in
+            await log.append(owner)
+        }
+
+        await replay.runOnce()
+
+        #expect(await outbox.snapshot.count == 1)
+        #expect(await log.owners.isEmpty)
     }
 }
 

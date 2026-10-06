@@ -20,7 +20,7 @@ import Testing
 ///  3. the outbox replay re-POSTs under the SAME idempotency key so the server
 ///     dedup folds a write that may already have landed.
 @MainActor
-@Suite("Medication free intake — Build 6.1", .serialized)
+@Suite("Medication free intake — Build 6.1", .serialized, .mockURLSession)
 struct MedicationFreeIntakeTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -50,7 +50,7 @@ struct MedicationFreeIntakeTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedIdem: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedMethod = req.httpMethod
             capturedPath = req.url?.path
             capturedIdem = req.value(forHTTPHeaderField: "Idempotency-Key")
@@ -97,7 +97,7 @@ struct MedicationFreeIntakeTests {
         let repo = MedicationsRepository(api: api, outbox: outbox)
 
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = req.httpBody ?? Self.readStream(req.httpBodyStream)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -150,7 +150,7 @@ struct MedicationFreeIntakeTests {
         let repo = MedicationsRepository(api: api, outbox: outbox)
 
         // 1) Live call hits a retriable 503 → repo enqueues on the outbox.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         await #expect(throws: HLError.self) {
@@ -174,7 +174,7 @@ struct MedicationFreeIntakeTests {
         // 2) Replay re-POSTs under the persisted key.
         nonisolated(unsafe) var replayIdem: String?
         nonisolated(unsafe) var replayPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             replayIdem = req.value(forHTTPHeaderField: "Idempotency-Key")
             replayPath = req.url?.path
             return (

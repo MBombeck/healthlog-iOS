@@ -90,10 +90,16 @@ public struct NutrientBatchRequestDTO: Codable, Sendable, Equatable {
 
 /// Per-entry ingest status (`NutrientEntryResult.status`). All three are
 /// terminal — the batch itself is always `200` when the envelope parses.
-public enum NutrientEntryStatus: String, Codable, Sendable, Equatable {
+public enum NutrientEntryStatus: String, Codable, Sendable, Equatable, TolerantServerEnum {
     case inserted
     case updated
     case skipped
+    /// #115 · 1.7 — a per-entry status this build does not know. Used to fail
+    /// the whole batch answer; now only that row is unreadable.
+    case unknown
+
+    public static let unknownFallback = NutrientEntryStatus.unknown
+    public static let wireVocabulary: StaticString = "nutrient entry status"
 }
 
 /// `data` payload of `POST /api/nutrients/batch` (`NutrientBatchResponse`).

@@ -5,7 +5,7 @@ import Foundation
 // Source of truth (verified 2026-06-06 against `HealthLog` server repo):
 //   - `src/lib/cycle/dto.ts`          → CycleDayLogDTO / MenstrualCycleDTO /
 //                                        CyclePredictionDTO / CycleProfileDTO
-//   - `src/lib/cycle/engine-adapter.ts` → CalendarDayDTO
+//   - `src/lib/cycle/engine-adapter.ts` → CalendarDayDTO (`CalendarDayDTO.swift`)
 //   - `src/app/api/cycle/calendar/route.ts` → calendar envelope (slim profile)
 //   - `src/app/api/cycle/cycles/route.ts`   → cycles envelope + stats
 //   - `src/app/api/cycle/day-logs/bulk/route.ts` → bulk per-entry results
@@ -297,78 +297,6 @@ public struct CyclePredictionDTO: Codable, Sendable, Equatable, Hashable {
         cyclesObserved = try c.decodeIfPresent(Int.self, forKey: .cyclesObserved) ?? 0
         stillLearning = try c.decodeIfPresent(Bool.self, forKey: .stillLearning) ?? true
         disclaimer = try c.decodeIfPresent(String.self, forKey: .disclaimer) ?? ""
-    }
-}
-
-// MARK: - CalendarDayDTO
-
-public struct CalendarDayDTO: Codable, Sendable, Equatable, Hashable, Identifiable {
-    public var id: String {
-        date
-    }
-
-    public let date: String
-    /// Raw phase string — see ``phaseValue``.
-    public let phase: String?
-    public let isPredictedPeriod: Bool
-    public let isFertileWindow: Bool
-    public let isPredictedOvulation: Bool
-    public let isPeriodLogged: Bool
-    public let flow: String?
-    public let hasSymptoms: Bool
-    public let confidence: Double
-    public let basalBodyTempC: Double?
-    /// v1.16.15 — the day's BBT reading was excluded from the temperature
-    /// evaluation (disturbed). Defaults `false`.
-    public let temperatureExcluded: Bool
-    public let ovulationTest: String?
-    public let cervicalMucus: String?
-    /// v1.16.15 — cervix secondary-symptom observations (manual-only).
-    public let cervixPosition: String?
-    public let cervixFirmness: String?
-    public let cervixOpening: String?
-
-    public var phaseValue: CyclePhaseValue? {
-        phase.flatMap(CyclePhaseValue.init)
-    }
-
-    /// Typed flow accessor — the calendar day's logged flow. Drives the CU-25
-    /// (#72) flow-without-period reconciliation check, which needs to know
-    /// whether the PRECEDING day already carried bleeding.
-    public var flowLevel: CycleFlowLevel? {
-        flow.flatMap(CycleFlowLevel.init)
-    }
-
-    public var cervixPositionValue: CycleCervixPosition? {
-        cervixPosition.flatMap(CycleCervixPosition.init)
-    }
-
-    public var cervixFirmnessValue: CycleCervixFirmness? {
-        cervixFirmness.flatMap(CycleCervixFirmness.init)
-    }
-
-    public var cervixOpeningValue: CycleCervixOpening? {
-        cervixOpening.flatMap(CycleCervixOpening.init)
-    }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        date = try c.decodeIfPresent(String.self, forKey: .date) ?? ""
-        phase = try c.decodeIfPresent(String.self, forKey: .phase)
-        isPredictedPeriod = try c.decodeIfPresent(Bool.self, forKey: .isPredictedPeriod) ?? false
-        isFertileWindow = try c.decodeIfPresent(Bool.self, forKey: .isFertileWindow) ?? false
-        isPredictedOvulation = try c.decodeIfPresent(Bool.self, forKey: .isPredictedOvulation) ?? false
-        isPeriodLogged = try c.decodeIfPresent(Bool.self, forKey: .isPeriodLogged) ?? false
-        flow = try c.decodeIfPresent(String.self, forKey: .flow)
-        hasSymptoms = try c.decodeIfPresent(Bool.self, forKey: .hasSymptoms) ?? false
-        confidence = try c.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
-        basalBodyTempC = try c.decodeIfPresent(Double.self, forKey: .basalBodyTempC)
-        temperatureExcluded = try c.decodeIfPresent(Bool.self, forKey: .temperatureExcluded) ?? false
-        ovulationTest = try c.decodeIfPresent(String.self, forKey: .ovulationTest)
-        cervicalMucus = try c.decodeIfPresent(String.self, forKey: .cervicalMucus)
-        cervixPosition = try c.decodeIfPresent(String.self, forKey: .cervixPosition)
-        cervixFirmness = try c.decodeIfPresent(String.self, forKey: .cervixFirmness)
-        cervixOpening = try c.decodeIfPresent(String.self, forKey: .cervixOpening)
     }
 }
 

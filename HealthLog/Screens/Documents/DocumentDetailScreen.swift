@@ -179,7 +179,13 @@ struct DocumentDetailScreen: View {
     /// Reading both here in a SwiftUI body establishes observation, so the area
     /// appears/disappears live when consent or server availability changes.
     var aiAssistEnabled: Bool {
-        store.assistAvailable && (container?.documentExternalAIConsentGranted ?? false)
+        store.assistAvailable && (container?.documentExternalAIConsentGranted ?? false) && documentAICapable
+    }
+
+    /// #115 · 0.2 — the server's `documentAi` capability (`/api/auth/me` `ai`).
+    /// Unknown container (previews) reads as available, like the module reads.
+    var documentAICapable: Bool {
+        container?.aiCapabilityGate.isAvailable(.documentAi) ?? true
     }
 
     /// The content-search index affordances gate on the same AI consent plus the
@@ -187,7 +193,7 @@ struct DocumentDetailScreen: View {
     /// also iOS's "auto-read is on" signal: when it holds, the document is
     /// indexed silently on open and the server's background summary is expected.
     var contentIndexEnabled: Bool {
-        store.contentIndexEnabled && (container?.documentExternalAIConsentGranted ?? false)
+        store.contentIndexEnabled && (container?.documentExternalAIConsentGranted ?? false) && documentAICapable
     }
 
     /// Whether the labs module is on — gates the "N Laborwerte" jump (web

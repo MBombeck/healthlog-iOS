@@ -19,7 +19,7 @@
     /// assert it lays out without crashing for each store-state, matching
     /// the convention from `LockOverlayTests`.
     @MainActor
-    @Suite("HealthScoreDetailSheet — state branches (F3)", .serialized)
+    @Suite("HealthScoreDetailSheet — state branches (F3)", .serialized, .mockURLSession)
     struct HealthScoreDetailSheetTests {
         private func makeAPIClient() -> APIClient {
             let env = AppEnvironment(
@@ -53,7 +53,7 @@
         func loadedScoreBranch() async {
             let api = makeAPIClient()
             let payload = Data(Self.snapshotJSON.utf8)
-            MockURLProtocol.handler = { request in
+            MockURLProtocol.install { request in
                 let response = HTTPURLResponse(
                     url: request.url!,
                     statusCode: 200,
@@ -77,7 +77,7 @@
         @Test("Error present → renders error state without crash")
         func errorBranch() async {
             let api = makeAPIClient()
-            MockURLProtocol.handler = { request in
+            MockURLProtocol.install { request in
                 let response = HTTPURLResponse(
                     url: request.url!,
                     statusCode: 500,

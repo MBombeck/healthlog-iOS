@@ -75,7 +75,8 @@ import SwiftUI
             HLSettingsCard(
                 icon: "lifepreserver",
                 title: "settings.support.gate_title",
-                subtitle: "settings.support.gate_body"
+                subtitle: "settings.support.gate_body",
+                subtitleWraps: true
             ) {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     if supportSession.isAwaitingConfirmation {

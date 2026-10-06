@@ -115,6 +115,13 @@ struct HealthScoreLoaded: View {
                         .foregroundStyle(HLText.primary)
                         .monospacedDigit()
                     deltaSubtitle
+                    // #103 / #115 · 1.3 — what the number rests on, beside it.
+                    if let basis = score.scoreBasis {
+                        Text(HealthScorePresentation.basisLine(basis))
+                            .font(.hlCaption)
+                            .foregroundStyle(basis.isNarrow ? HLText.secondary : HLText.tertiary)
+                            .lineLimit(2)
+                    }
                     // v1.18.3 — calm Rest Mode acknowledgement next to the score.
                     // Server-authoritative (`score.activeRestMode`) + gated on the
                     // illness module. Annotate-never-mutate: frames the number, never
@@ -158,7 +165,7 @@ struct HealthScoreLoaded: View {
     /// of the number. Localized "Health Score —" fallback when band is
     /// unknown (server returned a score without a banding classification).
     private var headlineText: String {
-        bandLabel
+        bandLabel ?? String(localized: "Health Score —")
     }
 
     /// The week-over-week line.
@@ -190,25 +197,31 @@ struct HealthScoreLoaded: View {
     }
 
     /// W-B187 / #27 — the tile colour follows the server-authoritative band token
-    /// via ``HealthScore/displayBand``, falling back to the local numeric
-    /// thresholds (green ≥67 / amber 34–66 / red ≤33) only when the server emits no
-    /// band. The Dashboard tile and the Insights score surfaces now agree on the
-    /// same green/yellow/red banding for a given score ("one engine"); the label
-    /// stays consistent with the colour because both read `displayBand`.
+    /// via ``HealthScore/displayBand``. Without a server band the ring stays
+    /// neutral and the headline names no band (#115 B7 — the local 67/34
+    /// thresholds are gone). The label stays consistent with the colour because
+    /// both read `displayBand`.
     private var bandColor: Color {
         switch score.displayBand {
         case .green: HLColor.statusOK
         case .yellow: HLColor.statusWarn
         case .red: HLColor.statusBad
+        case nil: HLText.tertiary
         }
     }
 
-    private var bandLabel: String {
+    private var bandLabel: String? {
         switch score.displayBand {
         case .green: String(localized: "Green")
         case .yellow: String(localized: "Yellow", comment: "Health Score band label")
         case .red: String(localized: "Red", comment: "Health Score band label")
+        case nil: nil
         }
+    }
+
+    /// The band as spoken in the accessibility label; "unknown" without one.
+    private var spokenBand: String {
+        bandLabel ?? String(localized: "unknown")
     }
 
     private var accessibilityLabel: String {
@@ -221,15 +234,17 @@ struct HealthScoreLoaded: View {
         let base: String
         if let reason = score.deltaReason {
             base = String(
-                localized: "Health Score \(score.score) of 100, band \(bandLabel). \(HealthScorePresentation.explanation(for: reason))",
+                localized: "Health Score \(score.score) of 100, band \(spokenBand). \(HealthScorePresentation.explanation(for: reason))",
                 comment: "Health Score tile a11y label with a withheld week-over-week delta"
             )
         } else {
             let delta = score.narratableDelta.map { $0 >= 0 ? "+\($0)" : "\($0)" } ?? "—"
-            base = String(localized: "Health Score \(score.score) of 100, band \(bandLabel), change \(delta) from last week")
+            base = String(localized: "Health Score \(score.score) of 100, band \(spokenBand), change \(delta) from last week")
         }
-        guard score.runsOnChosenComposition else { return base }
-        return [base, HealthScorePresentation.chosenCompositionA11y].joined(separator: " ")
+        var parts = [base]
+        if let basis = score.scoreBasis { parts.append(HealthScorePresentation.basisLine(basis) + ".") }
+        if score.runsOnChosenComposition { parts.append(HealthScorePresentation.chosenCompositionA11y) }
+        return parts.joined(separator: " ")
     }
 }
 

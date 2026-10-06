@@ -65,8 +65,15 @@
 
         static func response(forPath path: String, method: String) -> (status: Int, body: Data)? {
             guard method == "GET" else { return nil }
+            // #115 P2 — the imperial-account overlay (`-uitest-imperial`) outranks
+            // this table's `/me`.
+            if HermeticUITestSupport.isImperialOverlayActive,
+               let imperial = ImperialUnitFixtures.response(forPath: path, method: method)
+            {
+                return imperial
+            }
             if path.hasPrefix("/api/dashboard/summary") {
-                return ok(HermeticFixtures.dashboardSummaryJSON(salutation: ""))
+                return ok(summaryJSON)
             }
             // Order matters: the intake route sits under the list route's prefix.
             if path.hasPrefix("/api/medications/intake") { return ok(todayIntakesJSON) }
@@ -126,7 +133,7 @@
                 "schedules": [
                   { "windowStart": "08:00", "timesOfDay": ["08:00", "20:00"], "scheduleType": "SCHEDULED" }
                 ] },
-              { "id": "\(trulicityID)", "name": "Trulicity", "dose": "1.5 mg",
+              { "id": "\(trulicityID)", "name": "Trulicity", "dose": "\(trulicityDose)",
                 "active": true, "notificationsEnabled": true, "deliveryForm": "INJECTION",
                 "stockDosesRemaining": 4, "runwayDays": 28,
                 "createdAt": "2026-04-06T08:00:00.000Z",
@@ -136,6 +143,66 @@
                 ] }
             ]
             """
+        }
+
+        /// The dose is free text the user typed, so the app shows it verbatim —
+        /// a German user writes "1,5 mg". The fixture follows the capture
+        /// language instead of putting an English decimal point into the
+        /// German App Store screenshot.
+        private static var trulicityDose: String {
+            // The bundle's resolved localization, like the citations overlay:
+            // it is what `Text()` renders from, so dose and chrome agree.
+            Bundle.main.preferredLocalizations.first?.hasPrefix("de") == true ? "1,5 mg" : "1.5 mg"
+        }
+
+        /// `/api/dashboard/summary` with the empty salutation, re-dated to the
+        /// capture day. The shared row is pinned to 2026-06-16, so the hero
+        /// header read "Tuesday, Jun 16" while the Medications list beside it
+        /// computes "today" / "tomorrow" and the weekly dose's next date from
+        /// the real clock — two different days in one screenshot set.
+        ///
+        /// It also carries three more vital signs (resting heart rate, HRV,
+        /// SpO₂), appended after the shared metrics. The Insights overview's
+        /// "Vitals" block shows every vital with a reading, and with weight
+        /// alone it ended so high that the empty insight-cards state sat under
+        /// the tab bar of the App Store shot. The insight cards themselves
+        /// cannot be served honestly here: `InsightsStore.load` is gated on AI
+        /// consent, and the marketing run declines it. Values fit the rest of
+        /// the fixture (pulse 64 on the dashboard).
+        private static var summaryJSON: String {
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let updatedAt = iso.string(from: morningSlot(hour: 7))
+            let base = HermeticFixtures.dashboardSummaryJSON(salutation: "")
+                .replacingOccurrences(of: "2026-06-16T08:00:00.000Z", with: iso.string(from: morningSlot(hour: 8)))
+                .replacingOccurrences(of: "2026-06-16T07:00:00.000Z", with: updatedAt)
+            guard var summary = (try? JSONSerialization.jsonObject(with: Data(base.utf8))) as? [String: Any],
+                  let metrics = summary["metrics"] as? [[String: Any]] else { return base }
+            func vital(_ kind: String, _ value: Double, _ unit: String, _ trend: String, _ series: [Double]) -> [String: Any] {
+                [
+                    "id": kind,
+                    "kind": kind,
+                    "title": kind,
+                    "latestValue": value,
+                    "secondaryValue": NSNull(),
+                    "unit": unit,
+                    "trend": trend,
+                    "sparkline": series,
+                    "updatedAt": updatedAt
+                ]
+            }
+            // The server's day counters for the three medications' intake rows
+            // (two morning doses taken, the evening one open). The compliance
+            // ring renders these as they are; the shared table's 2/1 would
+            // show 1/2 next to a medication list with three doses.
+            summary["compliance"] = ["scheduledToday": 3, "takenToday": 2]
+            summary["metrics"] = metrics + [
+                vital("restingHeartRate", 58, "bpm", "flat", [60, 59, 59, 58, 58]),
+                vital("heartRateVariability", 46, "ms", "up", [41, 43, 42, 45, 46]),
+                vital("oxygenSaturation", 97, "%", "flat", [97, 96, 97, 98, 97])
+            ]
+            guard let data = try? JSONSerialization.data(withJSONObject: summary) else { return base }
+            return String(bytes: data, encoding: .utf8) ?? base
         }
 
         /// Today at `hour`:00 in the simulator's own timezone.

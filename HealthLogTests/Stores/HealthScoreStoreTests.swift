@@ -20,7 +20,7 @@ import Testing
 ///    store surfaces the cached payload + `isShowingStaleCache=true`
 ///    before the revalidate lands.
 /// 4. Offline-with-cache emits `cached` and never fires the fetch.
-@Suite("HealthScoreStore — SWR state machine", .serialized)
+@Suite("HealthScoreStore — SWR state machine", .serialized, .mockURLSession)
 struct HealthScoreStoreTests {
     private final class StubReach: ReachabilityProviding, @unchecked Sendable {
         let online: Bool
@@ -45,7 +45,7 @@ struct HealthScoreStoreTests {
     @MainActor
     func directFetchHappyPath() async {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Data(Self.snapshotJSON.utf8))
         }
         let store = HealthScoreStore(repo: AnalyticsRepository(api: api))
@@ -63,7 +63,7 @@ struct HealthScoreStoreTests {
     @MainActor
     func swrColdStart() async throws {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Data(Self.snapshotJSON.utf8))
         }
         let cache = try SWRCache(modelContainer: SWRCache.makeInMemory())
@@ -85,7 +85,7 @@ struct HealthScoreStoreTests {
         try await cache.write(.healthScore, payload: encoded, at: Date().addingTimeInterval(-120))
 
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Data(Self.snapshotJSON.utf8))
         }
         let coord = SWRCoordinator(cache: cache, reachability: StubReach(online: true))
@@ -109,7 +109,7 @@ struct HealthScoreStoreTests {
         let (api, _) = makeAPIClient()
         // Network handler must NEVER be hit while offline.
         nonisolated(unsafe) var hits = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // CU-07: the handler is process-global — `hits == 0` only holds as an
             // assertion if a parallel suite's request cannot raise it.
             if request.targets("/api/dashboard/snapshot") { hits += 1 }
@@ -128,7 +128,7 @@ struct HealthScoreStoreTests {
     @MainActor
     func clearOnLogout() async {
         let (api, _) = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Data(Self.snapshotJSON.utf8))
         }
         let store = HealthScoreStore(repo: AnalyticsRepository(api: api))

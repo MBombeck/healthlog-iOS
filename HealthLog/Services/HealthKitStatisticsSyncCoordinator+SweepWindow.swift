@@ -32,6 +32,26 @@ import Foundation
             lastSweepEndKeyPrefix + HealthKitBackfillWindowStore.partitionToken(for: ownerID)
         }
 
+        /// Transmits what the read produced and records the sweep as complete
+        /// only when it is. #115 / 0.3 — a HealthKit query that threw did not
+        /// read its window: the rows that were read still go out, but the sweep
+        /// end stays where it was, so the next sweep reads the window again
+        /// (and the orchestrator does not burn the all-time backfill one-shot).
+        func finishSweep(
+            _ read: HealthKitDailyStatsRead,
+            requiring lease: HealthSyncAuthenticatedLease,
+            endingAt now: Date
+        ) async -> HealthKitStatisticsSyncSummary {
+            var summary = await process(read.rows, requiring: lease)
+            if read.failedTypes > 0 {
+                summary = summary.markingIncomplete()
+            }
+            if summary.isComplete {
+                recordCompletedSweep(ownerID: lease.ownerID, endingAt: now)
+            }
+            return summary
+        }
+
         func lastCompletedSweepEnd(ownerID: String) -> Date? {
             defaultsProvider().object(forKey: Self.lastSweepEndKey(ownerID: ownerID)) as? Date
         }
@@ -73,6 +93,20 @@ import Foundation
                 HLLog.healthKit.error("HK-STATS durable retry write failed — sweep stays incomplete")
                 return false
             }
+        }
+    }
+
+    public extension HealthKitStatisticsSyncSummary {
+        /// The window was not fully read. Sticky, like every incompleteness.
+        func markingIncomplete() -> HealthKitStatisticsSyncSummary {
+            HealthKitStatisticsSyncSummary(
+                posted: posted,
+                reposted: reposted,
+                skipped: skipped,
+                failed: failed,
+                retryQueued: retryQueued,
+                isComplete: false
+            )
         }
     }
 

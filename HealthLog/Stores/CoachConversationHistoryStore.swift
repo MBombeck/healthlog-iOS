@@ -9,7 +9,7 @@ import Observation
 /// **State machine.** `conversations` is the rail list (server order preserved).
 /// `selected` holds the most recently opened conversation's full, decrypted
 /// turns. `isLoading` / `isLoadingDetail` drive the spinners. `isCoachDisabled`
-/// is set from the typed ``HLError/assistantDisabled(_:)`` so the screen renders
+/// is set from the typed ``HLError/aiUnavailable(_:)`` so the screen renders
 /// the calm disabled-surface placeholder instead of an error banner — mirroring
 /// ``CoachFactsStore``. `error` carries a user-facing string for genuine failures.
 ///
@@ -65,7 +65,7 @@ public final class CoachConversationHistoryStore {
             conversations = page.conversations
             nextCursor = page.nextCursor
             isCoachDisabled = false
-        } catch HLError.assistantDisabled {
+        } catch HLError.aiUnavailable {
             isCoachDisabled = true
             conversations = []
             nextCursor = nil
@@ -86,7 +86,7 @@ public final class CoachConversationHistoryStore {
             let page = try await repo.list(cursor: cursor)
             conversations.append(contentsOf: page.conversations)
             nextCursor = page.nextCursor
-        } catch HLError.assistantDisabled {
+        } catch HLError.aiUnavailable {
             isCoachDisabled = true
         } catch let err as HLError {
             error = err.userFacingDescription
@@ -103,7 +103,7 @@ public final class CoachConversationHistoryStore {
         do {
             selected = try await repo.detail(id: id)
             isCoachDisabled = false
-        } catch HLError.assistantDisabled {
+        } catch HLError.aiUnavailable {
             isCoachDisabled = true
             selected = nil
         } catch let err as HLError {

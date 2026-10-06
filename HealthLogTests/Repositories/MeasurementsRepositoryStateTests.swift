@@ -16,7 +16,7 @@ import Testing
 /// user has hit on real-device — see PROJECT_GUIDE.md anti-pattern "Mock-Server
 /// in Tests fuer Outbox-Replay-Pfade" → we keep the real APIClient and
 /// stub the network at URLProtocol level.
-@Suite("MeasurementsRepository.state(kind:rangeDays:)", .serialized)
+@Suite("MeasurementsRepository.state(kind:rangeDays:)", .serialized, .mockURLSession)
 struct MeasurementsRepositoryStateTests {
     private func makeRepo() throws -> MeasurementsRepository {
         let env = AppEnvironment(
@@ -71,7 +71,7 @@ struct MeasurementsRepositoryStateTests {
     func noData() async throws {
         let repo = try makeRepo()
         let payload = listPayload(measurements: [])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
         let state = try await repo.state(kind: .weight, rangeDays: 30)
@@ -85,7 +85,7 @@ struct MeasurementsRepositoryStateTests {
         let older = WireRow(id: "a", type: "WEIGHT", value: 73.0, at: now.addingTimeInterval(-86400 * 10), source: nil)
         let newer = WireRow(id: "b", type: "WEIGHT", value: 72.0, at: now.addingTimeInterval(-86400 * 2), source: nil)
         let payload = listPayload(measurements: [older, newer])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
         let state = try await repo.state(kind: .weight, rangeDays: 30, now: now)
@@ -103,7 +103,7 @@ struct MeasurementsRepositoryStateTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let veryOld = WireRow(id: "a", type: "WEIGHT", value: 80.0, at: now.addingTimeInterval(-86400 * 120), source: nil)
         let payload = listPayload(measurements: [veryOld])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
         let state = try await repo.state(kind: .weight, rangeDays: 30, now: now)
@@ -121,7 +121,7 @@ struct MeasurementsRepositoryStateTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let appleOnly = WireRow(id: "a", type: "WEIGHT", value: 71.0, at: now.addingTimeInterval(-86400 * 3), source: "APPLE_HEALTH")
         let payload = listPayload(measurements: [appleOnly])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
         let state = try await repo.state(
@@ -143,7 +143,7 @@ struct MeasurementsRepositoryStateTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let recentPulse = WireRow(id: "p1", type: "PULSE", value: 64.0, at: now.addingTimeInterval(-3600), source: "APPLE_HEALTH")
         let payload = listPayload(measurements: [recentPulse])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
         let state = try await repo.state(kind: .pulse, rangeDays: 30, now: now)

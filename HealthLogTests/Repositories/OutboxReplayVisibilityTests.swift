@@ -13,7 +13,7 @@ import Testing
 /// construction on the pre-fix code (which deleted every non-retriable reply
 /// with a log line, deleted a payload it could no longer decode, treated any 409
 /// as permanent, dropped a remap error, and resent an op whose remove failed).
-@Suite("Outbox replay visibility (audit B-3 / B-11 / B-2)", .serialized)
+@Suite("Outbox replay visibility (audit B-3 / B-11 / B-2)", .serialized, .mockURLSession)
 struct OutboxReplayVisibilityTests {
     // MARK: - Fixtures
 
@@ -78,7 +78,7 @@ struct OutboxReplayVisibilityTests {
     func nonRetriableRejectionIsReported() async throws {
         let outbox = try OutboxQueue(inMemory: true)
         try await enqueueAllergyCreate(outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, nil)
         }
         let notices = NoticeRecorder()
@@ -121,7 +121,7 @@ struct OutboxReplayVisibilityTests {
             createdAt: Date(timeIntervalSince1970: 1000)
         ))
         let recorder = MethodPathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
@@ -149,7 +149,7 @@ struct OutboxReplayVisibilityTests {
         let outbox = try OutboxQueue(inMemory: true)
         try await enqueueAllergyCreate(outbox)
         let recorder = MethodPathRecorder()
-        MockURLProtocol.handler = { [resp = Self.allergyResponse] req in
+        MockURLProtocol.install { [resp = Self.allergyResponse] req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             let http = HTTPURLResponse(
                 url: req.url!, statusCode: 201, httpVersion: nil,
@@ -172,7 +172,7 @@ struct OutboxReplayVisibilityTests {
     func idempotencyInFlightConflictIsRetriable() async throws {
         let outbox = try OutboxQueue(inMemory: true)
         try await enqueueAllergyCreate(outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(
                 url: req.url!, statusCode: 409, httpVersion: nil,
                 headerFields: ["X-Idempotent-Replay": "false"]
@@ -192,7 +192,7 @@ struct OutboxReplayVisibilityTests {
     func plainConflictIsDiscardedVisibly() async throws {
         let outbox = try OutboxQueue(inMemory: true)
         try await enqueueAllergyCreate(outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!, nil)
         }
         let notices = NoticeRecorder()
@@ -210,7 +210,7 @@ struct OutboxReplayVisibilityTests {
         let optimisticId = "optimistic-\(UUID().uuidString)"
         try await enqueueAllergyCreate(outbox, clientEntityId: optimisticId)
         await outbox.injectFault(.entityRemap)
-        MockURLProtocol.handler = { [resp = Self.allergyResponse] req in
+        MockURLProtocol.install { [resp = Self.allergyResponse] req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(resp.utf8))
         }
         let notices = NoticeRecorder()
@@ -230,7 +230,7 @@ struct OutboxReplayVisibilityTests {
         let id = try await enqueueAllergyCreate(outbox)
         await outbox.injectFault(.remove)
         let recorder = MethodPathRecorder()
-        MockURLProtocol.handler = { [resp = Self.allergyResponse] req in
+        MockURLProtocol.install { [resp = Self.allergyResponse] req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(resp.utf8))
         }

@@ -290,6 +290,9 @@ struct CycleCalendarLegend: View {
             items.append((.ovulation, "cycle.legend.ovulation"))
         }
         items.append((.symptoms, "cycle.legend.symptoms"))
+        // v1.39.1 (#1032) — the two day markers the grid gained.
+        items.append((.intercourse, "cycle.legend.intercourse"))
+        items.append((.otherEntries, "cycle.legend.otherEntries"))
         items.append((.today, "cycle.legend.today"))
         return items
     }

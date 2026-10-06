@@ -19,7 +19,7 @@ import Testing
 /// Real `APIClient` over `MockURLProtocol` — no mock server — so a path /
 /// method / body-shape drift is caught at the wire boundary. `.serialized`
 /// because the handler is process-global.
-@Suite("CU-20 — guarded routes", .serialized)
+@Suite("CU-20 — guarded routes", .serialized, .mockURLSession)
 struct OptimisticConcurrencyRouteTests {
     // MARK: - Harness
 
@@ -105,7 +105,7 @@ struct OptimisticConcurrencyRouteTests {
         writeEcho: @escaping @Sendable (String) -> String
     ) {
         nonisolated(unsafe) var reads = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.note(req)
             let path = req.url?.path ?? ""
             if req.httpMethod == writeMethod, path == writePath {
@@ -152,7 +152,7 @@ struct OptimisticConcurrencyRouteTests {
     @Test("coach-prefs special case: never saved → GET omits the token, first PUT omits it too")
     func coachPrefsNeverSavedWritesUnconditionally() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "PUT" {
                 _ = rec.noteWrite(req)
@@ -239,7 +239,7 @@ struct OptimisticConcurrencyRouteTests {
         nonisolated(unsafe) var serverToken = "T0"
         nonisolated(unsafe) var reads = 0
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "PATCH" {
                 let n = rec.noteWrite(req)
@@ -290,7 +290,7 @@ struct OptimisticConcurrencyRouteTests {
     @Test("GAIN: the clientManaged write itself is guarded and echoes the new token")
     func medicationClientManagedWriteIsGuarded() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "PATCH" {
                 _ = rec.noteWrite(req)
@@ -343,7 +343,7 @@ struct OptimisticConcurrencyRouteTests {
     @Test("about-me special case: GET updatedAt=null → first PUT omits the token")
     func aboutMeNullTokenWritesUnconditionally() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "PUT" {
                 _ = rec.noteWrite(req)
@@ -374,7 +374,7 @@ struct OptimisticConcurrencyRouteTests {
     func aboutMeEmptyIsAllowed() async throws {
         let rec = Recorder()
         nonisolated(unsafe) var sentAboutMe: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "PUT" {
                 let body = req.bodyOrStream()
@@ -426,7 +426,7 @@ struct OptimisticConcurrencyRouteTests {
     @Test("dashboard/widgets DELETE reset: takes no token, adopts the one it echoes")
     func dashboardResetAdoptsEchoedToken() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "DELETE" {
                 _ = rec.noteWrite(req)
@@ -475,7 +475,7 @@ struct OptimisticConcurrencyRouteTests {
     @Test("insights/layout DELETE reset: no token in, none out → token cleared")
     func insightsResetClearsToken() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "DELETE" {
                 _ = rec.noteWrite(req)
@@ -548,7 +548,7 @@ struct OptimisticConcurrencyRouteTests {
     @Test("mood/tags/layout special case: token omitted on GET → PUT omits it too")
     func moodTagLayoutConditionalToken() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "PUT" {
                 _ = rec.noteWrite(req)
@@ -573,7 +573,7 @@ struct OptimisticConcurrencyRouteTests {
     @Test("Stale cached re-read → bounded give-up, and never an unconditional fallback")
     func staleCacheGivesUpVisibly() async throws {
         let rec = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             rec.note(req)
             if req.httpMethod == "PUT" {
                 _ = rec.noteWrite(req)

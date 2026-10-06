@@ -295,8 +295,16 @@ extension DocumentDetailScreen {
     /// withdrew assist mid-session); a rate-limit as its own line; anything else
     /// as the generic retry message.
     static func assistErrorMessage(_ error: Error) -> String {
-        if DocumentsRepository.isProviderUnsupported(error) {
+        // #115 · 0.2 — one sentence per v1.39 refusal code.
+        switch DocumentsRepository.aiRefusalKind(error) {
+        case .operatorDisabled:
+            return String(localized: "documents.assist.errorOperatorDisabled")
+        case .recordNotPermitted:
+            return String(localized: "documents.assist.errorRecordNotPermitted")
+        case .noProvider:
             return String(localized: "documents.assist.errorProvider")
+        case .unavailable, nil:
+            break
         }
         if let hl = error as? HLError, case .rateLimited = hl {
             return String(localized: "documents.assist.errorRateLimited")

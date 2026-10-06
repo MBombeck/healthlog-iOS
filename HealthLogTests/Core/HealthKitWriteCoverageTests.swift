@@ -145,16 +145,18 @@ import Testing
             HealthLog.Measurement(id: id, kind: kind, recordedAt: .now, value: value, source: source)
         }
 
-        @Test("server-origin withings + import_ rows with an HK write-type are mirrored")
+        @Test("server-origin withings + import_ + manual rows with an HK write-type are mirrored")
         func mirrorsUserAuthoredElsewhere() {
             #expect(HealthKitService.shouldMirrorFromServer(makeMeasurement(source: .withings)))
             #expect(HealthKitService.shouldMirrorFromServer(makeMeasurement(source: .import_)))
+            // S1 / public #11 — a reading typed on the web is MANUAL on the
+            // server; the create-time dedup, not the source, keeps this
+            // device's own manual rows from being written twice.
+            #expect(HealthKitService.shouldMirrorFromServer(makeMeasurement(source: .manual)))
         }
 
-        @Test("manual + appleHealth + wearable sources are NOT mirrored")
+        @Test("appleHealth + wearable sources are NOT mirrored")
         func excludesNonAuthoringSources() {
-            // .manual already round-trips at create-time.
-            #expect(!HealthKitService.shouldMirrorFromServer(makeMeasurement(source: .manual)))
             // .appleHealth originated in HealthKit — writing back = duplicate.
             #expect(!HealthKitService.shouldMirrorFromServer(makeMeasurement(source: .appleHealth)))
             // wearable read-only sources belong to their provider.
@@ -226,7 +228,7 @@ import Testing
                 let m = makeMeasurement(kind: .weight, value: .scalar(72), source: source)
                 #expect(source.isServerMirrorEligible == HealthKitService.shouldMirrorFromServer(m))
             }
-            #expect(MeasurementSource.serverMirrorEligible == [.withings, .import_])
+            #expect(MeasurementSource.serverMirrorEligible == [.withings, .import_, .manual])
         }
     }
 

@@ -10,7 +10,7 @@ import Testing
 /// wird hier gegen `MockURLProtocol` gepinnt — inklusive der vier Fehlerbilder,
 /// die zu vier verschiedenen Meldungen führen müssen.
 @MainActor
-@Suite("AnamnesisFactsStore", .serialized)
+@Suite("AnamnesisFactsStore", .serialized, .mockURLSession)
 struct AnamnesisFactsStoreTests {
     private func makeStore() -> AnamnesisFactsStore {
         let env = AppEnvironment(
@@ -71,7 +71,7 @@ struct AnamnesisFactsStoreTests {
     @Test("an empty payload is 'never recorded' for all three kinds — never NONE")
     func emptyIsNeverRecorded() async {
         let store = makeStore()
-        MockURLProtocol.handler = { Self.respond($0, 200, Self.emptyFacts) }
+        MockURLProtocol.install { Self.respond($0, 200, Self.emptyFacts) }
 
         await store.load()
 
@@ -90,7 +90,7 @@ struct AnamnesisFactsStoreTests {
     func declaredNoneIsNotAbsence() async {
         let store = makeStore()
         let row = Self.revision(id: "rev-alc", kind: "ALCOHOL_PATTERN", value: "NONE")
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let json = """
             {"data":{"current":{"SMOKING_STATUS":null,"ALCOHOL_PATTERN":\(row),\
             "SHIFT_SCHEDULE":null},"history":[\(row)]},"error":null}
@@ -110,7 +110,7 @@ struct AnamnesisFactsStoreTests {
     @Test("a load failure is reported, not silently rendered as an empty anamnesis")
     func loadFailureIsHonest() async {
         let store = makeStore()
-        MockURLProtocol.handler = { Self.respond($0, 500, #"{"data":null,"error":"x"}"#) }
+        MockURLProtocol.install { Self.respond($0, 500, #"{"data":null,"error":"x"}"#) }
 
         await store.load()
 
@@ -125,7 +125,7 @@ struct AnamnesisFactsStoreTests {
     func firstEntryUsesPost() async {
         let store = makeStore()
         nonisolated(unsafe) var methods: [String] = []
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let method = request.httpMethod ?? ""
             methods.append(method)
             switch method {
@@ -156,7 +156,7 @@ struct AnamnesisFactsStoreTests {
         let store = makeStore()
         nonisolated(unsafe) var patchedPath: String?
         nonisolated(unsafe) var methods: [String] = []
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let method = request.httpMethod ?? ""
             methods.append(method)
             if method == "PATCH" {
@@ -189,7 +189,7 @@ struct AnamnesisFactsStoreTests {
     func unreadableIsPatchedNotPosted() async {
         let store = makeStore()
         nonisolated(unsafe) var methods: [String] = []
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let method = request.httpMethod ?? ""
             methods.append(method)
             if method == "PATCH" {
@@ -223,7 +223,7 @@ struct AnamnesisFactsStoreTests {
     func removeClosesTheRevision() async {
         let store = makeStore()
         nonisolated(unsafe) var methods: [String] = []
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let method = request.httpMethod ?? ""
             methods.append(method)
             if method == "DELETE" {
@@ -264,7 +264,7 @@ struct AnamnesisFactsStoreTests {
         let store = makeStore()
         nonisolated(unsafe) var getCount = 0
         nonisolated(unsafe) var didWrite = false
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.httpMethod == "GET" {
                 getCount += 1
                 return Self.respond(request, 200, Self.factsWithSmoking("CURRENT"))
@@ -306,7 +306,7 @@ struct AnamnesisFactsStoreTests {
     @Test("the object-shaped idempotency 409 reaches the UI as its own message")
     func inFlightFailureIsSurfaced() async {
         let store = makeStore()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.httpMethod == "GET" {
                 return Self.respond(request, 200, Self.emptyFacts)
             }
@@ -326,7 +326,7 @@ struct AnamnesisFactsStoreTests {
     @Test("clearWriteError dismisses the banner")
     func writeErrorCanBeDismissed() async {
         let store = makeStore()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             request.httpMethod == "GET"
                 ? Self.respond(request, 200, Self.emptyFacts)
                 : Self.respond(request, 500, #"{"data":null,"error":"x"}"#)

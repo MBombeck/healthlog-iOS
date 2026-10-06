@@ -20,7 +20,7 @@ import Testing
 ///   - the persisted idempotency-key is reused on replay (server dedup intact),
 ///   - replay clears the Outbox on 2xx,
 ///   - standalone (no server repo wired) performs zero server writes.
-@Suite("MedicationTherapyLogRepository (SP3 + SP4)", .serialized)
+@Suite("MedicationTherapyLogRepository (SP3 + SP4)", .serialized, .mockURLSession)
 struct MedicationTherapyLogRepositoryTests {
     // MARK: - Helpers
 
@@ -123,7 +123,7 @@ struct MedicationTherapyLogRepositoryTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let repo = MedicationTherapyLogRepository(api: api, outbox: outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(sideEffectListJSON.utf8)
@@ -141,7 +141,7 @@ struct MedicationTherapyLogRepositoryTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let repo = MedicationTherapyLogRepository(api: api, outbox: outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
                 Data(inventoryRowJSON.utf8)
@@ -167,7 +167,7 @@ struct MedicationTherapyLogRepositoryTests {
 
         let recorder = KeyRecorder()
         let phase = Phase()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             if phase.current == 0 {
                 return (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
@@ -221,7 +221,7 @@ struct MedicationTherapyLogRepositoryTests {
 
         let recorder = KeyRecorder()
         let phase = Phase()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             if phase.current == 0 {
                 return (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
@@ -263,7 +263,7 @@ struct MedicationTherapyLogRepositoryTests {
     @MainActor
     func standaloneSideEffectNoServerWrite() async throws {
         let hits = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = hits.increment()
             return (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, nil)
         }
@@ -282,7 +282,7 @@ struct MedicationTherapyLogRepositoryTests {
     @MainActor
     func standaloneInventoryNoServerWrite() async throws {
         let hits = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = hits.increment()
             return (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, nil)
         }

@@ -35,11 +35,9 @@ import SwiftUI
 /// edit) live in the header and own their own 44 pt hit targets so
 /// they do not collide with the body tap.
 ///
-/// **Compliance algorithm parity:** `MedicationsStore.complianceSnapshot`
-/// implements `src/lib/analytics/compliance.ts` calculateCompliance at
-/// the 7- and 30-day windows. Numbers therefore agree with the web's
-/// `/api/medications/[id]/compliance` modulo the createdAt
-/// approximation noted in `MedicationsStore+CardCompliance.swift`.
+/// **Compliance:** the bars show the server's rates verbatim
+/// (`/api/medications/compliance`). Without a server answer the slot says
+/// "adherence unknown" (#115 B7); the card never computes a rate itself.
 struct MedicationCard: View {
     let medication: Medication
     let displayState: ActiveMedicationDisplayState
@@ -165,11 +163,16 @@ struct MedicationCard: View {
                     //    the section, so a PRN card and a scheduled card no
                     //    longer differ structurally (recurring operator
                     //    complaint: "die Kacheln sehen unterschiedlich aus").
-                    if let compliance {
+                    if !medication.tracksIntake || compliance?.notApplicableReason == .intakeNotTracked {
+                        // v1.39.1 (#1033) — a medication kept as a record has no
+                        // adherence at all; the slot says so instead of waiting
+                        // for, or painting, a server placeholder.
+                        ComplianceSlotNote(medicationId: medication.id, kind: .notTracked)
+                    } else if let compliance {
                         if compliance.rate30 != nil {
                             complianceBlock(compliance)
                         } else {
-                            asNeededComplianceNote
+                            complianceNote(unknown: compliance.serverUnavailable)
                         }
                     } else {
                         // W-COMPLIANCE-INV — server fetch pending → skeleton.
@@ -258,6 +261,13 @@ struct MedicationCard: View {
                 if medication.isAppleHealthMirrored {
                     AppleHealthProvenanceBadge()
                 }
+                // v1.39.1 (#1033) — says why this card has no intake buttons,
+                // no next dose and no adherence.
+                if !medication.tracksIntake {
+                    RecordOnlyMedicationBadge()
+                }
+                // v1.39.4 (#1040) — an ended or not yet started course.
+                if let course = MedicationCourseBadge.resolve(medication) { MedicationCourseStatusBadge(badge: course) }
             }
             Spacer(minLength: HLSpace.sm)
             HStack(spacing: 0) {
@@ -499,8 +509,10 @@ struct MedicationCard: View {
     /// Compliance has no meaning for an on-demand med, so this never shows a
     /// fabricated number. A file-scope subview (like `ScheduleLine`) so it keeps
     /// the card's type-body lean.
-    private var asNeededComplianceNote: some View {
-        AsNeededComplianceNote(medicationId: medication.id)
+    /// #115 B7 — the same slot says "adherence unknown" when the server gave
+    /// no answer for a scheduled medication.
+    private func complianceNote(unknown: Bool) -> some View {
+        ComplianceSlotNote(medicationId: medication.id, kind: unknown ? .unknown : .asNeeded)
     }
 
     // MARK: - Action buttons
@@ -532,39 +544,48 @@ struct MedicationCard: View {
     /// leave the other claiming parity. R9/E2-A1 names one carrier; both tiles
     /// render from it; `VorsorgeMedicationTileParityTests` says so out loud if
     /// that ever stops being true.
+    ///
+    /// **K1 — side by side while both labels fit their half, stacked when not.**
+    /// H2 photographed „Übersprun-gen" on the iPhone SE and „Ge-nom-men" over
+    /// three lines at AX-XXL. ``HLTileActionRow`` keeps the equal-width row
+    /// wherever the longer label fits its half — every large device at the
+    /// default size — and stacks the pair full-width otherwise.
     private var actionButtons: some View {
-        HStack(spacing: HLSpace.sm) {
-            HLTileActionButton("med.card.action.taken", icon: "checkmark") {
-                takenPulse &+= 1
-                // v0.14 BC — fire the monochrome border-beam sweep instead of
-                // the green-checkmark spray. The beam confirms "taken" as
-                // Liquid-Glass chrome light, then settles into the discreet
-                // resting border once the store flips `takenToday`.
-                beamTrigger &+= 1
-                onMarkTaken()
-            }
-            .sensoryFeedback(.success, trigger: takenPulse)
-            // 15-04 (E3) — additive: a long-press (and, for VoiceOver, a rotor
-            // action) on the SAME button. The plain tap above is untouched.
-            .modifier(DeviatingDoseAffordance(
-                target: cardActions.deviatingDose,
-                onSelect: onDeviatingDose
-            ))
-            HLTileActionButton("med.card.action.skipped", icon: "forward.end") {
-                skippedPulse &+= 1
-                // v0.14.1 ITEM-B — fire the dark-orange border-beam sweep so a
-                // skip reads as a deliberate, distinct signal (same sweep as the
-                // silver taken-beam, tinted HLColor.skipBeam).
-                skipBeamTrigger &+= 1
-                onMarkSkipped()
-            }
-            .sensoryFeedback(.impact(weight: .light), trigger: skippedPulse)
-            .sensoryFeedback(.selection, trigger: skippedPulse)
+        HLTileActionRow(spacing: HLSpace.sm) { actionButtonPair }
+            // v0.8.2 W1b (B5): freeze the action pair while the mark is in
+            // flight so a rapid second tap is visibly inert.
+            .disabled(isMarking)
+            .opacity(isMarking ? 0.5 : 1)
+    }
+
+    @ViewBuilder
+    private var actionButtonPair: some View {
+        HLTileActionButton("med.card.action.taken", icon: "checkmark") {
+            takenPulse &+= 1
+            // v0.14 BC — fire the monochrome border-beam sweep instead of
+            // the green-checkmark spray. The beam confirms "taken" as
+            // Liquid-Glass chrome light, then settles into the discreet
+            // resting border once the store flips `takenToday`.
+            beamTrigger &+= 1
+            onMarkTaken()
         }
-        // v0.8.2 W1b (B5): freeze the action pair while the mark is in
-        // flight so a rapid second tap is visibly inert.
-        .disabled(isMarking)
-        .opacity(isMarking ? 0.5 : 1)
+        .sensoryFeedback(.success, trigger: takenPulse)
+        // 15-04 (E3) — additive: a long-press (and, for VoiceOver, a rotor
+        // action) on the SAME button. The plain tap above is untouched.
+        .modifier(DeviatingDoseAffordance(
+            target: cardActions.deviatingDose,
+            onSelect: onDeviatingDose
+        ))
+        HLTileActionButton("med.card.action.skipped", icon: "forward.end") {
+            skippedPulse &+= 1
+            // v0.14.1 ITEM-B — fire the dark-orange border-beam sweep so a
+            // skip reads as a deliberate, distinct signal (same sweep as the
+            // silver taken-beam, tinted HLColor.skipBeam).
+            skipBeamTrigger &+= 1
+            onMarkSkipped()
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: skippedPulse)
+        .sensoryFeedback(.selection, trigger: skippedPulse)
     }
 
     // 17-02 (G2) — the inline `monochromeActionButton` that used to live here is
@@ -586,8 +607,10 @@ struct MedicationCard: View {
                 windowStatus: windowStatus
             )
         ]
+        if !medication.tracksIntake { parts.append(String(localized: "medications.recordOnly.badge")) }
+        if let course = MedicationCourseBadge.resolve(medication) { parts.append(course.title) }
         if !scheduleSummary.isEmpty { parts.append(scheduleSummary) }
-        if let longRow = compliance?.displayRows.last {
+        if medication.tracksIntake, let longRow = compliance?.displayRows.last {
             parts.append(
                 String(
                     format: String(localized: "med.card.compliance.a11y"),
@@ -639,6 +662,9 @@ struct MedicationCard: View {
         "HORMONE": "medications.categoryHormone",
         "SKIN": "medications.categorySkin",
         "SLEEP_AID": "medications.categorySleepAid",
+        "DIABETES": "medications.categoryDiabetes",
+        "ANTIBIOTIC": "medications.categoryAntibiotic",
+        "MENTAL_HEALTH": "medications.categoryMentalHealth",
         "OTHER": "medications.categoryOther"
     ]
 
@@ -659,23 +685,80 @@ struct MedicationCard: View {
 /// **MED-11** — the PRN/as-needed card's compliance-slot content. A file-scope
 /// view (mirroring `ScheduleLine`) so a PRN card occupies the SAME compliance
 /// slot a scheduled card does, keeping the two cards structurally identical.
-private struct AsNeededComplianceNote: View {
+struct ComplianceSlotNote: View {
+    enum Kind: Equatable {
+        /// Scheduled medication, server gave no answer (#115 B7).
+        case unknown
+        /// PRN / as-needed medication, no adherence to show.
+        case asNeeded
+        /// v1.39.1 (#1033) — intake tracking is off; the medication is a record.
+        case notTracked
+
+        var symbol: String {
+            switch self {
+            case .unknown: "questionmark.circle"
+            case .asNeeded: "hand.tap"
+            case .notTracked: "doc.text"
+            }
+        }
+
+        var text: String {
+            switch self {
+            case .unknown: String(localized: "med.compliance.unavailable")
+            case .asNeeded: String(localized: "med.card.compliance.as_needed")
+            case .notTracked: String(localized: "med.card.compliance.not_tracked")
+            }
+        }
+
+        var identifierStem: String {
+            switch self {
+            case .unknown: "unknown"
+            case .asNeeded: "asneeded"
+            case .notTracked: "nottracked"
+            }
+        }
+    }
+
     let medicationId: String
+    let kind: Kind
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            Image(systemName: "hand.tap")
+            Image(systemName: kind.symbol)
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLText.tertiary)
                 .accessibilityHidden(true)
-            Text(String(localized: "med.card.compliance.as_needed"))
+            Text(kind.text)
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
             Spacer(minLength: HLSpace.sm)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("medications.card.compliance.asneeded.\(medicationId)")
+        .accessibilityIdentifier("medications.card.compliance.\(kind.identifierStem).\(medicationId)")
+    }
+}
+
+/// **v1.39.1 (#1033) — the "record only" mark.** Rendered on a medication
+/// whose intake tracking is off: it keeps its dose, dates and schedule as
+/// information, and nothing about it is due. Same capsule as the Apple Health
+/// provenance mark beside it.
+struct RecordOnlyMedicationBadge: View {
+    var body: some View {
+        HStack(spacing: HLSpace.xxs) {
+            Image(systemName: "doc.text")
+                .font(.hlCaption2)
+                .foregroundStyle(HLText.tertiary)
+            Text("medications.recordOnly.badge")
+                .font(.hlCaption2.weight(.semibold))
+                .foregroundStyle(HLText.secondary)
+        }
+        .padding(.horizontal, HLSpace.sm)
+        .padding(.vertical, HLSpace.xxs)
+        .background(HLSurface.tertiary, in: Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("medications.recordOnly.badge"))
+        .accessibilityIdentifier("medications.recordOnly.badge")
     }
 }
 
@@ -744,20 +827,41 @@ private struct ScheduleLine: View {
     /// (green, web parity). Every other schedule value stays HLText.primary.
     var valueTint: Color = HLText.primary
 
+    /// K1 — side by side while label and value both fit on one line; stacked
+    /// (label above value) once they do not. H2 photographed „Letzte Ei…" and
+    /// „heute, 8…" at AX-XXL: the time of the last dose is the information
+    /// this line exists for, and truncating it is not an option. On a large
+    /// device at the default text size the first candidate always fits, so the
+    /// card looks exactly as before.
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-            Spacer(minLength: HLSpace.sm)
-            Text(value)
-                .font(.hlSubhead)
-                .foregroundStyle(valueTint)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+                labelText
+                Spacer(minLength: HLSpace.sm)
+                valueText
+                    .multilineTextAlignment(.trailing)
+            }
+            VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                labelText
+                valueText
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("\(label): \(value)"))
+    }
+
+    private var labelText: some View {
+        Text(label)
+            .font(.hlSubhead)
+            .foregroundStyle(HLText.secondary)
+    }
+
+    private var valueText: some View {
+        Text(value)
+            .font(.hlSubhead)
+            .foregroundStyle(valueTint)
     }
 }
 
@@ -935,12 +1039,16 @@ struct MedicationCardSchedule: Equatable {
             // scheduled medication keeps the line it always had.
             next: isAsNeeded ? nil : Line(
                 label: String(localized: "med.card.schedule.daily.next.label"),
-                value: nextValue(
-                    windowStatus: windowStatus,
-                    nextDose: nextDose,
-                    scheduleSummary: scheduleSummary,
-                    now: now
-                )
+                // v1.39.1 (#1033) — nothing is due on a record; the line says
+                // so instead of reading the stored schedule as a plan.
+                value: medication.tracksIntake
+                    ? nextValue(
+                        windowStatus: windowStatus,
+                        nextDose: nextDose,
+                        scheduleSummary: scheduleSummary,
+                        now: now
+                    )
+                    : String(localized: "med.card.schedule.not_tracked")
             )
         )
     }

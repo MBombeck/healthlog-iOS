@@ -114,6 +114,8 @@ private struct DeltaReasonCard: View {
 /// which pillar decided the colour.
 private struct CompositionCard: View {
     let score: HealthScore
+    @Environment(HealthScoreStore.self) private var store
+    @State private var isDismissingNotice = false
 
     var body: some View {
         if let composition = score.composition, !composition.isEmpty {
@@ -125,6 +127,39 @@ private struct CompositionCard: View {
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
                         ForEach(composition, id: \.rawValue) { pillar in
                             PillarRow(pillar: pillar, isBandSetter: pillar == score.bandSetter)
+                        }
+                    }
+                    // #103 / #115 · 1.3 — breadth, scope and pillar changes,
+                    // all server-resolved.
+                    if let basis = score.scoreBasis {
+                        Text(HealthScorePresentation.basisLine(basis))
+                            .font(.hlSubhead)
+                            .foregroundStyle(basis.isNarrow ? HLText.primary : HLText.secondary)
+                        if !basis.physiological {
+                            Text(HealthScorePresentation.basisWithoutPhysiology)
+                                .font(.hlCaption)
+                                .foregroundStyle(HLText.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if let notice = score.compositionNotice {
+                        ForEach(HealthScorePresentation.noticeLines(notice), id: \.self) { line in
+                            Text(line)
+                                .font(.hlCaption)
+                                .foregroundStyle(HLText.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        // #115 B6 — the server stores the dismissal; the note
+                        // goes once it has.
+                        if notice.isShowable {
+                            HLTileActionButton("Hide") {
+                                isDismissingNotice = true
+                                Task {
+                                    await store.dismissCompositionNotice()
+                                    isDismissingNotice = false
+                                }
+                            }
+                            .disabled(isDismissingNotice)
                         }
                     }
                     if let bandSetter = score.bandSetter {

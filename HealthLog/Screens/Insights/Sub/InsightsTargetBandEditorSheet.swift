@@ -36,6 +36,9 @@ struct InsightsTargetBandEditorSheet: View {
     var currentValues: [String: Double] = [:]
 
     @Environment(UserThresholdsStore.self) private var store
+    /// #115 P2 — the account's display units. Fields, hints and bounds read in
+    /// them; the save inverts to canonical (``ThresholdUnitAdapter``).
+    @Environment(\.unitPreferences) private var unitPreferences
     @Environment(\.dismiss) private var dismiss
     /// QoL-4 (A360-4) — routes the empty-state CTA to the capture picker so the
     /// "no editable targets yet" state has a next step (log a value) instead of
@@ -90,6 +93,9 @@ struct InsightsTargetBandEditorSheet: View {
                     }
                 }
             }
+            // K1 — the banner below still presents as this overlay; this
+            // reserves its height at the top so it covers nothing (H2).
+            .hlReserveErrorBannerSpace(store.error)
             .overlay(alignment: .top) {
                 ErrorBanner(error: store.error) {
                     Task {
@@ -158,7 +164,7 @@ struct InsightsTargetBandEditorSheet: View {
     }
 
     private func metricSection(_ metric: ThresholdMetric) -> some View {
-        let bounds = metric.bounds
+        let adapter = metric.unitAdapter(unitPreferences)
         let draft = drafts[metric.rawValue] ?? Draft(min: "", max: "")
         return Section {
             HStack(spacing: HLSpace.sm) {
@@ -175,7 +181,7 @@ struct InsightsTargetBandEditorSheet: View {
                     text: bindingFor(metric, keyPath: \.max),
                     accessibilityID: "target-editor.\(metric.rawValue).max"
                 )
-                Text(bounds.unit)
+                Text(adapter.unit)
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
                     .frame(minWidth: 44, alignment: .leading)
@@ -204,10 +210,11 @@ struct InsightsTargetBandEditorSheet: View {
     /// was supplied (hides the hint).
     private func currentValueHint(_ metric: ThresholdMetric) -> String? {
         guard let value = currentValues[metric.rawValue] else { return nil }
+        let adapter = metric.unitAdapter(unitPreferences)
         return String(
             format: String(localized: "Currently: %@ %@"),
-            Self.format(value),
-            metric.bounds.unit
+            Self.format(adapter.toDisplay(value)),
+            adapter.unit
         )
     }
 
@@ -230,9 +237,14 @@ struct InsightsTargetBandEditorSheet: View {
 
     @ViewBuilder
     private func saveRow(metric: ThresholdMetric, draft: Draft) -> some View {
-        let parsed = parsedBand(draft)
+        let adapter = metric.unitAdapter(unitPreferences)
+        let parsed = parsedBand(draft, adapter: adapter)
         let isValid = parsed.flatMap { UserThresholdsStore.validate($0, for: metric) } != nil
-        let isDirty = parsed != store.band(for: metric)
+        // Dirty in DISPLAY space: an untouched lb draft seeded from 68.0 kg
+        // reads 149.9 and inverts to 67.99, which is not an edit.
+        let isDirty = parsedDisplayBand(draft) != store.band(for: metric).map {
+            ThresholdRange(min: adapter.toDisplay($0.min), max: adapter.toDisplay($0.max))
+        }
         Button {
             guard let band = parsed else { return }
             Task {
@@ -283,9 +295,10 @@ struct InsightsTargetBandEditorSheet: View {
         var seeded: [String: Draft] = [:]
         for metric in metrics {
             guard let band = store.band(for: metric) else { continue }
+            let adapter = metric.unitAdapter(unitPreferences)
             seeded[metric.rawValue] = Draft(
-                min: Self.format(band.min),
-                max: Self.format(band.max)
+                min: Self.format(adapter.toDisplay(band.min)),
+                max: Self.format(adapter.toDisplay(band.max))
             )
         }
         drafts = seeded
@@ -307,18 +320,27 @@ struct InsightsTargetBandEditorSheet: View {
         )
     }
 
-    private func parsedBand(_ draft: Draft) -> ThresholdRange? {
+    /// The draft as typed (display unit), before inversion.
+    private func parsedDisplayBand(_ draft: Draft) -> ThresholdRange? {
         guard let lo = Self.parse(draft.min), let hi = Self.parse(draft.max) else { return nil }
         return ThresholdRange(min: lo, max: hi)
     }
 
+    /// The draft inverted to the canonical band the store validates and saves.
+    private func parsedBand(_ draft: Draft, adapter: ThresholdUnitAdapter) -> ThresholdRange? {
+        parsedDisplayBand(draft).map {
+            ThresholdRange(min: adapter.toCanonical($0.min), max: adapter.toCanonical($0.max))
+        }
+    }
+
     private func boundsHint(_ metric: ThresholdMetric) -> String {
-        let b = metric.bounds
+        let adapter = metric.unitAdapter(unitPreferences)
+        let window = adapter.bounds(metric.bounds)
         return String(
             format: String(localized: "Allowed range: %@ – %@ %@"),
-            Self.format(b.min),
-            Self.format(b.max),
-            b.unit
+            Self.format(window.min),
+            Self.format(window.max),
+            adapter.unit
         )
     }
 

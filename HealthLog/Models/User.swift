@@ -144,9 +144,23 @@ public struct AccountAccessEntry: Codable, Sendable, Equatable {
         guard (try? c.decodeNil(forKey: .sections)) != true else { return .all }
         guard let raw = try? c.decode([String].self, forKey: .sections) else { return .unavailable }
         guard !raw.isEmpty else { return .none }
-        let sections = raw.compactMap(AccountAccessSection.init(rawValue:))
-        guard sections.count == raw.count, Set(sections).count == sections.count else { return .unavailable }
-        return .subset(sections)
+        // A repeated word is a malformed grant and stays refused.
+        guard Set(raw).count == raw.count else { return .unavailable }
+        // #115 B6 — a section word this build does not know is IGNORED, not
+        // fatal: the known sections stay usable and the unknown one is simply
+        // not shown (nothing routes to it, `allowsWholeRecord` still needs
+        // `.all`). Before, one new server word locked the delegate out of
+        // every section. Only unknown words → an empty, not a refused, grant.
+        let sections = raw.compactMap { word -> AccountAccessSection? in
+            guard let known = AccountAccessSection(rawValue: word) else {
+                UnknownServerEnumLog.noteFirstSighting(
+                    of: word, vocabulary: "AccountAccessSection", consequence: "section ignored, known sections kept"
+                )
+                return nil
+            }
+            return known
+        }
+        return sections.isEmpty ? .none : .subset(sections)
     }
 
     private static func isConsistent(

@@ -43,7 +43,7 @@
             // Server-backed repos.
             _ = container.measurementsRepo
             _ = container.medicationsRepo
-            _ = container.featureFlagsRepo
+            _ = container.aiCapabilityGate // #115 0.2 — replaces the retired featureFlagsRepo
             _ = container.glp1LocalRepo
             _ = container.moodRepo
             _ = container.dashboardRepo

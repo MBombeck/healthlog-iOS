@@ -63,4 +63,29 @@ public extension CoachConversationStore {
             setIntendedArm(server: false, byo: false)
         }
     }
+
+    /// **#114 / #115 · 0.2 — the `coach` capability, per arm.** The server
+    /// resolves it (`/api/auth/me` `ai.capabilities.coach`); the store only
+    /// picks the half that applies to the arm the next turn would take:
+    ///
+    /// - server arm → `available` (the server would refuse otherwise);
+    /// - on-device arm and own-key arm → `onDeviceAllowed` (the operator's and
+    ///   the person's decisions hold on the device too; a missing server
+    ///   provider or server consent do not concern it).
+    ///
+    /// Returns the refusal to surface instead of running the turn, or `nil`
+    /// when the turn may run (or no capability reader is wired — unit tests,
+    /// and a server older than v1.39 reads the legacy "allowed" state).
+    func coachCapabilityRefusal() -> AIRefusal? {
+        guard let aiCapabilities else { return nil }
+        let state = aiCapabilities.state(.coach)
+        let allowed = if shouldUseBYO {
+            state.allowsOnDevice
+        } else if shouldUseServerFallback {
+            state.isAvailable
+        } else {
+            state.allowsOnDevice
+        }
+        return allowed ? nil : AIRefusal.implied(by: state, for: .coach)
+    }
 }

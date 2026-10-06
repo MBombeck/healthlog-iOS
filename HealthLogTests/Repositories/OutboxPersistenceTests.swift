@@ -16,7 +16,7 @@ import Testing
 /// Audit-Referenzen: security C-2 (Persistierung), perf-quality C1
 /// (in-memory-Store-Bug), concurrency H4 (cross-process race — bewusst
 /// deferred), perf-quality M11 (lastError observability).
-@Suite("Outbox SwiftData persistence", .serialized)
+@Suite("Outbox SwiftData persistence", .serialized, .mockURLSession)
 struct OutboxPersistenceTests {
     // MARK: - Helpers
 
@@ -152,7 +152,7 @@ struct OutboxPersistenceTests {
             ))
         }
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             let body = #"{"data":{"id":"srv-x","type":"WEIGHT","value":81.0,"unit":"kg","measuredAt":"2026-05-01T10:00:00Z","createdAt":"2026-05-01T10:00:00Z","source":"MANUAL","externalId":null,"note":null}}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
@@ -178,7 +178,7 @@ struct OutboxPersistenceTests {
             idempotencyKey: "key-c",
             createdAt: .now
         ))
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -218,7 +218,7 @@ struct OutboxPersistenceTests {
 
         // Replay against a 200 server, capture the Idempotency-Key header.
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             let body = #"{"data":{"id":"srv-d","type":"WEIGHT","value":81.0,"unit":"kg","measuredAt":"2026-05-01T10:00:00Z","createdAt":"2026-05-01T10:00:00Z","source":"MANUAL","externalId":null,"note":null}}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
@@ -241,7 +241,7 @@ struct OutboxPersistenceTests {
             idempotencyKey: "key-e",
             createdAt: .now
         ))
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = #"{"data":{"id":"srv-e","type":"WEIGHT","value":81.0,"unit":"kg","measuredAt":"2026-05-01T10:00:00Z","createdAt":"2026-05-01T10:00:00Z","source":"MANUAL","externalId":null,"note":null}}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
         }
@@ -295,7 +295,7 @@ struct OutboxPersistenceTests {
             idempotencyKey: "key-f-2",
             createdAt: .now
         ))
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox2, maxAttempts: 1)
@@ -320,7 +320,7 @@ struct OutboxPersistenceTests {
         ))
         // Server should never get hit — decode fails first.
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }
@@ -365,7 +365,7 @@ struct OutboxPersistenceTests {
         // The server must never be hit for a row this build cannot name — the
         // quarantine gate skips it before dispatch.
         let attempts = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = attempts.increment()
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
         }

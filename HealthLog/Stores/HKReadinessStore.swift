@@ -36,9 +36,11 @@ public final class HKReadinessStore {
     /// `shouldShowBanner` / `isFullyGranted`.
     public private(set) var state: ConnectionState = .unknown
 
-    /// Zuletzt erfolgreicher HK→Server Batch-Upload — angezeigt in Settings.
-    /// Wird vom `MeasurementBatchUploader` nach jedem 2xx-Response via
-    /// `noteSuccessfulSync()` aktualisiert.
+    /// Zuletzt erfolgreicher HK→Server Batch-Upload **dieses Geräts** —
+    /// angezeigt in Settings. Wird vom `MeasurementBatchUploader` (und vom
+    /// Outbox-Replay eines HealthKit-Batches) nach jeder angenommenen Antwort via
+    /// `noteSuccessfulSync(at:ownerUserID:)` aktualisiert; verdrahtet in
+    /// `AppContainer.configureRuntimeWiring` (#10).
     public private(set) var lastSyncedAt: Date?
 
     /// Wird gesetzt während `requestAuthorization()` läuft, damit die UI
@@ -508,6 +510,27 @@ public final class HKReadinessStore {
         let timestamp = date ?? clock()
         lastSyncedAt = timestamp
         defaults.set(timestamp.timeIntervalSince1970, forKey: Self.lastSyncedKey(for: currentUserID))
+    }
+
+    /// #10 — der Stempel eines angenommenen Batch-Uploads, **an das Konto
+    /// gebunden, das ihn hochgeladen hat**. Der Uploader meldet den Lease-
+    /// Eigentümer mit; ein Upload des vorigen Kontos, der erst nach Abmelden
+    /// oder Kontowechsel zurückkommt, darf weder die angezeigte Zeit des neuen
+    /// Kontos setzen noch unter dessen Schlüssel persistieren. Ohne Eigentümer
+    /// (Uploader ohne Lease-Quelle) wird nichts gestempelt.
+    ///
+    /// Die Sitzungs-Lease prüft der Composition-Root vor dem Aufruf
+    /// (`AppContainer.makeMeasurementSyncStamp`); der Abgleich hier gegen die
+    /// Keychain-ID ist die zweite, store-eigene Hälfte derselben Grenze.
+    ///
+    /// - Returns: ob gestempelt wurde.
+    @discardableResult
+    public func noteSuccessfulSync(at date: Date, ownerUserID: String?) -> Bool {
+        let owner = ownerUserID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let current = currentUserID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !owner.isEmpty, owner == current else { return false }
+        noteSuccessfulSync(at: date)
+        return true
     }
 
     /// Logout-Cleanup. Wird vom `AppContainer.handleLocalLogout` + 401-Bridge

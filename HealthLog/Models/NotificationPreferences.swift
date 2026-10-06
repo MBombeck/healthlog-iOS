@@ -94,10 +94,18 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
         /// clobbered from a stale read. Decoded so the client can see (and a
         /// test can pin) the value that survives a conflict.
         public let clientManaged: Bool?
+        /// **N1** — the roaming `deliveryDefault` (`"server" | "client"`, server
+        /// v1.7.0). `"client"` pins `clientManaged` to `true` on the server
+        /// (`applyDeliveryDefaultMapping`), so a `clientManaged: false` write
+        /// cannot lift the suppression while it stands. Read so the app can
+        /// tell that case apart instead of re-sending a write that has no
+        /// effect. `nil` on a server that omits it.
+        public let deliveryDefault: String?
 
-        public init(lowStockRunwayDays: Int?, clientManaged: Bool? = nil) {
+        public init(lowStockRunwayDays: Int?, clientManaged: Bool? = nil, deliveryDefault: String? = nil) {
             self.lowStockRunwayDays = lowStockRunwayDays
             self.clientManaged = clientManaged
+            self.deliveryDefault = deliveryDefault
         }
     }
 
@@ -169,6 +177,17 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
     /// the caller keeps its local mirror rather than guessing.
     public var medicationClientManaged: Bool? {
         medication?.clientManaged
+    }
+
+    /// **N1** — the medication-reminder delivery state this payload reports,
+    /// or `nil` when the server omitted `medication.clientManaged` (an older
+    /// server: the app then never writes the flag).
+    var medicationReminderDelivery: MedicationReminderServerDelivery? {
+        guard let clientManaged = medication?.clientManaged else { return nil }
+        return MedicationReminderServerDelivery(
+            clientManaged: clientManaged,
+            deliveryDefault: medication?.deliveryDefault
+        )
     }
 }
 

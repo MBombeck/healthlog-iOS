@@ -9,7 +9,7 @@ import SwiftUI
 /// - Mini sparkline (~32pt) with a filled `Circle()` overlay at the
 ///   peak index (and a tiny star above as a peak-flag indicator).
 /// - Footer row: relative timestamp + delta chip ("Neuer Rekord!" /
-///   "+12% vs. zuvor").
+///   "+12% vs. previous", catalog `records.delta.vsPrevious`).
 ///
 /// **Tap target:** the entire card is a button — taps emit `onTap`
 /// upstream so the screen can present a share sheet or push to
@@ -19,6 +19,8 @@ import SwiftUI
 /// VoiceOver element with a synthesised summary so users don't have
 /// to swipe through each label individually.
 struct RecordCard: View {
+    /// #115 P2 — the account's display units.
+    @Environment(\.unitPreferences) private var unitPreferences
     let record: PersonalRecord
     let onTap: (PersonalRecord) -> Void
 
@@ -79,8 +81,8 @@ struct RecordCard: View {
                 // Dynamic Type instead of crushing below its caption.
                 .minimumScaleFactor(0.75)
                 .contentTransition(.numericText(value: record.base.value))
-            if !record.base.unit.isEmpty {
-                Text(record.base.unit)
+            if !unitLabel.isEmpty {
+                Text(unitLabel)
                     // v0.11 reconcile (#12 sizing-drift): footnote token (13pt)
                     // instead of a raw system-size font.
                     .font(.hlFootnote.weight(.semibold))
@@ -105,7 +107,7 @@ struct RecordCard: View {
             ForEach(Array(record.sparklineValues.enumerated()), id: \.offset) { idx, value in
                 LineMark(
                     x: .value("Index", idx),
-                    y: .value("Wert", value)
+                    y: .value("Value", value)
                 )
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(tint)
@@ -113,7 +115,7 @@ struct RecordCard: View {
                 if idx == (record.peakIndex ?? -1) {
                     PointMark(
                         x: .value("Index", idx),
-                        y: .value("Wert", value)
+                        y: .value("Value", value)
                     )
                     .symbol(.circle)
                     .symbolSize(60)
@@ -169,8 +171,14 @@ struct RecordCard: View {
         return MetricTypeLocalisation.label(forType: record.base.metricType)
     }
 
+    /// #115 P2 — the record in the account's unit (the row is canonical).
     private var formattedValue: String {
-        Self.numberFormatter.string(from: NSNumber(value: record.base.value)) ?? "\(record.base.value)"
+        let value = record.base.displayValue(unitPreferences)
+        return Self.numberFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    private var unitLabel: String {
+        record.base.displayUnit(unitPreferences)
     }
 
     private var relativeDateLabel: String {
@@ -185,7 +193,8 @@ struct RecordCard: View {
         if let percent = delta.percent {
             let signed = percent * 100
             let prefix = signed >= 0 ? "+" : ""
-            return "\(prefix)\(Int(signed.rounded()))% vs. zuvor"
+            let percentText = prefix + HLNumberFormat.percent(Int(signed.rounded()))
+            return String(localized: "records.delta.vsPrevious \(percentText)")
         }
         let signed = delta.absolute
         let prefix = signed >= 0 ? "+" : ""
@@ -203,18 +212,18 @@ struct RecordCard: View {
 
     private var accessibilityLabel: Text {
         let metric = metricLabel
-        let value = "\(formattedValue) \(record.base.unit)"
+        let value = "\(formattedValue) \(unitLabel)"
         let date = HLDateFormat.date(record.base.achievedAt, style: .abbreviated)
         let deltaText: String = {
-            guard let delta = record.delta else { return "Neuer Rekord." }
-            return "Veränderung: \(Self.deltaLabel(delta: delta))."
+            guard let delta = record.delta else { return String(localized: "records.a11y.newRecord") }
+            return String(localized: "records.a11y.change \(Self.deltaLabel(delta: delta))")
         }()
         return Text("\(metric): \(value), reached on \(date). \(deltaText)")
     }
 
     private static let numberFormatter: NumberFormatter = {
         let f = NumberFormatter()
-        f.locale = Locale(identifier: "de_DE")
+        f.locale = Locale.current
         f.numberStyle = .decimal
         f.maximumFractionDigits = 1
         f.minimumFractionDigits = 0

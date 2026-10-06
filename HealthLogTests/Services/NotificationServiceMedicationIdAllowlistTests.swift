@@ -30,7 +30,7 @@ import Testing
     ///     before the snooze re-schedule fires (so the rescheduled
     ///     banner can never re-introduce a tampered ID into the action
     ///     pipeline).
-    @Suite("NotificationService — medicationId allowlist guard (W-SEC-M-2)", .serialized)
+    @Suite("NotificationService — medicationId allowlist guard (W-SEC-M-2)", .serialized, .mockURLSession)
     @MainActor
     struct NotificationServiceMedicationIdAllowlistTests {
         // MARK: - Pure validator unit contract
@@ -123,7 +123,7 @@ import Testing
             let repo = MedicationsRepository(api: api, outbox: outbox)
 
             nonisolated(unsafe) var sawBulkIntakePost = false
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.url?.path == "/api/medications/intake/bulk" {
                     sawBulkIntakePost = true
                 }
@@ -160,7 +160,7 @@ import Testing
             let overLong = String(repeating: "A", count: 200)
 
             nonisolated(unsafe) var sawBulkIntakePost = false
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.url?.path == "/api/medications/intake/bulk" {
                     sawBulkIntakePost = true
                 }
@@ -194,7 +194,7 @@ import Testing
             let repo = MedicationsRepository(api: api, outbox: outbox)
 
             nonisolated(unsafe) var sawBulkIntakePost = false
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.url?.path == "/api/medications/intake/bulk" {
                     sawBulkIntakePost = true
                 }

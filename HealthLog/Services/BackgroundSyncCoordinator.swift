@@ -109,6 +109,15 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// Reconcile-Fehler blockt den BGTask-Erfolg nicht.
     private nonisolated(unsafe) var onMedicationReconcile: (@Sendable () async -> Void)?
 
+    /// **R5 — Erinnerungs-Nachfüll-Hook.** Plant die lokalen
+    /// Medikamenten-Erinnerungen aus den gecachten Medikamenten neu, ohne
+    /// Netz. Läuft am Anfang jedes BGProcessing- und BGAppRefresh-Wakes, bei
+    /// jedem Silent-Push und nach jeder Aktion auf einer Medikamenten-
+    /// Mitteilung. Einzeltermine (kurze Kurse, alle N Wochen, zyklisch …)
+    /// reichen nur so weit, wie der letzte Abgleich sie geplant hat; jeder
+    /// dieser Wakes verlängert sie. `nil` = nicht verdrahtet (Tests, Pre-Attach).
+    private nonisolated(unsafe) var onReminderTopUp: (@Sendable () async -> Void)?
+
     /// **v0.15.5 AUD-1 F4 — Mood-Reminder-Re-Arm-Hook.** Wird am Ende jedes
     /// BGTask-Wakeups best-effort aufgerufen, damit der lokale Abend-Mood-
     /// Reminder (`mood-reminder-local`, ein nicht-wiederholender
@@ -233,6 +242,23 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
 
     private func currentMedicationReconcileHook() -> (@Sendable () async -> Void)? {
         hookLock.withLock { onMedicationReconcile }
+    }
+
+    /// **R5** — Setzt den Erinnerungs-Nachfüll-Hook. `AppContainer` verdrahtet
+    /// `MedicationsStore.topUpRemindersFromCache()` hinein.
+    public func attachReminderTopUpHook(_ hook: @escaping @Sendable () async -> Void) {
+        hookLock.withLock { onReminderTopUp = hook }
+    }
+
+    /// **R5** — Füllt die lokalen Medikamenten-Erinnerungen aus dem Cache nach.
+    /// Aufgerufen von beiden BGTask-Wakes, vom Silent-Push und von den
+    /// Aktionen auf Medikamenten-Mitteilungen. No-op ohne Hook. Gibt `true`
+    /// zurück, wenn der Hook lief.
+    @discardableResult
+    public func runReminderTopUp() async -> Bool {
+        guard let topUp = hookLock.withLock({ onReminderTopUp }) else { return false }
+        await topUp()
+        return true
     }
 
     /// **v0.15.5 AUD-1 F4** — Setzt den Mood-Reminder-Re-Arm-Hook nachtraeglich.
@@ -602,6 +628,12 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     private func runBGSyncPassesBody(expirationFlag: ExpirationFlag) async {
         guard healthKit != nil else { return }
 
+        // R5 — the reminder top-up comes FIRST. It is cheap (cache only, no
+        // network), while the HealthKit pass below can use up the whole grant;
+        // the med reconcile further down only runs if the grant has not expired
+        // by then.
+        await runReminderTopUp()
+
         // **Plan 07-09 — one named trigger, one pass.** This used to be four
         // sequential calls (the writer's shimmed sweep, the direct workout pass,
         // the aggregate anchor-sweep hook, the ECG hook), three of which the
@@ -733,6 +765,10 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// capability outside that set comes back named `deferred` rather than
     /// silently missing.
     private func runBGRefreshPassesBody(expirationFlag: ExpirationFlag) async {
+        // R5 — the AppRefresh wake is the frequent one, and up to R5 it never
+        // touched the local medication reminders. The top-up reads the cached
+        // medication list only, so it costs no request out of the short budget.
+        await runReminderTopUp()
         let answered = await runHealthSyncPass(
             HealthSyncTrigger.appRefresh,
             isExpired: { expirationFlag.value }

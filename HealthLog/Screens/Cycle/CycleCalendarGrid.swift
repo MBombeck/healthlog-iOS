@@ -139,7 +139,37 @@ struct CycleCalendarGrid: View {
         if dto.hasSymptoms {
             parts.append(String(localized: "cycle.calendar.a11y.symptoms"))
         }
+        // v1.39.1 (#1032) — intercourse has its own marker, and every other
+        // entry the day log holds is named, so VoiceOver reads what the
+        // markers under the number show.
+        if dto.sexualActivity {
+            parts.append(String(localized: "cycle.calendar.a11y.intercourse"))
+        }
+        parts.append(contentsOf: otherEntryLabels(dto))
         return parts.joined(separator: ", ")
+    }
+
+    /// **v1.39.1 (#1032)** — the entries a day holds beyond period, symptoms,
+    /// intercourse and the predictions, each named for VoiceOver. Non-empty
+    /// lights the "other entries" ring, so a day with only a test, a
+    /// temperature or a note logged no longer looks like an empty day. Mirrors
+    /// the web grid's `otherEntryLabels` (server v1.39.1).
+    static func otherEntryLabels(_ dto: CalendarDayDTO) -> [String] {
+        var labels: [String] = []
+        if dto.intermenstrualBleeding {
+            labels.append(String(localized: "cycle.capture.intermenstrualBleeding.label"))
+        }
+        if dto.basalBodyTempC != nil { labels.append(String(localized: "cycle.capture.bbt.label")) }
+        if dto.ovulationTest != nil { labels.append(String(localized: "cycle.capture.ovulation.label")) }
+        if dto.cervicalMucus != nil { labels.append(String(localized: "cycle.capture.mucus.label")) }
+        if dto.cervixPosition != nil || dto.cervixFirmness != nil || dto.cervixOpening != nil {
+            labels.append(String(localized: "cycle.capture.cervix.header"))
+        }
+        if dto.pregnancyTest != nil { labels.append(String(localized: "cycle.capture.pregnancyTest.label")) }
+        if dto.progesteroneTest != nil { labels.append(String(localized: "cycle.capture.progesteroneTest.label")) }
+        if dto.contraceptive != nil { labels.append(String(localized: "cycle.capture.contraceptive.label")) }
+        if dto.hasNote { labels.append(String(localized: "cycle.capture.note.header")) }
+        return labels
     }
 
     static func dayKey(_ date: Date) -> String {
@@ -214,13 +244,29 @@ private struct CycleDayCell: View {
 
     /// Symptoms surface as a hollow grey diamond below the number — a different
     /// SHAPE (not a dot), so it never blends into the round period/fertile markers
-    /// and stays distinct under colour-blindness.
+    /// and stays distinct under colour-blindness. v1.39.1 (#1032): intercourse
+    /// adds a FILLED mauve diamond and any other logged entry a hollow grey ring,
+    /// each drawn by the shared swatch so the legend shows the same mark.
     @ViewBuilder
     private var markers: some View {
-        if dto?.hasSymptoms == true {
-            SymptomGlyph()
-                .stroke(HLText.secondary, lineWidth: 1)
-                .frame(width: 6, height: 6)
+        let symptoms = dto?.hasSymptoms == true
+        let intercourse = dto?.sexualActivity == true
+        let others = dto.map { !CycleCalendarGrid.otherEntryLabels($0).isEmpty } ?? false
+        if symptoms || intercourse || others {
+            HStack(spacing: 2) {
+                if symptoms {
+                    SymptomGlyph()
+                        .stroke(HLText.secondary, lineWidth: 1)
+                        .frame(width: 6, height: 6)
+                }
+                if intercourse {
+                    CycleMarkerSwatch.shape(.intercourse, scheme: scheme).frame(width: 6, height: 6)
+                }
+                if others {
+                    CycleMarkerSwatch.shape(.otherEntries, scheme: scheme).frame(width: 6, height: 6)
+                }
+            }
+            .frame(height: 6)
         } else {
             Color.clear.frame(height: 6)
         }
@@ -239,6 +285,11 @@ struct CycleMarkerSwatch: View {
         case fertile
         case ovulation
         case symptoms
+        /// v1.39.1 (#1032) — intercourse logged: a FILLED diamond, apart from
+        /// the hollow symptom diamond by fill and hue.
+        case intercourse
+        /// v1.39.1 (#1032) — anything else logged that day: a hollow ring.
+        case otherEntries
         case today
     }
 
@@ -264,6 +315,10 @@ struct CycleMarkerSwatch: View {
             Circle().stroke(fertile(scheme).opacity(0.95), lineWidth: 1.8)
         case .symptoms:
             SymptomGlyph().stroke(HLText.secondary, lineWidth: 1.2).padding(2)
+        case .intercourse:
+            SymptomGlyph().fill(CyclePhasePalette.tint(for: .luteal, scheme: scheme))
+        case .otherEntries:
+            Circle().stroke(HLText.secondary, lineWidth: 1)
         case .today:
             Circle().stroke(HLText.primary.opacity(0.6), lineWidth: 1.3)
         }

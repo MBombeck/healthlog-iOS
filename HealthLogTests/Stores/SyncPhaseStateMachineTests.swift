@@ -20,7 +20,7 @@ import Testing
 /// All timing runs against the manual `SyncPhaseTestClock` below (Mutex-backed,
 /// `Synchronization`, iOS 18) — zero wall-time sleeps in the assertions.
 @MainActor
-@Suite("SyncStateStore — handshake phase machine", .serialized)
+@Suite("SyncStateStore — handshake phase machine", .serialized, .mockURLSession)
 struct SyncPhaseStateMachineTests {
     private func makeStore(
         clock: SyncPhaseTestClock,
@@ -43,7 +43,7 @@ struct SyncPhaseStateMachineTests {
     }
 
     private func stubSuccess() {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{
               "userId":"usr_phase","timezone":"Europe/Berlin",
@@ -57,7 +57,7 @@ struct SyncPhaseStateMachineTests {
     }
 
     private func stubFailure() {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
         }
     }

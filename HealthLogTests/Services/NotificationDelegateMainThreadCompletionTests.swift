@@ -12,7 +12,7 @@ import Testing
     /// completion handler on whatever executor the Task ended on — never the main
     /// thread. The methods are main-actor isolated now, so the completion lands on
     /// the main thread. Two pins: the ObjC entry point at runtime, and the source.
-    @Suite("Notification delegate — completion on the main thread", .serialized)
+    @Suite("Notification delegate — completion on the main thread", .serialized, .mockURLSession)
     @MainActor
     struct NotificationDelegateMainThreadCompletionTests {
         private static let env = AppEnvironment(

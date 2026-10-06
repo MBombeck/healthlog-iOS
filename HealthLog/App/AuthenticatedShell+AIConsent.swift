@@ -19,26 +19,22 @@ extension AuthenticatedShell {
     /// user can re-engage via the explicit-CTA path
     /// (`requestExplicitConsentPrompt`).
     func evaluateConsentGate() {
+        // T1 — the automatic gate never raises its sheet over a shell sheet that
+        // is up or animating (that would preempt it); the next tab change
+        // re-evaluates.
         guard let container,
-              pendingConsentProvider == nil else { return }
-        // Bug 2 (v0.14.8) — don't gate against a provider that isn't loaded yet.
-        // `config == nil` means the fetch hasn't landed (distinct from "server
-        // genuinely has no provider"); opening the sheet now would capture a
-        // phantom `.unconfigured`. The shell `.task` kicks off `load()` and the
-        // `.onChange(of: config)` re-runs this once it arrives or its effective
-        // availability changes without a provider-enum change.
-        guard let config = container.aiProviderStore.config else { return }
-        if config.usesProviderOpaqueAIConsent {
-            guard !container.aiConsentStore.hasServerManagedConsent() else { return }
-            guard !container.aiConsentStore.wasServerManagedDeclined() else { return }
-            pendingConsentProvider = AIConsentRequest(provider: .unconfigured, serverManaged: true)
-            return
-        }
-        guard case let .provider(provider) = config.aiConsentTarget else { return }
-        guard !container.aiConsentStore.hasConsent(for: provider) else { return }
-        // Honour the decline — no auto re-prompt until the user explicitly asks.
-        guard !container.aiConsentStore.wasDeclined(for: provider) else { return }
-        pendingConsentProvider = AIConsentRequest(provider: provider)
+              pendingConsentProvider == nil,
+              sheetGate.isIdle else { return }
+        // Bug 2 (v0.14.8) — don't gate against a provider that isn't loaded yet
+        // (`config == nil`); the shell `.task` loads it and the
+        // `.onChange(of: config)` re-runs this once it arrives. The decision
+        // itself is `AIConsentRequest.pending(config:consent:honourDecline:)`
+        // (J1 — pure, so the relaunch round trip is testable).
+        pendingConsentProvider = AIConsentRequest.pending(
+            config: container.aiProviderStore.config,
+            consent: container.aiConsentStore,
+            honourDecline: true
+        )
     }
 
     /// Explicit-CTA re-prompt path — fired when the user opted into the
@@ -70,15 +66,11 @@ extension AuthenticatedShell {
     func presentExplicitConsentIfNeeded() {
         guard let container,
               pendingConsentProvider == nil else { return }
-        guard let config = container.aiProviderStore.config else { return }
-        if config.usesProviderOpaqueAIConsent {
-            guard !container.aiConsentStore.hasServerManagedConsent() else { return }
-            pendingConsentProvider = AIConsentRequest(provider: .unconfigured, serverManaged: true)
-            return
-        }
-        guard case let .provider(provider) = config.aiConsentTarget else { return }
-        guard !container.aiConsentStore.hasConsent(for: provider) else { return }
-        pendingConsentProvider = AIConsentRequest(provider: provider)
+        pendingConsentProvider = AIConsentRequest.pending(
+            config: container.aiProviderStore.config,
+            consent: container.aiConsentStore,
+            honourDecline: false
+        )
     }
 }
 
@@ -97,5 +89,36 @@ struct AIConsentRequest: Identifiable, Hashable {
     var serverManaged: Bool = false
     var id: String {
         serverManaged ? "__server_managed__" : provider.rawValue
+    }
+}
+
+extension AIConsentRequest {
+    /// The consent the shell still has to ask for, or `nil`.
+    ///
+    /// - `config == nil` — not loaded yet, never gate against a phantom.
+    /// - provider-opaque (server AI whose provider this build cannot name) —
+    ///   the server-managed scope.
+    /// - a concrete provider — that provider's grant.
+    /// - `honourDecline` — the automatic gate respects an earlier decline; the
+    ///   explicit prompt (Settings, AI CTA) does not.
+    ///
+    /// A grant already on file always wins: this is what keeps the sheet from
+    /// coming back on the next launch once Accept landed.
+    @MainActor
+    static func pending(
+        config: AIProviderConfig?,
+        consent: AIConsentStore,
+        honourDecline: Bool
+    ) -> AIConsentRequest? {
+        guard let config else { return nil }
+        if config.usesProviderOpaqueAIConsent {
+            guard !consent.hasServerManagedConsent() else { return nil }
+            if honourDecline, consent.wasServerManagedDeclined() { return nil }
+            return AIConsentRequest(provider: .unconfigured, serverManaged: true)
+        }
+        guard case let .provider(provider) = config.aiConsentTarget else { return nil }
+        guard !consent.hasConsent(for: provider) else { return nil }
+        if honourDecline, consent.wasDeclined(for: provider) { return nil }
+        return AIConsentRequest(provider: provider)
     }
 }

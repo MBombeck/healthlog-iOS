@@ -197,18 +197,38 @@ struct TwoFactorManagementScreen: View {
 /// Inline (not a sheet) so a flow can host it as one step of a wizard without
 /// chained-sheet dismissal hazards.
 struct StepUpArmPicker: View {
-    /// The route this proof is for. Its ``MfaManagementOperation/requiresFreshFactor``
-    /// decides whether the **password** arm is offered at all — on a fresh-factor
-    /// route a password elevation is refused at the gate, and a gate refusal is
-    /// the one failure class that burns the proof.
-    let operation: MfaManagementOperation
+    /// Whether the target route wants a fresh second factor. Decides whether
+    /// the **password** arm is offered at all — on such a route a password
+    /// elevation is refused at the gate, and a gate refusal is the one failure
+    /// class that burns the proof.
+    let requiresFresh: Bool
     /// Whether the account has an active TOTP factor (drives the TOTP arm).
     /// Read from the live status, never assumed.
     let hasTotp: Bool
     let onElevation: (ConsumableElevation) async -> Void
 
-    private var requiresFresh: Bool {
-        operation.requiresFreshFactor
+    /// The route this proof is for; its ``MfaManagementOperation/requiresFreshFactor``
+    /// decides the password arm.
+    init(
+        operation: MfaManagementOperation,
+        hasTotp: Bool,
+        onElevation: @escaping (ConsumableElevation) async -> Void
+    ) {
+        self.init(requiresFresh: operation.requiresFreshFactor, hasTotp: hasTotp, onElevation: onElevation)
+    }
+
+    /// R2 / #115 A3 — for a gate whose strength depends on the account rather
+    /// than on the route alone: adding a factor on an account that has one
+    /// (`freshFactorIfEnrolled`), and the record actions (`requireRecentProof`),
+    /// where an account with a second factor must prove that factor or a passkey.
+    init(
+        requiresFresh: Bool,
+        hasTotp: Bool,
+        onElevation: @escaping (ConsumableElevation) async -> Void
+    ) {
+        self.requiresFresh = requiresFresh
+        self.hasTotp = hasTotp
+        self.onElevation = onElevation
     }
 
     /// A picker error is either a catalog key (our own copy) or verbatim server

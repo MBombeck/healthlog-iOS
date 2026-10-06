@@ -58,7 +58,6 @@ struct ServerManagedAIConsentTests {
 
         let reengage = InsightsScreen.isCoachReengageAvailable(
             aiMode: .none,
-            coachFlagEnabled: true,
             hasServer: true,
             resolvedProvider: config.resolvedProvider,
             hasConsentForProvider: false,
@@ -213,7 +212,6 @@ struct ServerManagedAIConsentTests {
     func reengageOfferedForServerManaged() {
         let available = InsightsScreen.isCoachReengageAvailable(
             aiMode: .none,
-            coachFlagEnabled: true,
             hasServer: true,
             resolvedProvider: .unconfigured, // no per-user provider
             hasConsentForProvider: true, // .unconfigured short-circuits true — must NOT block
@@ -227,7 +225,6 @@ struct ServerManagedAIConsentTests {
     func reengageHiddenAfterServerManagedConsent() {
         let available = InsightsScreen.isCoachReengageAvailable(
             aiMode: .online, // aiMode flipped after grant — affordance only for .none
-            coachFlagEnabled: true,
             hasServer: true,
             resolvedProvider: .unconfigured,
             hasConsentForProvider: true,
@@ -243,7 +240,6 @@ struct ServerManagedAIConsentTests {
         // exactly as before COACH-1 (we never offer a path we can't fulfil).
         let available = InsightsScreen.isCoachReengageAvailable(
             aiMode: .none,
-            coachFlagEnabled: true,
             hasServer: true,
             resolvedProvider: .unconfigured,
             hasConsentForProvider: true,
@@ -257,7 +253,6 @@ struct ServerManagedAIConsentTests {
     func reengageHonorsExplicitUnavailability() {
         let available = InsightsScreen.isCoachReengageAvailable(
             aiMode: .none,
-            coachFlagEnabled: true,
             hasServer: true,
             resolvedProvider: .anthropic,
             hasConsentForProvider: false,

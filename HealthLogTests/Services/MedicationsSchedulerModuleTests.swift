@@ -289,9 +289,11 @@ import Testing
             // one-offs (was a single one-off) so a backgrounded app keeps a queue.
             let medication = Self.med(cadence: .everyNWeeks(interval: 2, days: [.wed]))
             let projections = MedicationsSchedulerModule.projections(for: medication, now: .now)
-            // Biweekly over the 8-week pre-arm horizon → at least 2 occurrences.
+            // Biweekly over the 8-week pre-arm horizon → at least 2 occurrences,
+            // and (R5) never more than the horizon holds: four biweekly doses
+            // plus the immediate next one.
             #expect(projections.count >= 2)
-            #expect(projections.count <= MedicationsSchedulerModule.maxPreArmedOccurrences)
+            #expect(projections.count <= 5)
             #expect(projections.allSatisfy { $0.schedule.recurrence == nil })
             #expect(projections.first?.slotKey == "e0-once-0")
             // Slot keys are unique (distinct pending-notification ids).
@@ -312,7 +314,7 @@ import Testing
             let medication = Self.med(cadence: .cyclic(weeksOn: 3, weeksOff: 1))
             let projections = MedicationsSchedulerModule.projections(for: medication, now: .now)
             #expect(projections.count >= 2)
-            #expect(projections.count <= MedicationsSchedulerModule.maxPreArmedOccurrences)
+            #expect(projections.count <= MedicationReminderRunway.notificationBudget)
             #expect(projections.allSatisfy { $0.schedule.recurrence == nil })
         }
 
@@ -330,9 +332,9 @@ import Testing
                 Self.med(id: "m-rolling", cadence: .rolling(intervalDays: 14), lastTakenAt: Date()),
                 Self.med(id: "m-cyclic", cadence: .cyclic(weeksOn: 2, weeksOff: 2))
             ]
-            let total = meds.reduce(0) { acc, med in
-                acc + MedicationsSchedulerModule.projections(for: med, now: .now).count
-            }
+            // R5 — the whole set is planned together; per medication alone each
+            // runway would take the whole budget.
+            let total = MedicationsSchedulerModule.plannedProjections(for: meds, now: .now).count
             // Every pre-armed slot is one prospective pending request; the whole
             // set must fit under the SpeziScheduler budget so the tail is never
             // silently dropped.

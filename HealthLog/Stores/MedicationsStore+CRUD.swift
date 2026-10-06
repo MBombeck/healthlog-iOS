@@ -245,7 +245,7 @@ public extension MedicationsStore {
     /// user finished their course of, not one they temporarily suspended.
     @discardableResult
     func endMedication(id: String, on date: Date = .now) async -> WriteOutcome {
-        await update(id: id, patch: .init(endsOn: MedicationCadenceLogic.isoDay(date)))
+        await update(id: id, patch: .init(endsOn: ProfileDay.key(for: date))) // #115 1.5: the account's day
     }
 
     /// **M2** — best-effort fetch of the saved list layout. Quietly keeps the
@@ -345,7 +345,10 @@ public extension MedicationsStore {
             todayEventCount: medication.todayEventCount,
             notificationsEnabled: medication.notificationsEnabled,
             active: false,
-            archivedAt: timestamp
+            archivedAt: timestamp,
+            // v1.39.1 — an archived record stays a record until the server says otherwise.
+            trackIntake: medication.trackIntake,
+            recordedSchedule: medication.recordedSchedule
         )
     }
 

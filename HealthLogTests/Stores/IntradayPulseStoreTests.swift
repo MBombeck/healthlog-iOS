@@ -16,7 +16,7 @@ import Testing
 /// - `403` (module off) hides the block without an error
 ///
 /// `.serialized` — every case installs its own handler.
-@Suite("IntradayPulseStore — block gate + day navigator", .serialized)
+@Suite("IntradayPulseStore — block gate + day navigator", .serialized, .mockURLSession)
 @MainActor
 struct IntradayPulseStoreTests {
     private func makeStore() -> IntradayPulseStore {
@@ -36,7 +36,7 @@ struct IntradayPulseStoreTests {
 
     private func respond(_ json: String, status: Int = 200) {
         let body = Data(json.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, body)
         }
     }

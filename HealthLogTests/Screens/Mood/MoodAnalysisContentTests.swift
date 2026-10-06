@@ -10,8 +10,8 @@ import Testing
 /// (Insights → Stimmung) — in the same order with separately-maintained period
 /// controls + sheet wiring (double-maintenance). W4-3 extracts the seven-section
 /// sequence into one shared `MoodAnalysisContent` body that both hosts delegate
-/// to. This suite pins that the shared body emits EXACTLY the seven sections, in
-/// order 0…6, so a regression that drops or re-orders a section (or that
+/// to. This suite pins that the shared body emits EXACTLY the six sections, in
+/// order 0…5, so a regression that drops or re-orders a section (or that
 /// re-introduces a divergent second copy) is caught.
 @MainActor
 @Suite("MoodAnalysisContent — one shared seven-section body")
@@ -42,23 +42,25 @@ struct MoodAnalysisContentTests {
         return recorder.indices
     }
 
-    @Test("emits exactly seven sections")
-    func emitsSevenSections() throws {
-        #expect(try recordedSectionIndices().count == 7)
+    /// #115 1.3 — the device-calendar pattern cards have no server source and
+    /// are gone, so the body has six sections.
+    @Test("emits exactly six sections")
+    func emitsSixSections() throws {
+        #expect(try recordedSectionIndices().count == 6)
     }
 
-    @Test("section indices are 0…6 in order (hero → heatmap → trend → stability → tags → patterns → recent)")
+    @Test("section indices are 0…5 in order (hero → heatmap → trend → stability → tags → recent)")
     func sectionIndicesAreOrdered() throws {
-        #expect(try recordedSectionIndices() == [0, 1, 2, 3, 4, 5, 6])
+        #expect(try recordedSectionIndices() == [0, 1, 2, 3, 4, 5])
     }
 
     /// v0.14.4 E2 — the Insights Mood page opts out of the inline recent-entries
     /// section (`showsRecentSection: false`); it replaces it with the canonical
     /// bottom-of-page "Show all measurements" drill-down. The shared body must
-    /// then emit only sections 0…5 (no index 6).
-    @Test("recent section (index 6) is dropped when the host opts out (E2)")
+    /// then emit only sections 0…4 (no index 5).
+    @Test("recent section (index 5) is dropped when the host opts out (E2)")
     func recentSectionDroppable() throws {
-        #expect(try recordedSectionIndices(showsRecentSection: false) == [0, 1, 2, 3, 4, 5])
+        #expect(try recordedSectionIndices(showsRecentSection: false) == [0, 1, 2, 3, 4])
     }
 
     // MARK: - Phase 09 / 09-04
@@ -95,7 +97,7 @@ struct MoodAnalysisContentTests {
         let renderer = ImageRenderer(content: content)
         _ = renderer.uiImage
 
-        #expect(recorder.indices == [0, 1, 2, 3, 4, 5], "the unresolved body emits the same sections in the same order")
+        #expect(recorder.indices == [0, 1, 2, 3, 4], "the unresolved body emits the same sections in the same order")
         // The render's own `.task` may or may not have landed by the time this
         // line runs, so the count is not the assertion — *where* it ran is.
         // Before 09-04 this body ran six analyses on the thread that draws.

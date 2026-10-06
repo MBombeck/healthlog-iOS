@@ -27,9 +27,9 @@ import Testing
 ///   and a PRN medication became a fixed daily plan that reminds and is scored.
 ///
 /// **The anchor is not renamed, it is deleted.** The server anchors the cyclic
-/// phase on `medication.startsOn ?? medication.createdAt`, snapped to the
-/// Sunday-rooted UTC week (`src/lib/medications/scheduling/recurrence.ts:246`
-/// at the accepted tag). There is no per-schedule anchor and there is nowhere
+/// phase on `medication.startsOn ?? medication.createdAt` — since server
+/// 1.39.3 (R1) as seven-day blocks from that calendar day, before that snapped
+/// to the Sunday-rooted UTC week. There is no per-schedule anchor and there is nowhere
 /// on the server to put one. `serverCyclicOnWeek` below is a transcription of
 /// that function, and the parity clause asserts the iOS engine agrees with it
 /// rather than asserting a hand-written list of days.

@@ -116,7 +116,8 @@ actor MoodAnalysisCache {
                         scope: key.scope,
                         now: key.dayStart,
                         calendar: key.calendar,
-                        enrichment: key.enrichment
+                        enrichment: key.enrichment,
+                        windowDays: key.periodDays
                     ),
                     resident: hit.insights
                 ),
@@ -153,7 +154,8 @@ actor MoodAnalysisCache {
             scope: key.scope,
             now: key.dayStart,
             calendar: key.calendar,
-            enrichment: key.enrichment
+            enrichment: key.enrichment,
+            windowDays: key.periodDays
         )
         return MoodAnalysisSnapshot(
             key: key,

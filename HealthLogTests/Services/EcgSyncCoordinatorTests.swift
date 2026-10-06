@@ -12,7 +12,7 @@ import Testing
 /// health sample is ever constructed, and no waveform is ever logged.
 ///
 /// `.serialized` — the suite installs the process-global `MockURLProtocol.handler`.
-@Suite("EcgSyncCoordinator — Vertrag, Fehlerklassen, Anker", .serialized)
+@Suite("EcgSyncCoordinator — Vertrag, Fehlerklassen, Anker", .serialized, .mockURLSession)
 struct EcgSyncCoordinatorTests {
     // Fixtures + Doubles: `EcgSyncTestSupport.swift`.
 
@@ -23,7 +23,7 @@ struct EcgSyncCoordinatorTests {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/insights/ecg") { recorder.record(req) }
             return reply(req)
         }
@@ -66,7 +66,7 @@ struct EcgSyncCoordinatorTests {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/insights/ecg") { recorder.record(req) }
             return reply(req)
         }
@@ -82,7 +82,7 @@ struct EcgSyncCoordinatorTests {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/insights/ecg") { recorder.record(req) }
             return reply(req)
         }
@@ -106,7 +106,7 @@ struct EcgSyncCoordinatorTests {
     func allThreeStatusesAreSuccess(status: String, code: Int) async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let reply = EcgSyncTestSupport.okResponse(status, code: code)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let source = FakeEcgSource(recordings: [EcgSyncTestSupport.recording()], volts: ["11111111-2222-3333-4444-555555555555": [0]])
         let summary = await EcgSyncTestSupport.makeCoordinator(
@@ -131,7 +131,7 @@ struct EcgSyncCoordinatorTests {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let timeline = EventTimeline()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/insights/ecg") { timeline.append("post") }
             return reply(req)
         }
@@ -156,7 +156,7 @@ struct EcgSyncCoordinatorTests {
     func optInGate() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let recorder = EcgRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/insights/ecg") { recorder.record(req) }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
         }
@@ -170,23 +170,11 @@ struct EcgSyncCoordinatorTests {
     @Test("Ohne Anmeldung passiert nichts")
     func authTokenGate() async {
         let (api, kc) = EcgSyncTestSupport.makeClient(token: nil)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
         }
         let source = FakeEcgSource(recordings: [EcgSyncTestSupport.recording()], volts: ["11111111-2222-3333-4444-555555555555": [0]])
         let summary = await EcgSyncTestSupport.makeCoordinator(api: api, keychain: kc, source: source).sync()
-        #expect(summary == .zero)
-        #expect(source.fetchCount == 0)
-    }
-
-    @Test("Ohne das insights-Modul passiert nichts — dieselbe Schranke wie beim Lesen")
-    func insightsModuleGate() async {
-        let (api, kc) = EcgSyncTestSupport.makeClient()
-        MockURLProtocol.handler = { req in
-            (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
-        }
-        let source = FakeEcgSource(recordings: [EcgSyncTestSupport.recording()], volts: ["11111111-2222-3333-4444-555555555555": [0]])
-        let summary = await EcgSyncTestSupport.makeCoordinator(api: api, keychain: kc, source: source, moduleEnabled: false).sync()
         #expect(summary == .zero)
         #expect(source.fetchCount == 0)
     }
@@ -197,7 +185,7 @@ struct EcgSyncCoordinatorTests {
         try keychain.setString("user-A", forKey: KeychainKey.userID)
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets("/api/insights/ecg") { recorder.record(request) }
             return reply(request)
         }
@@ -235,7 +223,7 @@ struct EcgSyncCoordinatorTests {
         try keychain.setString("user-A", forKey: KeychainKey.userID)
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets("/api/insights/ecg") { recorder.record(request) }
             return reply(request)
         }
@@ -271,7 +259,7 @@ struct EcgSyncCoordinatorTests {
         try keychain.setString("user-A", forKey: KeychainKey.userID)
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets("/api/insights/ecg") {
                 recorder.record(request)
                 try? keychain.setString("bearer-replacement", forKey: KeychainKey.authToken)
@@ -304,7 +292,7 @@ struct EcgSyncCoordinatorTests {
     func overlongRecordingIsSkippedNotTruncated() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let recorder = EcgRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/insights/ecg") { recorder.record(req) }
             return (HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!, Data())
         }
@@ -329,7 +317,7 @@ struct EcgSyncCoordinatorTests {
     func exactlyAtTheLimitStillUploads() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let atLimit = EcgSyncTestSupport.recording(id: "edge-1", samples: EcgIngestRequestDTO.maxSamples)
         let source = FakeEcgSource(
             recordings: [atLimit],
@@ -343,7 +331,7 @@ struct EcgSyncCoordinatorTests {
     func persistenceFailureRetainsTheAnchor() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let oldAnchor = Data("old-anchor".utf8)
         defaults().set(oldAnchor, forKey: EcgSyncTestSupport.anchorKey)
@@ -376,7 +364,7 @@ struct EcgSyncCoordinatorTests {
         let (api, keychain) = EcgSyncTestSupport.makeClient()
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request)
             return reply(request)
         }

@@ -12,7 +12,7 @@ import Testing
 /// sibling fields survive value-equal and the key-absence sentinels
 /// (`dataClusters` / `reminderSuggestions`) are preserved as absence, never
 /// materialised into `[]`/`null` (plan §guard 2).
-@Suite("AICoachSettingsRepository coach-prefs (Build 9)", .serialized)
+@Suite("AICoachSettingsRepository coach-prefs (Build 9)", .serialized, .mockURLSession)
 struct AICoachSettingsRepositoryCoachPrefsTests {
     private func makeRepo() -> AICoachSettingsRepository {
         let env = AppEnvironment(
@@ -46,7 +46,7 @@ struct AICoachSettingsRepositoryCoachPrefsTests {
     @Test("fetchDisableCoach GET decodes the flag")
     func fetchDisableCoach() async throws {
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -60,7 +60,7 @@ struct AICoachSettingsRepositoryCoachPrefsTests {
 
     @Test("fetchDisableCoach tolerates a payload that omits the field → false")
     func fetchDisableCoachTolerant() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":{},"error":null}"#.utf8)
@@ -75,7 +75,7 @@ struct AICoachSettingsRepositoryCoachPrefsTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -98,7 +98,7 @@ struct AICoachSettingsRepositoryCoachPrefsTests {
 
     /// Installs a GET that returns `getBody`, and captures the PUT body.
     private func installCoachPrefsRouter(getBody: String, capturedPut: @escaping @Sendable (Data?) -> Void) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             if req.httpMethod == "PUT" {
                 capturedPut(req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:)))
@@ -173,6 +173,71 @@ struct AICoachSettingsRepositoryCoachPrefsTests {
         // Absent in the GET → still absent in the PUT (semantic sentinel, not []/null).
         #expect(json.keys.contains("dataClusters") == false)
         #expect(json["dataClusters"] == nil)
+    }
+
+    // MARK: - #115 R3 — server v1.39.4 `followUpChips`
+
+    /// Server v1.39.4 added `followUpChips` to coach-prefs: absent means on,
+    /// only `false` turns the Coach's follow-up chips off, and `PUT` replaces
+    /// the whole object — a body without the key switches chips back ON. The
+    /// app has no typed field for it, so the reminder toggle must carry it (and
+    /// any other key it does not know) through verbatim.
+    @Test("RMW keeps followUpChips:false and an unknown nested key untouched")
+    func rmwKeepsFollowUpChipsAndUnknownKeys() async throws {
+        nonisolated(unsafe) var putBody: Data?
+        installCoachPrefsRouter(
+            getBody: #"""
+            {"data":{"tone":"neutral","verbosity":"detailed","excludeMetrics":[],
+             "showEvidenceByDefault":true,"defaultWindow":"last30days",
+             "followUpChips":false,"futureBlock":{"mode":"x","weights":[1,2.5,null]}},"error":null}
+            """#,
+            capturedPut: { putBody = $0 }
+        )
+        _ = try await makeRepo().setReminderSuggestionsEnabled(false)
+
+        let json = try #require(putBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] })
+        #expect(json["followUpChips"] as? Bool == false, "chips would silently switch back on")
+        let future = try #require(json["futureBlock"] as? [String: Any])
+        #expect(future["mode"] as? String == "x")
+        let weights = try #require(future["weights"] as? [Any])
+        #expect(weights.count == 3)
+        #expect(weights[2] is NSNull)
+    }
+
+    /// After a 409 the toggle is re-applied to the RE-READ object, so a
+    /// `followUpChips` another session wrote in between survives the retry.
+    @Test("409 retry re-applies onto the fresh object and keeps its followUpChips")
+    func conflictRetryKeepsFreshFollowUpChips() async throws {
+        nonisolated(unsafe) var reads = 0
+        nonisolated(unsafe) var puts: [Data] = []
+        MockURLProtocol.install { req in
+            let url = req.url!
+            if req.httpMethod == "PUT" {
+                puts.append(req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:)) ?? Data())
+                if puts.count == 1 {
+                    let http = HTTPURLResponse(url: url, statusCode: 409, httpVersion: nil, headerFields: nil)!
+                    let body = #"{"data":null,"error":"changed","meta":{"errorCode":"\#(OptimisticConflictCode.coachPrefs)"}}"#
+                    return (http, Data(body.utf8))
+                }
+                let http = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (http, Data(#"{"data":{"tone":"warm","updatedAt":"T2"},"error":null}"#.utf8))
+            }
+            reads += 1
+            // First read: chips on (absent). The other session then turns them off.
+            let body = reads == 1
+                ? #"{"data":{"tone":"warm","updatedAt":"T0"},"error":null}"#
+                : #"{"data":{"tone":"warm","followUpChips":false,"updatedAt":"T1"},"error":null}"#
+            let http = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(body.utf8))
+        }
+        _ = try await makeRepo().setReminderSuggestionsEnabled(false)
+
+        #expect(puts.count == 2)
+        let retry = try #require(try JSONSerialization.jsonObject(with: puts[1]) as? [String: Any])
+        #expect(retry["followUpChips"] as? Bool == false)
+        let reminder = try #require(retry["reminderSuggestions"] as? [String: Any])
+        #expect(reminder["enabled"] as? Bool == false)
+        #expect(retry["baseUpdatedAt"] as? String == "T1")
     }
 }
 

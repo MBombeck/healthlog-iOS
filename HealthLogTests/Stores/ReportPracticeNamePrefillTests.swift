@@ -20,7 +20,7 @@ import Testing
 /// test pins that a filled-in practice name actually reaches
 /// `POST /api/export/health-record` (and that a blank field sends no key at all,
 /// which matters because the schema is `.strict()`).
-@Suite("CU-35 — practice-name prefill", .serialized)
+@Suite("CU-35 — practice-name prefill", .serialized, .mockURLSession)
 struct ReportPracticeNamePrefillTests {
     private final class RequestLog: @unchecked Sendable {
         private let lock = NSLock()
@@ -65,7 +65,7 @@ struct ReportPracticeNamePrefillTests {
     }
 
     private static func respond(_ json: String) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(json.utf8)
@@ -186,7 +186,7 @@ struct ReportPracticeNamePrefillTests {
     @MainActor
     @Test("a /me failure leaves the field exactly as it was — no report is blocked by it")
     func loadPrefillFailsSoft() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"boom"}"#.utf8)
@@ -214,7 +214,7 @@ struct ReportPracticeNamePrefillTests {
     @Test("the report POST carries `practiceName` when the field is filled")
     func requestCarriesPracticeName() async throws {
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(Self.bodyFromStream(req))
             return (
                 HTTPURLResponse(
@@ -241,7 +241,7 @@ struct ReportPracticeNamePrefillTests {
     @Test("a blank field omits the key entirely — `.strict()` would 422 on a null")
     func requestOmitsAbsentPracticeName() async throws {
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             log.record(Self.bodyFromStream(req))
             return (
                 HTTPURLResponse(

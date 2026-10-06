@@ -65,6 +65,11 @@ struct EditEpisodeSheet: View {
                         ForEach(IllnessLifecycle.allCases) { lifecycle in
                             Text(lifecycle.localizedLabel).tag(lifecycle)
                         }
+                        // A stored course this build does not know stays
+                        // selectable as itself; unchanged, it is not sent.
+                        if episode.lifecycle == .unknown {
+                            Text(IllnessLifecycle.unknown.localizedLabel).tag(IllnessLifecycle.unknown)
+                        }
                     }
                     .onChange(of: lifecycle) { _, newValue in
                         if !newValue.allowsParent {
@@ -140,7 +145,7 @@ struct EditEpisodeSheet: View {
             lifecycle: lifecycle == episode.lifecycle ? nil : lifecycle,
             onsetAt: onsetAt == originalOnset ? nil : iso.string(from: onsetAt),
             resolvedAt: hasResolvedAt ? iso.string(from: resolvedAt) : nil,
-            parentConditionId: lifecycle.allowsParent ? parentConditionId : nil,
+            parentConditionId: lifecycle.parentForPatch(chosen: parentConditionId, stored: episode.parentConditionId),
             note: trimmedNote.isEmpty ? nil : trimmedNote
         )
         if await store.updateEpisode(id: episode.id, patch) {

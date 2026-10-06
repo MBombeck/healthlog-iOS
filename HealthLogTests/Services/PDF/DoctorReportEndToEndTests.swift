@@ -76,15 +76,17 @@ struct DoctorReportEndToEndTests {
                 schedule: MedicationSchedule(times: [TimeOfDay(hour: 8, minute: 0), TimeOfDay(hour: 20, minute: 0)])
             )
         ]
-        let intakes: [MedicationIntake] = (0 ..< 10).map { offset in
-            MedicationIntake(
-                id: "i\(offset)",
-                medicationId: offset.isMultiple(of: 2) ? "m1" : "m2",
-                scheduledAt: makeDate(2026, 5, 8 + offset / 2),
-                takenAt: offset < 7 ? makeDate(2026, 5, 8 + offset / 2, 8) : nil,
-                status: offset < 7 ? .taken : .skipped
+        // #115 1.2 — adherence is the server's `GET /api/medications/compliance` rows.
+        let window = { (taken: Int, missed: Int) in
+            ComplianceWindowResult(
+                totalExpected: taken + missed, taken: taken, skipped: 0, missed: missed,
+                rate: Int((Double(taken) / Double(taken + missed) * 100).rounded()), streak: 0
             )
         }
+        let serverCompliance = [
+            MedicationComplianceSummaryEntry(medicationId: "m1", compliance7: window(6, 1), compliance30: window(27, 3)),
+            MedicationComplianceSummaryEntry(medicationId: "m2", compliance7: window(12, 2), compliance30: window(50, 10))
+        ]
         let moodEntries: [MoodEntry] = (0 ..< 8).map { offset in
             MoodEntry(
                 id: "md\(offset)",
@@ -98,8 +100,7 @@ struct DoctorReportEndToEndTests {
             appVersion: "0.5.0 (8)",
             measurements: pulses + bps + weights,
             medications: meds,
-            compliance: [],
-            intakes: intakes,
+            serverCompliance: serverCompliance,
             moodEntries: moodEntries
         )
     }
@@ -221,8 +222,6 @@ struct DoctorReportEndToEndTests {
             appVersion: "0.0.0",
             measurements: [],
             medications: [],
-            compliance: [],
-            intakes: [],
             moodEntries: []
         )
         let spec = DoctorReportSpecBuilder.build(

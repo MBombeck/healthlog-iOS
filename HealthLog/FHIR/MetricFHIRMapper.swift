@@ -182,8 +182,8 @@ public enum MetricFHIRMapper {
             MetricFHIRMapping(
                 kind: kind,
                 loinc: LOINCCode(
-                    code: "73704-9",
-                    display: "Body water by Bioelectrical impedance analysis",
+                    code: "101683-1",
+                    display: "Body water mass",
                     physicianReviewPending: true
                 ),
                 ucum: UCUMUnit(unit: "kg")
@@ -193,8 +193,8 @@ public enum MetricFHIRMapper {
             MetricFHIRMapping(
                 kind: kind,
                 loinc: LOINCCode(
-                    code: "73708-0",
-                    display: "Bone mineral content by DXA",
+                    code: "101685-6",
+                    display: "Body bone mass",
                     physicianReviewPending: true
                 ),
                 ucum: UCUMUnit(unit: "kg")
@@ -233,50 +233,6 @@ public enum MetricFHIRMapper {
                     physicianReviewPending: true
                 ),
                 ucum: UCUMUnit(unit: "ms")
-            )
-
-        case .vo2Max:
-            MetricFHIRMapping(
-                kind: kind,
-                loinc: LOINCCode(
-                    code: "96402-2",
-                    display: "Oxygen consumption maximum during exercise",
-                    physicianReviewPending: true
-                ),
-                ucum: UCUMUnit(unit: "mL/min/kg")
-            )
-
-        case .walkingSpeed:
-            MetricFHIRMapping(
-                kind: kind,
-                loinc: LOINCCode(
-                    code: "41957-2",
-                    display: "Gait speed [Velocity] Measured",
-                    physicianReviewPending: true
-                ),
-                ucum: UCUMUnit(unit: "m/s")
-            )
-
-        case .walkingAsymmetry:
-            MetricFHIRMapping(
-                kind: kind,
-                loinc: LOINCCode(
-                    code: "91557-1",
-                    display: "Walking asymmetry percentage",
-                    physicianReviewPending: true
-                ),
-                ucum: UCUMUnit(unit: "%")
-            )
-
-        case .walkingStepLength:
-            MetricFHIRMapping(
-                kind: kind,
-                loinc: LOINCCode(
-                    code: "41955-6",
-                    display: "Step length Measured",
-                    physicianReviewPending: true
-                ),
-                ucum: UCUMUnit(unit: "m")
             )
 
         case .walkingDoubleSupport:
@@ -519,7 +475,10 @@ public enum MetricFHIRMapper {
         // keep this switch under the type-body-length budget (file_length
         // discipline). See `additiveSignalMapping(for:)`. The grouped case
         // delegates so the parent switch stays exhaustive at the boundary.
-        case .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
+        // #115 R3 — VO2 max and the walking trio are HealthKit-identifier rows
+        // since server v1.39.3; they live with the other HK rows in the helper.
+        case .vo2Max, .walkingSpeed, .walkingAsymmetry, .walkingStepLength,
+             .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
              .breathingDisturbances, .cardioRecovery, .wristTemperature,
              .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount,
              .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation,

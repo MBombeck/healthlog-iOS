@@ -18,7 +18,7 @@ import Testing
     ///     carries the same metadata in `userInfo`
     ///   - Body-tap (default action) with `medicationId` deep-links to
     ///     `healthlog://medications/<id>`
-    @Suite("NotificationService — medication action dispatch", .serialized)
+    @Suite("NotificationService — medication action dispatch", .serialized, .mockURLSession)
     @MainActor
     struct NotificationServiceMedicationActionTests {
         // MARK: - Test scaffolding
@@ -137,7 +137,7 @@ import Testing
 
             nonisolated(unsafe) var capturedBody: Data?
             nonisolated(unsafe) var capturedPath: String?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 capturedPath = req.url?.path
                 capturedBody = req.httpBody ?? Self.drainBody(req)
                 let body = #"{"data":{"processed":1,"inserted":1,"duplicates":0,"entries":[{"index":0,"status":"inserted","id":"new"}]}}"#
@@ -186,7 +186,7 @@ import Testing
             let outbox = try OutboxQueue(inMemory: true)
             let repo = MedicationsRepository(api: api, outbox: outbox)
             nonisolated(unsafe) var capturedBody: Data?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 capturedBody = req.httpBody ?? Self.drainBody(req)
                 let body = #"{"data":{"processed":1,"inserted":1,"duplicates":0,"entries":[{"index":0,"status":"inserted","id":"new"}]}}"#
                 return (Self.okResponse(req), Data(body.utf8))

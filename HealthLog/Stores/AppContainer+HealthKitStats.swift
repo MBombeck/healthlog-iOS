@@ -9,8 +9,8 @@ extension AppContainer {
     // **Phase 07 / plan 07-09** — `wireEcgBackgroundSync` is gone. It attached a
     // second ECG hook to the BGProcessing wake, and the orchestrated pass already
     // runs `ecgUpload` as one of its eleven capabilities against the same
-    // coordinator, which self-gates on the device-local opt-in, authentication
-    // and the server-owned `insights` module. Two hooks, one sweep, one
+    // coordinator, which self-gates on the device-local opt-in and
+    // authentication (no module gate since server v1.39). Two hooks, one sweep, one
     // coalescer: the second call was work the first had already done.
 
     /// Wires the direct workout importer from authenticated composition-root

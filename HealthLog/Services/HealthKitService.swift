@@ -158,6 +158,11 @@ import Foundation
         /// channels).
         private var deletionReconciler: MeasurementDeletionReconciler?
 
+        /// S1 — server ids a measurement write on this actor has claimed (see
+        /// `HealthKitServerMirrorPlanner`); the create-time write and the mirror
+        /// never both write the same row.
+        var serverMirrorClaims: Set<String> = []
+
         public func setDeletionReconciler(_ reconciler: MeasurementDeletionReconciler?) {
             deletionReconciler = reconciler
         }

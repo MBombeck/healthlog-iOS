@@ -21,7 +21,7 @@ import Testing
 /// 4. Idempotent: calling twice with the same inputs is a no-op on the
 ///    second call.
 /// 5. No-op when `summary == nil`.
-@Suite("DashboardStore.synthesiseMissingTiles — voll-umfänglich tile coverage", .serialized)
+@Suite("DashboardStore.synthesiseMissingTiles — voll-umfänglich tile coverage", .serialized, .mockURLSession)
 struct DashboardStoreSynthesiseMissingTilesTests {
     @MainActor
     private func makeStore() -> DashboardStore {

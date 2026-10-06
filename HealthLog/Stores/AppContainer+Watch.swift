@@ -45,7 +45,9 @@ extension AppContainer {
                 // those stores exist) into the snapshot the watch complications
                 // read. Absent when not yet wired → complications show em-dash.
                 healthScore: coordinator?.scoreProvider?(),
-                latestMeasurement: coordinator?.latestMeasurementProvider?()
+                latestMeasurement: coordinator?.latestMeasurementProvider?(),
+                // #115 B5 — the wrist enters glucose in the account's unit.
+                glucoseUnit: coordinator?.glucoseUnitProvider?() ?? .mgdL
             )
         }
 
@@ -115,6 +117,7 @@ extension AppContainer {
         measurementsStore: MeasurementsStore,
         unitPreferences: @escaping @MainActor () -> UnitPreferences
     ) {
+        coordinator.glucoseUnitProvider = { unitPreferences().glucose }
         coordinator.scoreProvider = { [weak healthScoreStore] in
             WatchSnapshot.HealthScoreGlance.make(from: healthScoreStore?.score)
         }

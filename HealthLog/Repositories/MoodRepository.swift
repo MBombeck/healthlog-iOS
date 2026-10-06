@@ -46,18 +46,23 @@ public actor MoodRepository {
     /// posture as `MoodRelationsRepository`. Writes invalidate the row via
     /// `CacheInvalidator` (already wired). `nil` in unit tests → direct fetch.
     private let swr: SWRCoordinator?
+    /// #115 1.5 — the zone the `from`/`to` day keys are cut in: the account's
+    /// (``ProfileDay``), never the device's. Injectable for tests.
+    private let profileTimeZone: @Sendable () -> TimeZone
 
     public init(
         api: APIClientProtocol,
         outbox: OutboxQueue,
         encoder: JSONEncoder = .hlDefault,
         standalone: StandaloneGate? = nil,
-        swr: SWRCoordinator? = nil
+        swr: SWRCoordinator? = nil,
+        profileTimeZone: @escaping @Sendable () -> TimeZone = { ProfileDay.timeZone }
     ) {
         self.api = api
         self.outbox = outbox
         self.encoder = encoder
         self.standalone = standalone
+        self.profileTimeZone = profileTimeZone
         self.swr = swr
     }
 
@@ -83,6 +88,16 @@ public actor MoodRepository {
     /// Fix: echte vom Server honorierte Params (`from`/`to` als `YYYY-MM-DD`,
     /// `limit`, `offset`) + Offset-Pagination bis `meta.total` gedrained ist
     /// (oder eine Page < `pageSize` zurückkommt). Cancellation-safe via `async`.
+    /// #115 1.5 — the `from`/`to` pair for the last `days` days, as the
+    /// account sees them: today is the account's today, and both keys are cut
+    /// in `timeZone`. The server (`listMoodEntriesSchema`) reads the pair as
+    /// days in the same zone, so a device-zone pair shifted the whole window
+    /// by a day for anyone whose phone and account disagree.
+    nonisolated static func dayWindow(days: Int, now: Date, timeZone: TimeZone) -> (from: String, to: String) {
+        let to = ProfileDay.key(for: now, timeZone: timeZone)
+        return (ProfileDay.key(to, addingDays: -max(days, 0)), to)
+    }
+
     public func recent(days: Int = 365) async throws -> [MoodEntry] {
         if isStandalone, let standalone {
             // Standalone: read the local mirror, newest-first. Mood *analytics*
@@ -96,17 +111,9 @@ public actor MoodRepository {
         // paginated network fetch is captured as a sendable closure so it can be
         // routed through the SWR cache (v0.14.3 E3) when a coordinator is wired.
         let api = api
+        let window = Self.dayWindow(days: days, now: .now, timeZone: profileTimeZone())
         @Sendable func networkFetch() async throws -> [MoodEntry] {
-            let to = Date.now
-            let from = Calendar.current.date(byAdding: .day, value: -max(days, 0), to: to) ?? to
-
-            let fmt = DateFormatter()
-            fmt.calendar = Calendar(identifier: .gregorian)
-            fmt.locale = Locale(identifier: "en_US_POSIX")
-            fmt.timeZone = .current
-            fmt.dateFormat = "yyyy-MM-dd"
-            let fromStr = fmt.string(from: from)
-            let toStr = fmt.string(from: to)
+            let (fromStr, toStr) = window
 
             var all: [MoodEntry] = []
             var offset = 0
@@ -139,6 +146,30 @@ public actor MoodRepository {
             return try await swr.fetchCachingFirst(
                 .moodEntries(days: days),
                 decoding: [MoodEntry].self,
+                fetch: networkFetch
+            )
+        }
+        return try await networkFetch()
+    }
+
+    /// #115 · 1.3 — the server's daily mood series (`GET /api/mood/analytics`),
+    /// profile-zone day means plus summary slopes. `nil` in standalone (no
+    /// server; the analysis buckets the local entries itself). Routed through
+    /// the `.moodDailySeries` SWR row so a warm bounce and an offline launch
+    /// paint the last server series; a mood write drops the row
+    /// (`MutationKind.moodEntryChange`).
+    func dailySeries(forceRevalidate: Bool = false) async throws -> MoodAnalyticsEnrichment? {
+        if isStandalone { return nil }
+        let api = api
+        @Sendable func networkFetch() async throws -> MoodAnalyticsEnrichment {
+            let req: APIRequest<MoodAnalyticsEnrichment> = .get("/api/mood/analytics")
+            return try await api.send(req)
+        }
+        if let swr {
+            return try await swr.fetchCachingFirst(
+                .moodDailySeries,
+                decoding: MoodAnalyticsEnrichment.self,
+                forceRevalidate: forceRevalidate,
                 fetch: networkFetch
             )
         }
@@ -258,6 +289,11 @@ public actor MoodRepository {
         let idempotencyKey = retryIdentity.map { IdempotencyKey(raw: $0.idempotencyKey) } ?? IdempotencyKey()
         do {
             return try await .accepted(postEntry(entry, idempotencyKey: idempotencyKey))
+        } catch HLError.network(.writeCancelled) where retryIdentity != nil {
+            // C4 / E1 — for the importer a cut-off request holds the anchor (the
+            // sample is re-read next sweep). A manual entry has no such second
+            // chance and falls through to the outbox below.
+            return .rejected(.canceled)
         } catch let err as HLError where err.shouldPersistToOutbox {
             guard let payload = try? encoder.encode(entry) else {
                 return .enqueueLost(.notPersisted("mood entry could not be encoded for the outbox"))
@@ -273,6 +309,9 @@ public actor MoodRepository {
             return .queued(entry, transport: err)
         } catch let err as HLError {
             return .rejected(err)
+        } catch is CancellationError {
+            // C4 — stopped, not refused; the importer holds its anchor on it.
+            return .rejected(.canceled)
         } catch {
             return .rejected(HLError.unknown(String(describing: error)))
         }

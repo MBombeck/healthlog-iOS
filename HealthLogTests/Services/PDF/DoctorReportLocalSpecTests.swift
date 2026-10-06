@@ -38,8 +38,7 @@ struct DoctorReportLocalSpecTests {
     private static func snapshot(
         measurements: [Measurement] = [],
         medications: [Medication] = [],
-        compliance: [ComplianceDay] = [],
-        intakes: [MedicationIntake] = [],
+        serverCompliance: [MedicationComplianceSummaryEntry]? = nil,
         moodEntries: [MoodEntry] = []
     ) -> DoctorReportSpecBuilder.Snapshot {
         DoctorReportSpecBuilder.Snapshot(
@@ -47,8 +46,7 @@ struct DoctorReportLocalSpecTests {
             appVersion: "0.5.0",
             measurements: measurements,
             medications: medications,
-            compliance: compliance,
-            intakes: intakes,
+            serverCompliance: serverCompliance,
             moodEntries: moodEntries
         )
     }
@@ -278,55 +276,6 @@ struct DoctorReportLocalSpecTests {
 
     // MARK: - Adherence
 
-    @Test("adherence per-med rate is computed from in-window intakes")
-    func adherencePerMedRate() {
-        let med = Medication(
-            id: "med-1",
-            name: "Levothyroxin",
-            dose: "75 mcg",
-            schedule: MedicationSchedule(times: [TimeOfDay(hour: 7, minute: 0)])
-        )
-        let intakes: [MedicationIntake] = (0 ..< 4).map { offset in
-            MedicationIntake(
-                id: "i-\(offset)",
-                medicationId: "med-1",
-                scheduledAt: Self.makeDate(2026, 5, 10 + offset),
-                takenAt: offset < 3 ? Self.makeDate(2026, 5, 10 + offset, 8) : nil,
-                status: offset < 3 ? .taken : .skipped
-            )
-        }
-        let spec = DoctorReportSpecBuilder.build(
-            snapshot: Self.snapshot(medications: [med], intakes: intakes),
-            periodStart: Self.periodStart,
-            periodEnd: Self.periodEnd
-        )
-        let row = spec.adherence?.perMedication.first
-        #expect(row?.scheduled == 4)
-        #expect(row?.taken == 3)
-        #expect(row?.rate == 0.75)
-        #expect(spec.adherence?.overall == 0.75)
-    }
-
-    @Test("adherence falls back to ComplianceDay aggregate when intakes missing")
-    func adherenceFallbackToCompliance() {
-        let med = Medication(
-            id: "med-1",
-            name: "Levothyroxin",
-            dose: "75 mcg",
-            schedule: MedicationSchedule(times: [TimeOfDay(hour: 7, minute: 0)])
-        )
-        let compliance: [ComplianceDay] = (0 ..< 3).map { offset in
-            ComplianceDay(date: Self.makeDate(2026, 5, 10 + offset), scheduled: 2, taken: 1)
-        }
-        let spec = DoctorReportSpecBuilder.build(
-            snapshot: Self.snapshot(medications: [med], compliance: compliance),
-            periodStart: Self.periodStart,
-            periodEnd: Self.periodEnd
-        )
-        #expect(spec.adherence?.perMedication.isEmpty == true)
-        #expect(spec.adherence?.overall == 0.5)
-    }
-
     @Test("adherence block is nil when no meds and no compliance")
     func adherenceNilOnEmpty() {
         let spec = DoctorReportSpecBuilder.build(
@@ -418,8 +367,7 @@ struct DoctorReportLocalSpecSelectionTests {
     private static func snapshot(
         measurements: [Measurement] = [],
         medications: [Medication] = [],
-        compliance: [ComplianceDay] = [],
-        intakes: [MedicationIntake] = [],
+        serverCompliance: [MedicationComplianceSummaryEntry]? = nil,
         moodEntries: [MoodEntry] = []
     ) -> DoctorReportSpecBuilder.Snapshot {
         DoctorReportSpecBuilder.Snapshot(
@@ -427,8 +375,7 @@ struct DoctorReportLocalSpecSelectionTests {
             appVersion: "0.5.0",
             measurements: measurements,
             medications: medications,
-            compliance: compliance,
-            intakes: intakes,
+            serverCompliance: serverCompliance,
             moodEntries: moodEntries
         )
     }
@@ -483,18 +430,10 @@ struct DoctorReportLocalSpecSelectionTests {
             dose: "5 mg",
             schedule: MedicationSchedule(times: [TimeOfDay(hour: 8, minute: 0)])
         )
-        let intake = MedicationIntake(
-            id: "i1",
-            medicationId: "med-1",
-            scheduledAt: Self.makeDate(2026, 5, 12),
-            takenAt: Self.makeDate(2026, 5, 12, 8),
-            status: .taken
-        )
         let entries = [MoodEntry(id: "m1", recordedAt: Self.makeDate(2026, 5, 11), score: 4, tags: ["ok"])]
         let snapshot = Self.snapshot(
             measurements: [pulse],
             medications: [med],
-            intakes: [intake],
             moodEntries: entries
         )
         let spec = DoctorReportSpecBuilder.build(

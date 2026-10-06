@@ -17,7 +17,7 @@ import Testing
 /// return the freshly-marked event — this is the contract the operator
 /// experiences as "I tapped ✓ on the list and now the detail-screen
 /// history shows the dose as taken".
-@Suite("MedicationsStore × MedicationDetailStore — quick-mark cross-flow", .serialized)
+@Suite("MedicationsStore × MedicationDetailStore — quick-mark cross-flow", .serialized, .mockURLSession)
 struct MedicationQuickMarkCrossFlowTests {
     private static let scheduledISO = "2026-05-01T08:00:00Z"
     private static let takenISO = "2026-05-01T09:00:00Z"
@@ -85,7 +85,7 @@ struct MedicationQuickMarkCrossFlowTests {
         }
         let server = ServerState()
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let method = req.httpMethod ?? "GET"
 
@@ -167,7 +167,7 @@ struct MedicationQuickMarkCrossFlowTests {
         let medID = Self.medicationID
         let intakeID = Self.intakeID
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let method = req.httpMethod ?? "GET"
 

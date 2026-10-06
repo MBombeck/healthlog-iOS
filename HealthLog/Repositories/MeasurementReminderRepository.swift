@@ -58,8 +58,10 @@ public actor MeasurementReminderRepository {
         return try await api.send(req)
     }
 
-    /// `PATCH /api/measurement-reminders/{id}` — partial edit. Server recomputes
-    /// `nextDueAt` after the cadence merge. Returns the updated row.
+    /// `PATCH /api/measurement-reminders/{id}` — partial edit. Since v1.39.2 the
+    /// server recomputes `nextDueAt` only when the cadence changes (older
+    /// servers on every PATCH), so callers send only changed fields. Returns
+    /// the updated row.
     public func update(id: String, patch: MeasurementReminderUpdate) async throws -> MeasurementReminderRow {
         let req: APIRequest<MeasurementReminderRow> = try .patch("\(Self.basePath)/\(id)", body: patch)
         return try await api.send(req)

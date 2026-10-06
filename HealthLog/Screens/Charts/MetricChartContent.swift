@@ -191,6 +191,33 @@ enum MetricChartContent {
         }
     }
 
+    // MARK: - Clinical threshold rules (#115 · 1.3)
+
+    /// One dashed rule on a chart, in the unit the plotted series is in.
+    struct ChartThreshold: Identifiable {
+        let value: Double
+        let label: String
+        let tint: Color
+        var id: Double {
+            value
+        }
+    }
+
+    /// The dashed rules a chart of `kind` draws. **Empty for every kind.**
+    ///
+    /// These used to be hard-coded clinical constants: BP 140/60 mmHg, pulse
+    /// 100/60 bpm, glucose 70/180 mg/dL (drawn on a series the server had
+    /// already converted to mmol/L for a mmol account, so the rules sat far
+    /// off the scale), fever 37.5 °C, SpO₂ 95 %. None of them came from the
+    /// server, none knew the person's own band, and the glucose pair was in the
+    /// wrong unit. Until the server publishes a band in the series' own unit
+    /// for the chart to draw, the chart draws none (see B2 report, server
+    /// issue text). The rendering path stays wired to this function so a
+    /// server band plugs in here and nowhere else.
+    nonisolated static func clinicalThresholds(for _: MetricKind) -> [ChartThreshold] {
+        []
+    }
+
     // MARK: - Per-metric content
 
     /// Two `LineMark`s (sys + dia) plus dashed clinical-threshold `RuleMark`s.
@@ -203,7 +230,11 @@ enum MetricChartContent {
     /// 130-140 stage-1-borderline band and the 90-130 normal band are no
     /// longer painted — the absence of any threshold line in a region
     /// conveys "in normal range" without dominating the foreground.
+    ///
+    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct BloodPressureMarks: ChartContent {
+        static let kind: MetricKind = .bloodPressure
         let points: [SeriesPoint]
         let primaryTint: Color
         var includeThresholds: Bool = true
@@ -215,23 +246,19 @@ enum MetricChartContent {
 
         var body: some ChartContent {
             // Dashed threshold rules first so the lines paint on top.
+            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // `MetricChartContent.clinicalThresholds(for:)`, empty until the
+            // server publishes a band in this series' unit.
             if includeThresholds {
-                ThresholdRule(
-                    value: 140,
-                    label: "Systolisch hoch",
-                    tint: HLChartTints.thresholdHigh
-                )
-                ThresholdRule(
-                    value: 60,
-                    label: "Diastolisch niedrig",
-                    tint: HLChartTints.thresholdLow
-                )
+                ForEach(MetricChartContent.clinicalThresholds(for: Self.kind)) { threshold in
+                    ThresholdRule(value: threshold.value, label: threshold.label, tint: threshold.tint)
+                }
             }
 
             ForEach(points) { point in
                 LineMark(
-                    x: .value("Zeit", point.at),
-                    y: .value("Systolisch", point.value),
+                    x: .value("Time", point.at),
+                    y: .value("Systolic", point.value),
                     series: .value("series", "sys")
                 )
                 .foregroundStyle(primaryTint)
@@ -241,8 +268,8 @@ enum MetricChartContent {
 
                 if let diastolic = point.secondary {
                     LineMark(
-                        x: .value("Zeit", point.at),
-                        y: .value("Diastolisch", diastolic),
+                        x: .value("Time", point.at),
+                        y: .value("Diastolic", diastolic),
                         series: .value("series", "dia")
                     )
                     // T2-3: secondary (diastolic) line uses `seriesMid`
@@ -269,8 +296,8 @@ enum MetricChartContent {
         var body: some ChartContent {
             ForEach(points) { point in
                 LineMark(
-                    x: .value("Zeit", point.at),
-                    y: .value("Gewicht", point.value)
+                    x: .value("Time", point.at),
+                    y: .value("Weight", point.value)
                 )
                 .foregroundStyle(primaryTint)
                 .interpolationMethod(.catmullRom)
@@ -296,30 +323,30 @@ enum MetricChartContent {
     /// Tachycardia (>100 bpm resting) renders as a dashed red `RuleMark`,
     /// bradycardia (<60 bpm) as a dashed green `RuleMark` — both lower- and
     /// upper-bound clinical thresholds, no solid fill behind the series.
+    ///
+    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct PulseMarks: ChartContent {
+        static let kind: MetricKind = .pulse
         let points: [SeriesPoint]
         let primaryTint: Color
         var includeThresholds: Bool = true
         var lineWidth: CGFloat?
 
         var body: some ChartContent {
+            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // `MetricChartContent.clinicalThresholds(for:)`, empty until the
+            // server publishes a band in this series' unit.
             if includeThresholds {
-                ThresholdRule(
-                    value: 100,
-                    label: "Tachykardie",
-                    tint: HLChartTints.thresholdHigh
-                )
-                ThresholdRule(
-                    value: 60,
-                    label: "Bradykardie",
-                    tint: HLChartTints.thresholdLow
-                )
+                ForEach(MetricChartContent.clinicalThresholds(for: Self.kind)) { threshold in
+                    ThresholdRule(value: threshold.value, label: threshold.label, tint: threshold.tint)
+                }
             }
 
             ForEach(points) { point in
                 LineMark(
-                    x: .value("Zeit", point.at),
-                    y: .value("Puls", point.value)
+                    x: .value("Time", point.at),
+                    y: .value("Pulse", point.value)
                 )
                 .foregroundStyle(primaryTint)
                 .interpolationMethod(.catmullRom)
@@ -348,7 +375,11 @@ enum MetricChartContent {
     ///
     /// Apple-Health-style visualization: danger zones are signalled by
     /// thin dashed boundaries, not by recolouring every measurement point.
+    ///
+    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct GlucoseMarks: ChartContent {
+        static let kind: MetricKind = .glucose
         let points: [SeriesPoint]
         let primaryTint: Color
         var includeThresholds: Bool = true
@@ -360,23 +391,19 @@ enum MetricChartContent {
 
         var body: some ChartContent {
             // Dashed clinical-boundary rules first so lines + points paint on top.
+            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // `MetricChartContent.clinicalThresholds(for:)`, empty until the
+            // server publishes a band in this series' unit.
             if includeThresholds {
-                ThresholdRule(
-                    value: 70,
-                    label: "Hypoglykämie",
-                    tint: HLChartTints.thresholdLow
-                )
-                ThresholdRule(
-                    value: 180,
-                    label: "Hyperglykämie",
-                    tint: HLChartTints.thresholdHigh
-                )
+                ForEach(MetricChartContent.clinicalThresholds(for: Self.kind)) { threshold in
+                    ThresholdRule(value: threshold.value, label: threshold.label, tint: threshold.tint)
+                }
             }
 
             ForEach(points) { point in
                 LineMark(
-                    x: .value("Zeit", point.at),
-                    y: .value("Glukose", point.value)
+                    x: .value("Time", point.at),
+                    y: .value("Blood glucose", point.value)
                 )
                 .foregroundStyle(primaryTint)
                 .interpolationMethod(.catmullRom)
@@ -384,8 +411,8 @@ enum MetricChartContent {
 
                 if showsPoints {
                     PointMark(
-                        x: .value("Zeit", point.at),
-                        y: .value("Glukose", point.value)
+                        x: .value("Time", point.at),
+                        y: .value("Blood glucose", point.value)
                     )
                     .foregroundStyle(primaryTint)
                     .symbolSize(40)
@@ -395,7 +422,11 @@ enum MetricChartContent {
     }
 
     /// Temperature line + 37.5 °C fever threshold rule (dashed red).
+    ///
+    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct BodyTemperatureMarks: ChartContent {
+        static let kind: MetricKind = .bodyTemperature
         let points: [SeriesPoint]
         let primaryTint: Color
         var includeThresholds: Bool = true
@@ -404,8 +435,8 @@ enum MetricChartContent {
         var body: some ChartContent {
             ForEach(points) { point in
                 LineMark(
-                    x: .value("Zeit", point.at),
-                    y: .value("Temperatur", point.value)
+                    x: .value("Time", point.at),
+                    y: .value("Body temperature", point.value)
                 )
                 .foregroundStyle(primaryTint)
                 .interpolationMethod(.catmullRom)
@@ -414,18 +445,23 @@ enum MetricChartContent {
             // T2-3: fever rule routes through `HLChartTints.thresholdHigh`
             // (dashed red) with `HLChartGrid` stroke style — consistent with
             // every other upper-bound clinical threshold across the app.
+            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // `MetricChartContent.clinicalThresholds(for:)`, empty until the
+            // server publishes a band in this series' unit.
             if includeThresholds {
-                ThresholdRule(
-                    value: 37.5,
-                    label: "Fieber",
-                    tint: HLChartTints.thresholdHigh
-                )
+                ForEach(MetricChartContent.clinicalThresholds(for: Self.kind)) { threshold in
+                    ThresholdRule(value: threshold.value, label: threshold.label, tint: threshold.tint)
+                }
             }
         }
     }
 
     /// SpO2 line + 95 % hypoxemia threshold (dashed green — lower bound).
+    ///
+    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct SPO2Marks: ChartContent {
+        static let kind: MetricKind = .spo2
         let points: [SeriesPoint]
         let primaryTint: Color
         var includeThresholds: Bool = true
@@ -434,7 +470,7 @@ enum MetricChartContent {
         var body: some ChartContent {
             ForEach(points) { point in
                 LineMark(
-                    x: .value("Zeit", point.at),
+                    x: .value("Time", point.at),
                     y: .value("SpO2", point.value)
                 )
                 .foregroundStyle(primaryTint)
@@ -444,12 +480,13 @@ enum MetricChartContent {
             // T2-3: SpO2 95% is a lower-bound clinical threshold — routes
             // through `HLChartTints.thresholdLow` (dashed green) like every
             // other hard floor (BP diastolic 60, bradycardia 60, hypoglycemia 70).
+            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // `MetricChartContent.clinicalThresholds(for:)`, empty until the
+            // server publishes a band in this series' unit.
             if includeThresholds {
-                ThresholdRule(
-                    value: 95,
-                    label: "Hypoxämie",
-                    tint: HLChartTints.thresholdLow
-                )
+                ForEach(MetricChartContent.clinicalThresholds(for: Self.kind)) { threshold in
+                    ThresholdRule(value: threshold.value, label: threshold.label, tint: threshold.tint)
+                }
             }
         }
     }
@@ -483,8 +520,8 @@ enum MetricChartContent {
         var body: some ChartContent {
             ForEach(points) { point in
                 LineMark(
-                    x: .value("Zeit", point.at),
-                    y: .value("Wert", point.value)
+                    x: .value("Time", point.at),
+                    y: .value("Value", point.value)
                 )
                 .foregroundStyle(tint)
                 .interpolationMethod(.catmullRom)

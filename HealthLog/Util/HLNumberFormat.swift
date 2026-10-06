@@ -34,29 +34,49 @@ public enum HLNumberFormat {
 
     /// The DIN-5008 / Web-style gap between a number and the percent sign: a
     /// NARROW NO-BREAK SPACE (U+202F). It keeps "83 %" on one line and reads
-    /// tighter than a normal space — this is what the web client renders and
-    /// what iOS should match. Exposed for the rare call site (e.g. a signed
-    /// magnitude) that assembles the string itself; inside the `percent(_:)`
-    /// helpers the raw `\u{202F}` escape is used so the character before the
-    /// sign is `}` (never `)`), keeping the percent-lint quiet on this file.
+    /// tighter than a normal space — this is what the web client renders for
+    /// German. Whether a locale puts a gap before the sign at all is the
+    /// locale's call (see `percent(formattedNumber:locale:)`): English writes
+    /// "83%", German "83 %". Exposed for the rare call site that needs the
+    /// glyph itself.
     public static let narrowNoBreakSpace = "\u{202F}"
 
-    /// Renders an integer percentage the canonical way — "83 %" with a narrow
-    /// no-break space before the sign (never the bare, space-less form). Use
-    /// this instead of interpolating a number directly in front of a percent
-    /// sign for any user-facing percentage.
+    /// A whole-number percentage of a 0…1 fraction, rounded half away from
+    /// zero: 2 of 3 is 67, not 66.
+    ///
+    /// F1 (App-Store screenshots, 1.1.0) — `Int(ratio * 100)` truncates, so the
+    /// dashboard read "66 %" for two of three doses. Every ratio→percent
+    /// conversion goes through here. A non-finite fraction has no percentage
+    /// to show and maps to 0; callers that can reach 0/0 guard it themselves
+    /// (they render their own empty/unknown state, never an invented 0 %).
+    public static func percentValue(ofFraction fraction: Double) -> Int {
+        guard fraction.isFinite else { return 0 }
+        return Int((fraction * 100).rounded())
+    }
+
+    /// Renders a 0…1 fraction as a rounded whole percentage ("67 %" / "67%").
+    public static func percent(fraction: Double, locale: Locale = .current) -> String {
+        percent(percentValue(ofFraction: fraction), locale: locale)
+    }
+
+    /// Renders an integer percentage the way `locale` writes one. Use this
+    /// instead of interpolating a number directly in front of a percent sign
+    /// for any user-facing percentage.
+    ///
+    /// - German: "83 %" with a narrow no-break space (U+202F).
+    /// - English: "83%" with no space.
     ///
     /// - Parameters:
     ///   - value: the already-computed percentage (0…100 domain), rendered
     ///     with the locale's grouping/sign conventions.
     ///   - locale: locale for the number rendering; defaults to `.current`.
     public static func percent(_ value: Int, locale: Locale = .current) -> String {
-        "\(value.formatted(.number.locale(locale)))\u{202F}%"
+        percent(formattedNumber: value.formatted(.number.locale(locale)), locale: locale)
     }
 
     /// Fractional-percent counterpart of `percent(_:)` for values that carry
-    /// decimals. Precision is fixed to `fractionDigits` (as `%.Nf`) and the
-    /// narrow no-break space is inserted before the sign.
+    /// decimals. Precision is fixed to `fractionDigits` (as `%.Nf`); the sign
+    /// sits where `locale` puts it.
     ///
     /// - Parameters:
     ///   - value: the already-computed percentage (0…100 domain).
@@ -70,6 +90,21 @@ public enum HLNumberFormat {
         let number = value.formatted(
             .number.precision(.fractionLength(fractionDigits)).locale(locale)
         )
-        return "\(number)\u{202F}%"
+        return percent(formattedNumber: number, locale: locale)
+    }
+
+    /// Places the percent sign around an already formatted number the way
+    /// `locale` does: Foundation's own percent pattern decides whether there is
+    /// a gap and on which side the sign sits ("83%", "83 %", "%83"). The gap
+    /// Foundation uses (U+00A0) becomes the narrow no-break space (U+202F) the
+    /// web client renders, so German stays "83 %" exactly as before.
+    public static func percent(formattedNumber number: String, locale: Locale = .current) -> String {
+        let one = 1.formatted(.number.locale(locale))
+        let pattern = 1.formatted(.percent.locale(locale))
+            .replacingOccurrences(of: "\u{00A0}", with: narrowNoBreakSpace)
+        guard let range = pattern.range(of: one) else {
+            return number + narrowNoBreakSpace + "%"
+        }
+        return pattern.replacingCharacters(in: range, with: number)
     }
 }

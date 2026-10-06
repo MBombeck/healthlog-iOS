@@ -10,7 +10,7 @@ import Testing
 /// server route (`src/app/api/version/route.ts`) wraps the payload in
 /// the canonical `{ data, error }` envelope; the decoder honours the
 /// envelope branch already proven by `APIClientTests.bearerHeader`.
-@Suite("APIClient — fetchServerVersion", .serialized)
+@Suite("APIClient — fetchServerVersion", .serialized, .mockURLSession)
 struct SettingsServerVersionAPITests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -27,7 +27,7 @@ struct SettingsServerVersionAPITests {
     func decodesFullEnvelope() async throws {
         let api = makeClient()
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             let body = Data(#"""
             {"data":{"version":"1.4.39","buildSha":"28594dc8","builtAt":"2026-05-21T08:14:00.000Z","license":"AGPL-3.0","repository":"https://github.com/example/healthlog","changelog":"https://github.com/example/healthlog/blob/main/CHANGELOG.md","docs":"https://docs.healthlog.dev","offlineGeoEnabled":true},"error":null}
@@ -44,7 +44,7 @@ struct SettingsServerVersionAPITests {
     @Test("Decodes envelope with null buildSha + builtAt (pnpm dev shape)")
     func decodesDevShape() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"version":"1.4.40-dev","buildSha":null,"builtAt":null,"license":"AGPL-3.0","repository":"https://github.com/example/healthlog","changelog":"https://github.com/example/healthlog/blob/main/CHANGELOG.md","docs":"https://docs.healthlog.dev","offlineGeoEnabled":false},"error":null}
             """#.utf8)
@@ -59,7 +59,7 @@ struct SettingsServerVersionAPITests {
     @Test("Surfaces server error envelope as HLError.server")
     func surfacesServerError() async {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Internal error"}
             """#.utf8)
@@ -79,7 +79,7 @@ struct SettingsServerVersionAPITests {
     @Test("ServerVersionInfo ignores future server fields (forward-compatible)")
     func forwardCompatibleDecoding() async throws {
         let api = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"version":"1.5.0","buildSha":"abc1234","builtAt":"2026-06-01T00:00:00.000Z","futureField":"will-not-break-decoder","nested":{"more":"data"}},"error":null}
             """#.utf8)

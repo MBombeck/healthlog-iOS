@@ -13,7 +13,7 @@ import Testing
 /// per the project doctrine (export paths must run the real request-building +
 /// response-handling so schema drift surfaces — never a mock server).
 @MainActor
-@Suite("ExportStore", .serialized)
+@Suite("ExportStore", .serialized, .mockURLSession)
 struct ExportStoreTests {
     private func makeAPI(keychain: InMemoryKeychain = InMemoryKeychain()) -> APIClient {
         let env = AppEnvironment(
@@ -48,8 +48,6 @@ struct ExportStoreTests {
             appVersion: "0.1.0 (1)",
             measurements: [],
             medications: [],
-            compliance: [],
-            intakes: [],
             moodEntries: []
         )
     }
@@ -59,7 +57,7 @@ struct ExportStoreTests {
     @Test("downloadFullBackup runs the service and persists a temp file")
     func fullBackupPersists() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(
                 url: req.url!, statusCode: 200, httpVersion: nil,
                 headerFields: ["Content-Type": "application/json"]
@@ -79,7 +77,7 @@ struct ExportStoreTests {
     @Test("downloadDomainCSV persists under the server-suggested filename")
     func domainCSVPersists() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(
                 url: req.url!, statusCode: 200, httpVersion: nil,
                 headerFields: [
@@ -101,7 +99,7 @@ struct ExportStoreTests {
     @Test("export errors surface (rate-limit) instead of a silent nil")
     func fullBackupRateLimitThrows() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(
                 url: req.url!, statusCode: 429, httpVersion: nil,
                 headerFields: ["X-RateLimit-Reset": "2000-01-01T00:00:00Z"]
@@ -154,7 +152,7 @@ struct ExportStoreTests {
     @Test("assembleFHIR falls back to local when the server $everything fetch fails")
     func assembleFHIRFallsBackOnServerError() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Any server-side failure on the `$everything` fetch must fall
             // through to the local emitter — the export never dead-ends.
             let http = HTTPURLResponse(
@@ -202,12 +200,12 @@ struct ExportStoreTests {
     func emptyBundleWithoutSavedSelection() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var paths: [String] = []
-        MockURLProtocol.handler = serverArmHandler(
+        MockURLProtocol.install(serverArmHandler(
             bundleJSON: Self.emptyBundleJSON,
             // The honest "this account has never saved one" answer (CU-01).
             profileJSON: #"{"data":{"profile":null},"error":null}"#,
             record: { paths.append($0) }
-        )
+        ))
         let store = try makeStore(api: api)
 
         let outcome = await store.assembleFHIR(
@@ -231,14 +229,14 @@ struct ExportStoreTests {
     func emptyBundleWithSavedSelection() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var paths: [String] = []
-        MockURLProtocol.handler = serverArmHandler(
+        MockURLProtocol.install(serverArmHandler(
             bundleJSON: Self.emptyBundleJSON,
             profileJSON: #"""
             {"data":{"profile":{"v":2,"leaves":["WEIGHT"],"format":"fhir",
             "rangeDays":90,"includeCharts":true}},"error":null}
             """#,
             record: { paths.append($0) }
-        )
+        ))
         let store = try makeStore(api: api)
 
         let outcome = await store.assembleFHIR(
@@ -253,7 +251,7 @@ struct ExportStoreTests {
     @Test("a failed report-selection read never claims the user has no selection")
     func selectionReadFailureDoesNotAccuse() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let isProfile = (req.url?.path ?? "").hasPrefix("/api/auth/me/report-selection")
             let http = HTTPURLResponse(
                 url: req.url!,
@@ -280,14 +278,14 @@ struct ExportStoreTests {
     func nonEmptyServerBundleAssembles() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var paths: [String] = []
-        MockURLProtocol.handler = serverArmHandler(
+        MockURLProtocol.install(serverArmHandler(
             bundleJSON: """
             {"resourceType":"Bundle","type":"searchset","total":1,\
             "entry":[{"resource":{"resourceType":"Patient"}}]}
             """,
             profileJSON: #"{"data":{"profile":null},"error":null}"#,
             record: { paths.append($0) }
-        )
+        ))
         let store = try makeStore(api: api)
 
         let assembly = try #require(

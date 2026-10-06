@@ -1,44 +1,40 @@
 // Compliance KPI + Verlauf-glyph track split out of MedicationDetailStore.swift (pure move, W-FILELEN).
 import Foundation
 
-extension MedicationDetailStore {
+public extension MedicationDetailStore {
     // MARK: - v0.6.1.2 Y4 — compliance KPI + Verlauf glyph track
 
-    /// In-time compliance summary for the detail-screen KPI block.
-    /// "In-time" = `takenAt` within ±30 min of `scheduledFor`. Mirrors
-    /// the web's "on_time" classification (`src/lib/analytics/compliance.ts`
-    /// `classifyIntakeTiming`) at a tighter, easier-to-explain tolerance —
-    /// the operator brief prefers a single bar over the four-bucket
-    /// breakdown the web charts surface.
-    public struct ComplianceSummary: Sendable, Equatable {
-        /// Number of past-due intakes with `takenAt` within ±30 min of
-        /// their `scheduledFor`. Skipped events do not count toward this
-        /// numerator — they're a deliberate user decision, not a miss.
-        public let inTime: Int
-        /// Total number of past-due intakes considered (taken + missed
-        /// + skipped). Future-scheduled rows are excluded so the bar
-        /// doesn't pessimistically count a yet-to-fire dose as a miss.
-        public let total: Int
-        /// Convenience ratio in 0...1. Returns 1.0 when `total == 0` so
-        /// a fresh medication paints "full" instead of "empty/error".
-        public var ratio: Double {
-            total == 0 ? 1.0 : Double(inTime) / Double(total)
+    /// **#115 · 1.3 — the KPI is the server's 30-day adherence, verbatim.**
+    ///
+    /// Until 1.0.3 the detail KPI tallied "on time" slots on the client (from
+    /// the dose-history ledger, else the drained intake table with a ±30 min
+    /// rule, else a cadence-capped server window) and ranked that tally ABOVE
+    /// the server's `compliance30`. Two numbers for one medication on adjacent
+    /// screens, one of them computed here. Now the tile paints
+    /// `GET /api/medications/{id}/compliance` → `compliance30` as sent: `rate`,
+    /// `taken`, and `taken + missed` as the denominator the rate uses (skips
+    /// are excluded server-side).
+    struct ServerAdherence: Sendable, Equatable {
+        /// The server's rounded 0…100 rate.
+        public let rate: Int
+        public let taken: Int
+        /// `taken + missed` — the rate's denominator.
+        public let expected: Int
+
+        public init(rate: Int, taken: Int, expected: Int) {
+            self.rate = rate
+            self.taken = taken
+            self.expected = expected
         }
 
-        /// Integer percentage 0...100 for the KPI text rendering.
-        public var percentage: Int {
-            Int((ratio * 100).rounded())
-        }
-
-        public init(inTime: Int, total: Int) {
-            self.inTime = inTime
-            self.total = total
+        public init(window: ComplianceWindowResult) {
+            self.init(rate: window.rate, taken: window.taken, expected: window.taken + window.missed)
         }
     }
 
     /// Per-day glyph for the Verlauf track. Maps to a single SF Symbol
     /// in `MedicationDetailSections.VerlaufGlyphTrack`.
-    public enum VerlaufGlyph: Sendable, Equatable {
+    enum VerlaufGlyph: Sendable, Equatable {
         /// All scheduled doses for the day were taken within ±30 min
         /// of their window. Renders as `circle.fill`.
         case onTime
@@ -54,217 +50,35 @@ extension MedicationDetailStore {
         case noSchedule
     }
 
-    /// Compliance summary for the last 30 days.
-    ///
-    /// **W45 (v0.11) — client-intake authoritative.** This screen's intake
-    /// TABLE renders `intakes`, which `load()` drains to the FULL history
-    /// (`drainRemainingIntakes`). The operator's complaint was that the KPI %
-    /// and the Verlauf glyph track diverged from that table — they read the
-    /// server's compliance payload, whose 30-day window is bounded by the
-    /// account's server-side effective-days clamp (`calculateCompliance`
-    /// clamps `totalExpected` to the medication's server lifespan +
-    /// `createdAt`). For a long-history twice-daily Lisinopril re-imported into a
-    /// young server account that window collapses to a handful of slots, so the
-    /// KPI under-counted (and the prior #42 band-aid that floored `total` at the
-    /// loaded past-due count produced a `taken > total` > 100 % reading).
-    ///
-    /// Root fix: the loaded `intakes` set is the same truth the table shows, so
-    /// it is the authoritative source for the trailing-30-day KPI whenever it
-    /// carries any past-due slot in the window. We derive both the numerator
-    /// (`taken` in-time) and the denominator (past-due slots) from it, so
-    /// `inTime ≤ total` holds by construction and optimistic today-marks
-    /// (already applied to `intakes`) update the bar immediately.
-    ///
-    /// Server fallback: when the client has NOT loaded any past-due intake for
-    /// the window (initial paint before the drain completes, or a genuinely
-    /// sparse client view), read the server's cadence-canonical `compliance30`
-    /// verbatim — the case the original server-canonical path fixed ("0 von 2"
-    /// against a paged-out intake set). The server `rate` is already
-    /// `min(100, …)`-capped, and we cap `inTime` at `total` regardless, so the
-    /// denominator can never be exceeded.
-    public func complianceSummary(now: Date = .now) -> ComplianceSummary {
-        // W3-MEDCONTRACT — ledger-first. The server ledger is the same
-        // source the compliance % and the web Verlauf read, AND it is
-        // era-aware (v1.16.3): a schedule edit archives the old cadence and
-        // past days keep being judged against the schedule live then. Any
-        // client-side derivation (both branches below) projects from the
-        // CURRENT schedule and drifts after an edit, so it survives only as
-        // the fallback for ≤ v1.15.17 servers / standalone / fetch hiccups.
-        if let ledgerSummary = ledgerComplianceSummary(now: now) {
-            return ledgerSummary
-        }
-        // W-MEDVERIFY (v0.14.8) — server-verbatim doctrine. A v1.7.0-capable
-        // `/compliance` payload is cadence-canonical AND era-aware, so it
-        // outranks any client-side re-derivation from the drained intake
-        // table. The demo walkthrough proved the W45 ordering wrong on a
-        // ledger-less server: the card read the server 75 % / 84 % while this
-        // KPI re-derived 0 % / 12 % "pünktlich" from the same history — two
-        // numbers for one med on adjacent screens. The W45 intake-derivation
-        // survives below ONLY for pre-v1.7.0 payloads (degenerate
-        // effective-days windows) and for settled loads without any payload.
-        if let payload = compliance, payload.isV170Capable {
-            return Self.serverWindowSummary(payload.compliance30)
-        }
-        let loadedTotal = loadedPastDueCount(now: now)
-        if loadedTotal > 0 {
-            // The drained intake history covers the window — it is the same
-            // truth the table renders, so derive the KPI from it directly.
-            let inTime = loadedInTimeCount(now: now)
-            return ComplianceSummary(inTime: min(inTime, loadedTotal), total: loadedTotal)
-        }
-        // No loaded past-due intake in the window → trust the server's
-        // 30-day window (or fall through to the empty 100 % state when neither
-        // source has data). This is the "0 von 2 against a paged-out intake
-        // set" case the original server-canonical path fixed.
-        guard let payload = compliance else {
-            return ComplianceSummary(inTime: 0, total: 0)
-        }
-        let window = payload.compliance30
-        // Pre-v1.7.0 server (the capable case returned above):
-        // `calculateCompliance` computes `totalExpected = schedules.length *
-        // effectiveDays`, ignoring `daysOfWeek` / `intervalWeeks` — a weekly
-        // Trulicity reads 30, not 4. Recompute the denominator from the local
-        // cadence engine and cap at the server number; an engine-projected 0
-        // (PRN / future `startsOn` / non-due window) is trusted as genuinely
-        // not-due → denominator 0 → 100 %.
-        // W-TZ-MED — project expected doses on the server-profile zone (the same
-        // zone the cadence engine anchors on for the due surfaces), not the
-        // device TZ, so a traveling user's pre-v1.7.0 denominator matches the
-        // profile calendar. Falls back to `.current` for a nil/unknown zone.
-        let engineContext = MedicationRecurrenceEngine.Context(
-            medication: medication,
-            timeZone: profileTimeZone,
-            now: now
-        )
-        let scheduleExpected = medication.schedule.expectedDoses(
-            from: now.addingTimeInterval(-30 * 24 * 60 * 60),
-            to: now,
-            context: engineContext
-        )
-        let effectiveExpected = scheduleExpected > 0
-            ? min(scheduleExpected, window.totalExpected)
-            : 0
-        // Skipped doses leave the denominator (deliberate user decision, W19e
-        // doctrine); `inTime` is capped at the resulting total so a server
-        // `taken` can never exceed it (no > 100 %).
-        let total = max(0, effectiveExpected - window.skipped)
-        let inTime = min(window.taken, total)
-        return ComplianceSummary(inTime: inTime, total: total)
-    }
-
-    /// W-MEDVERIFY (v0.14.8) — the server `/compliance` 30-day window taken
-    /// VERBATIM (b177 doctrine: the client never recomputes a rate the server
-    /// already graded). `totalExpected` is cadence-canonical on v1.7.0+
-    /// servers; skipped doses leave the denominator (W19e) and `inTime` is
-    /// capped at the resulting total so `taken` can never exceed it.
-    private static func serverWindowSummary(
-        _ window: ComplianceWindowResult
-    ) -> ComplianceSummary {
-        let total = max(0, window.totalExpected - window.skipped)
-        return ComplianceSummary(inTime: min(window.taken, total), total: total)
-    }
-
-    /// **W-COMPLIANCE-INV — KPI paint state.** The view renders exactly one of:
-    /// a placeholder (`.pending`), the server-canonical number (`.server` —
-    /// dose-history ledger first, the `/compliance` 30-day window second), or
-    /// the clearly-marked local estimate (`.localFallback` — only after the
-    /// load attempt has settled WITHOUT any server compliance payload:
-    /// offline, standalone against a local mirror, or a ≤ v1.15.17 server
-    /// whose degenerate window the W42/W45 doctrine overrides with the loaded
-    /// intake history). The client-side interim derivation can therefore
-    /// never paint before the server round-trip has had its chance.
-    public enum ComplianceKPIState: Sendable, Equatable {
-        /// First load still in flight — paint a skeleton/placeholder.
+    /// **KPI paint state.** Exactly one of: a placeholder while the first
+    /// load runs (`.pending`), the server's number (`.server`), the server's
+    /// statement that no adherence applies (`.notApplicable`,
+    /// `applicable: false` / `NO_LOCAL_SCHEDULE` — its zero placeholders are
+    /// never painted as 0 %), or "unknown" when the load settled without a
+    /// server payload (`.unavailable`: offline, standalone). No client-derived
+    /// number paints in any state.
+    enum ComplianceKPIState: Sendable, Equatable {
         case pending
-        /// Server-canonical value (ledger or `/compliance` window).
-        case server(ComplianceSummary)
-        /// Local derivation — offline / old-server fallback. Views mark it.
-        case localFallback(ComplianceSummary)
+        case server(ServerAdherence)
+        case notApplicable
+        /// v1.39.1 (#1033) — intake tracking is off (`trackIntake: false`,
+        /// `notApplicableReason: INTAKE_NOT_TRACKED`): the medication is a
+        /// record and has no adherence at all.
+        case notTracked
+        case unavailable
     }
 
-    /// Resolve the KPI paint state for the detail screen. Mirrors the
-    /// `complianceSummary` source precedence exactly (ledger → loaded
-    /// intakes → server window → empty) but tags WHICH source produced the
-    /// number, and gates every non-ledger paint on `hasSettledComplianceLoad`
-    /// so partial-drain interim values never reach the screen.
-    public func complianceKPIState(now: Date = .now) -> ComplianceKPIState {
-        if let ledgerSummary = ledgerComplianceSummary(now: now) {
-            return .server(ledgerSummary)
+    /// Resolve the KPI paint state for the detail screen.
+    func complianceKPIState() -> ComplianceKPIState {
+        // A medication kept as a record has no adherence whatever the payload
+        // holds; the server answers `INTAKE_NOT_TRACKED` for it, and a stale
+        // payload from before the switch must not paint its old rate.
+        if !medication.tracksIntake { return .notTracked }
+        if let payload = compliance {
+            if payload.isApplicable { return .server(ServerAdherence(window: payload.compliance30)) }
+            return payload.notApplicableReason == .intakeNotTracked ? .notTracked : .notApplicable
         }
-        guard hasSettledComplianceLoad else { return .pending }
-        let summary = complianceSummary(now: now)
-        // W-MEDVERIFY (v0.14.8) — a v1.7.0-capable `/compliance` window is
-        // server-canonical (mirrors the `complianceSummary` precedence): it
-        // must paint as `.server`, never as the "Offline – lokale Schätzung"
-        // badge the W45 ordering produced while demonstrably online.
-        if compliance?.isV170Capable == true {
-            return .server(summary)
-        }
-        if loadedPastDueCount(now: now) > 0 {
-            // W45 doctrine branch — derived from the drained intake table
-            // (pre-v1.7.0 server / degenerate window).
-            return .localFallback(summary)
-        }
-        if compliance != nil {
-            return .server(summary)
-        }
-        return .localFallback(summary)
-    }
-
-    /// W3-MEDCONTRACT — trailing-30-day KPI from the server ledger.
-    ///
-    /// "Pünktlich" = a slot the server graded `taken_on_time` (its own
-    /// per-dose window bands, v1.15.18 — not the legacy hardcoded ±30 min).
-    /// Denominator = every past actionable slot (`taken_on_time` +
-    /// `taken_late` + `missed`); skipped slots leave the denominator (W19e
-    /// doctrine, matches the server's `tallyLedgerRows` rate) and
-    /// `upcoming` slots never count (b162 dose-safety: a future slot can't
-    /// read as taken or missed). Ad-hoc takes are off-schedule — excluded
-    /// from a punctuality ratio, mirroring the server rate. Returns `nil`
-    /// when no ledger is loaded (caller falls back to local derivation).
-    private func ledgerComplianceSummary(now: Date) -> ComplianceSummary? {
-        guard let ledger = doseHistory else { return nil }
-        let windowStart = now.addingTimeInterval(-30 * 24 * 60 * 60)
-        var inTime = 0
-        var total = 0
-        for row in ledger.rows where row.at >= windowStart && row.at <= now {
-            switch row.status {
-            case .takenOnTime:
-                inTime += 1
-                total += 1
-            case .takenLate, .missed:
-                total += 1
-            case .skipped, .upcoming, .adHoc, nil:
-                continue
-            }
-        }
-        return ComplianceSummary(inTime: inTime, total: total)
-    }
-
-    /// W42 — count of past-due intakes already loaded for the trailing 30-day
-    /// window. The store drains the full intake history in `load()`, so this is
-    /// the truthful client-side denominator the server's degenerate window must
-    /// not undercut. Skipped events are included (mirrors the legacy fallback's
-    /// `pastDue.count`, where skipped intakes still occupied a slot).
-    private func loadedPastDueCount(now: Date) -> Int {
-        let windowStart = now.addingTimeInterval(-30 * 24 * 60 * 60)
-        return intakes.filter {
-            $0.scheduledFor >= windowStart && $0.scheduledFor <= now
-        }.count
-    }
-
-    /// W42 — count of past-due intakes taken within ±30 min of their scheduled
-    /// time, over the same trailing 30-day window. The in-time numerator paired
-    /// with `loadedPastDueCount(now:)`.
-    private func loadedInTimeCount(now: Date) -> Int {
-        let windowStart = now.addingTimeInterval(-30 * 24 * 60 * 60)
-        return intakes.lazy
-            .filter { $0.scheduledFor >= windowStart && $0.scheduledFor <= now }
-            .filter { event in
-                guard !event.skipped, let takenAt = event.takenAt else { return false }
-                return abs(takenAt.timeIntervalSince(event.scheduledFor)) <= 30 * 60
-            }
-            .count
+        return hasSettledComplianceLoad ? .unavailable : .pending
     }
 
     /// Per-day glyph track for the Verlauf section. Builds one
@@ -286,7 +100,7 @@ extension MedicationDetailStore {
     /// day to `.noSchedule` so an off-week / non-matching-weekday day doesn't
     /// read as a false miss. A day that DOES have loaded intakes is always
     /// rendered from those intakes — the table's truth wins.
-    public func verlaufGlyphs(days: Int = 14, now: Date = .now, calendar: Calendar? = nil) -> [VerlaufGlyph] {
+    func verlaufGlyphs(days: Int = 14, now: Date = .now, calendar: Calendar? = nil) -> [VerlaufGlyph] {
         // W-TZ-MED — default to the profile-zone calendar so a traveling user
         // buckets each dose on the profile day (matching the card/dashboard/
         // ledger). Explicit `calendar` (tests) overrides; nil profile zone →
@@ -455,14 +269,14 @@ extension MedicationDetailStore {
     /// ``LocaleDecimalParser`` (the single canonical seam that honours the
     /// user's decimal + grouping separators, so a de-DE "1.000 mg" reads as
     /// 1000 and "0,5 mg" as 0.5). Nothing here is persisted.
-    static func parseHeadlineDose(_ dose: String) -> Double? {
+    internal static func parseHeadlineDose(_ dose: String) -> Double? {
         parseHeadlineDose(dose, locale: .current)
     }
 
     /// Locale-injectable seam behind ``parseHeadlineDose(_:)`` so the
     /// grouping/decimal behaviour is unit-pinnable independent of the host
     /// locale (see `ParseHeadlineDoseTests`).
-    static func parseHeadlineDose(_ dose: String, locale: Locale) -> Double? {
+    internal static func parseHeadlineDose(_ dose: String, locale: Locale) -> Double? {
         // Walk character-by-character; pick the first contiguous numeric run.
         // Keep both "." and "," so ``LocaleDecimalParser`` can disambiguate
         // decimal vs grouping against `locale` — do NOT normalise here.

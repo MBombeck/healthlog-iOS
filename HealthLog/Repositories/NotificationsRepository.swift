@@ -53,7 +53,10 @@ public actor NotificationsRepository {
     /// an unrelated account write can keep rotating the token, and an unbounded
     /// conflict→re-read→retry loop would never terminate. Giving up throws
     /// ``HLError/writeConflictUnresolved(_:)`` and the surface tells the user.
-    private func patchAuthNotificationPrefs(_ body: some Encodable & Sendable) async throws {
+    @discardableResult
+    private func patchAuthNotificationPrefs(
+        _ body: some Encodable & Sendable
+    ) async throws -> AuthNotificationPrefsPayload {
         try await withOptimisticConflictRetry(
             conflictCode: OptimisticConflictCode.notificationPrefs,
             token: baseUpdatedAt
@@ -66,6 +69,7 @@ public actor NotificationsRepository {
             // Advance the token off the write echo so a follow-up write in the
             // same session is guarded rather than falling back to unconditional.
             baseUpdatedAt = echoed.updatedAt
+            return echoed
         } reread: {
             // Nothing to re-apply: each writer owns one leaf of the blob and
             // the server deep-merges, so the pending change is still correct
@@ -167,14 +171,39 @@ public actor NotificationsRepository {
     /// user got both a server push and a local notification for the same dose.
     /// With `baseUpdatedAt` the write either lands or returns 409 having
     /// written nothing.
-    public func setMedicationClientManaged(_ enabled: Bool) async throws {
-        struct MedicationPrefs: Encodable, Sendable {
-            let clientManaged: Bool
-        }
-        struct Body: Encodable, Sendable {
-            let medication: MedicationPrefs
-        }
-        try await patchAuthNotificationPrefs(Body(medication: MedicationPrefs(clientManaged: enabled)))
+    ///
+    /// **N1** — returns the state the server resolved after the write (the
+    /// PATCH echo), or `nil` when the echo does not carry the field. Called by
+    /// ``MedicationReminderDeliveryCoordinator`` only, and only when this
+    /// device's truth differs from the server's.
+    @discardableResult
+    public func setMedicationClientManaged(_ enabled: Bool) async throws -> MedicationReminderServerDelivery? {
+        try await patchAuthNotificationPrefs(
+            MedicationClientManagedBody(medication: .init(clientManaged: enabled))
+        ).medicationReminderDelivery
+    }
+
+    /// **N1** — take `clientManaged` back while signing out, before the
+    /// refresh token is revoked. Unconditional (no `baseUpdatedAt`): the server
+    /// deep-merges this one leaf, so it cannot clobber a sibling, and a sign-out
+    /// must not stall in a conflict round. Fail-fast with no retries: sign-out
+    /// never waits on the network, and a failed release only means the server
+    /// keeps quiet until another device of the account claims or releases.
+    /// No authentication recovery either: a 401 here must not re-enter the
+    /// refresh/logout bridge in the middle of the sign-out that is running.
+    public func releaseMedicationClientManagedOnSignOut() async throws {
+        let body = try JSONEncoder.hlDefault.encode(
+            MedicationClientManagedBody(medication: .init(clientManaged: false))
+        )
+        let req = APIRequest<EmptyPayload>(
+            method: .patch,
+            path: "/api/auth/me/notification-prefs",
+            body: body,
+            maxRetries: 0,
+            failFast: true,
+            allowsAuthenticationRecovery: false
+        )
+        try await api.sendVoid(req)
     }
 
     /// Per-channel reliability state (last-success, last-failure, retry-state).
@@ -207,4 +236,14 @@ public actor NotificationsRepository {
         )
         try await api.sendVoid(req)
     }
+}
+
+/// `{ "medication": { "clientManaged": <Bool> } }` — the one leaf of
+/// `PATCH /api/auth/me/notification-prefs` the app owns for medication reminders.
+private struct MedicationClientManagedBody: Encodable, Sendable {
+    struct MedicationPrefs: Encodable, Sendable {
+        let clientManaged: Bool
+    }
+
+    let medication: MedicationPrefs
 }

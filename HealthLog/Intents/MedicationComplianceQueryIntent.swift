@@ -68,35 +68,24 @@ struct MedicationComplianceQueryIntent: AppIntent {
     }
 }
 
-/// **M1 — timezone-robust "is this the compliance day for today?" matcher.**
+/// **M1 / #115 1.5 — "is this the compliance day for today?"**
 ///
-/// `ComplianceDay.date` carries two different day-key bases depending on the
-/// data source:
-/// - **server** path → **UTC** midnight (`JSONDecoder.hlDayKey`, UTC, mirrors
-///   the server's `medications/intake?scope=compliance` convention).
-/// - **standalone** path → **local** midnight
-///   (`MedicationsRepository+Standalone` uses `Calendar.current.startOfDay`).
-///
-/// A naive `Calendar.current.isDateInToday($0.date)` misses the server's
-/// UTC-midnight day for any user west of UTC (the Americas) — UTC-midnight maps
-/// to the *previous* local calendar day — surfacing yesterday's compliance in
-/// the Siri/Shortcut answer, and giving a different result online vs offline.
-///
-/// The matcher accepts a `ComplianceDay` as "today" when its `.date` is the
-/// start-of-today under **either** the current calendar (standalone/local) OR a
-/// UTC-pinned calendar (server), so both bases resolve correctly regardless of
-/// the device timezone. Static + pure for unit testing with an injected `now`.
+/// `ComplianceDay.date` is the UTC-midnight anchor of a `YYYY-MM-DD` day key
+/// on both paths (the server's `JSONDecoder.hlDefault` decode, and since
+/// #115 1.5 the standalone roll-up too). "Today" is the ACCOUNT's today, the
+/// day the server buckets compliance in (`ProfileDay`), so the match is a key
+/// comparison: the anchor read back in UTC against today's key in the profile
+/// zone. The earlier matcher accepted either the device's local day or the UTC
+/// day, which picked tomorrow's row west of UTC once a server sent one, and
+/// answered for the device's day rather than the account's.
 enum ComplianceDayMatcher {
-    static func today(in days: [ComplianceDay], now: Date = .now) -> ComplianceDay? {
-        var utc = Calendar(identifier: .iso8601)
-        utc.timeZone = .gmt
-        let local = Calendar.current
-        let localToday = local.startOfDay(for: now)
-        let utcToday = utc.startOfDay(for: now)
-        return days.first {
-            local.isDate($0.date, inSameDayAs: localToday)
-                || utc.isDate($0.date, inSameDayAs: utcToday)
-        }
+    static func today(
+        in days: [ComplianceDay],
+        now: Date = .now,
+        timeZone: TimeZone = ProfileDay.timeZone
+    ) -> ComplianceDay? {
+        let todayKey = ProfileDay.key(for: now, timeZone: timeZone)
+        return days.first { ProfileDay.key(ofAnchor: $0.date) == todayKey }
     }
 }
 

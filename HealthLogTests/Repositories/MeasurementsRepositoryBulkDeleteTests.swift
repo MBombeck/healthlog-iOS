@@ -19,7 +19,7 @@ import Testing
 ///      `bulkDeleteMeasurements`, error re-throws.
 ///   4. Non-retriable failure (422) → NOT enqueued.
 ///   5. Replay path re-POSTs under the persisted key.
-@Suite("MeasurementsRepository — bulk delete", .serialized)
+@Suite("MeasurementsRepository — bulk delete", .serialized, .mockURLSession)
 struct MeasurementsRepositoryBulkDeleteTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -83,7 +83,7 @@ struct MeasurementsRepositoryBulkDeleteTests {
     func postBodyAndDecode() async throws {
         let api = makeAPI()
         let recorder = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let data = Data(#"{"data":{"deleted":3}}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, data)
@@ -102,7 +102,7 @@ struct MeasurementsRepositoryBulkDeleteTests {
     func chunksLargeSelections() async throws {
         let api = makeAPI()
         let recorder = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let body = req.httpBody ?? Recorder.consumeStream(req.httpBodyStream!)
             let obj = try JSONSerialization.jsonObject(with: body ?? Data()) as? [String: Any]
@@ -126,7 +126,7 @@ struct MeasurementsRepositoryBulkDeleteTests {
     func retriableEnqueues() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"error":"upstream down"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -149,7 +149,7 @@ struct MeasurementsRepositoryBulkDeleteTests {
     func nonRetriableNotEnqueued() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"error":"Validation failed"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -165,7 +165,7 @@ struct MeasurementsRepositoryBulkDeleteTests {
     func replayUsesPersistedKey() async throws {
         let api = makeAPI()
         let recorder = Recorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let data = Data(#"{"data":{"deleted":2}}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, data)
@@ -181,7 +181,7 @@ struct MeasurementsRepositoryBulkDeleteTests {
 
 /// v0.14.8 W3 — store-level optimistic semantics for the bulk delete.
 @MainActor
-@Suite("MeasurementsStore — bulk delete", .serialized)
+@Suite("MeasurementsStore — bulk delete", .serialized, .mockURLSession)
 struct MeasurementsStoreBulkDeleteTests {
     private func makeAPI() -> APIClient {
         let keychain = InMemoryKeychain()
@@ -206,7 +206,7 @@ struct MeasurementsStoreBulkDeleteTests {
 
     /// Seed `store.recent` with two WEIGHT rows via the real `load()` path.
     private func seedTwoWeights(store: MeasurementsStore) async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path.contains("/series") == true {
                 return (Self.response(200, request: req), Data(#"{"data":{"points":[]}}"#.utf8))
             }
@@ -229,7 +229,7 @@ struct MeasurementsStoreBulkDeleteTests {
         let targets = store.recent.filter { ["m-1", "m-2"].contains($0.id) }
         #expect(targets.count == 2)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (Self.response(200, request: req), Data(#"{"data":{"deleted":2}}"#.utf8))
         }
         let ok = await store.bulkDelete(targets)
@@ -246,7 +246,7 @@ struct MeasurementsStoreBulkDeleteTests {
         await seedTwoWeights(store: store)
         let targets = store.recent
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (Self.response(422, request: req), Data(#"{"error":"Validation failed"}"#.utf8))
         }
         let ok = await store.bulkDelete(targets)
@@ -271,7 +271,7 @@ struct MeasurementsStoreBulkDeleteTests {
             bloodPressureDiastolicId: "dia-1"
         )
         let recordedIDs = LockedBox()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = req.httpBody ?? req.httpBodyStream.flatMap { stream -> Data? in
                 stream.open()
                 defer { stream.close() }

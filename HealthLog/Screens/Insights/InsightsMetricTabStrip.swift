@@ -336,11 +336,21 @@ enum InsightsSpecialPage: String, Hashable, CaseIterable {
         case .workouts: .workouts
         case .recovery: .recovery
         case .medications: .medications
-        // P8 — the ECG routes are gated on the `insights` module server-side
-        // (plus the `insightStatus` assistant surface, which the repository's
-        // 403 arm handles), so the pill disappears with the module.
-        case .ecg: .insights
+        // Server v1.39 — `GET/POST /api/insights/ecg` and `ecg/[id]` carry no AI
+        // gate and no module gate: a recording is device data. The `insights`
+        // module means "AI analysis" only (migration 0343 switched it off for
+        // every "Hide Coach" account), so the ECG page is gated on its data
+        // (`EcgStore.hasRecordings`) alone.
+        case .ecg: nil
         }
+    }
+
+    /// Whether this page's owning module is on. `true` for a page without an
+    /// owning module and when no gate is wired / the map is absent (#30).
+    @MainActor
+    func isModuleEnabled(in gate: ModuleGate?) -> Bool {
+        guard let key = moduleKey, let gate else { return true }
+        return gate.isEnabled(key)
     }
 
     /// The localized pill / page title (reuses the existing web-parity nav keys).
@@ -438,7 +448,7 @@ enum InsightsTabSelection: Hashable {
         // metric available at all it stays at the tail as its own Heart pill
         // (web `:614` emits the group for ECG alone in the same case).
         // `availableSpecials` carries `.ecg` only when the operator HAS
-        // recordings AND the `insights` module is on — the whole gate.
+        // recordings — the whole gate (no module gate since server v1.39).
         if availableSpecials.contains(.ecg), !placedSpecials.contains(.ecg) {
             entries.append(.special(.ecg))
             placedSpecials.insert(.ecg)

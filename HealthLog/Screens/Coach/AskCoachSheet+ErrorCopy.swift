@@ -78,8 +78,21 @@ extension AskCoachSheet {
     /// honest copy (Coach turned off, offline, consent-required).
     private func hlErrorCopy(_ error: HLError) -> String {
         switch error {
-        case .assistantDisabled:
-            String(localized: "The Coach is turned off for your account.")
+        case let .aiUnavailable(refusal):
+            // #115 · 0.2 — one sentence per reason. Before, every refusal read
+            // "turned off for your account" and an operator-disabled Coach
+            // (whose refusal was never recognised) asked for consent.
+            Self.coachRefusalCopy(refusal)
+        case .moduleDisabled:
+            // `module.disabled` beside an AI refusal: the capability mirror
+            // (``AICapabilityGate``) carries the server's reason.
+            Self.coachRefusalCopy(
+                AIRefusal.implied(
+                    by: appContainer?.aiCapabilityGate.state(.coach)
+                        ?? AICapabilityState(available: false, reason: .moduleDisabled, onDeviceAllowed: false),
+                    for: .coach
+                )
+            )
         case .rateLimited:
             // A360 M2 — a TRANSPORT 429 (per-user 20/min limit) surfaced as
             // `HLError.rateLimited`, distinct from the provider `error` frame
@@ -92,9 +105,9 @@ extension AskCoachSheet {
             String(
                 localized: "You're offline — the server Coach needs a connection."
             )
-        case let .server(status, _, _) where status == 403:
-            // A 403 the API client did not map to `.assistantDisabled` is the
-            // missing-consent-receipt failure-closed case — route to consent.
+        case let .server(status, code, _) where status == 403 && (code == nil || code == AIRefusal.consentRequiredCode):
+            // `consent.ai.required` (server v1.39 sends it in `meta.errorCode`),
+            // or a pre-v1.39 403 without a code: the missing consent receipt.
             String(
                 localized: "The Coach needs your consent to use external AI. Grant it in Settings → Assistant."
             )
@@ -125,5 +138,38 @@ extension AskCoachSheet {
         case .badRequest, .decode:
             String(localized: "Response failed. Please try again.")
         }
+    }
+
+    /// **#114 / #115 · 0.2 — one plain sentence per reason the `coach`
+    /// capability is unavailable.** The reason (from `meta.reason` or the
+    /// capability gate) wins; the code family is the fallback. Never renders
+    /// the raw code.
+    static func coachRefusalCopy(_ refusal: AIRefusal) -> String {
+        switch refusal.impliedState.reason ?? .unknown {
+        case .operatorDisabled:
+            String(localized: "The Coach is turned off on your server.")
+        case .notPermittedForRecord:
+            String(localized: "The Coach isn't available for this person's data.")
+        case .moduleDisabled:
+            String(localized: "The Coach is off because a module it needs is turned off.")
+        case .userDisabled:
+            String(localized: "You've turned the Coach off. You can turn it back on in Settings.")
+        case .noProvider:
+            String(localized: "No AI provider is available. Set one up in Settings → Assistant.")
+        case .consentRequired:
+            String(localized: "The Coach needs your consent to use external AI. Grant it in Settings → Assistant.")
+        case .checkFailed, .unknown:
+            String(localized: "The Coach isn't available right now. Try again later.")
+        }
+    }
+
+    /// The refusal that closes the whole sheet, or `nil` while any arm may
+    /// still serve the Coach (``AICapabilityState/offersEntryPoint``). A
+    /// missing provider or consent is not a closure: the sheet's own
+    /// provider / consent flows handle those.
+    @MainActor
+    static func coachEntryRefusal(_ gate: AICapabilityGate) -> AIRefusal? {
+        let state = gate.state(.coach)
+        return state.offersEntryPoint ? nil : AIRefusal.implied(by: state, for: .coach)
     }
 }

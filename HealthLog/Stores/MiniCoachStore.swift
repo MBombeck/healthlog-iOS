@@ -190,7 +190,7 @@ public final class MiniCoachStore: BoxBackedPHIStore {
             .assistant
         case .refusedByClassifier, .refusedBySafetyFilter:
             .refused
-        case .unsupported, .featureFlagDisabled, .generationFailed:
+        case .unsupported, .capabilityNotAllowed, .generationFailed:
             .system
         }
         messages.append(Message(role: role, text: outcome.reply))

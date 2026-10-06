@@ -48,6 +48,34 @@ public extension AppContainer {
         return (uploader, bgSync)
     }
 
+    /// **#10 — the one sink a delivered HealthKit measurement batch stamps
+    /// "Last synced" through.**
+    ///
+    /// Fenced twice, because the upload that reports success may have started
+    /// under an account that is gone by the time the answer arrives:
+    ///
+    /// 1. the batch's lease owner must still hold the current generation of the
+    ///    session registry — `invalidate()` runs at the commitment point of every
+    ///    terminal path (logout, terminal 401, deletion, server switch), before
+    ///    any wipe, and an account switch moves the generation;
+    /// 2. the readiness store stamps only when that owner is the Keychain's
+    ///    current user (`noteSuccessfulSync(at:ownerUserID:)`).
+    ///
+    /// A batch without an owner (an uploader without a lease source, which the
+    /// composition root never builds) stamps nothing.
+    internal nonisolated static func makeMeasurementSyncStamp(
+        readiness: HKReadinessStore,
+        registry: AuthenticatedSessionLeaseRegistry
+    ) -> MeasurementBatchUploader.SuccessNotifier {
+        { syncedAt, ownerUserID in
+            guard let ownerUserID, let lease = registry.capture(ownerID: ownerUserID) else { return }
+            await MainActor.run {
+                guard lease.isCurrent else { return }
+                readiness.noteSuccessfulSync(at: syncedAt, ownerUserID: ownerUserID)
+            }
+        }
+    }
+
     /// Aktiviert HK-Background-Deliveries + BG-Sync-Schedule und fährt danach
     /// **einen** benannten Pass. Idempotent. Darf nur NACH erfolgreichem
     /// `requestAuthorization` aufgerufen werden — sonst lehnt HealthKit ab.

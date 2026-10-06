@@ -224,6 +224,13 @@ public enum DocumentChatError: Error, Sendable, Equatable {
     /// `403 consent.ai.required` — an external provider needs document-egress
     /// consent (the same receipt the capability route reports).
     case consentRequired
+    /// #115 · 0.2 — `assistant.disabled.documentAi` (or the overall switch): the
+    /// operator switched reading documents off.
+    case operatorDisabled
+    /// #115 · 0.2 — `ai.record.notPermitted`: not admitted for this record.
+    case recordNotPermitted
+    /// #115 · 0.2 — `ai.provider.none`: no provider can read documents.
+    case noProvider
     /// Per-user rate bucket / budget exhausted — the SSE `error` frame or a 429.
     case limitReached
     /// The server emitted an `error` frame with another code (provider failure).

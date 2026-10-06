@@ -153,6 +153,16 @@ public final class AccountSecurityStore {
         return false
     }
 
+    /// R2 / #115 A3 — whether the account holds a second factor (a confirmed
+    /// authenticator or a registered security key), the server's
+    /// `hasSecondFactorEnrolled`. Decides whether a step-up for adding a factor
+    /// or for a record action may come from the password (no) or must come from
+    /// a second factor or a passkey (yes). `false` until the status is loaded.
+    public var hasSecondFactor: Bool {
+        if case let .loaded(status) = twoFactor { return status.totp.enabled || !status.webauthn.isEmpty }
+        return false
+    }
+
     /// Loads the 2FA surface: version-gate first (older self-hosted servers keep
     /// the web-only card), then the real status.
     public func loadTwoFactor() async {

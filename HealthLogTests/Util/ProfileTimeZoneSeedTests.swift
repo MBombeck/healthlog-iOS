@@ -15,7 +15,7 @@ import Testing
 /// The box now mirrors the last resolved identifier into `UserDefaults` and
 /// reads it back at construction. These cases pin both directions plus the
 /// fallback, on an isolated suite (never the process store).
-@Suite("Audit B-7 — the profile zone survives into a background wake")
+@Suite("Audit B-7 — the profile zone survives into a background wake", .mockURLSession)
 struct ProfileTimeZoneSeedTests {
     private func suite(_ name: String) throws -> UserDefaults {
         try #require(UserDefaults(suiteName: "b7.\(name).\(UUID().uuidString)"))

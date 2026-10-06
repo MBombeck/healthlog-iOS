@@ -145,7 +145,7 @@ public extension APIClientProtocol {
             throw HLError.decoding("sendEnvelope: could not decode envelope for \(request.path)")
         }
         if let err = envelope.error {
-            throw HLError.server(status: response.statusCode, code: envelope.errorCode, message: err)
+            throw HLError.server(status: response.statusCode, code: envelope.meta?.errorCode ?? envelope.errorCode, message: err)
         }
         return (envelope.data, envelope.meta)
     }
@@ -217,15 +217,12 @@ public actor APIClient: APIClientProtocol {
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private let onUnauthorized: (@Sendable () async -> Void)?
-    /// F-1 — notification closure invoked when a route responds
-    /// with `403 + errorCode: "assistant.disabled.<surface>"`.
-    /// AppContainer wires this to mirror the disabled flag into
-    /// `FeatureFlagsStore` so the next render tick surfaces the
-    /// placeholder without waiting for the next foreground refresh
-    /// of `/api/feature-flags`. The closure runs fire-and-forget
-    /// (the surfaced `HLError.assistantDisabled(_:)` is the
-    /// authoritative signal; the store mirror is a convenience).
-    private var onAssistantDisabled: (@Sendable (FeatureFlag) async -> Void)?
+    /// #114 / #115 · 0.2 — notification closure invoked when a route refuses an
+    /// AI action (``AIRefusal``). AppContainer wires this to mirror the refusal
+    /// into ``AICapabilityGate`` so the surface follows on the next render tick,
+    /// without waiting for the next `/api/auth/me` load. Fire-and-forget: the
+    /// thrown ``HLError/aiUnavailable(_:)`` is the authoritative signal.
+    private var onAIRefusal: (@Sendable (AIRefusal) async -> Void)?
     /// #30 / v1.18.0 — fire-and-forget mirror invoked when a route 403's with
     /// `meta.errorCode: "module.disabled"` + `meta.module: "<key>"`. AppContainer
     /// wires this to flip the matching key OFF in ``ModuleGate`` so the surface
@@ -333,8 +330,7 @@ public actor APIClient: APIClientProtocol {
     /// one-shot upload's response through this exact envelope logic instead of
     /// growing a second one (Swift's `private` is file-scoped).
     func decodePayload<T: Decodable & Sendable>(_ type: T.Type, data: Data, status: Int) throws -> T {
-        // Server-Envelope ist Pflicht (`{ data, error: string | null }`). Erst envelope decoden,
-        // dann data extrahieren. Fallback nur für Endpoints die historisch ohne Envelope antworten.
+        // Server-Envelope ist Pflicht (`{ data, error }`); Fallback nur für Endpoints ohne Envelope.
         if let envelope = try? decoder.decode(APIEnvelope<T>.self, from: data) {
             if let err = envelope.error {
                 // Preserve the typed error-code discriminator (was dropped as `nil`
@@ -355,6 +351,7 @@ public actor APIClient: APIClientProtocol {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
+            if data.isEmpty, let empty = EmptyResponse() as? T { return empty } // C4 — a bodiless 2xx (204) is the ack.
             throw HLError.decoding(String(describing: error))
         }
     }
@@ -439,7 +436,7 @@ public actor APIClient: APIClientProtocol {
             throw HLError.unauthorized
         }
         if http.statusCode == 429 {
-            let retryAfter = parseRateLimitReset(headers: http) ?? Self.parseRetryAfterHeader(http)
+            let retryAfter = RateLimitDelay.seconds(from: http, body: nil)
             throw HLError.rateLimited(retryAfter: retryAfter)
         }
         // For a non-2xx that carries an error body (e.g. a 403 assistant-disabled
@@ -482,13 +479,10 @@ public actor APIClient: APIClientProtocol {
         refreshHandler = handler
     }
 
-    /// F-1 — composition-root setter for the assistant-disabled
-    /// mirror closure. Idempotent. AppContainer wires this so the
-    /// store learns about operator-disabled surfaces in the same
-    /// tick the route 403's, without a follow-up
-    /// `/api/feature-flags` round-trip.
-    public func setAssistantDisabledHandler(_ handler: @escaping @Sendable (FeatureFlag) async -> Void) {
-        onAssistantDisabled = handler
+    /// #114 / #115 · 0.2 — composition-root setter for the AI-refusal mirror
+    /// closure. Idempotent (overwrites).
+    public func setAIRefusalHandler(_ handler: @escaping @Sendable (AIRefusal) async -> Void) {
+        onAIRefusal = handler
     }
 
     /// #30 — composition-root setter for the module-disabled mirror closure.
@@ -622,7 +616,7 @@ public actor APIClient: APIClientProtocol {
                     // established collapse-to-`.unauthorized` behaviour, and the
                     // refresh→logout bridge is intentionally bypassed here (the ticket,
                     // not a Bearer, is the credential — there is nothing to refresh).
-                    if Self.preserves401Body(path: request.path) {
+                    if Self.preserves401Body(path: request.path) || SecurityStepUp.isProofRefusal(body: data) {
                         return (data, http)
                     }
                     // #5 — `urlRequest` still carries the bearer THIS attempt was
@@ -682,16 +676,16 @@ public actor APIClient: APIClientProtocol {
                 }
 
                 if http.statusCode == 429 {
-                    // Server schickt `X-RateLimit-Reset` als ISO-8601-Timestamp
-                    // (siehe `17-error-handling.md §4.2`). Früher hat iOS
-                    // `Retry-After` (Sekunden) gelesen — gibt es nicht, also
-                    // war `retryAfter` immer nil und der retry-Loop hat den
-                    // gerate-limiteten Endpoint mit Exponential-Backoff
-                    // gehammert (W2a-A2 Audit §6 + §7). Wir lesen jetzt
-                    // primär `X-RateLimit-Reset` und werfen mit der
-                    // berechneten Delta — der retry-Loop unten respektiert
-                    // genau diesen Wert (kein Backoff-Doppel).
-                    let retryAfter = parseRateLimitReset(headers: http) ?? Self.parseRetryAfterHeader(http)
+                    // #110 — ab Server v1.39 trägt jede Limiter-429 `Retry-After`
+                    // (Sekunden, ≥ 1) neben `X-RateLimit-Reset` (ISO-8601);
+                    // manche Routen spiegeln den Zeitpunkt in `meta.retryAt`.
+                    // `RateLimitDelay` liest sie in dieser Reihenfolge (auch die
+                    // HTTP-Datumsform) und reicht die Wartezeit im Fehler an den
+                    // Aufrufer durch. Der retry-Loop unten wartet genau diesen
+                    // Wert ab (kein Backoff-Doppel), aber nur bis zur
+                    // In-Request-Obergrenze; länger wartet der Aufrufer selbst
+                    // (Outbox-Pause, gehaltener Sweep).
+                    let retryAfter = RateLimitDelay.seconds(from: http, body: data)
                     throw HLError.rateLimited(retryAfter: retryAfter)
                 }
 
@@ -702,7 +696,7 @@ public actor APIClient: APIClientProtocol {
 
                 return (data, http)
             } catch let urlError as URLError {
-                let mapped = mapURLError(urlError)
+                let mapped = mapURLError(urlError, sending: request)
                 if mapped.isRetriable, attempt <= maxRetries {
                     try await Task.sleep(nanoseconds: backoffDelay(attempt: attempt))
                     continue
@@ -857,33 +851,26 @@ public actor APIClient: APIClientProtocol {
         return false
     }
 
+    /// Longest server-dictated wait (seconds) a single request sits out
+    /// in-process before it re-sends. Every v1.39 limiter window that a sync
+    /// path meets is 60 s, so a wait inside it is simply waited out.
+    static let inRequestRateLimitCeiling: TimeInterval = 60
+
     /// Rate-limit-aware Delay-Picker. Bei `.rateLimited(retryAfter:)` wird
     /// genau der vom Server diktierte Wert (+ kleiner Jitter) verwendet —
     /// kein zusätzliches Exponential-Backoff. Sonst Standard-Backoff.
-    private func rateLimitOrBackoffDelay(error: HLError, attempt: Int) -> UInt64 {
+    ///
+    /// #110 — a wait beyond ``inRequestRateLimitCeiling`` is thrown back
+    /// instead of slept: re-sending after the ceiling but before the named
+    /// instant only spends the bucket again. The caller owns the long wait
+    /// (the outbox pauses its pass, an importer holds its window).
+    private func rateLimitOrBackoffDelay(error: HLError, attempt: Int) throws -> UInt64 {
         if case let .rateLimited(retryAfter) = error, let retryAfter, retryAfter > 0 {
+            guard retryAfter <= Self.inRequestRateLimitCeiling else { throw error }
             let jitter = Double.random(in: 0 ... 0.5)
-            let seconds = retryAfter + jitter
-            return UInt64(min(seconds, 60.0) * 1_000_000_000)
+            return UInt64((retryAfter + jitter) * 1_000_000_000)
         }
         return backoffDelay(attempt: attempt)
-    }
-
-    /// Parses the server's `X-RateLimit-Reset` header (ISO-8601 timestamp) and
-    /// returns the seconds-from-now-until-reset interval, plus zero floor.
-    private nonisolated func parseRateLimitReset(headers: HTTPURLResponse) -> TimeInterval? {
-        guard let raw = headers.value(forHTTPHeaderField: "X-RateLimit-Reset") else { return nil }
-        let date = ISO8601DateFormatter.fractional.date(from: raw)
-            ?? ISO8601DateFormatter.plain.date(from: raw)
-        guard let reset = date else { return nil }
-        return max(0, reset.timeIntervalSinceNow)
-    }
-
-    /// Fallback: parse `Retry-After` (HTTP/1.1 seconds form) for upstream
-    /// proxies that strip our header. Server itself never sends this.
-    private nonisolated static func parseRetryAfterHeader(_ headers: HTTPURLResponse) -> TimeInterval? {
-        guard let raw = headers.value(forHTTPHeaderField: "Retry-After") else { return nil }
-        return TimeInterval(raw)
     }
 
     /// Auth-Endpoints sind selbst die Quelle des Refresh-Token-Flows — sie
@@ -924,6 +911,13 @@ public actor APIClient: APIClientProtocol {
     ///   as a bogus "please re-login"), so the body must survive for the delete flow
     ///   to detect it and route the user to the web deletion page. This path is
     ///   ONLY ever the account-delete DELETE, so preserving all its 401s is safe.
+    /// - **Any path, by code (R2 / #115 A3):** a 401 whose body carries an
+    ///   `auth.stepup.*` / `auth.reproof.*` code (``SecurityStepUp/isProofRefusal(body:)``)
+    ///   also surfaces verbatim — the token was fine, the action wants a fresh
+    ///   proof. This covers `POST /api/share-links`, `POST /api/mcp/tokens`,
+    ///   `POST /api/export/encrypted` and `GET /api/export?type=all` without
+    ///   listing them here: a path entry would also keep a genuinely expired
+    ///   token on those routes from refreshing.
     /// `internal` — the one-shot file-upload path in `APIClient+FileUpload.swift`
     /// consults the same allowlist, so the two 401 policies cannot drift.
     nonisolated static func preserves401Body(path: String) -> Bool {
@@ -1123,17 +1117,6 @@ public actor APIClient: APIClientProtocol {
             throw HLError.idempotencyReplayInFlight
         }
         let envelope = try? decoder.decode(APIEnvelope<EmptyPayload>.self, from: data)
-        // F-1 — surface the assistant-disabled envelope as a typed
-        // error so the caller can mirror the operator state into
-        // `FeatureFlagsStore` and the matching surface placeholder
-        // can render. Server brief v1.4.31 §5 + cross-coordination
-        // audit §c.1: `errorCode: "assistant.disabled.<surface>"`
-        // paired with status `403`. We only honour the typed error
-        // when BOTH (a) the status is 403 (not 401/422/...) AND
-        // (b) the errorCode parses to a known `FeatureFlag`. Any
-        // other shape falls through to the generic server-error
-        // path so future surfaces don't silently drop into the
-        // typed branch.
         // #30 — module-gate rejection: `403` + `meta.errorCode ==
         // "module.disabled"` + `meta.module: "<key>"`. We honour the typed
         // error only when BOTH (a) status is 403 AND (b) the meta carries the
@@ -1156,29 +1139,63 @@ public actor APIClient: APIClientProtocol {
             if let handler = onModuleDisabled {
                 Task { await handler(module) }
             }
+            // #115 · 0.2 — beside an AI refusal the module code carries
+            // `meta.capability` + `meta.reason`; hand those to the capability
+            // gate too, so the surface can name the reason.
+            if let refusal = AIRefusal.moduleRefusal(meta: meta), let handler = onAIRefusal {
+                Task { await handler(refusal) }
+            }
             throw HLError.moduleDisabled(module)
         }
-        if response.statusCode == 403, let envelope, let flag = parseAssistantDisabled(envelope.errorCode) {
-            // Fire-and-forget mirror into FeatureFlagsStore so the
-            // next render tick can surface the placeholder without
-            // waiting on the foreground-refresh of `/api/feature-flags`.
-            // Errors here are intentionally ignored — the typed
-            // `HLError.assistantDisabled(_:)` is the authoritative
-            // signal; the mirror is a convenience.
-            if let handler = onAssistantDisabled {
-                Task { await handler(flag) }
+        // #114 / #115 · 0.2 — an AI refusal. Server v1.39 carries the code in
+        // `meta.errorCode` next to `meta.capability` / `meta.reason` /
+        // `meta.module`; the pre-v1.39 top-level `errorCode` is the fallback.
+        // Before this read the top level only, so no v1.39 refusal was ever
+        // recognised. Every `assistant.disabled.<switch>` (incl. the overall
+        // `enabled` and switches this build does not know) on a 403, and
+        // `ai.record.notPermitted` / `ai.provider.none` / `ai.unavailable` on any
+        // status, become the typed error. Mirrored fire-and-forget into
+        // `AICapabilityGate`; the thrown error is the authoritative signal.
+        if let refusal = AIRefusal.from(
+            status: response.statusCode,
+            meta: envelope?.meta,
+            topLevelCode: envelope?.errorCode
+        ) {
+            if let handler = onAIRefusal {
+                Task { await handler(refusal) }
             }
-            throw HLError.assistantDisabled(flag)
+            throw HLError.aiUnavailable(refusal)
         }
         // v1.35.0 (GH #83) — a refusal that states WHICH rule it missed throws
         // its own typed error; every other envelope falls through (see
         // `APIRefusal`).
         try APIRefusal.throwIfReasoned(envelope?.meta)
         let msg = envelope?.error ?? "HTTP \(response.statusCode)"
-        // The typed discriminator lives in `meta.errorCode` for the module-gate +
-        // document-AI shapes (e.g. `documents.inbound.providerUnsupported` on a 422);
-        // the top-level `errorCode` carries the older assistant-disabled shape. Prefer
-        // the nested one so callers can distinguish typed errors from a plain status.
+        // E1 — v1.39.1 names the batch route's schema refusal and lists the
+        // offending entries under `details.issues`; the uploader splits on it.
+        if let invalid = MeasurementBatchInvalid.from(
+            path: response.url?.path ?? "",
+            status: response.statusCode,
+            code: envelope?.meta?.errorCode,
+            body: data
+        ) {
+            throw invalid
+        }
+        // #110 / #112 — the opted-in routes whose `meta` carries detail the
+        // surface shows (refused leaf ids, a relay's answer). Every other
+        // refusal keeps the `HLError.server` shape below (see `APIRefusalDetail`).
+        if let detail = APIRefusalDetail.detail(
+            path: response.url?.path ?? "",
+            status: response.statusCode,
+            meta: envelope?.meta,
+            message: msg
+        ) {
+            throw detail
+        }
+        // The typed discriminator lives in `meta.errorCode` (server v1.39 puts
+        // every code there, e.g. `consent.ai.required`,
+        // `documents.inbound.providerUnsupported`); the top-level `errorCode` is
+        // the pre-v1.39 fallback. Prefer the nested one.
         throw HLError.server(
             status: response.statusCode,
             code: envelope?.meta?.errorCode ?? envelope?.errorCode,
@@ -1198,16 +1215,6 @@ public actor APIClient: APIClientProtocol {
     nonisolated static func reportsIdempotentReplayInFlight(_ response: HTTPURLResponse) -> Bool {
         guard let raw = response.value(forHTTPHeaderField: idempotentReplayHeader) else { return false }
         return raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "false"
-    }
-
-    /// Parses `"assistant.disabled.<surface>"` into the corresponding
-    /// ``FeatureFlag``. Returns `nil` for any other shape. Defined
-    /// `nonisolated` so the actor's `ensureSuccess` can call it
-    /// without an `await` hop (pure-function).
-    private nonisolated func parseAssistantDisabled(_ errorCode: String?) -> FeatureFlag? {
-        guard let errorCode, errorCode.hasPrefix("assistant.disabled.") else { return nil }
-        let surface = String(errorCode.dropFirst("assistant.disabled.".count))
-        return FeatureFlag.from(serverSurface: surface)
     }
 
     private func backoffDelay(attempt: Int) -> UInt64 {
@@ -1230,6 +1237,21 @@ public actor APIClient: APIClientProtocol {
         case .cancelled: .canceled
         default: .network(.other(err.localizedDescription))
         }
+    }
+
+    /// E1 — ``mapURLError(_:)`` for one request. A write (any non-GET that is
+    /// neither an interactive auth leg nor a stream) cut off on the wire while
+    /// its task is still running was not cancelled by anyone who meant it: the
+    /// app was suspended, a background window ended, or the certificate pin
+    /// failed (`APIClient+Pinning` cancels the challenge). That becomes
+    /// `.network(.writeCancelled)`, which the repositories queue in the outbox
+    /// under the request's own idempotency key instead of rolling back. A
+    /// cancelled task, a read, a login and a coach stream keep `.canceled`.
+    func mapURLError(_ err: URLError, sending request: APIRequest<some Any>) -> HLError {
+        let mapped = mapURLError(err)
+        guard mapped == .canceled, !Task.isCancelled, request.method != .get,
+              !request.failFast, !request.streaming else { return mapped }
+        return .network(.writeCancelled)
     }
 }
 

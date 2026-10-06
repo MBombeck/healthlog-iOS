@@ -17,7 +17,7 @@ settings:
     # 2026-08-21 three of them hardcoded "0.19.0" instead — the same split as
     # the build number below, and it would have shipped a stale marketing
     # version on the first release that changed one.
-    MARKETING_VERSION: "1.0.3"
+    MARKETING_VERSION: "1.1.0"
     # 11-03 THE SINGLE FROZEN BUILD-NUMBER ALLOCATION POINT.
     #
     # This is the ONLY `CURRENT_PROJECT_VERSION:` assignment in this file, and
@@ -48,7 +48,7 @@ settings:
     #
     # The procedure and the receipt it must produce live in
     # .planning/active/apple-review-reliability/CANDIDATE-FREEZE.md.
-    CURRENT_PROJECT_VERSION: "279"
+    CURRENT_PROJECT_VERSION: "291"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -349,11 +349,15 @@ targets:
           # `backgroundFetchEnabled` ≡ `UIBackgroundModes.contains("fetch")`
           # (see `SchedulerNotifications.swift:543`). Without `fetch` the
           # module silently logs "Background fetch is not enabled…" and the
-          # pending med-reminder queue ONLY ever refreshes on app foreground —
-          # so non-daily cadences (monthly / everyNWeeks>1 / rolling / cyclic,
-          # which materialize as one-shot triggers) go silent once their
-          # horizon elapses without the app being opened. `fetch` is a
-          # legitimate App-Store background mode for Background App Refresh.
+          # pending med-reminder queue ONLY ever refreshes on app foreground.
+          # Note (1.1.0, R5): Spezi's refresh only re-arms events it has
+          # already stored; it never plans new one-shot reminders. Topping up
+          # one-shot cadences (monthly / everyNWeeks>1 / rolling / cyclic /
+          # bounded courses) is done by the app itself:
+          # `MedicationsStore.topUpRemindersFromCache()` at the start of both
+          # app BGTasks, on silent pushes and after every reminder action.
+          # `fetch` is a legitimate App-Store background mode for Background
+          # App Refresh.
           - fetch
         BGTaskSchedulerPermittedIdentifiers:
           - dev.healthlog.app.healthkit-sync
@@ -678,6 +682,9 @@ targets:
       - path: HealthLog/Services/APIRequest.swift
       - path: HealthLog/Services/AuthService.swift
       - path: HealthLog/Services/AuthService+WireDTOs.swift
+      # R2 / #115 A6 — `AuthService.refresh()` reads the device id through
+      # this extension; Foundation only.
+      - path: HealthLog/Services/AuthService+RefreshDeviceID.swift
       - path: HealthLog/Services/OidcStatus.swift
       - path: HealthLog/Services/AvatarCache.swift
       - path: HealthLog/Services/BatchSyncThrottle.swift
@@ -693,6 +700,9 @@ targets:
       - path: HealthLog/Services/HealthIngestRoute.swift
       - path: HealthLog/Services/IdempotencyKey.swift
       - path: HealthLog/Services/KeychainStore.swift
+      # #115 / 0.3 — the partition token `Repositories/HealthRefusalRegister`
+      # keys on. Foundation-only, mirrors the Package.swift allowlist.
+      - path: HealthLog/Services/HealthKitBackfillWindowStore.swift
       - path: HealthLog/Services/Logger.swift
       # Audit M2 — shared non-trapping in-memory floor used by the SwiftData
       # recovery ladders (OutboxQueue/SWRCache, both compiled here). Foundation

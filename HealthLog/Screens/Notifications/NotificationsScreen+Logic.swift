@@ -104,7 +104,8 @@ extension NotificationsScreen {
         guard s.state == .autoDisabled || s.state == .sendingPaused else { return nil }
         let raw = s.disabledReason ?? s.lastFailureReason
         guard let raw, !raw.isEmpty else { return nil }
-        return String(localized: "Grund: \(NotificationFailureReason.label(for: raw))")
+        let reason = NotificationFailureReason.label(for: raw)
+        return String(localized: "notifications.channel.failureReason \(reason)")
     }
 
     /// Resolve the effective channel state from the live `status`
@@ -126,7 +127,9 @@ extension NotificationsScreen {
                 needsRetryAction: false
             )
         }
-        if let status {
+        // #115 · 1.7 — an unknown server state says nothing about the channel;
+        // fall through to the static `enabled` flag below.
+        if let status, status.state != .unknown {
             switch status.state {
             case .active:
                 return .activeState
@@ -157,6 +160,8 @@ extension NotificationsScreen {
                     voiceOverLabel: String(localized: "notifications.channel.state.inactive"),
                     needsRetryAction: false
                 )
+            case .unknown:
+                break
             }
         }
         // Status hasn't loaded yet — fall back to the static `enabled`

@@ -97,44 +97,15 @@ struct ComplianceBandTests {
     /// boundary the text and its colour could disagree by one band (e.g. 69.5 %
     /// → text "70 %"/`.good` but colour `.warn`). This pins that the band the KPI
     /// paints is always the band the displayed integer implies.
-    @Test("at an x.5 boundary the displayed integer and its band colour agree")
-    func detailKPITextAndBandAgreeAtHalfBoundary() {
-        // 139/200 = 0.695 → 69.5 % → .rounded() → 70 (text), .towardZero → 69.
-        // The OLD ratio-rounding would have classified on 69 (.warn) while the
-        // text read "70 %" (.good). The fix classifies on the displayed integer.
-        let near70 = MedicationDetailStore.ComplianceSummary(inTime: 139, total: 200)
-        #expect(near70.percentage == 70)
-        #expect(ComplianceBand.band(forPercent: near70.percentage) == .good)
-
-        // 79/200 = 0.395 → 39.5 % → .rounded() → 40 (text, .warn); the OLD path
-        // truncated to 39 (.bad). Again: band follows the displayed integer.
-        let near40 = MedicationDetailStore.ComplianceSummary(inTime: 79, total: 200)
-        #expect(near40.percentage == 40)
-        #expect(ComplianceBand.band(forPercent: near40.percentage) == .warn)
-
-        // Exhaustive: for EVERY (inTime,total) the band the KPI paints is the band
-        // its DISPLAYED integer implies — never a separately re-rounded ratio.
-        // Wherever the half-away text ("\(percentage)%") and the toward-zero
-        // ratio path would have classified into different bands (the x.5
-        // boundary cases), this pins the painted band to the text's integer.
-        for total in 1 ... 200 {
-            for inTime in 0 ... total {
-                let summary = MedicationDetailStore.ComplianceSummary(inTime: inTime, total: total)
-                #expect((0 ... 100).contains(summary.percentage))
-                let paintedBand = ComplianceBand.band(forPercent: summary.percentage)
-                let textImpliedBand = ComplianceBand.band(forPercent: Int("\(summary.percentage)") ?? -1)
-                #expect(paintedBand == textImpliedBand)
-            }
+    @Test("the detail KPI colours the server's integer rate, the same integer it shows")
+    func detailKPIBandFollowsServerRate() {
+        // #115 1.3 — the KPI now paints the server's rounded `rate` verbatim, so
+        // the band and the text share one integer by construction.
+        for rate in 0 ... 100 {
+            let adherence = MedicationDetailStore.ServerAdherence(rate: rate, taken: rate, expected: 100)
+            #expect(ComplianceBand.band(forPercent: adherence.rate) == ComplianceBand.band(forPercent: rate))
         }
-    }
-
-    /// Non-boundary integers keep their established band — the fix only changes
-    /// the rounding *source*, never the threshold contract.
-    @Test("non-boundary percentages keep their bands (thresholds unchanged)")
-    func nonBoundaryBandsUnchanged() {
-        #expect(ComplianceBand.band(forPercent: 71) == .good)
-        #expect(ComplianceBand.band(forPercent: 68) == .warn)
-        #expect(ComplianceBand.band(forPercent: 41) == .warn)
-        #expect(ComplianceBand.band(forPercent: 38) == .bad)
+        #expect(ComplianceBand.band(forPercent: 70) == .good)
+        #expect(ComplianceBand.band(forPercent: 40) == .warn)
     }
 }

@@ -25,7 +25,7 @@ import Testing
 ///   up the freshly-warmed narrative in the SAME session.
 /// - the warm re-poll is bounded (no tight loop) — battery-safe.
 @MainActor
-@Suite("NarrativeStore — overview Tagesbriefing on-appear load", .serialized)
+@Suite("NarrativeStore — overview Tagesbriefing on-appear load", .serialized, .mockURLSession)
 struct NarrativeStoreOverviewLoadTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -55,7 +55,7 @@ struct NarrativeStoreOverviewLoadTests {
     func loadSettlesNarrative() async {
         let repo = NarrativeRepository(api: makeAPI())
         let store = NarrativeStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Self.body(revalidating: false, text: "Diese Woche lag dein Blutdruck stabil im Zielbereich.")
@@ -82,7 +82,7 @@ struct NarrativeStoreOverviewLoadTests {
         // First read: server still generating (revalidating:true, narrative:null).
         // The scheduled re-poll: settled with prose.
         let callCount = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let n = callCount.next()
             let body = n == 0
                 ? Self.body(revalidating: true, text: nil)
@@ -111,7 +111,7 @@ struct NarrativeStoreOverviewLoadTests {
         // must cap its re-polls and settle the period empty (battery-safe), not
         // spin a tight loop.
         let callCount = Counter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             _ = callCount.next()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

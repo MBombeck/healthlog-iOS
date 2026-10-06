@@ -71,11 +71,11 @@ public enum MetricSeriesProjection {
                     // collapsed it into a proper pair — when it didn't, the
                     // row carries zero in the systolic slot. Drop it so the
                     // chart's y-domain isn't crushed.
-                    return systolic > 0 ? systolic : nil
+                    systolic > 0 ? systolic : nil
                 case let .scalar(value):
                     // Defensive: a BP row encoded as scalar shouldn't occur,
                     // but if it does treat the scalar as a systolic reading.
-                    return value > 0 ? value : nil
+                    value > 0 ? value : nil
                 }
             }
     }

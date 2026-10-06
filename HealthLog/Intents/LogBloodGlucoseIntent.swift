@@ -13,6 +13,13 @@ import Foundation
 /// Keychain + a recovered Outbox via ``IntentDependencies``. When the
 /// user is not signed in we surface a friendly dialog rather than firing
 /// a doomed 401.
+///
+/// **#115 B5 — the spoken value is in the ACCOUNT's unit.** It was fixed
+/// mg/dL, so an mmol/L account said "5.3" and had it refused (or, from 10 up,
+/// stored as mg/dL). The value is now read in the account's glucose unit
+/// (``IntentDependencies/accountGlucoseUnit(shared:appDefaults:)``), converted
+/// to canonical mg/dL for the write — the server stores mg/dL whatever the
+/// account shows — and read back in the unit it was said in.
 struct LogBloodGlucoseIntent: AppIntent {
     static let title: LocalizedStringResource = "Log blood glucose"
 
@@ -24,10 +31,12 @@ struct LogBloodGlucoseIntent: AppIntent {
     /// in Siri, so the intent does not open the app.
     static let openAppWhenRun: Bool = false
 
+    /// Bounds wide enough for both units (0.5 mmol/L … 1000 mg/dL); the real
+    /// plausibility check runs on the canonical value in ``perform()``.
     @Parameter(
-        title: "Blood glucose (mg/dL)",
-        description: "Your blood glucose reading in mg/dL.",
-        inclusiveRange: (10, 1000)
+        title: "Blood glucose",
+        description: "Your blood glucose reading, in the unit your HealthLog account uses (mg/dL or mmol/L).",
+        inclusiveRange: (0.5, 1000)
     )
     var value: Double
 
@@ -39,7 +48,7 @@ struct LogBloodGlucoseIntent: AppIntent {
     var context: GlucoseContextAppEnum
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Log \(\.$value) mg/dL blood glucose \(\.$context)")
+        Summary("Log \(\.$value) blood glucose \(\.$context)")
     }
 
     @MainActor
@@ -49,11 +58,16 @@ struct LogBloodGlucoseIntent: AppIntent {
             return .result(dialog: IntentCopy.signInRequired)
         }
 
+        let unit = deps.glucoseUnit()
+        guard let canonical = Self.canonicalValue(value, unit: unit) else {
+            return .result(dialog: IntentDialog(IntentCopy.measurementOutOfRange))
+        }
+
         let measurement = Measurement(
             id: UUID().uuidString,
             kind: .glucose,
             recordedAt: Date(),
-            value: .scalar(value),
+            value: .scalar(canonical),
             source: .manual,
             glucoseContext: context.domainValue
         )
@@ -61,11 +75,12 @@ struct LogBloodGlucoseIntent: AppIntent {
         do {
             _ = try await deps.measurementsRepo.create(measurement)
             let shaped = value.formatted(.number.precision(.fractionLength(0 ... 1)))
+            let suffix = unit.unitSuffix
             return .result(
                 dialog: IntentDialog(
                     LocalizedStringResource(
-                        "Logged \(shaped) mg/dL blood glucose.",
-                        comment: "AppIntents — blood glucose logged confirmation"
+                        "Logged \(shaped) \(suffix) blood glucose.",
+                        comment: "AppIntents — blood glucose logged confirmation; %1$@ value, %2$@ unit (mg/dL or mmol/L)"
                     )
                 )
             )
@@ -74,10 +89,21 @@ struct LogBloodGlucoseIntent: AppIntent {
             // and will sync on the next app foreground (incl. a transient-
             // refresh 401 the repo durably enqueued). Tell the user it
             // is saved (not lost) so an offline log still feels reliable.
-            return .result(dialog: IntentCopy.queuedOffline)
+            return .result(dialog: IntentCopy.queued(after: error))
         } catch {
             return .result(dialog: IntentCopy.writeFailed)
         }
+    }
+}
+
+extension LogBloodGlucoseIntent {
+    /// #115 B5 — a value spoken in `unit`, in canonical mg/dL; `nil` when it is
+    /// not a plausible reading (10…1000 mg/dL, the band the parameter used to
+    /// enforce, now checked after the conversion so it holds in either unit).
+    static func canonicalValue(_ value: Double, unit: GlucoseUnit) -> Double? {
+        guard value.isFinite else { return nil }
+        let canonical = unit.canonicalMgdL(fromDisplayed: value)
+        return (10 ... 1000).contains(canonical) ? canonical : nil
     }
 }
 

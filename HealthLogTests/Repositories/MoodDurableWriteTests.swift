@@ -13,7 +13,7 @@ import Testing
 ///
 /// These drive the real `APIClient` over `MockURLProtocol` and a real
 /// `OutboxQueue` (PROJECT_GUIDE.md — no mock server on the write paths).
-@Suite("Mood durable write", .serialized)
+@Suite("Mood durable write", .serialized, .mockURLSession)
 struct MoodDurableWriteTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -42,7 +42,7 @@ struct MoodDurableWriteTests {
     func acceptedWriteReturnsTheServerRow() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(Self.serverEntry.utf8)
@@ -70,7 +70,7 @@ struct MoodDurableWriteTests {
     func retriableFailureQueuesUnderTheDerivedKey() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let repo = MoodRepository(api: api, outbox: outbox)
@@ -103,7 +103,7 @@ struct MoodDurableWriteTests {
     @Test("The same HealthKit sample replays as the same operation after a relaunch")
     func derivedIdentityIsStableAcrossAttempts() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let identity = try envelope()
@@ -138,7 +138,7 @@ struct MoodDurableWriteTests {
     func nonRetriableRefusalIsRejected() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Validation failed"}"#.utf8)
@@ -165,7 +165,7 @@ struct MoodDurableWriteTests {
     @Test("A manual write without a stable identity still mints one, per attempt")
     func manualWriteMintsItsOwnIdentity() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         var ids: Set<String> = []
@@ -195,7 +195,7 @@ struct MoodDurableWriteTests {
     func logProjectsTheDurableOutcome() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let repo = MoodRepository(api: api, outbox: outbox)

@@ -1,64 +1,21 @@
 import Foundation
 
-/// Feature-flag service surface.
+/// Feature-flag service surface — LOCAL build flags only.
 ///
-/// **F-1 (v0.5.x server-coord):** the protocol is now backed by the
-/// server's `GET /api/feature-flags` endpoint via
-/// ``FeatureFlagsRepository`` + ``FeatureFlagsStore``. The historical
-/// `UserDefaults`-backed stub remains as ``UserDefaultsFeatureFlagsService``
-/// — it stays the production default in two narrow scopes:
-///
-/// 1. Bootstrap window before ``FeatureFlagsStore`` has a snapshot. We
-///    fail-open (mirror server's pre-deploy defaults) so on-device AI
-///    doesn't blink off during the first network round-trip.
-/// 2. Unit tests that exercise the on-device services in isolation.
-///
-/// The HTTP-backed implementation is ``FeatureFlagsStoreSnapshot`` (a
-/// `Sendable` value-type view over the store's current cache) — it is
-/// what AppContainer wires into `OnDeviceBriefingService` /
-/// `TrendObservationsService` per R5 (server brief §5b: gate
-/// both on-device + server-AI behind the same operator flag).
+/// **#114 / #115 · 0.2:** the assistant keys and `GET /api/feature-flags` are
+/// gone. That route never reached the app (it was decoded as an invented
+/// `{ flags }` shape while the server sent `{ assistant }`), so every assistant
+/// flag always sat at its default "on". AI availability now comes from
+/// `GET /api/auth/me` `ai` through ``AICapabilityGate``; the on-device services
+/// read it through ``AICapabilityReading``. What remains here are the
+/// device-local HealthKit ingest switches and the cycle-tracking default, none
+/// of which the server ever sent.
 public protocol FeatureFlagsServicing: Sendable {
     func isEnabled(_ flag: FeatureFlag) -> Bool
 }
 
-/// Known feature flag keys.
-///
-/// **Source of truth:** server brief `v1.4.31 §c.1` — the namespace is
-/// `assistant.<surface>` and the server emits `errorCode:
-/// "assistant.disabled.<surface>"` when the corresponding flag is off
-/// on a route the user just hit (`/api/insights/*`,
-/// `/api/insights/chat`, `/api/insights/comprehensive`, etc.).
-///
-/// Per R5: we gate BOTH server-AI AND on-device AI paths behind the
-/// same surface flag — operator-control philosophy. The on-device
-/// services consult these flags before spending any FoundationModels
-/// inference; the surface placeholders (rendered by
-/// `FeatureDisabledCard`) render whenever the flag is off, regardless
-/// of who would have generated the content.
+/// Known local feature flag keys. None of them is operator-controlled.
 public enum FeatureFlag: String, Sendable, CaseIterable {
-    /// Daily Briefing — gates the server-AI
-    /// `POST /api/insights/generate` path AND the on-device
-    /// `OnDeviceBriefingService` (I-1).
-    case assistantBriefing = "assistant.briefing"
-
-    /// Conversational coach — gates the server-Coach-SSE
-    /// `GET /api/insights/chat` path AND any future on-device coach
-    /// surface (deferred to v0.7.0 per R4).
-    case assistantCoach = "assistant.coach"
-
-    /// Per-metric trend observations — gates the on-device
-    /// `TrendObservationsService` (I-2). Server side this maps to the
-    /// per-metric `/api/insights/{metric}-status` family.
-    case assistantTrend = "assistant.trend"
-
-    /// Insights mother-page cards — BMI / BP / Correlations /
-    /// Recommendations / Mood-Summary / Health-Alerts on the
-    /// `/api/insights/comprehensive` family. Off → the mother-page
-    /// renders a neutral placeholder above the cards block (no AI
-    /// summary, no recommendations, no correlations).
-    case assistantInsights = "assistant.insights"
-
     /// HK-STATS daily-stats path (v1.4.30 R-A Option A). When ON, the five
     /// cumulative HK types (steps, active-energy, flights, walking-running-
     /// distance, time-in-daylight) ingest via `HKStatisticsCollectionQuery`
@@ -81,8 +38,7 @@ public enum FeatureFlag: String, Sendable, CaseIterable {
     /// Pre-cutover days stay raw per-sample. Default ON on cutover-build;
     /// operator-toggleable via UserDefaults so TestFlight feedback can revert to
     /// all-per-sample HR without a server-side flip (server tolerates both ingest
-    /// shapes during cutover). Device-local — never deployed server-side, so it
-    /// does not appear in `mapWireFlags`.
+    /// shapes during cutover). Device-local — never deployed server-side.
     case enableHRBuckets = "healthkit.enableHRBuckets"
 
     // v0162 cleanup — the 7 `useSpeziFor*` HK-cutover flags (steps/active-energy,
@@ -98,29 +54,19 @@ public enum FeatureFlag: String, Sendable, CaseIterable {
     /// reports `isCycleTrackingAvailable == false` regardless of gender, so
     /// the contract-free foundation ships dormant behind the flag.
     ///
-    /// Wire-mappable: the namespace mirrors the server `cycle.tracking`
-    /// surface so the operator CAN deploy it server-side when the cycle
-    /// contract lands. Until then it resolves to its local default (OFF) on
-    /// every device. RECONCILE-WITH-SERVER: confirm the wire key + whether
-    /// the server gates this per-account.
+    /// Local only: the server never sent this key (the `/api/feature-flags`
+    /// read that was meant to carry it is gone, #115 · 0.2). The server-side
+    /// gate is the `cycle` module in `/api/auth/me` `modules`, which
+    /// `CycleGate` reads.
     case cycleTracking = "cycle.tracking"
 
-    /// Default state on first launch / pre-snapshot.
+    /// Default state.
     ///
-    /// - All four assistant surfaces default ON so the on-device path
-    ///   runs immediately on a fresh install. Operator turns them off
-    ///   via server config, and the next foreground refresh propagates
-    ///   the disabled state — there is no client-side default-deny.
-    /// - `enableDailyStats` defaults ON (cutover-build); operator
-    ///   override reverts to the legacy per-sample batch path for
-    ///   cumulative types.
+    /// - `enableDailyStats` defaults ON (cutover-build); a local override
+    ///   reverts to the legacy per-sample batch path for cumulative types.
     public var defaultValue: Bool {
         switch self {
-        case .assistantBriefing,
-             .assistantCoach,
-             .assistantTrend,
-             .assistantInsights,
-             .enableDailyStats,
+        case .enableDailyStats,
              .enableHRBuckets:
             true
         // v0.14.8 — cycle tracking is feature-complete (capture, calendar,
@@ -133,24 +79,11 @@ public enum FeatureFlag: String, Sendable, CaseIterable {
     }
 
     /// `UserDefaults` key under which the flag is persisted by the
-    /// legacy stub. The HTTP-backed store does not touch UserDefaults.
+    /// UserDefaults stub. Keys a previous build may have written for the
+    /// removed assistant flags (`feature_flag.assistant.*`) are no longer read
+    /// by anything.
     public var defaultsKey: String {
         "feature_flag.\(rawValue)"
-    }
-
-    /// Surface-suffix in the server's `errorCode` envelope. Used by
-    /// ``HLError.assistantDisabled`` to look up the matching flag
-    /// from a 403 response. Mirrors the server's
-    /// `"assistant.disabled.<surface>"` shape so the iOS side never
-    /// has to grep the raw string.
-    public static func from(serverSurface surface: String) -> FeatureFlag? {
-        switch surface {
-        case "briefing": .assistantBriefing
-        case "coach": .assistantCoach
-        case "trend", "trendObservations": .assistantTrend
-        case "insights": .assistantInsights
-        default: nil
-        }
     }
 }
 
@@ -181,18 +114,7 @@ public struct UserDefaultsFeatureFlagsService: FeatureFlagsServicing, @unchecked
     }
 }
 
-/// Sendable snapshot of the server-fetched feature flags. Built by
-/// ``FeatureFlagsStore`` after every successful refresh; injected into
-/// the on-device assistant services so they read the same operator
-/// state the surface guards do.
-///
-/// Why a snapshot value-type (vs the store directly)?
-/// `OnDeviceBriefingService` + `TrendObservationsService` are `actor`
-/// types and their initialiser captures `featureFlags` as
-/// `any FeatureFlagsServicing`. The store is `@MainActor`-isolated, so
-/// passing it directly would force a main-actor hop inside the actor.
-/// A frozen snapshot is cheap (one enum→bool map) and lets the actor
-/// stay on its own queue.
+/// Sendable snapshot of a flag map.
 public struct FeatureFlagsStoreSnapshot: FeatureFlagsServicing, Sendable {
     /// Map of `FeatureFlag` → enabled. Missing keys default to the
     /// flag's own ``FeatureFlag/defaultValue`` (fail-open during
@@ -208,19 +130,9 @@ public struct FeatureFlagsStoreSnapshot: FeatureFlagsServicing, Sendable {
     }
 }
 
-/// Closure-backed `FeatureFlagsServicing` that reads from a live
-/// store on every call. Bridges the @MainActor `FeatureFlagsStore`
-/// into a Sendable adaptor the on-device-AI actors can capture at
-/// construction.
-///
-/// Why a closure instead of a static snapshot? The on-device
-/// services are long-lived actors (constructed in `AppContainer.init`
-/// and held for the lifetime of the session). If the operator flips
-/// a flag mid-session, the next `generate(...)` call must see the
-/// new value rather than the snapshot captured at init time. The
-/// closure indirection trades one MainActor hop per gate-check for
-/// up-to-date state — acceptable cost because the on-device path
-/// is gate-checked O(1)/inference, not in tight loops.
+/// Closure-backed `FeatureFlagsServicing` that reads from a live store on
+/// every call. Bridges the @MainActor `FeatureFlagsStore` into a Sendable
+/// adaptor the HealthKit coordinators can capture at construction.
 public struct LiveFeatureFlagsService: FeatureFlagsServicing, Sendable {
     /// Resolver — invoked synchronously from the actor. AppContainer
     /// wires this to a closure that hops to MainActor to read the

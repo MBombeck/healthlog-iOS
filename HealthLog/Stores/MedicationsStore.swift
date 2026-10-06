@@ -44,7 +44,7 @@ public final class MedicationsStore {
     /// **v0.6.1.4 Y4.2 — per-medication card snapshots.** Server-fetched 7-/30-day
     /// compliance rates keyed by medication id, hydrated on `load()` + refreshed
     /// after each `markIntakeQuick`. `MedicationCard` reads via
-    /// `cardComplianceSnapshot(for:)`, with a local-algorithm fallback. Empty on logout.
+    /// `cardComplianceSnapshot(for:)` ("unknown" when the fetch failed, #115 B7). Empty on logout.
     public private(set) var complianceCardSnapshots: [String: ComplianceCardSnapshot] = [:]
     public private(set) var isLoading: Bool = false
     public internal(set) var error: HLError?
@@ -134,8 +134,8 @@ public final class MedicationsStore {
 
     /// **W-COMPLIANCE-INV — per-med fetch-failure marker.** A med-id lands
     /// here when its `GET …/compliance` round-trip failed (offline / 5xx) and
-    /// leaves on the next success. `cardComplianceSnapshot` only runs the
-    /// local-algorithm OFFLINE FALLBACK for ids in this set — before the
+    /// leaves on the next success. `cardComplianceSnapshot` answers "unknown"
+    /// (never a device-computed rate, #115 B7) for ids in this set — before the
     /// first settle the accessor returns `nil` so the card paints a skeleton
     /// instead of a local interim value that would jump on server arrival.
     var failedComplianceFetchIDs: Set<String> = []
@@ -475,8 +475,8 @@ public final class MedicationsStore {
         }
         // v0.6.1.4 Y4.2 — fan out per-medication server-canonical
         // snapshots once the medication list has settled. Quietly
-        // drops failures (cold cache / offline) so the screen still
-        // paints via the local-algorithm fallback.
+        // drops failures (cold cache / offline); the card then says
+        // "adherence unknown" (#115 B7).
         // v0.14.2 H4 — throttled so this load + the SWR `.fresh` re-emit it
         // races coalesce into ONE fan-out per screen-open (was N×2-3 GETs).
         await refreshAllCardComplianceSnapshotsThrottled(sessionLease: sessionLease)
@@ -521,7 +521,7 @@ public final class MedicationsStore {
             // refresh tolerates failures so unit-test fixtures that
             // omit the `/api/medications/[id]/compliance` stub keep
             // the existing direct-fetch contract — the dict stays
-            // empty and the card falls back to the local algorithm.
+            // empty and the card says "adherence unknown" (#115 B7).
             await refreshAllCardComplianceSnapshots(sessionLease: sessionLease)
         } catch let err as HLError {
             guard authenticatedEffectIsCurrent(sessionLease) else { return }
@@ -672,7 +672,9 @@ public final class MedicationsStore {
                 todayEventCount: row.todayEventCount,
                 notificationsEnabled: row.notificationsEnabled,
                 active: row.active,
-                archivedAt: preserved
+                archivedAt: preserved,
+                trackIntake: row.trackIntake,
+                recordedSchedule: row.recordedSchedule
             )
         }
     }
@@ -740,7 +742,7 @@ public final class MedicationsStore {
     /// the optimistic window and this refresh overwrites it ~200-600 ms later
     /// — one repaint with the canonical number instead of a local-interim
     /// jump. On failure the med-id is marked in `failedComplianceFetchIDs`
-    /// so the accessor may run its clearly-marked offline fallback.
+    /// so the accessor can say "adherence unknown" instead of a skeleton.
     public func refreshCardComplianceSnapshot(for medicationID: String) async {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return }
         await refreshCardComplianceSnapshot(for: medicationID, sessionLease: sessionLease)
@@ -769,7 +771,9 @@ public final class MedicationsStore {
                 displayShortDays: payload.complianceDisplay?.shortDays,
                 displayShortRate: payload.complianceDisplay?.short.rate,
                 displayLongDays: payload.complianceDisplay?.longDays,
-                displayLongRate: payload.complianceDisplay?.long.rate
+                displayLongRate: payload.complianceDisplay?.long.rate,
+                applicable: payload.isApplicable,
+                notApplicableReason: payload.notApplicableReason
             )
             complianceCardSnapshots[medicationID] = snapshot
             failedComplianceFetchIDs.remove(medicationID)
@@ -788,7 +792,7 @@ public final class MedicationsStore {
         } catch {
             guard authenticatedEffectIsCurrent(sessionLease) else { return }
             // W-COMPLIANCE-INV — mark the failed round-trip so the card
-            // accessor may paint the clearly-marked offline fallback instead
+            // accessor may say "adherence unknown" (#115 B7) instead
             // of a skeleton forever. A previous-good cached value still wins.
             failedComplianceFetchIDs.insert(medicationID)
             // M-7 triage — same rationale: cuid med id + free-form error text
@@ -838,7 +842,9 @@ public final class MedicationsStore {
                     displayShortDays: entry.complianceDisplay?.shortDays,
                     displayShortRate: entry.complianceDisplay?.short.rate,
                     displayLongDays: entry.complianceDisplay?.longDays,
-                    displayLongRate: entry.complianceDisplay?.long.rate
+                    displayLongRate: entry.complianceDisplay?.long.rate,
+                    applicable: entry.isApplicable,
+                    notApplicableReason: entry.notApplicableReason
                 )
                 failedComplianceFetchIDs.remove(entry.medicationId)
             }
@@ -912,7 +918,7 @@ public final class MedicationsStore {
 
         /// v0.6.1.4 Y4.2 test-only seam — seeds a single
         /// `ComplianceCardSnapshot` into the dict so contract tests
-        /// can assert the `cardComplianceSnapshot(for:windowIntakes:)`
+        /// can assert the `cardComplianceSnapshot(for:)`
         /// accessor reads from the cache before hitting the fallback.
         @MainActor
         // swiftlint:disable:next identifier_name

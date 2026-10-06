@@ -101,7 +101,9 @@ struct SettingsSourcesScreen: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            Text("\(row.label): \(row.sources.map { SourcePriorityRow.displayLabel(forSource: $0) }.joined(separator: ", "))")
+            Text(
+                "\(Text(LocalizedStringKey(row.label))): \(row.sources.map { SourcePriorityRow.displayLabel(forSource: $0) }.joined(separator: ", "))"
+            )
         )
     }
 }

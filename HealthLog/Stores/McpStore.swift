@@ -23,6 +23,10 @@ public final class McpStore {
     /// show-once sheet is presented.
     public private(set) var freshToken: ApiTokenMintResponse?
 
+    /// R2 / #115 A3 — set when the server wants a fresh proof for a mint;
+    /// the mint sheet asks for it and mints again.
+    public let stepUp = StepUpRetry()
+
     private let repo: McpRepository
 
     public init(repo: McpRepository) {
@@ -140,11 +144,11 @@ public final class McpStore {
         defer { isMinting = false }
 
         do {
-            freshToken = try await repo.mintToken(name: trimmed, scope: scope)
+            freshToken = try await repo.mintToken(name: trimmed, scope: scope, elevation: stepUp.take())
             tokens = await (try? repo.listTokens()) ?? tokens
             return true
         } catch let err as HLError {
-            error = err.userFacingDescription
+            error = stepUp.requestIfProofRefusal(err) ? StepUpRetry.requiredMessage : err.userFacingDescription
             return false
         } catch {
             self.error = String(localized: "Couldn't create the token. Please try again.")
@@ -168,6 +172,7 @@ public final class McpStore {
         freshToken = nil
         error = nil
         revoking = []
+        stepUp.cancel()
     }
 }
 

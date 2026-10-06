@@ -91,13 +91,23 @@ public actor NutrientReadRepository {
     /// failure the write is queued and the typed `HLError` re-throws (the store
     /// keeps its optimistic total). A `module.disabled` / other non-retriable
     /// reject re-throws WITHOUT queueing.
+    ///
+    /// #115 B6 — the body always names the day the tap happened on, in the
+    /// profile zone. Without it the server filed the write under ITS today at
+    /// the moment the request arrived, so a quick-add queued offline at 23:50
+    /// and replayed after midnight landed on the next day.
     @discardableResult
     public func quickAddWater(
         amountMl: Double,
         mode: NutrientWaterWriteMode,
-        day: String? = nil
+        day: String? = nil,
+        capturedAt: Date = .now
     ) async throws -> NutrientWaterWriteResponseDTO {
-        let body = NutrientWaterWriteRequestDTO(amountMl: amountMl, mode: mode, day: day)
+        let body = NutrientWaterWriteRequestDTO(
+            amountMl: amountMl,
+            mode: mode,
+            day: day ?? ProfileDay.key(for: capturedAt)
+        )
         let key = IdempotencyKey()
         do {
             return try await send(body, idempotencyKey: key)

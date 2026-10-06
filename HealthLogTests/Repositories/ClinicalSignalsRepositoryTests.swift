@@ -17,7 +17,7 @@ import Testing
 /// mock server): the exact server shape decodes; `present`/has-content drives the
 /// card self-suppression; the type tokens resolve to `MetricKind`; a `404`
 /// (route absent) → `nil` (graceful self-suppress); the store hydrates all three.
-@Suite("ClinicalSignals — v1.25 wire contracts + self-suppression", .serialized)
+@Suite("ClinicalSignals — v1.25 wire contracts + self-suppression", .serialized, .mockURLSession)
 struct ClinicalSignalsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -34,7 +34,7 @@ struct ClinicalSignalsRepositoryTests {
     @Test("health-status — decodes deviations + shifts; tokens resolve to MetricKind")
     func decodesHealthStatus() async throws {
         let repo = ClinicalSignalsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path.hasSuffix("/insights/health-status") == true)
             let body = Data(#"""
             {"data":{
@@ -74,7 +74,7 @@ struct ClinicalSignalsRepositoryTests {
     @Test("health-status — present:false → no content (card self-suppresses)")
     func healthStatusAbsentSelfSuppresses() async throws {
         let repo = ClinicalSignalsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"present":false,"deviations":[],"shifts":[],"generatedAt":"2026-06-28T06:00:00.000Z"},"error":null}
             """#.utf8)
@@ -87,7 +87,7 @@ struct ClinicalSignalsRepositoryTests {
     @Test("health-status — unknown type token decodes (metricKind nil), never crashes")
     func healthStatusTolerantUnknownToken() async throws {
         let repo = ClinicalSignalsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"present":true,"deviations":[
               {"type":"FUTURE_VITAL_X","value":1,"center":0,"low":-1,"high":1,"direction":"above"}
@@ -106,7 +106,7 @@ struct ClinicalSignalsRepositoryTests {
     @Test("breathing-screening — decodes nights/trend/events/classification")
     func decodesBreathing() async throws {
         let repo = ClinicalSignalsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path.hasSuffix("/insights/breathing-screening") == true)
             let body = Data(#"""
             {"data":{
@@ -128,7 +128,7 @@ struct ClinicalSignalsRepositoryTests {
     @Test("breathing-screening — null trend/classification + no data → no content")
     func breathingNullsSelfSuppress() async throws {
         let repo = ClinicalSignalsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"present":false,"nights":0,"recentMeanIndex":null,"trend":null,
               "eventCount":0,"classification":null,"generatedAt":"2026-06-28T06:00:00.000Z"},"error":null}
@@ -147,7 +147,7 @@ struct ClinicalSignalsRepositoryTests {
     @Test("labs-changes — decodes per-analyte delta + status")
     func decodesLabsChanges() async throws {
         let repo = ClinicalSignalsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path.hasSuffix("/insights/labs-changes") == true)
             let body = Data(#"""
             {"data":{
@@ -180,7 +180,7 @@ struct ClinicalSignalsRepositoryTests {
     @Test("labs-changes — fewer than two panels (present:false) → no content")
     func labsChangesAbsentSelfSuppresses() async throws {
         let repo = ClinicalSignalsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"present":false,"latestDate":null,"previousDate":null,"changes":[]},"error":null}
             """#.utf8)
@@ -195,7 +195,7 @@ struct ClinicalSignalsRepositoryTests {
     @Test("404 (route absent on an older server) → nil for each read")
     func routeAbsentIsNil() async {
         let repo = ClinicalSignalsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(await repo.fetchHealthStatus() == nil)
@@ -208,7 +208,7 @@ struct ClinicalSignalsRepositoryTests {
     func storeLoadHydratesAll() async {
         let repo = ClinicalSignalsRepository(api: makeAPI())
         let store = ClinicalSignalsStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let json = if path.hasSuffix("/insights/health-status") {
                 #"{"data":{"present":true,"deviations":[{"type":"PULSE","value":90,"center":70,"low":60,"high":80,"direction":"above"}],"shifts":[]},"error":null}"#
@@ -232,7 +232,7 @@ struct ClinicalSignalsRepositoryTests {
     func storeEmptyAndClear() async {
         let repo = ClinicalSignalsRepository(api: makeAPI())
         let store = ClinicalSignalsStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         await store.load()

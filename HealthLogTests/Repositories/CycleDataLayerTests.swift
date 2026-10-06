@@ -10,7 +10,7 @@ import Testing
 /// (externalId + Idempotency-Key), bulk per-entry result parse, 403
 /// cycle.disabled handling, sync tombstone-before-upsert identity, and an Outbox
 /// replay of a cycle op. Real `APIClient` + stub `URLProtocol` (no mock server).
-@Suite("Cycle data layer (v1.15 LOCKED)", .serialized)
+@Suite("Cycle data layer (v1.15 LOCKED)", .serialized, .mockURLSession)
 struct CycleDataLayerTests {
     private struct StubReach: ReachabilityProviding, @unchecked Sendable {
         let online: Bool
@@ -134,7 +134,7 @@ struct CycleDataLayerTests {
         let repo = try CycleRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true))
         nonisolated(unsafe) var capturedIdem: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedIdem = req.value(forHTTPHeaderField: "Idempotency-Key")
             capturedBody = req.bodyBytes()
             let body = Data(
@@ -180,7 +180,7 @@ struct CycleDataLayerTests {
     func cycleDisabled403() async throws {
         let outbox = try OutboxQueue(inMemory: true)
         let repo = CycleRepository(api: makeAPI(), outbox: outbox)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // v1.15 LOCKED: top-level `errorCode` (the assistant-disabled
             // precedent the iOS `APIEnvelope` already parses).
             let body = Data(#"{"data":null,"error":"cycle disabled","errorCode":"cycle.disabled"}"#.utf8)
@@ -207,7 +207,7 @@ struct CycleDataLayerTests {
 
         nonisolated(unsafe) var hitBulk = false
         nonisolated(unsafe) var replayIdem: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             hitBulk = req.url?.path.hasSuffix("/api/cycle/day-logs/bulk") ?? false
             replayIdem = req.value(forHTTPHeaderField: "Idempotency-Key")
             let body = Data(#"{"data":{"entries":[{"index":0,"status":"inserted","id":"s","externalId":"ext-r"}]}}"#.utf8)
@@ -264,7 +264,7 @@ struct CycleDataLayerTests {
         let repo = try CycleRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true))
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let body = Data(
@@ -284,7 +284,7 @@ struct CycleDataLayerTests {
     @Test("purgeAll surfaces 403 cycle.disabled as the typed disabled error")
     func purgeAllDisabled() async throws {
         let repo = try CycleRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true))
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"cycle.disabled","errorCode":"cycle.disabled"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -429,7 +429,7 @@ extension CycleDataLayerTests {
     func updateSecondarySymptomRequest() async throws {
         nonisolated(unsafe) var capturedBody: Data?
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedBody = req.bodyBytes()
             let body = Data(#"""
@@ -468,5 +468,51 @@ private extension URLRequest {
             data.append(buffer, count: read)
         }
         return data
+    }
+}
+
+// MARK: - #115 / 0.3 — a replayed day-log the server did not store stays queued
+
+extension CycleDataLayerTests {
+    /// `day-logs/bulk` (v1.39.0) answers a failed DB write with HTTP 200 and
+    /// `skipped` + `upsert_failed`. The 279 replay discarded the response, so the
+    /// row drained and the day — whose HealthKit anchor had already moved — was
+    /// gone.
+    @Test("#115 — a replayed day-log skipped with upsert_failed stays queued; unstable_external_id drains")
+    func replaySkippedUpsertFailedStaysQueued() async throws {
+        let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { nil })
+        let write = CycleDayLogWrite(date: "2026-06-02", flow: .medium, loggedAt: "2026-06-02T08:00:00Z", externalId: "ext-r")
+        let payload = try JSONEncoder.hlDefault.encode(OutboxQueue.Payloads.LogCycleDayLog(write: write))
+        try await outbox.enqueue(.init(kind: .logCycleDayLog, payload: payload, idempotencyKey: "idem-cycle-2"))
+
+        MockURLProtocol.install(Self.skippedDayLog(reason: "upsert_failed"))
+        let api = makeAPI()
+        let replay = OutboxReplayService(
+            outbox: outbox,
+            measurementsRepo: MeasurementsRepository(api: api, outbox: outbox),
+            moodRepo: MoodRepository(api: api, outbox: outbox),
+            medicationsRepo: MedicationsRepository(api: api, outbox: outbox),
+            cycleRepo: CycleRepository(api: api, outbox: outbox),
+            currentUserProvider: { nil },
+            attemptBackoff: 0
+        )
+
+        await replay.runOnce()
+        let held = try #require(await outbox.snapshot.first, "an unstored day-log must not drain")
+        #expect(held.attempts == 1, "retried under the outbox budget, like any transient failure")
+
+        MockURLProtocol.install(Self.skippedDayLog(reason: "unstable_external_id"))
+        await replay.runOnce()
+        #expect(await outbox.snapshot.isEmpty, "the one verdict a retry cannot change lets the row go")
+    }
+
+    /// `day-logs/bulk` answering the single replayed entry with `skipped`.
+    private static func skippedDayLog(reason: String) -> MockURLProtocol.Handler {
+        { req in
+            let body = Data(
+                #"{"data":{"entries":[{"index":0,"status":"skipped","externalId":"ext-r","reason":"\#(reason)"}]}}"#.utf8
+            )
+            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
+        }
     }
 }

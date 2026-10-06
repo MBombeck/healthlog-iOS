@@ -28,6 +28,10 @@ enum RecordShareImage {
     /// Off-screen view rendered into a UIImage for sharing.
     struct Surface: View {
         let record: PersonalRecord
+        /// #115 P2 — handed in explicitly: `ImageRenderer` renders outside the
+        /// app's environment, so an `@Environment` read would fall back to
+        /// the metric identity and share a kg image from an lb account.
+        var units: UnitPreferences = .standard
 
         var body: some View {
             ZStack {
@@ -60,7 +64,7 @@ enum RecordShareImage {
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                    Text(record.base.unit)
+                    Text(record.base.displayUnit(units))
                         .font(.system(size: 32, weight: .semibold, design: .rounded))
                         .foregroundStyle(HLColor.recordHeroInk.opacity(0.85))
                     Spacer(minLength: 0)
@@ -86,16 +90,17 @@ enum RecordShareImage {
 
         private var formattedValue: String {
             let f = NumberFormatter()
-            f.locale = Locale(identifier: "de_DE")
+            f.locale = Locale.current
             f.numberStyle = .decimal
             f.maximumFractionDigits = 1
             f.minimumFractionDigits = 0
-            return f.string(from: NSNumber(value: record.base.value)) ?? "\(record.base.value)"
+            let value = record.base.displayValue(units)
+            return f.string(from: NSNumber(value: value)) ?? "\(value)"
         }
 
         private var dateLabel: String {
             let f = DateFormatter()
-            f.locale = Locale(identifier: "de_DE")
+            f.locale = Locale.current
             f.dateStyle = .long
             return f.string(from: record.base.achievedAt)
         }
@@ -107,9 +112,9 @@ enum RecordShareImage {
     /// without UIKit (mac unit-tests) so callers can short-circuit
     /// gracefully.
     @MainActor
-    static func render(_ record: PersonalRecord) -> UIImage? {
+    static func render(_ record: PersonalRecord, units: UnitPreferences = .standard) -> UIImage? {
         #if canImport(UIKit)
-            let renderer = ImageRenderer(content: Surface(record: record))
+            let renderer = ImageRenderer(content: Surface(record: record, units: units))
             // `UIScreen.main` is deprecated (no single main screen in iOS 18
             // multi-scene). `UITraitCollection.current.displayScale` reflects the
             // active scene's scale on the main actor, so the exported PNG keeps the

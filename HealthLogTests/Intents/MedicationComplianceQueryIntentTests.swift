@@ -156,54 +156,50 @@ struct MedicationComplianceQueryIntentTests {
     }
 }
 
-/// **M1 (AUDIT-bugs b198)** — `ComplianceDayMatcher` must resolve "today" for a
-/// server day-key whose `.date` is UTC-midnight (`JSONDecoder.hlDayKey`), even
-/// for a user west of UTC, AND for a standalone day-key at local midnight.
-@Suite("ComplianceDayMatcher — timezone-robust today resolution (M1)")
+/// **M1 (AUDIT-bugs b198) / #115 1.5** — `ComplianceDayMatcher` resolves
+/// "today" as the ACCOUNT's today. Every `ComplianceDay.date` is the UTC-midnight
+/// anchor of a server `YYYY-MM-DD` (`JSONDecoder.hlDefault`); the server buckets
+/// compliance in the profile zone, so today is today's key in that zone.
+@Suite("ComplianceDayMatcher — today in the profile zone (M1, #115 1.5)")
 struct ComplianceDayMatcherTests {
-    private func utcCalendar() -> Calendar {
-        var c = Calendar(identifier: .iso8601)
-        c.timeZone = .gmt
-        return c
+    private func anchor(_ key: String) throws -> Date {
+        try #require(ProfileDay.anchor(forKey: key))
     }
 
-    @Test("Server UTC-midnight day matches today for a user west of UTC (Americas)")
-    func utcMidnightDayMatchesWestOfUTC() throws {
-        // `now` = 2026-06-19T03:00:00Z. In Los Angeles (UTC-7/8) the local
-        // calendar day is still 2026-06-18, but the server's compliance day-key
-        // for "today" is the UTC date 2026-06-19 at UTC-midnight. The naive
-        // `Calendar.current.isDateInToday(utcMidnight)` would MISS that day for a
-        // west-of-UTC host; the matcher's UTC arm must catch it.
+    @Test("An account in Los Angeles at 03:00Z is still on the previous day")
+    func westOfUTCAccountUsesItsOwnDay() throws {
+        // 2026-06-19T03:00:00Z = 2026-06-18 20:00 in Los Angeles. The server's
+        // row for this account's today is keyed 2026-06-18. The old matcher took
+        // the UTC date (and, on a device east of UTC, the device date) and
+        // answered with 2026-06-19 — a day the account has not reached yet.
         let now = try #require(ISO8601DateFormatter().date(from: "2026-06-19T03:00:00Z"))
-        let utcMidnightToday = utcCalendar().startOfDay(for: now) // 2026-06-19 00:00 UTC
-        let yesterday = utcMidnightToday.addingTimeInterval(-86400)
-
-        let days = [
-            ComplianceDay(date: yesterday, scheduled: 2, taken: 2),
-            ComplianceDay(date: utcMidnightToday, scheduled: 3, taken: 1)
+        let losAngeles = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let days = try [
+            ComplianceDay(date: anchor("2026-06-18"), scheduled: 2, taken: 2),
+            ComplianceDay(date: anchor("2026-06-19"), scheduled: 3, taken: 1)
         ]
 
-        let match = ComplianceDayMatcher.today(in: days, now: now)
-        #expect(match?.date == utcMidnightToday)
-        #expect(match?.taken == 1, "Must pick today's UTC row (1 taken), not yesterday's")
+        let match = ComplianceDayMatcher.today(in: days, now: now, timeZone: losAngeles)
+        #expect(try match?.date == anchor("2026-06-18"))
+        #expect(match?.taken == 2)
     }
 
-    @Test("Standalone local-midnight day matches today")
-    func localMidnightDayMatches() {
-        let now = Date.now
-        let localMidnightToday = Calendar.current.startOfDay(for: now)
-        let days = [ComplianceDay(date: localMidnightToday, scheduled: 1, taken: 1)]
-        let match = ComplianceDayMatcher.today(in: days, now: now)
-        #expect(match?.date == localMidnightToday)
+    @Test("An account in Tokyo at 20:00Z is already on the next day")
+    func eastOfUTCAccountUsesItsOwnDay() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-06-18T20:00:00Z"))
+        let tokyo = try #require(TimeZone(identifier: "Asia/Tokyo"))
+        let days = try [
+            ComplianceDay(date: anchor("2026-06-18"), scheduled: 2, taken: 2),
+            ComplianceDay(date: anchor("2026-06-19"), scheduled: 3, taken: 1)
+        ]
+        #expect(try ComplianceDayMatcher.today(in: days, now: now, timeZone: tokyo)?.date == anchor("2026-06-19"))
     }
 
     @Test("No matching day returns nil (caller falls back to days.last)")
     func noTodayReturnsNil() throws {
         let now = try #require(ISO8601DateFormatter().date(from: "2026-06-19T03:00:00Z"))
-        let utcMidnightToday = utcCalendar().startOfDay(for: now)
-        let twoDaysAgo = utcMidnightToday.addingTimeInterval(-2 * 86400)
-        let days = [ComplianceDay(date: twoDaysAgo, scheduled: 2, taken: 2)]
-        #expect(ComplianceDayMatcher.today(in: days, now: now) == nil)
+        let days = try [ComplianceDay(date: anchor("2026-06-16"), scheduled: 2, taken: 2)]
+        #expect(ComplianceDayMatcher.today(in: days, now: now, timeZone: .gmt) == nil)
     }
 }
 

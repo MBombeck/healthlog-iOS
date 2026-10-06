@@ -62,12 +62,23 @@ public enum IllnessType: String, Codable, Sendable, CaseIterable, Equatable, Ide
 
 /// `{ ACUTE | CHRONIC_ONGOING | RECURRING | FLARE }` — the episode lifecycle.
 /// `CHRONIC_ONGOING` has no recovery date (the resolve route 422s for it).
-/// Tolerant decode falls back to ``acute``.
-public enum IllnessLifecycle: String, Codable, Sendable, CaseIterable, Equatable, Identifiable {
+/// A value this build does not know, or a missing one, decodes to ``unknown``
+/// (#115 · 1.7 / C1). It used to become ``acute``, which labelled a condition
+/// as a short illness and — through the edit sheet — could unlink its parent
+/// condition. ``unknown`` is never offered in a picker and never sent.
+public enum IllnessLifecycle: String, Codable, Sendable, CaseIterable, Equatable, Identifiable, TolerantServerEnum {
     case acute = "ACUTE"
     case chronicOngoing = "CHRONIC_ONGOING"
     case recurring = "RECURRING"
     case flare = "FLARE"
+    /// A course this build does not know. Asserts nothing; rendered neutrally.
+    case unknown = "UNKNOWN"
+
+    public static let unknownFallback: IllnessLifecycle = .unknown
+    public static let wireVocabulary: StaticString = "IllnessLifecycle"
+
+    /// The courses a person can pick. Excludes ``unknown``.
+    public static let allCases: [IllnessLifecycle] = [.acute, .chronicOngoing, .recurring, .flare]
 
     public var id: String {
         rawValue
@@ -75,13 +86,9 @@ public enum IllnessLifecycle: String, Codable, Sendable, CaseIterable, Equatable
 
     /// A `CHRONIC_ONGOING` episode can never be resolved (the server 422s with
     /// `illness.episode.chronic-no-resolve`) — the UI hides the resolve action.
+    /// An ``unknown`` course keeps the action; the server decides.
     public var isResolvable: Bool {
         self != .chronicOngoing
-    }
-
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = IllnessLifecycle(rawValue: raw) ?? .acute
     }
 }
 
@@ -141,7 +148,7 @@ public struct IllnessEpisodeDTO: Codable, Sendable, Equatable, Identifiable, Has
         id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
         label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
         type = try c.decodeIfPresent(IllnessType.self, forKey: .type) ?? .other
-        lifecycle = try c.decodeIfPresent(IllnessLifecycle.self, forKey: .lifecycle) ?? .acute
+        lifecycle = try c.decodeIfPresent(IllnessLifecycle.self, forKey: .lifecycle) ?? .unknown
         onsetAt = try c.decodeIfPresent(String.self, forKey: .onsetAt) ?? ""
         resolvedAt = try c.decodeIfPresent(String.self, forKey: .resolvedAt)
         parentConditionId = try c.decodeIfPresent(String.self, forKey: .parentConditionId)

@@ -174,11 +174,17 @@ struct AboutMeScreen: View {
         }
     }
 
-    /// Height in cm from the profile, formatted "%lld cm". Nil → empty
-    /// placeholder. Height is not unit-converted anywhere in the app (the
-    /// editor stores/edits it in cm), so no `UnitPreferences` conversion here.
+    /// Height from the profile: "%lld cm" on a metric account, "5 ft 11 in"
+    /// on an imperial one (#115 P2 — the web converts this profile column the
+    /// same way). Nil → empty placeholder. The editor still takes centimetres
+    /// (see the P2 report, open points).
     private var heightDisplay: String? {
         guard let cm = profile?.heightCm else { return nil }
+        if settingsStore.unitPreference == .imperial,
+           let imperial = UnitPreferences.feetAndInches(fromCentimetres: Double(cm))
+        {
+            return String(localized: "aboutMe.body.heightValue.imperial \(imperial.feet) \(imperial.inches)")
+        }
         return String(format: String(localized: "aboutMe.body.heightValue"), cm)
     }
 

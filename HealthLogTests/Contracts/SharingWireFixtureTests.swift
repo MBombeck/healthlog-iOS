@@ -34,7 +34,7 @@ import Testing
 /// exists to catch (12-11: a search that can only ever pass proves nothing, so
 /// each pin also asserts a control substring that must be present).
 @MainActor
-@Suite("SharingWireFixtures", .serialized)
+@Suite("SharingWireFixtures", .serialized, .mockURLSession)
 struct SharingWireFixtureTests {
     // MARK: - The fixed inputs every fixture was captured with
 
@@ -91,7 +91,7 @@ struct SharingWireFixtureTests {
     @Test("the current PDF call site sends what pdf.json records")
     func pdfCallSiteMatchesFixture() async throws {
         let recorder = WireRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return SharingWire.binaryOK(req, contentType: "application/pdf", bytes: Data("%PDF-1.4".utf8))
         }
@@ -110,7 +110,7 @@ struct SharingWireFixtureTests {
     @Test("the current ZIP call site sends what zip.json records")
     func zipCallSiteMatchesFixture() async throws {
         let recorder = WireRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return SharingWire.binaryOK(req, contentType: "application/zip", bytes: Data("PK".utf8))
         }
@@ -142,7 +142,7 @@ struct SharingWireFixtureTests {
     @Test("the current FHIR call site sends what fhir.json records")
     func fhirCallSiteMatchesFixture() async throws {
         let recorder = WireRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return SharingWire.jsonOK(
                 req,
@@ -198,7 +198,7 @@ struct SharingWireFixtureTests {
 
     private func captureLink(selection: ReportSelection, fixture: String) async throws {
         let recorder = WireRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return req.httpMethod == "POST"
                 ? SharingWire.jsonOK(req, SharingWire.shareLinkResponseJSON)

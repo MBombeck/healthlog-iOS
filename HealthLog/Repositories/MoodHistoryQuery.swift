@@ -72,7 +72,9 @@ public struct MoodHistoryQuery: Sendable, Equatable {
         return items
     }
 
-    func matches(_ entry: MoodEntry, calendar: Calendar = .current) -> Bool {
+    /// #115 1.5 — `from`/`to` are day keys in the ACCOUNT zone, so the local
+    /// match reads them in the same calendar (``ProfileDay``).
+    func matches(_ entry: MoodEntry, calendar: Calendar = ProfileDay.calendar()) -> Bool {
         if let mood, entry.mood != mood { return false }
         if let source, entry.source?.uppercased() != source.rawValue { return false }
 
@@ -134,11 +136,14 @@ public struct MoodHistoryFilter: Sendable, Equatable {
         self = MoodHistoryFilter()
     }
 
+    /// #115 1.5 — the trailing presets are the account's last N days: cut in
+    /// the profile zone (``ProfileDay``), the zone the server reads `from`/`to`
+    /// in, not the phone's.
     public func query(
         limit: Int,
         offset: Int,
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = ProfileDay.calendar()
     ) -> MoodHistoryQuery {
         let bounds: (String?, String?) = switch period {
         case .all:
@@ -166,6 +171,17 @@ public struct MoodHistoryFilter: Sendable, Equatable {
             limit: limit,
             offset: offset
         )
+    }
+
+    /// #115 B6 — the range the Custom period opens with: the last 29 days up to
+    /// and including today, both named in the profile zone. The screen took
+    /// the phone's today, so west of the account the range ended a day early.
+    public static func defaultCustomRange(
+        now: Date = .now,
+        timeZone: TimeZone = ProfileDay.timeZone
+    ) -> (from: String, to: String) {
+        let today = ProfileDay.key(for: now, timeZone: timeZone)
+        return (ProfileDay.key(today, addingDays: -29), today)
     }
 
     private static func trailingBounds(

@@ -29,7 +29,7 @@ struct MeasurementBatchUploaderNotifierTests {
         let uploader = MeasurementBatchUploader(api: api, throttle: throttle)
 
         let collector = TimestampCollector()
-        await uploader.setSuccessNotifier { date in
+        uploader.setSuccessNotifier { date, _ in
             await collector.append(date)
         }
 
@@ -56,7 +56,7 @@ struct MeasurementBatchUploaderNotifierTests {
         let uploader = MeasurementBatchUploader(api: api, throttle: throttle)
 
         let collector = TimestampCollector()
-        await uploader.setSuccessNotifier { date in
+        uploader.setSuccessNotifier { date, _ in
             await collector.append(date)
         }
 
@@ -74,7 +74,7 @@ struct MeasurementBatchUploaderNotifierTests {
         let uploader = MeasurementBatchUploader(api: api, throttle: throttle)
 
         let collector = TimestampCollector()
-        await uploader.setSuccessNotifier { date in
+        uploader.setSuccessNotifier { date, _ in
             await collector.append(date)
         }
 
@@ -87,6 +87,58 @@ struct MeasurementBatchUploaderNotifierTests {
 
         let timestamps = await collector.values
         #expect(timestamps.isEmpty)
+    }
+}
+
+// MARK: - #10 — the owner rides along
+
+extension MeasurementBatchUploaderNotifierTests {
+    /// The receiver fences on the account that carried the POST, so the
+    /// uploader has to name it: the lease owner, not whoever is current when the
+    /// answer lands.
+    @Test("Notifier trägt den Lease-Eigentümer des POST mit (#10)")
+    func notifierCarriesLeaseOwner() async throws {
+        let api = NotifierStubAPI()
+        let throttle = BatchSyncThrottle(maxPerWindow: 60, window: 60.0, jitter: 0 ... 0)
+        let uploader = MeasurementBatchUploader(
+            api: api,
+            throttle: throttle,
+            authenticationSnapshot: {
+                MeasurementUploadAuthenticationSnapshot(ownerUserID: " user-a ", bearerToken: "token-a")
+            }
+        )
+        let owners = OwnerCollector()
+        uploader.setSuccessNotifier { _, owner in
+            await owners.append(owner)
+        }
+
+        _ = try await uploader.upload(Self.entries)
+
+        #expect(await owners.values == ["user-a"])
+    }
+
+    /// A lease-less uploader (direct unit tests only) names no owner, and the
+    /// production sink stamps nothing for it.
+    @Test("Ohne Lease-Quelle meldet der Notifier keinen Eigentümer (#10)")
+    func notifierWithoutLeaseNamesNoOwner() async throws {
+        let api = NotifierStubAPI()
+        let throttle = BatchSyncThrottle(maxPerWindow: 60, window: 60.0, jitter: 0 ... 0)
+        let uploader = MeasurementBatchUploader(api: api, throttle: throttle)
+        let owners = OwnerCollector()
+        uploader.setSuccessNotifier { _, owner in
+            await owners.append(owner)
+        }
+
+        _ = try await uploader.upload(Self.entries)
+
+        #expect(await owners.values == [nil])
+    }
+}
+
+private actor OwnerCollector {
+    private(set) var values: [String?] = []
+    func append(_ owner: String?) {
+        values.append(owner)
     }
 }
 

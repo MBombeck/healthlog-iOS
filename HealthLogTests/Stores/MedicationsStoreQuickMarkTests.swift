@@ -13,7 +13,7 @@ import Testing
 /// already covered by `MedicationsStoreMarkIntakeTests` (F5 reconcile);
 /// this suite focuses on the WriteOutcome contract the list-row quick-mark
 /// surface depends on.
-@Suite("MedicationsStore — markIntakeQuick WriteOutcome contract", .serialized)
+@Suite("MedicationsStore — markIntakeQuick WriteOutcome contract", .serialized, .mockURLSession)
 struct MedicationsStoreQuickMarkTests {
     private static let scheduled = Date(timeIntervalSince1970: 1_714_550_400)
     private static let now = scheduled.addingTimeInterval(3600) // 1h after scheduled
@@ -69,7 +69,7 @@ struct MedicationsStoreQuickMarkTests {
     func quickMarkSuccess() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = #"{"data":{"id":"intake-1","medicationId":"med-1","scheduledFor":"2026-05-01T08:00:00Z","takenAt":"2026-05-01T09:00:00Z","skipped":false,"snoozedUntil":null}}"#
             return (Self.ok(req), Data(body.utf8))
         }
@@ -91,7 +91,7 @@ struct MedicationsStoreQuickMarkTests {
     func quickMarkQueuedKeepsOptimisticPatch() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let repo = MedicationsRepository(api: api, outbox: outbox)
@@ -116,7 +116,7 @@ struct MedicationsStoreQuickMarkTests {
     func quickMarkFailedRollsBack() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (Self.status(422, request: req), Data(#"{"error":"validation"}"#.utf8))
         }
         let repo = MedicationsRepository(api: api, outbox: outbox)
@@ -143,7 +143,7 @@ struct MedicationsStoreQuickMarkTests {
     func quickMarkSoftNoOpOnMissingId() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Should never be reached.
             (Self.status(500, request: req), Data())
         }
@@ -168,7 +168,7 @@ struct MedicationsStoreQuickMarkTests {
         // Server response carries server-stamped takenAt — distinct from our
         // optimistic-now to verify the resolver uses the server value.
         let serverTakenAt = "2026-05-01T09:00:00Z"
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = #"{"data":{"id":"intake-1","medicationId":"med-1","scheduledFor":"2026-05-01T08:00:00Z","takenAt":"\#(serverTakenAt)","skipped":false,"snoozedUntil":null}}"#
             return (Self.ok(req), Data(body.utf8))
         }

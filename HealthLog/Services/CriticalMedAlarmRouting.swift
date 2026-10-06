@@ -74,6 +74,9 @@ enum CriticalMedAlarmRouting {
     ) -> Bool {
         guard osAvailable, authorized else { return false }
         guard medication.active, medication.notificationsEnabled else { return false }
+        // v1.39.1 (#1033) — a medication kept as a record never alarms; leaving
+        // it out of the alarm set cancels any alarm armed before the switch.
+        guard medication.tracksIntake else { return false }
         guard !medication.schedule.entries.isEmpty else { return false }
         guard medication.schedule.entries.contains(where: { !$0.effectiveTimes.isEmpty }) else { return false }
         return alarmEnabled(medication.id)
@@ -143,42 +146,66 @@ enum CriticalMedAlarmRouting {
             now: now
         )
         var planned: [PlannedAlarm] = []
+        // R1 — a weekly-recurring alarm has no first or last day; a course that
+        // has not started yet, or ends soon, arms its next occurrence instead.
+        let repeats = MedicationRecurrenceEngine.repeatingRuleFits(
+            context: context, now: now, endHorizon: repeatingAlarmEndHorizon
+        )
         for entry in medication.schedule.entries {
-            switch entry.cadence {
-            case .daily:
-                for time in entry.effectiveTimes {
-                    planned.append(.weekly(AlarmSlot(hour: time.hour, minute: time.minute, weekdays: [])))
-                }
-            case let .weekdays(days):
-                appendWeeklySlots(entry: entry, days: days, into: &planned)
-            case let .everyNWeeks(interval, days):
-                if interval <= 1 {
-                    appendWeeklySlots(entry: entry, days: days, into: &planned)
-                } else {
-                    appendFixed(entry: entry, context: context, now: now, into: &planned)
-                }
-            case let .legacy(days, intervalWeeks):
-                if let days, !days.isEmpty, intervalWeeks <= 1 {
-                    appendWeeklySlots(entry: entry, days: days, into: &planned)
-                } else if days?.isEmpty ?? true, intervalWeeks <= 1 {
-                    for time in entry.effectiveTimes {
-                        planned.append(.weekly(AlarmSlot(hour: time.hour, minute: time.minute, weekdays: [])))
-                    }
-                } else {
-                    appendFixed(entry: entry, context: context, now: now, into: &planned)
-                }
-            case .monthly, .everyNMonths, .yearly, .rolling, .oneShot, .cyclic:
-                // Cyclic on/off-weeks has no clean AlarmKit Recurrence → arm a
-                // single `.fixed` alarm at the next on-week occurrence,
-                // re-armed on reconcile / intake. Off-weeks yield no alarm.
+            if !repeats, entry.cadence.armsWeeklyAlarm {
                 appendFixed(entry: entry, context: context, now: now, into: &planned)
-            case .asNeeded:
-                // PRN / as-needed — never arms a critical alarm.
-                continue
+            } else {
+                appendPlanned(entry: entry, context: context, now: now, into: &planned)
             }
         }
         return planned
     }
+
+    /// One entry's alarms when the course allows a weekly-recurring slot (the
+    /// pre-R1 mapping, unchanged).
+    private static func appendPlanned(
+        entry: ScheduleEntry,
+        context: MedicationRecurrenceEngine.Context,
+        now: Date,
+        into planned: inout [PlannedAlarm]
+    ) {
+        switch entry.cadence {
+        case .daily:
+            for time in entry.effectiveTimes {
+                planned.append(.weekly(AlarmSlot(hour: time.hour, minute: time.minute, weekdays: [])))
+            }
+        case let .weekdays(days):
+            appendWeeklySlots(entry: entry, days: days, into: &planned)
+        case let .everyNWeeks(interval, days):
+            if interval <= 1 {
+                appendWeeklySlots(entry: entry, days: days, into: &planned)
+            } else {
+                appendFixed(entry: entry, context: context, now: now, into: &planned)
+            }
+        case let .legacy(days, intervalWeeks):
+            if let days, !days.isEmpty, intervalWeeks <= 1 {
+                appendWeeklySlots(entry: entry, days: days, into: &planned)
+            } else if days?.isEmpty ?? true, intervalWeeks <= 1 {
+                for time in entry.effectiveTimes {
+                    planned.append(.weekly(AlarmSlot(hour: time.hour, minute: time.minute, weekdays: [])))
+                }
+            } else {
+                appendFixed(entry: entry, context: context, now: now, into: &planned)
+            }
+        case .monthly, .everyNMonths, .yearly, .rolling, .oneShot, .cyclic:
+            // Cyclic on/off-weeks has no clean AlarmKit Recurrence → arm a
+            // single `.fixed` alarm at the next on-week occurrence,
+            // re-armed on reconcile / intake. Off-weeks yield no alarm.
+            appendFixed(entry: entry, context: context, now: now, into: &planned)
+        case .asNeeded:
+            // PRN / as-needed — never arms a critical alarm.
+            break
+        }
+    }
+
+    /// How far ahead a course end must lie for a weekly-recurring alarm to
+    /// stand in for it (the Spezi pre-arm horizon, eight weeks).
+    static let repeatingAlarmEndHorizon: TimeInterval = 8 * 7 * 24 * 60 * 60
 
     private static func appendWeeklySlots(
         entry: ScheduleEntry,
@@ -279,5 +306,17 @@ enum UUIDv5 {
             uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
         )
         return UUID(uuid: tuple)
+    }
+}
+
+private extension Cadence {
+    /// The cadences ``CriticalMedAlarmRouting/plannedAlarms(for:now:timeZone:)``
+    /// arms as a weekly-recurring AlarmKit slot when the course allows it.
+    var armsWeeklyAlarm: Bool {
+        switch self {
+        case .daily, .weekdays, .legacy: true
+        case let .everyNWeeks(interval, _): interval <= 1
+        case .monthly, .everyNMonths, .yearly, .rolling, .oneShot, .asNeeded, .cyclic: false
+        }
     }
 }

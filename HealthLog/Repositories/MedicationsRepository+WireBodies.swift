@@ -173,6 +173,10 @@ public extension MedicationsRepository {
         /// schedules and is excluded from compliance. The Apple-mirror path
         /// sets this from `scheduleType == .asNeeded`.
         public let asNeeded: Bool?
+        /// **v1.39.1 (#1033) — intake tracking.** Omitted (nil) → the server
+        /// default, tracked. The add sheet sends `false` only, and only against
+        /// a server that knows the field (E1).
+        public let trackIntake: Bool?
 
         public init(
             name: String,
@@ -195,7 +199,8 @@ public extension MedicationsRepository {
             externalSource: String? = nil,
             externalId: String? = nil,
             rxNormCode: String? = nil,
-            asNeeded: Bool? = nil
+            asNeeded: Bool? = nil,
+            trackIntake: Bool? = nil
         ) {
             self.name = name
             self.dose = dose
@@ -218,6 +223,7 @@ public extension MedicationsRepository {
             self.externalId = externalId
             self.rxNormCode = rxNormCode
             self.asNeeded = asNeeded
+            self.trackIntake = trackIntake
         }
     }
 
@@ -283,6 +289,14 @@ public extension MedicationsRepository {
         /// rather than by hand, so they cannot drift apart.
         public let asNeeded: Bool?
 
+        /// **v1.39.1 (#1033) — intake tracking.** Omitted (nil) → unchanged
+        /// server-side. Named only when the person changed the switch, or to
+        /// make a schedule edit on a medication kept as a record apply (the
+        /// server drops `schedules`/`asNeeded`/`oneShot` on such a medication
+        /// from a write that does not name it). Build the value with
+        /// ``MedicationTrackIntakeWrite/value(server:edited:scheduleChanged:)``.
+        public let trackIntake: Bool?
+
         /// **Read-modify-write safety (R1 risk 5).** Every field is optional;
         /// the server applies only the keys present. When `schedules` is
         /// supplied it REPLACES the full schedule list server-side, so a
@@ -311,7 +325,8 @@ public extension MedicationsRepository {
             criticalAlarmEnabled: Bool? = nil,
             trackInjectionSites: Bool? = nil,
             allowedInjectionSites: [String]? = nil,
-            asNeeded: Bool? = nil
+            asNeeded: Bool? = nil,
+            trackIntake: Bool? = nil
         ) {
             self.name = name
             self.dose = dose
@@ -331,6 +346,7 @@ public extension MedicationsRepository {
             self.trackInjectionSites = trackInjectionSites
             self.allowedInjectionSites = allowedInjectionSites
             self.asNeeded = asNeeded
+            self.trackIntake = trackIntake
         }
     }
 

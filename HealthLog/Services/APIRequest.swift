@@ -73,6 +73,30 @@ public struct APIRequest<Response: Sendable>: Sendable {
     }
 }
 
+public extension APIRequest {
+    /// R2 / #115 A3 — this request carrying a single-use step-up elevation in
+    /// `X-Step-Up`, or unchanged when there is none. A request that carries one
+    /// is never re-sent by the transport (`maxRetries: 0`): the server spends
+    /// the elevation when it acts, so a replay could only be refused.
+    func withStepUpElevation(_ elevation: String?) -> APIRequest<Response> {
+        guard let elevation, !elevation.isEmpty else { return self }
+        var headers = extraHeaders
+        headers[SecurityHTTPHeader.stepUp] = elevation
+        return APIRequest(
+            method: method,
+            path: path,
+            query: query,
+            body: body,
+            extraHeaders: headers,
+            idempotencyKey: idempotencyKey,
+            maxRetries: 0,
+            failFast: failFast,
+            streaming: streaming,
+            allowsAuthenticationRecovery: allowsAuthenticationRecovery
+        )
+    }
+}
+
 public extension APIRequest where Response: Decodable {
     static func get(_ path: String, query: [(String, String)] = []) -> APIRequest<Response> {
         APIRequest(method: .get, path: path, query: query)

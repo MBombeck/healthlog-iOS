@@ -74,7 +74,7 @@ extension MedicationsRepository {
     /// exact cadence the user built; `id == externalId` (stable local identity).
     func standaloneCreate(_ body: MedicationCreate) async throws -> Medication {
         guard let standalone else {
-            throw HLError.unknown("standaloneCreate ohne Standalone-Gate")
+            throw HLError.unknown("standaloneCreate without the standalone gate")
         }
         let snapshot = LocalMedicationSnapshot(
             externalId: UUID().uuidString,
@@ -104,10 +104,10 @@ extension MedicationsRepository {
     /// store surfaces the failure rather than silently no-op'ing.
     func standaloneUpdate(id: String, patch: MedicationPatch) async throws -> Medication {
         guard let standalone else {
-            throw HLError.unknown("standaloneUpdate ohne Standalone-Gate")
+            throw HLError.unknown("standaloneUpdate without the standalone gate")
         }
         guard let existing = try await standalone.local.standaloneMedication(externalId: id) else {
-            throw HLError.unknown("standaloneUpdate: unbekannte Medikation")
+            throw HLError.unknown("standaloneUpdate: unknown medication")
         }
         let merged = LocalMedicationSnapshot(
             externalId: existing.externalId,
@@ -136,7 +136,7 @@ extension MedicationsRepository {
     /// Soft-delete (archive) a local definition by `externalId`.
     func standaloneArchive(id: String) async throws {
         guard let standalone else {
-            throw HLError.unknown("standaloneArchive ohne Standalone-Gate")
+            throw HLError.unknown("standaloneArchive without the standalone gate")
         }
         try await standalone.local.standaloneArchiveMedication(externalId: id, archivedAt: .now)
     }
@@ -202,7 +202,14 @@ extension MedicationsRepository {
                 // A logged dose with no scheduled slot (PRN) counts itself as
                 // its own denominator so the day reads complete, never > 100%.
                 let scheduled = max(scheduledByDay[day] ?? 0, taken)
-                return ComplianceDay(date: day, scheduled: scheduled, taken: taken)
+                // #115 1.5 — emit the day as the SAME representation a server
+                // row decodes to (the UTC-midnight anchor of its `YYYY-MM-DD`),
+                // so every consumer matches days one way, online or offline.
+                return ComplianceDay(
+                    date: ProfileDay.anchor(for: day, timeZone: calendar.timeZone),
+                    scheduled: scheduled,
+                    taken: taken
+                )
             }
             .sorted { $0.date < $1.date }
     }

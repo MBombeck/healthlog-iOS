@@ -183,9 +183,10 @@ public struct SleepCompositeTile: View {
         case .unknown: nil
         }
         if let stages, stages.total > 0 {
+            let primary = metric.formattedPrimary()
             let stageDescription = String(
                 localized:
-                "\(title) letzte Nacht: \(metric.formattedPrimary()). Tief \(Int(stages.deep)) Minuten, REM \(Int(stages.rem)), Kern \(Int(stages.core)), wach \(Int(stages.awake))."
+                "dashboard.sleep.a11y.stages \(title) \(primary) \(Int(stages.deep)) \(Int(stages.rem)) \(Int(stages.core)) \(Int(stages.awake))"
             )
             return Text([stageDescription, trend].compactMap { $0 }.joined(separator: " "))
         }

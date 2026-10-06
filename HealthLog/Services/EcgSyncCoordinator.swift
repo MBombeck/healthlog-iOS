@@ -5,9 +5,9 @@ import Foundation
 /// one method. Mirrors ``NutrientDailySyncing``.
 public protocol EcgSyncing: AnyObject, Sendable {
     /// Upload every ECG recording HealthKit has not handed us yet.
-    /// Fire-and-forget: the coordinator self-gates on the device-local opt-in,
-    /// the `insights` module and a present auth token, so it is safe to call
-    /// unconditionally from a wake path.
+    /// Fire-and-forget: the coordinator self-gates on the device-local opt-in
+    /// and a present auth token, so it is safe to call unconditionally from a
+    /// wake path.
     func triggerEcgSync() async
 }
 
@@ -23,16 +23,21 @@ public protocol EcgSyncing: AnyObject, Sendable {
 /// memory at a time**, which is the whole reason the source seam separates
 /// metadata from voltages.
 ///
-/// ## Gates (three, all fail-closed)
+/// ## Gates (two, both fail-closed)
 ///
 /// 1. **Device-local opt-in.** The ECG read type is deliberately kept out of the
 ///    onboarding sheet; nothing runs until the user turns the switch on
 ///    (``EcgHealthSyncStore``). Without it we would neither hold the permission
 ///    nor be entitled to it.
 /// 2. **Auth token.** No session, nothing to upload to.
-/// 3. **`insights` module.** The same module that gates the ECG *reads*. If the
-///    server disables it mid-flight the route answers `403`, ``APIClient``
-///    mirrors the key into ``ModuleGate``, and the sweep stops.
+///
+/// **No module gate** (server v1.39). `POST /api/insights/ecg` carries no AI
+/// gate and no module gate: a recording is device data, and the `insights`
+/// module means "AI analysis" only. Build 279 gated the sweep on `insights`;
+/// migration 0343 switched that module off for every "Hide Coach" account, so
+/// their recordings waited behind the held anchor. With the gate gone the next
+/// sweep reads from that same anchor and uploads them. Should a server still
+/// answer `403`, the sweep stops and holds the anchor (see the error classes).
 ///
 /// ## Which recordings, and how often
 ///
@@ -71,13 +76,24 @@ public protocol EcgSyncing: AnyObject, Sendable {
 ///   retry it; only a released success consumes a recording.
 /// - **Gated** (`403`) / **unauthenticated** (`401`) — stop the sweep, hold the
 ///   anchor, do not retry.
-/// - **Wait** (`429`) / **transport** (network, offline, 5xx) — stop the sweep,
-///   hold the anchor, resume on the next wake.
+/// - **Wait** (`429`) — sit the named wait out inside the sweep's pause budget
+///   and re-send the same recording; a longer wait stops the sweep, holds the
+///   anchor, and the next wake does not knock before the named instant.
+/// - **Transport** (network, offline, 5xx) — stop the sweep, hold the anchor,
+///   resume on the next wake.
+///
+/// ## Progress survives a held anchor (S2)
+///
+/// Every confirmed recording is remembered per account
+/// (``EcgConfirmedLedger``) and never posted again while the anchor still
+/// covers it, and each fetch is sent newest first. A sweep that stops halfway
+/// therefore resumes where it stopped instead of replaying the whole list into
+/// the same rate limit — see `EcgSyncProgress.swift`.
 ///
 /// **No Outbox.** The retry queue for this path is the HealthKit store itself:
 /// holding the anchor makes the next wake re-read exactly the recordings that
-/// did not land, and the recording's own identity makes the replay a no-op if
-/// one of them actually did. Copying a decrypted 15 000-sample waveform into
+/// did not land, and the ledger plus the recording's own identity make the
+/// re-read a no-op for the ones that did. Copying a decrypted 15 000-sample waveform into
 /// the Outbox's SQLite file to achieve the same thing would put health data in
 /// a store that outlives the request for no gain at all.
 ///
@@ -92,8 +108,6 @@ public actor EcgSyncCoordinator {
     /// Reads the device-local opt-in on the main actor, injected as a closure so
     /// the actor stays free of a `@MainActor` store reference.
     private let isOptedIn: @Sendable () async -> Bool
-    /// Reads ``ModuleGate/isEnabled(_:)`` for `.insights` on the main actor.
-    private let isModuleEnabled: @Sendable () async -> Bool
     /// `UserDefaults` is not `Sendable` — injected behind a provider closure
     /// (same pattern as ``NutrientDailySyncCoordinator``).
     private let defaultsProvider: @Sendable () -> UserDefaults
@@ -111,6 +125,11 @@ public actor EcgSyncCoordinator {
     /// coordinator resets is named by a ``HealthSyncOwnerLease`` rather than by
     /// whoever the Keychain happens to hold when the reset finally runs.
     private let admission: HealthSyncImporterAdmission?
+    /// Wall clock for the 429 hold. Injected so a test can run a limiter on
+    /// the same clock its sleeper advances.
+    let clock: @Sendable () -> Date
+    /// The server's last 429, shared by every sweep of this coordinator.
+    var pacer = EcgRateLimitPacer()
 
     /// The partition the most recent admitted sweep ran under. This — not a
     /// live Keychain read — is what `resetAnchor()` clears.
@@ -119,12 +138,14 @@ public actor EcgSyncCoordinator {
     /// instead of racing them.
     private var ownedSweeps: [UUID: Task<EcgSyncSummary, Never>] = [:]
 
-    private var defaults: UserDefaults {
+    var defaults: UserDefaults {
         defaultsProvider()
     }
 
     /// Per-user anchor key prefix.
     static let anchorKeyPrefix = "hl.ecg.hk.anchor."
+    /// Per-user key prefix of the confirmed-recording ledger (S2).
+    static let confirmedKeyPrefix = "hl.ecg.hk.confirmed."
 
     /// One account's ECG cursor identity, captured before any suspension.
     ///
@@ -136,6 +157,13 @@ public actor EcgSyncCoordinator {
         let ownerUserID: String
         let storageKey: String
         let ownerLease: HealthSyncOwnerLease?
+
+        /// The ledger key of the same account, derived from the anchor key so
+        /// the two can never name different partitions.
+        var confirmedKey: String {
+            EcgSyncCoordinator.confirmedKeyPrefix
+                + storageKey.dropFirst(EcgSyncCoordinator.anchorKeyPrefix.count)
+        }
 
         /// `true` while this partition's account is still the live one. A
         /// coordinator with no owner lease has only the sweep's own bearer
@@ -150,19 +178,19 @@ public actor EcgSyncCoordinator {
         repo: EcgRepository,
         keychain: KeychainStoring,
         isOptedIn: @escaping @Sendable () async -> Bool,
-        isModuleEnabled: @escaping @Sendable () async -> Bool,
         defaultsProvider: @escaping @Sendable () -> UserDefaults = { .standard },
         anchorPersistenceOverride: (@Sendable (Data, String) -> Bool)? = nil,
-        admission: HealthSyncImporterAdmission? = nil
+        admission: HealthSyncImporterAdmission? = nil,
+        clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.source = source
         self.repo = repo
         self.keychain = keychain
         self.isOptedIn = isOptedIn
-        self.isModuleEnabled = isModuleEnabled
         self.defaultsProvider = defaultsProvider
         self.anchorPersistenceOverride = anchorPersistenceOverride
         self.admission = admission
+        self.clock = clock
     }
 
     // MARK: - Sweep
@@ -177,10 +205,6 @@ public actor EcgSyncCoordinator {
         }
         guard let authLease = captureAuthenticationLease() else {
             HLLog.healthKit.debug("ECG sync skipped — no auth token")
-            return .zero
-        }
-        guard await isModuleEnabled() else {
-            HLLog.healthKit.debug("ECG sync skipped — insights module OFF")
             return .zero
         }
         guard authLease.isCurrent else {
@@ -265,6 +289,10 @@ public actor EcgSyncCoordinator {
             summary.stoppedBecause = .persistence
             return summary
         }
+        // The anchor now stands past every recording of this fetch; HealthKit
+        // will not hand them out again, so the ledger lets go of them.
+        EcgConfirmedLedger(defaults: defaults, key: partition.confirmedKey)
+            .remove(fetched.recordings.map(\.id))
         return summary
     }
 
@@ -300,6 +328,8 @@ public actor EcgSyncCoordinator {
     /// onto B — the key was decided before the drain began.
     public func resetAnchor() async {
         let key = capturedPartition?.storageKey ?? anchorKey()
+        let confirmedKey = capturedPartition?.confirmedKey
+            ?? Self.confirmedKeyPrefix + key.dropFirst(Self.anchorKeyPrefix.count)
         let draining = ownedSweeps
         ownedSweeps.removeAll()
         for task in draining.values {
@@ -309,6 +339,9 @@ public actor EcgSyncCoordinator {
             _ = await task.value
         }
         defaults.removeObject(forKey: key)
+        // S2 — the progress goes with the cursor: the next account (or the
+        // same one after a re-enable) starts from its own, empty ledger.
+        defaults.removeObject(forKey: confirmedKey)
         capturedPartition = nil
     }
 
@@ -358,32 +391,6 @@ public actor EcgSyncCoordinator {
         case halted(EcgSyncStopReason)
     }
 
-    private func uploadRecordings(
-        _ recordings: [EcgSourceRecording],
-        requiring authLease: EcgUploadAuthenticationLease,
-        within partition: EcgAnchorPartition
-    ) async -> (EcgSyncSummary, Bool) {
-        var summary = EcgSyncSummary.zero
-        var retainAnchor = false
-        for recording in recordings {
-            if !authLease.isCurrent || !partition.isCurrent {
-                summary.stoppedBecause = .transport
-                return (summary, true)
-            }
-            switch await upload(recording, requiring: authLease) {
-            case let .accepted(status):
-                summary.record(status)
-            case let .skipped(reason):
-                summary.skip(reason)
-                retainAnchor = true
-            case let .halted(reason):
-                summary.stoppedBecause = reason
-                return (summary, true)
-            }
-        }
-        return (summary, retainAnchor)
-    }
-
     private func persistAnchor(_ anchor: Data, replacing previous: Data?, forKey key: String) -> Bool {
         let persisted: Bool
         if let anchorPersistenceOverride {
@@ -402,7 +409,7 @@ public actor EcgSyncCoordinator {
     }
 
     /// Read one trace, convert it, send it, drop it.
-    private func upload(
+    func upload(
         _ recording: EcgSourceRecording,
         requiring authLease: EcgUploadAuthenticationLease
     ) async -> RecordingOutcome {
@@ -458,7 +465,16 @@ public actor EcgSyncCoordinator {
             // id — an operator needs to know the sweep worked, not which strip.
             // swiftlint:disable:next hllog_public_privacy_interpolation
             HLLog.healthKit.info("ECG upload \(status, privacy: .public)")
+            // #115 · 1.7 — a status word this build does not know does not
+            // confirm storage. Same disposition an unreadable answer had
+            // before the enum became tolerant: hold the anchor and retry.
+            guard response.status.isConfirmedStored else { return .halted(.transport) }
             return .accepted(response.status)
+        } catch let HLError.rateLimited(retryAfter) {
+            // S2 — the wait the server named, so the loop above can sit it out
+            // and re-send this same recording instead of restarting the sweep.
+            pacer.recordRateLimit(retryAfter: retryAfter, now: clock())
+            return .halted(.rateLimited)
         } catch {
             return Self.disposition(for: error)
         }
@@ -475,7 +491,7 @@ public actor EcgSyncCoordinator {
             return .halted(.transport)
         }
         switch hlError {
-        case .moduleDisabled, .assistantDisabled:
+        case .moduleDisabled, .aiUnavailable:
             return .halted(.gated)
         case .unauthorized:
             return .halted(.unauthorized)
@@ -487,8 +503,8 @@ public actor EcgSyncCoordinator {
             return .halted(.transport)
         case let .server(status, _, _):
             if status == 403 || status == 401 {
-                // `insightStatus` is not a known `FeatureFlag`, so its 403
-                // arrives untyped. It is still a gate, not a failure.
+                // An untyped 403 (no recognised AI / module code) is still a
+                // gate, not a failure.
                 return .halted(status == 401 ? .unauthorized : .gated)
             }
             if status == 429 { return .halted(.rateLimited) }
@@ -561,27 +577,5 @@ extension EcgSyncCoordinator {
         let summary = await task.value
         ownedSweeps[id] = nil
         return summary
-    }
-}
-
-extension EcgSyncCoordinator: EcgSyncing {
-    public func triggerEcgSync() async {
-        let summary = await runOwnedSweep()
-        guard summary.accepted > 0 || summary.skippedCount > 0 || summary.stoppedBecause != nil else { return }
-        let inserted = summary.inserted
-        let updated = summary.updated
-        let duplicate = summary.duplicate
-        let skipped = summary.skippedCount
-        let stopped = summary.stoppedBecause?.rawValue ?? "-"
-        HLLog.healthKit
-            .info(
-                """
-                ECG sync done — inserted=\(inserted, privacy: .public) \
-                updated=\(updated, privacy: .public) \
-                duplicate=\(duplicate, privacy: .public) \
-                skipped=\(skipped, privacy: .public) \
-                stopped=\(stopped, privacy: .public)
-                """
-            )
     }
 }

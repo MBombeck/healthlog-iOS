@@ -33,7 +33,7 @@ struct ConsistencyStrip: View {
         case .inBand: HLColor.statusOK
         case .nearBand: HLColor.statusWarn
         case .outBand: HLColor.statusBad
-        case .none: HLSurface.tertiary
+        case .none, .unknown: HLSurface.tertiary
         }
     }
 

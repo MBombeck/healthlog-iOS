@@ -68,6 +68,17 @@ import Foundation
             }
         }
 
+        /// **v1.39.2** — a preventive-care reminder arrived (foreground) or was
+        /// tapped: re-read the reminders so `nextDueAt` is the server's current
+        /// value. Nothing is scheduled or rolled locally, the app has no local
+        /// check-up reminders. Any other event type is a no-op.
+        @MainActor
+        func refreshRemindersAfterMeasurementReminder(payload: APNsPayload?) async {
+            guard payload?.eventType == Self.categoryMeasurementReminder,
+                  let refresh = measurementReminderRefresher else { return }
+            await refresh()
+        }
+
         /// Body-tap on a preventive-care reminder. Deep-links to the measurement
         /// capture surface via the server-supplied `deepLink`; falls back to the
         /// dashboard when the push carries none so an "Erledigt" tap or body-tap

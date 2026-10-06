@@ -252,12 +252,12 @@ struct ServerAuthStep: View {
                 }
 
                 if let err = authStore.lastError {
-                    // R1 — `localizedDescription` ist die Diagnose-Fassung
-                    // (fest deutsch, für Logs gedacht). Eine Anmeldefläche
-                    // zeigt die lokalisierte Nutzer-Fassung; 4xx-Umschläge
-                    // reicht sie unverändert durch, also bleibt „falsches
-                    // Passwort" wortgleich.
-                    Text(err.userFacingDescription)
+                    // R1 — die Anmelde-Fassung (L1, `signInFacingDescription`):
+                    // lokalisiert, 4xx-Umschläge durchgereicht, offline ohne
+                    // „zwischengespeicherte Werte"; Login-/Passkey-401 werden
+                    // vorher im Store zum Katalogsatz (J1 / F1, L1). Nie die
+                    // Diagnose-Fassung `localizedDescription`.
+                    Text(err.signInFacingDescription)
                         .font(.hlSubhead)
                         .foregroundStyle(HLColor.statusBad)
                         .padding(.horizontal, HLSpace.xl)
@@ -644,7 +644,7 @@ private struct RegistrationSheet: View {
                             .foregroundStyle(HLColor.statusBad)
                             .padding(.horizontal, HLSpace.xl)
                     } else if let err = authStore.lastError {
-                        Text(err.localizedDescription)
+                        Text(err.signInFacingDescription) // J1 / F2, L1: sign-in copy
                             .font(.hlSubhead)
                             .foregroundStyle(HLColor.statusBad)
                             .padding(.horizontal, HLSpace.xl)

@@ -257,15 +257,25 @@ struct VorsorgeReminderDetailSheet: View {
     // MARK: - Chart
 
     private func chart(model: VorsorgeDetailModel, bandByID: [String: String]) -> some View {
-        HistoryLineChart(
+        // #115 P2 — a metric arm plots in the account's unit (the axis shows
+        // the numbers). The annotation still formats the CANONICAL point,
+        // looked up by id, because `chartValueText` converts it itself.
+        let canonicalByID = Dictionary(model.points.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let plotted: [HistoryLineChart.Point] = if case let .metric(kind) = model.arm {
+            model.points.map { .init(id: $0.id, date: $0.date, value: units.displayValue($0.value, kind: kind)) }
+        } else {
+            model.points
+        }
+        return HistoryLineChart(
             title: "vorsorge.detail.history",
-            points: model.points,
+            points: plotted,
             yDomain: model.yDomain,
             xValueLabel: String(localized: "vorsorge.detail.axis.date"),
             yValueLabel: String(localized: "vorsorge.detail.axis.value"),
-            annotation: { point in chartValueText(point, model: model, bandByID: bandByID) },
+            annotation: { point in chartValueText(canonicalByID[point.id] ?? point, model: model, bandByID: bandByID) },
             accessibilityDescription: { point in
-                "\(HLDateFormat.date(point.date, style: .abbreviated)): \(chartValueText(point, model: model, bandByID: bandByID))"
+                let canonical = canonicalByID[point.id] ?? point
+                return "\(HLDateFormat.date(point.date, style: .abbreviated)): \(chartValueText(canonical, model: model, bandByID: bandByID))"
             }
         )
     }

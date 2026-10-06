@@ -27,6 +27,12 @@
             {
                 return marketing
             }
+            // 1.1.0 — the QA-sweep readings, only under `-uitest-sweep`.
+            if HermeticUITestSupport.isSweepOverlayActive,
+               let sweep = SweepFixtures.response(forPath: path, method: method, query: query)
+            {
+                return sweep
+            }
             // Scenario fixtures — the scenario-keyed answers come first and only
             // exist while `-uitest-phase8 <scenario>` is on the command line.
             // Outside a Phase-8 UI test this returns `nil` on every path and the
@@ -61,7 +67,6 @@
             if let account = accountResponse(forPath: path) { return account }
             if path.hasPrefix("/api/dashboard/summary") { return ok(dashboardSummaryJSON) }
             if path.hasPrefix("/api/dashboard/snapshot") { return ok("{}") }
-            if path.hasPrefix("/api/feature-flags") { return ok(featureFlagsJSON) }
             if path.hasPrefix("/api/measurements") { return ok(measurementsJSON) }
             if path.hasPrefix("/api/medications") { return ok("[]") }
             if path.hasPrefix("/api/cycle") { return ok(emptyArrayOrObject(forPath: path)) }
@@ -318,12 +323,6 @@
         /// inspect a seeded one.
         private static let shareLinkListJSON = """
         { "data": { "shareLinks": [] }, "error": null }
-        """
-
-        /// `/api/feature-flags` — cycle tracking ON so the cycle toggle surface
-        /// is reachable; the rest default off (the store fails open).
-        private static let featureFlagsJSON = """
-        { "cycleTracking": true }
         """
 
         /// `/api/dashboard/summary` — deterministic greeting + three per-kind

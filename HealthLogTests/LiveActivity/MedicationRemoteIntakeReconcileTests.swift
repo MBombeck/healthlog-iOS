@@ -24,7 +24,7 @@
     ///   (b) reloads the widget timeline (proxy: the widget snapshot's
     ///       `generatedAt` advances — the writer only writes when data moved).
     /// Plus: an already-taken dose must NOT (re)start a Live Activity.
-    @Suite("MedicationsStore — b181 remote-intake reconcile", .serialized)
+    @Suite("MedicationsStore — b181 remote-intake reconcile", .serialized, .mockURLSession)
     @MainActor
     struct MedicationRemoteIntakeReconcileTests {
         // MARK: - Reconcile spy
@@ -205,7 +205,7 @@
             let scheduledISO = ISO8601DateFormatter().string(from: scheduled)
             let api = makeAPIClient()
             let outbox = try OutboxQueue(inMemory: true)
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let path = req.url?.path ?? ""
                 let query = req.url?.query ?? ""
                 if path == "/api/medications", req.httpMethod == "GET" {
@@ -284,7 +284,7 @@
             let scheduledISO = ISO8601DateFormatter().string(from: scheduled)
             let api = makeAPIClient()
             let outbox = try OutboxQueue(inMemory: true)
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let path = req.url?.path ?? ""
                 let query = req.url?.query ?? ""
                 if path == "/api/medications", req.httpMethod == "GET" {

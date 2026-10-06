@@ -85,6 +85,16 @@ public struct HLButton: View {
     private let size: Size
     private let isLoading: Bool
     private let action: () -> Void
+    /// Push form (`destination:`): the button builds the `NavigationLink`
+    /// itself and pushes onto the enclosing `NavigationStack`. `nil` for the
+    /// action forms.
+    private let destination: AnyView?
+
+    /// Test-visible: whether this button pushes a destination (the
+    /// `destination:` form) rather than running an action.
+    public var pushesDestination: Bool {
+        destination != nil
+    }
 
     @Environment(\.isEnabled) private var isEnabled
 
@@ -123,6 +133,7 @@ public struct HLButton: View {
         self.size = size
         self.isLoading = isLoading
         self.action = action
+        destination = nil
     }
 
     /// Verbatim initializer — `title` is painted **as-is**, with no catalog
@@ -144,50 +155,83 @@ public struct HLButton: View {
         self.size = size
         self.isLoading = isLoading
         self.action = action
+        destination = nil
+    }
+
+    /// Push initializer — same look as the action form, but the button is a
+    /// `NavigationLink` that pushes `destination` onto the enclosing
+    /// `NavigationStack`. The call site then carries no presenter of its own
+    /// (`.navigationDestination`): the push lives in this shared primitive,
+    /// the way `HLSettingsActionRow(presents: .push)` carries a row's push.
+    public init(
+        _ title: String,
+        icon: String? = nil,
+        variant: Variant,
+        size: Size = .regular,
+        destination: () -> some View
+    ) {
+        self.title = title
+        isTitleVerbatim = false
+        self.icon = icon
+        self.variant = variant
+        self.size = size
+        isLoading = false
+        action = {}
+        self.destination = AnyView(destination())
     }
 
     public var body: some View {
-        Button(action: triggerHaptic) {
-            HStack(spacing: HLSpace.sm) {
-                if isLoading {
-                    // ProgressView's .tint(Color?) overload requires a
-                    // concrete Color, not a ShapeStyle — for variants that
-                    // wear white labels we pass white explicitly; for
-                    // accent-coloured labels (.secondary) we
-                    // omit `.tint` so the inherited `.tint(...)` from the
-                    // parent environment paints the spinner.
-                    if let spinnerTint {
-                        ProgressView().controlSize(.small).tint(spinnerTint)
-                    } else {
-                        ProgressView().controlSize(.small)
-                    }
-                } else if let icon {
-                    Image(systemName: icon)
-                }
-                titleText.font(font)
-            }
-            .frame(minHeight: minHeight)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, HLSpace.lg)
-            .background(background)
-            .foregroundStyle(textForegroundStyle)
-            .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
-            .overlay {
-                // v0.6.0.5 REG-BTN: universal 1pt hairline keeps every
-                // variant visually framed in both appearances, including
-                // ghost / secondary on canvas where the fill is transparent.
-                // R9: der Sonderfall mit eigener 1,5-pt-Kontur ist entfallen —
-                // die Variante ging eins zu eins in `.secondary` auf.
-                RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
-                    .strokeBorder(HLText.tertiary.opacity(0.25), lineWidth: 1)
-            }
-            .opacity(isEnabled ? 1 : 0.5)
-            .scaleEffect(isLoading ? 0.99 : 1)
-            .hlAnimation(.easeOut(duration: 0.12), value: isLoading)
+        if let destination {
+            NavigationLink { destination } label: { label }
+                .buttonStyle(PressedScaleStyle())
+                .simultaneousGesture(TapGesture().onEnded { tapCount &+= 1 })
+                .sensoryFeedback(.selection, trigger: tapCount)
+                .accessibilityLabel(titleText)
+        } else {
+            Button(action: triggerHaptic) { label }
+                .buttonStyle(PressedScaleStyle())
+                .sensoryFeedback(.selection, trigger: tapCount)
+                .accessibilityLabel(titleText)
         }
-        .buttonStyle(PressedScaleStyle())
-        .sensoryFeedback(.selection, trigger: tapCount)
-        .accessibilityLabel(titleText)
+    }
+
+    private var label: some View {
+        HStack(spacing: HLSpace.sm) {
+            if isLoading {
+                // ProgressView's .tint(Color?) overload requires a
+                // concrete Color, not a ShapeStyle — for variants that
+                // wear white labels we pass white explicitly; for
+                // accent-coloured labels (.secondary) we
+                // omit `.tint` so the inherited `.tint(...)` from the
+                // parent environment paints the spinner.
+                if let spinnerTint {
+                    ProgressView().controlSize(.small).tint(spinnerTint)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+            } else if let icon {
+                Image(systemName: icon)
+            }
+            titleText.font(font)
+        }
+        .frame(minHeight: minHeight)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, HLSpace.lg)
+        .background(background)
+        .foregroundStyle(textForegroundStyle)
+        .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
+        .overlay {
+            // v0.6.0.5 REG-BTN: universal 1pt hairline keeps every
+            // variant visually framed in both appearances, including
+            // ghost / secondary on canvas where the fill is transparent.
+            // R9: der Sonderfall mit eigener 1,5-pt-Kontur ist entfallen —
+            // die Variante ging eins zu eins in `.secondary` auf.
+            RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
+                .strokeBorder(HLText.tertiary.opacity(0.25), lineWidth: 1)
+        }
+        .opacity(isEnabled ? 1 : 0.5)
+        .scaleEffect(isLoading ? 0.99 : 1)
+        .hlAnimation(.easeOut(duration: 0.12), value: isLoading)
     }
 
     /// The label `Text` — localized through `LocalizedStringKey` for the

@@ -153,6 +153,9 @@ struct DocumentChatSheet: View {
         switch state {
         case .notIndexed: "documents.chat.notIndexed"
         case .consentRequired: "documents.chat.consentRequired"
+        case .operatorDisabled: "documents.chat.operatorDisabled"
+        case .recordNotPermitted: "documents.chat.recordNotPermitted"
+        case .noProvider: "documents.chat.noProvider"
         case .limitReached: "documents.chat.limitReached"
         case .generic: "documents.chat.error"
         }
@@ -162,6 +165,8 @@ struct DocumentChatSheet: View {
         switch state {
         case .notIndexed: "text.magnifyingglass"
         case .consentRequired: "lock.shield"
+        case .operatorDisabled, .noProvider: "sparkles.slash"
+        case .recordNotPermitted: "person.2.slash"
         case .limitReached: "hourglass"
         case .generic: "exclamationmark.triangle"
         }
@@ -170,7 +175,7 @@ struct DocumentChatSheet: View {
     /// The composer is hidden on a dead-end gate state (nothing the user can send
     /// resolves it here); shown otherwise (including the retriable limit / error).
     private var showsInput: Bool {
-        store.errorState != .notIndexed && store.errorState != .consentRequired
+        !(store.errorState?.isDeadEnd ?? false)
     }
 
     // MARK: - Composer

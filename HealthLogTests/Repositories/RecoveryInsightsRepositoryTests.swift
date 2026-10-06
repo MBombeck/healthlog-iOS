@@ -16,7 +16,7 @@ import Testing
 ///   ANS_CHARGE / CARDIO_LOAD are NOT required — exactly those two blocks render;
 /// - empty summaries → nil (honest empty state);
 /// - a `403` (analytics gated) / `404` / `422` / transport error → nil.
-@Suite("RecoveryInsights — built from analytics summaries (P1)", .serialized)
+@Suite("RecoveryInsights — built from analytics summaries (P1)", .serialized, .mockURLSession)
 struct RecoveryInsightsRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -49,7 +49,7 @@ struct RecoveryInsightsRepositoryTests {
         let repo = RecoveryInsightsRepository(api: makeAPI())
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedQuery: String?
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             capturedPath = req.url?.path
             capturedQuery = req.url?.query
             // Operator shape: DAY_STRAIN + ENERGY_EXPENDITURE_KJ present, the
@@ -94,7 +94,7 @@ struct RecoveryInsightsRepositoryTests {
     @Test("fetch — empty summaries → nil (honest empty state)")
     func fetchEmptyIsNil() async {
         let repo = RecoveryInsightsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data("{\"data\":{\"summaries\":{}},\"error\":null}".utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -104,7 +104,7 @@ struct RecoveryInsightsRepositoryTests {
     @Test("fetch — a non-recovery type with data does NOT synthesise a block")
     func fetchIgnoresUnrelatedTypes() async {
         let repo = RecoveryInsightsRepository(api: makeAPI())
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             let body = summariesBody([Entry(type: "WEIGHT", count: 200, latest: 82.5)])
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -115,7 +115,7 @@ struct RecoveryInsightsRepositoryTests {
     func fetchGatedIsNil() async {
         for status in [403, 404, 422] {
             let repo = RecoveryInsightsRepository(api: makeAPI())
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, Data())
             }
             #expect(await repo.fetch() == nil)
@@ -163,7 +163,7 @@ struct RecoveryInsightsRepositoryTests {
     func storeLoadAndPresentable() async {
         let repo = RecoveryInsightsRepository(api: makeAPI())
         let store = RecoveryInsightsStore(repo: repo)
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             let body = summariesBody([Entry(type: "DAY_STRAIN", count: 50, latest: 12.4)])
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -179,7 +179,7 @@ struct RecoveryInsightsRepositoryTests {
     func storeEmptyState() async {
         let repo = RecoveryInsightsRepository(api: makeAPI())
         let store = RecoveryInsightsStore(repo: repo)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         await store.load()
@@ -194,7 +194,7 @@ struct RecoveryInsightsRepositoryTests {
     func storeClearOnLogout() async {
         let repo = RecoveryInsightsRepository(api: makeAPI())
         let store = RecoveryInsightsStore(repo: repo)
-        MockURLProtocol.handler = { [self] req in
+        MockURLProtocol.install { [self] req in
             let body = summariesBody([Entry(type: "DAY_STRAIN", count: 50, latest: 12.4)])
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }

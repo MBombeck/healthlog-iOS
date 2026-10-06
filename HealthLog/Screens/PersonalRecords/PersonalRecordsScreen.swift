@@ -37,6 +37,8 @@ import SwiftUI
 /// data without an iOS release.
 struct PersonalRecordsScreen: View {
     @Environment(PersonalRecordsStore.self) private var store
+    /// #115 P2 — the share image renders in the account's unit.
+    @Environment(\.unitPreferences) private var unitPreferences
     /// R4 §3.1 — Personal Records are server-derived (no on-device store). When
     /// no backend is available, render `HLCloudDerivedPlaceholder` instead of an
     /// empty screen + doomed `/api/personal-records` fetch. `hasServer` is always
@@ -94,6 +96,9 @@ struct PersonalRecordsScreen: View {
         // W-B184 — WHOOP-style pull-to-refresh (custom glyph + checkmark + one
         // success haptic; the handshake driving the checkmark runs in the modifier).
         .hlPullToRefresh { if backend.canShowPersonalRecords { await store.refresh() } }
+        // K1 — the banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing (H2).
+        .hlReserveErrorBannerSpace(store.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: store.error) {
                 Task { await store.refresh() }
@@ -101,7 +106,7 @@ struct PersonalRecordsScreen: View {
         }
         #if canImport(UIKit)
         .sheet(item: $selectedShareRecord) { record in
-            if let image = RecordShareImage.render(record) {
+            if let image = RecordShareImage.render(record, units: unitPreferences) {
                 RecordShareSheet(image: image) {
                     selectedShareRecord = nil
                 }
@@ -342,13 +347,26 @@ private struct BenchmarkSelection: Identifiable, Equatable {
 /// human-readable metric labels. Coverage matches the v0.5.2 measurement
 /// type set; unknown values pass through verbatim so the screen never
 /// renders an empty label.
+///
+/// L1 — every value resolves through the String Catalog. The table used to be
+/// plain `String`s, half English and half German ("Herzfrequenzvariabilität",
+/// "Stockwerke", "Stimmung" …), and every caller put them on screen as-is, so
+/// the record cards, the hero card and the VoiceOver labels mixed German into
+/// the English UI.
 public enum MetricTypeLocalisation {
-    public static func label(forType raw: String) -> String {
+    public static func label(forType raw: String, locale: Locale = .current) -> String {
         let key = raw.uppercased()
-        return MetricTypeLocalisation.dictionary[key] ?? raw.capitalized
+        guard var resource = MetricTypeLocalisation.dictionary[key] else { return raw.capitalized }
+        resource.locale = locale
+        return String(localized: resource)
     }
 
-    private static let dictionary: [String: String] = [
+    /// Every server metric type this table names (tests walk it per language).
+    static var knownTypes: [String] {
+        dictionary.keys.sorted()
+    }
+
+    private static let dictionary: [String: LocalizedStringResource] = [
         "WEIGHT": "Weight",
         "BMI": "BMI",
         "BODY_FAT": "Body fat",
@@ -358,30 +376,30 @@ public enum MetricTypeLocalisation {
         "BP_DIASTOLIC": "Blood pressure",
         "PULSE": "Pulse",
         "RESTING_HR": "Resting heart rate",
-        "HRV": "Herzfrequenzvariabilität",
+        "HRV": "Heart rate variability",
         "VO2_MAX": "VO₂ max",
         "OXYGEN_SATURATION": "Oxygen saturation",
-        "BODY_TEMPERATURE": "Körpertemperatur",
+        "BODY_TEMPERATURE": "records.metric.bodyTemperature",
         "ACTIVITY_STEPS": "Steps",
-        "ACTIVE_ENERGY_BURNED": "Aktive Energie",
-        "FLIGHTS_CLIMBED": "Stockwerke",
-        "WALKING_RUNNING_DISTANCE": "Distanz (Gehen / Laufen)",
-        "WALKING_STEADINESS": "Geh-Stabilität",
+        "ACTIVE_ENERGY_BURNED": "Active energy",
+        "FLIGHTS_CLIMBED": "Flights climbed",
+        "WALKING_RUNNING_DISTANCE": "records.metric.walkingRunningDistance",
+        "WALKING_STEADINESS": "records.metric.walkingSteadiness",
         "SLEEP_DURATION": "Sleep",
         "SLEEP_ASLEEP": "Sleep",
         "SLEEP_IN_BED": "Sleep",
-        "MOOD": "Stimmung",
-        "MOOD_SCORE": "Stimmung",
-        "MOOD_STABILITY": "Stimmung",
+        "MOOD": "Mood",
+        "MOOD_SCORE": "Mood",
+        "MOOD_STABILITY": "Mood",
         "BLOOD_GLUCOSE": "Blood glucose",
         "BLOOD_GLUCOSE_FASTING": "Blood glucose",
         "BLOOD_GLUCOSE_POSTPRANDIAL": "Blood glucose",
         "BLOOD_GLUCOSE_RANDOM": "Blood glucose",
         "BLOOD_GLUCOSE_BEDTIME": "Blood glucose",
-        "MEDICATION_COMPLIANCE": "Medikamenten-Compliance",
-        "AUDIO_EXPOSURE_ENV": "Lärm-Belastung",
-        "AUDIO_EXPOSURE_HEADPHONE": "Lärm-Belastung",
-        "AUDIO_EXPOSURE_EVENT": "Lärm-Belastung",
-        "TIME_IN_DAYLIGHT": "Tageslicht"
+        "MEDICATION_COMPLIANCE": "records.metric.medicationCompliance",
+        "AUDIO_EXPOSURE_ENV": "records.metric.noiseExposure",
+        "AUDIO_EXPOSURE_HEADPHONE": "records.metric.noiseExposure",
+        "AUDIO_EXPOSURE_EVENT": "records.metric.noiseExposure",
+        "TIME_IN_DAYLIGHT": "Time in daylight"
     ]
 }

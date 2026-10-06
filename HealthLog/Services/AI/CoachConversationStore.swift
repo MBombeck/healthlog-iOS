@@ -191,6 +191,11 @@ public final class CoachConversationStore {
     /// `serverConsentGate`.
     public var prefersServerArm: (@MainActor () -> Bool)?
 
+    /// **#114 / #115 · 0.2** — the server-resolved AI capabilities; every turn
+    /// checks `coach` for the arm it would take (``coachCapabilityRefusal()``).
+    /// `nil` in unit tests that do not exercise the gate.
+    public var aiCapabilities: (any AICapabilityReading)?
+
     /// **v0.7.1 W-COACH-FALLBACK** — `true` while the conversation is
     /// being served by the server fallback rather than the on-device
     /// model. Drives the AskCoach sheet's "läuft auf dem Server"
@@ -412,6 +417,12 @@ public final class CoachConversationStore {
         turnTask?.cancel()
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
+            // #115 · 0.2 — the operator / the person may have switched the Coach
+            // off (or the record does not admit it): say so, run nothing.
+            if let refusal = coachCapabilityRefusal() {
+                lastError = .serverFailed(HLError.aiUnavailable(refusal))
+                return
+            }
             // **v0.13 W4 — BYO-key arm.** The user's explicit "Own key" choice
             // wins over both other arms: requests go straight from this device to
             // their provider. The service enforces the consent gate before
@@ -742,7 +753,7 @@ public final class CoachConversationStore {
             // C3 (b199 walkthrough) — PRESERVE the typed error rather than
             // collapsing every failure into `.modelResponseFailed`. The
             // `.serverFailed` case keeps the discriminating cause
-            // (`CoachServerError.provider(code)`, `HLError.assistantDisabled` /
+            // (`CoachServerError.provider(code)`, `HLError.aiUnavailable` /
             // HTTP status, offline, missing consent receipt) so
             // `serverErrorCopy` can render an honest, actionable message instead
             // of the flat "Response failed. Please try again." The user turn

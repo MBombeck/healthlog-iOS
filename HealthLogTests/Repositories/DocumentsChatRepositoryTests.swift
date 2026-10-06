@@ -10,7 +10,7 @@ import Testing
 /// all over the REAL `APIClient` + stub `URLProtocol` (no mock server, per
 /// PROJECT_GUIDE.md). The streaming POST rides the same `streamLines` transport the Coach
 /// turn uses; the stub delivers a `text/event-stream` body the parser walks.
-@Suite("Documents chat data layer", .serialized)
+@Suite("Documents chat data layer", .serialized, .mockURLSession)
 struct DocumentsChatRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -44,7 +44,7 @@ struct DocumentsChatRepositoryTests {
 
     @Test("History detail decodes messages oldest-first; role/content tolerant")
     func historyDetailDecode() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound/d1/chat")
             #expect(req.url?.query?.contains("conversationId=c-1") == true)
             return ok(req, #"""
@@ -69,7 +69,7 @@ struct DocumentsChatRepositoryTests {
 
     @Test("History list decodes the document's threads newest-first")
     func historyListDecode() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.query?.contains("conversationId") != true)
             return ok(req, #"""
             {"data":{"conversations":[
@@ -109,7 +109,7 @@ struct DocumentsChatRepositoryTests {
 
     @Test("A 422 notIndexed POST maps the stream to DocumentChatError.notIndexed")
     func streamNotIndexed() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(
                 req,
                 #"{"data":null,"error":"not indexed","meta":{"errorCode":"documents.inbound.notIndexed"}}"#,
@@ -123,7 +123,7 @@ struct DocumentsChatRepositoryTests {
 
     @Test("A 403 consent.ai.required POST maps the stream to DocumentChatError.consentRequired")
     func streamConsentRequired() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(
                 req,
                 #"{"data":null,"error":"consent","meta":{"errorCode":"consent.ai.required"}}"#,
@@ -139,7 +139,7 @@ struct DocumentsChatRepositoryTests {
 
     @Test("A token/done SSE stream yields the tokens in order + the done frame")
     func streamTokensAndDone() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.httpMethod == "POST")
             #expect(req.url?.path == "/api/documents/inbound/d1/chat")
             let sse = """
@@ -166,7 +166,7 @@ struct DocumentsChatRepositoryTests {
 
     @Test("A budget-exhaustion error frame throws DocumentChatError.limitReached")
     func streamBudgetErrorFrame() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let sse = """
             data: {"type":"error","code":"documents.chat.budgetExceeded","message":"budget"}
 
@@ -180,7 +180,7 @@ struct DocumentsChatRepositoryTests {
 
     @Test("A generic provider error frame throws DocumentChatError.provider(code)")
     func streamProviderErrorFrame() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let sse = """
             data: {"type":"error","code":"documents.chat.providerUnavailable","message":"x"}
 
@@ -194,7 +194,7 @@ struct DocumentsChatRepositoryTests {
 
     @Test("A stream with only a done frame (no tokens) throws emptyReply")
     func streamEmptyReply() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, "data: {\"type\":\"done\",\"conversationId\":\"c-1\"}\n\n")
         }
         await #expect(throws: DocumentChatError.emptyReply) {

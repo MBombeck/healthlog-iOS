@@ -106,16 +106,16 @@ public enum TimeBucket: String, CaseIterable, Identifiable, Sendable {
         rawValue
     }
 
-    /// Human label for the segmented picker. Localized strings live in
-    /// `Localizable.xcstrings` under the same key. Plain `String` here so
-    /// the picker can render via `Text(LocalizedStringKey(...))` without
-    /// a second translation step.
+    /// String-Catalog key for the segmented picker; the picker renders it via
+    /// `Text(LocalizedStringKey(...))`. L1 — these were the German words
+    /// themselves ("Allzeit", "Dieses Jahr", …), which are no catalog keys, so
+    /// the English UI showed German segments.
     public var label: String {
         switch self {
-        case .allTime: "Allzeit"
-        case .year: "Dieses Jahr"
-        case .month: "Dieser Monat"
-        case .week: "Diese Woche"
+        case .allTime: "records.bucket.allTime"
+        case .year: "records.bucket.year"
+        case .month: "records.bucket.month"
+        case .week: "records.bucket.week"
         }
     }
 

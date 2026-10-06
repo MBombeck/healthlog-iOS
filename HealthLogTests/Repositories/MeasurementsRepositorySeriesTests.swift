@@ -11,7 +11,7 @@ import Testing
 /// Locks the `kind=` query for `/api/measurements/series` to the camelCase
 /// domain-keys the server's Zod schema expects (W2a-A2 Audit §2.2). Sending
 /// `BLOOD_PRESSURE_SYS` etc. previously made every chart 422.
-@Suite("MeasurementsRepository.series query keys", .serialized)
+@Suite("MeasurementsRepository.series query keys", .serialized, .mockURLSession)
 struct MeasurementsRepositorySeriesTests {
     private func makeRepo() throws -> (MeasurementsRepository, InMemoryKeychain) {
         let env = AppEnvironment(
@@ -49,7 +49,7 @@ struct MeasurementsRepositorySeriesTests {
         let (repo, _) = try makeRepo()
         let body = emptySeriesPayload()
         nonisolated(unsafe) var capturedKind: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let comps = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)
             capturedKind = comps?.queryItems?.first(where: { $0.name == "kind" })?.value
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -71,7 +71,7 @@ struct MeasurementsRepositorySeriesTests {
         let (repo, _) = try makeRepo()
         let body = emptySeriesPayload()
         nonisolated(unsafe) var capturedDays: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let comps = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)
             capturedDays = comps?.queryItems?.first(where: { $0.name == "days" })?.value
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -87,7 +87,7 @@ struct MeasurementsRepositorySeriesTests {
         let (repo, _) = try makeRepo()
         let body = emptySeriesPayload()
         nonisolated(unsafe) var capturedDays: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let comps = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)
             capturedDays = comps?.queryItems?.first(where: { $0.name == "days" })?.value
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -100,7 +100,7 @@ struct MeasurementsRepositorySeriesTests {
 /// W-SERVER-SYNC — pure `clampDays` boundary contract. Pins the days-cap math
 /// without spinning up the actor / network. The server v1.5.5 cap is 3650, so
 /// `.all` passes through unchanged; the clamp stays as a defensive ceiling.
-@Suite("MeasurementsRepository.clampDays — server days-cap boundary")
+@Suite("MeasurementsRepository.clampDays — server days-cap boundary", .mockURLSession)
 struct MeasurementsRepositoryClampDaysTests {
     @Test("`.all` (3650) passes through at the cap")
     func allPassesThroughAtCap() {

@@ -18,7 +18,7 @@ import Testing
 /// that exact partition cleared.
 ///
 /// `.serialized` — the suite installs the process-global `MockURLProtocol.handler`.
-@Suite("ECG teardown — captured owner, drained work, exact partition", .serialized)
+@Suite("ECG teardown — captured owner, drained work, exact partition", .serialized, .mockURLSession)
 struct EcgAccountResetTests {
     private static let accountA = "user-123"
     private static let accountB = "user-456"
@@ -37,7 +37,7 @@ struct EcgAccountResetTests {
         let registry = AuthenticatedSessionLeaseRegistry()
         registry.activate(ownerID: Self.accountA)
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let source = FakeEcgSource(
             recordings: [EcgSyncTestSupport.recording(id: "a-1")],
@@ -77,7 +77,7 @@ struct EcgAccountResetTests {
         let registry = AuthenticatedSessionLeaseRegistry()
         registry.activate(ownerID: Self.accountA)
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let source = FakeEcgSource(
             recordings: [EcgSyncTestSupport.recording(id: "a-1")],
@@ -116,7 +116,7 @@ struct EcgAccountResetTests {
         registry.activate(ownerID: Self.accountA)
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/insights/ecg") { recorder.record(req) }
             return reply(req)
         }
@@ -172,7 +172,7 @@ struct EcgAccountResetTests {
         )
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return reply(req)
         }
@@ -204,7 +204,7 @@ struct EcgAccountResetTests {
         let registry = AuthenticatedSessionLeaseRegistry()
         registry.activate(ownerID: Self.accountA)
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let source = FakeEcgSource(
             recordings: [EcgSyncTestSupport.recording(id: "a-1")],
             volts: ["a-1": [0.001]]

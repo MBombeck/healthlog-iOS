@@ -1,33 +1,26 @@
 import Foundation
 
-// MARK: - F-1 assistant-disabled mirror wiring
+// MARK: - AI refusal + module mirror wiring
 
 extension AppContainer {
-    /// Wires `APIClient` → `FeatureFlagsStore` so a `403 +
-    /// errorCode: "assistant.disabled.<surface>"` (server brief
-    /// v1.4.31 §c.1) flips the matching flag in the store on the
-    /// same tick the route 403's. Without this hop, the store would
-    /// only update on the next `/api/feature-flags` foreground
-    /// refresh — the placeholder would race the user's tap.
+    /// #114 / #115 · 0.2 — wires `APIClient` → ``AICapabilityGate`` so an AI
+    /// refusal (``HLError/aiUnavailable(_:)``) flips the named capabilities off
+    /// on the same tick the route refuses, and hands the gate to ``ModuleGate``
+    /// so every `/api/auth/me` load (which ModuleGate already performs) also
+    /// applies the `ai` block. No extra request.
     ///
-    /// The store mirror is a **convenience**: the typed
-    /// `HLError.assistantDisabled(_:)` returned by APIClient stays
-    /// the authoritative signal for surface guards. The mirror just
-    /// short-circuits the latency window between "route 403's" and
-    /// "store knows".
-    ///
-    /// Detached because APIClient is an actor and the store is
-    /// @MainActor — the wiring is fire-and-forget at init time;
-    /// idempotent on the APIClient side
-    /// (`setAssistantDisabledHandler` overwrites).
-    static func wireAssistantDisabledMirror(
+    /// Detached because APIClient is an actor and the gate is `@MainActor`;
+    /// idempotent on the APIClient side (`setAIRefusalHandler` overwrites).
+    static func wireAIRefusalMirror(
         apiClient: APIClient,
-        store: FeatureFlagsStore
+        gate: AICapabilityGate,
+        moduleGate: ModuleGate
     ) {
+        moduleGate.aiCapabilityGate = gate
         Task.detached {
-            await apiClient.setAssistantDisabledHandler { @Sendable flag in
+            await apiClient.setAIRefusalHandler { @Sendable [weak gate] refusal in
                 await MainActor.run {
-                    store.applyDisabled(flag)
+                    gate?.applyRefusal(refusal)
                 }
             }
         }
@@ -55,24 +48,16 @@ extension AppContainer {
         }
     }
 
-    /// Constructs the on-device assistant service singletons with a
-    /// `LiveFeatureFlagsService` bridge so the actors honour
-    /// server-deployed operator-flag state on every
-    /// `generate(...)` / `observe(...)` call (F-1 / R5).
-    ///
-    /// Returned as a value-type bundle (vs three separate factories)
-    /// because all services share the same live-flag adaptor —
-    /// keeping the allocation in one place makes the wiring intent
-    /// explicit. D-1 added `smartReminder` as the third entry; it is
-    /// gated by `.assistantBriefing` (same operator-flag as the daily
-    /// briefing — per R5 the AI surfaces collapse to a single
-    /// operator-control knob until we have a reason to split them).
-    static func makeAssistantServices(store: FeatureFlagsStore) -> AssistantServiceBundle {
-        let liveFlags = store.liveService()
-        return AssistantServiceBundle(
-            briefing: OnDeviceBriefingService(featureFlags: liveFlags),
-            trend: TrendObservationsService(featureFlags: liveFlags),
-            smartReminder: SmartReminderPhraseService(featureFlags: liveFlags)
+    /// Constructs the on-device assistant service singletons, each reading the
+    /// live ``AICapabilityGate`` shadow on every call, so a capability the
+    /// server switches off mid-session stops the next inference (#115 · 0.2:
+    /// `onDeviceAllowed`). Daily briefing and the smart reminder phrase follow
+    /// `briefing`; per-metric trend observations follow `statusText`.
+    static func makeAssistantServices(aiCapabilities: any AICapabilityReading) -> AssistantServiceBundle {
+        AssistantServiceBundle(
+            briefing: OnDeviceBriefingService(aiCapabilities: aiCapabilities),
+            trend: TrendObservationsService(aiCapabilities: aiCapabilities),
+            smartReminder: SmartReminderPhraseService(aiCapabilities: aiCapabilities)
         )
     }
 

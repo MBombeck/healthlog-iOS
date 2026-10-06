@@ -28,9 +28,16 @@ enum VorsorgeCard {
         case inDays(Int)
 
         /// Localization key for the bucket. Reuses the web's wording 1:1.
+        ///
+        /// v1.39.2 — one day over has its own phrase ("Overdue since
+        /// yesterday", web `overdueSinceYesterday`) instead of the counted
+        /// "Overdue by 1 days". Check-ups now stay overdue after their reminder
+        /// instead of rolling on, so this is the line an open check-up shows
+        /// the morning after it was due.
         var localizedKey: String {
             switch self {
             case .none: "vorsorge.card.due.none"
+            case .overdue(days: 1): "vorsorge.card.due.overdueYesterday"
             case .overdue: "vorsorge.card.due.overdue"
             case .today: "vorsorge.card.due.today"
             case .tomorrow: "vorsorge.card.due.tomorrow"
@@ -42,6 +49,7 @@ enum VorsorgeCard {
         /// key carries no count (none / today / tomorrow).
         var dayArgument: Int? {
             switch self {
+            case .overdue(days: 1): nil
             case let .overdue(days): days
             case let .inDays(days): days
             case .none, .today, .tomorrow: nil
@@ -70,10 +78,17 @@ enum VorsorgeCard {
     /// 20:00, rounded to −1 and read "seit 1 Tag überfällig" on iOS while the
     /// web said "Heute fällig". The doc comment above it claimed web parity —
     /// it described the *pre*-v1.18.9 web code.
+    ///
+    /// **#115 1.5 / v1.39.2 — the day is the account's day.** The calendar
+    /// defaults to the profile zone (``ProfileDay``), the zone the server's
+    /// reminder tick and the digest's "due today or overdue" read in. On a phone
+    /// set to another zone the device calendar named a different day for the
+    /// same instant, so a check-up the digest already called overdue could read
+    /// "Due today" here, or drop out of the Home tile's due-now gate.
     static func dueBucket(
         nextDueAt: Date?,
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = ProfileDay.calendar()
     ) -> DueBucket {
         guard let due = nextDueAt else { return .none }
         let dueDay = calendar.startOfDay(for: due)
@@ -233,8 +248,12 @@ enum VorsorgeCard {
     /// Relative next-due text (the web `relativeDueKey` mirror) — presentation of
     /// the server `nextDueAt` delta, never a cadence recompute. Shared by the card
     /// and the detail sheet so the two surfaces read identically.
-    static func dueDisplayText(nextDueAt: Date?, now: Date = .now) -> String {
-        let bucket = dueBucket(nextDueAt: nextDueAt, now: now)
+    static func dueDisplayText(
+        nextDueAt: Date?,
+        now: Date = .now,
+        calendar: Calendar = ProfileDay.calendar()
+    ) -> String {
+        let bucket = dueBucket(nextDueAt: nextDueAt, now: now, calendar: calendar)
         let key = String.LocalizationValue(bucket.localizedKey)
         if let days = bucket.dayArgument {
             return String(format: String(localized: key), days)
@@ -247,7 +266,7 @@ enum VorsorgeCard {
     static func lastDoneDisplayText(
         lastSatisfiedAt: Date?,
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = ProfileDay.calendar()
     ) -> String {
         guard let last = lastSatisfiedAt else { return "—" }
         let day = calendar.startOfDay(for: last)

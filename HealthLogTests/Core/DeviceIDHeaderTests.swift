@@ -10,7 +10,7 @@ import Testing
 
 /// Locks: `X-Device-Id` ist auf jedem Request gesetzt, über Lifetime stabil
 /// und persistiert in der Keychain (siehe `05-auth-flows.md §9` + W2a-A2 §3).
-@Suite("X-Device-Id header", .serialized)
+@Suite("X-Device-Id header", .serialized, .mockURLSession)
 struct DeviceIDHeaderTests {
     private func makeAPI(keychain: InMemoryKeychain = InMemoryKeychain()) -> (APIClient, InMemoryKeychain) {
         let env = AppEnvironment(
@@ -29,7 +29,7 @@ struct DeviceIDHeaderTests {
     func headerPresent() async {
         let (api, _) = makeAPI()
         nonisolated(unsafe) var captured: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             captured = req.value(forHTTPHeaderField: "X-Device-Id")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -46,7 +46,7 @@ struct DeviceIDHeaderTests {
     func headerStable() async {
         let (api, _) = makeAPI()
         nonisolated(unsafe) var ids: [String] = []
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if let v = req.value(forHTTPHeaderField: "X-Device-Id") { ids.append(v) }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -66,7 +66,7 @@ struct DeviceIDHeaderTests {
         let kc = InMemoryKeychain()
         let (api1, _) = makeAPI(keychain: kc)
         nonisolated(unsafe) var first: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             first = req.value(forHTTPHeaderField: "X-Device-Id")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -78,7 +78,7 @@ struct DeviceIDHeaderTests {
 
         let (api2, _) = makeAPI(keychain: kc)
         nonisolated(unsafe) var second: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             second = req.value(forHTTPHeaderField: "X-Device-Id")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

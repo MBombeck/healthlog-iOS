@@ -18,7 +18,7 @@ import Testing
 ///
 /// Real APIClient + URLProtocol-stubbed network (PROJECT_GUIDE.md anti-pattern: no
 /// mock-server for these paths) so a schema drift would actually break the test.
-@Suite("MeasurementsRepository wide recent fallback (D2)", .serialized)
+@Suite("MeasurementsRepository wide recent fallback (D2)", .serialized, .mockURLSession)
 struct MeasurementsRepositoryWideRecentTests {
     private func makeRepo() throws -> MeasurementsRepository {
         let env = AppEnvironment(
@@ -58,7 +58,7 @@ struct MeasurementsRepositoryWideRecentTests {
         // dormant kind, but inside the wide ~10y window the D2 fallback requests.
         let old = Date(timeIntervalSince1970: 1_700_000_000).addingTimeInterval(-86400 * 400)
         let payload = listPayload(type: "FAT_MASS", value: 18.4, at: old)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
         let rows = try await repo.recent(kind: .fatMass, limit: 2000)

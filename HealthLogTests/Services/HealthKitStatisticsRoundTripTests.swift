@@ -11,7 +11,7 @@ import Testing
     /// MockURLProtocol gegen die echte Server-Wire-Konvention. Validiert,
     /// dass die externalId-Locked-Konstruktion am Server ankommt + dass der
     /// Cache-State nach jedem Action-Arm korrekt fortgeschrieben wird.
-    @Suite("HK-STATS round-trip — HK→externalId UPSERT→cache update", .serialized)
+    @Suite("HK-STATS round-trip — HK→externalId UPSERT→cache update", .serialized, .mockURLSession)
     struct HealthKitStatisticsRoundTripTests {
         // MARK: - Helpers
 
@@ -98,7 +98,7 @@ import Testing
             nonisolated(unsafe) var capturedBody: Data?
             nonisolated(unsafe) var capturedPath: String?
             nonisolated(unsafe) var capturedMethod: String?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // CU-07: the handler is process-global — record only OUR route.
                 if req.targets("/api/measurements/batch") {
                     capturedPath = req.url?.path
@@ -171,7 +171,7 @@ import Testing
             nonisolated(unsafe) var capturedMethod: String?
             nonisolated(unsafe) var capturedBody: Data?
             nonisolated(unsafe) var capturedAuthorization: String?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 if req.targets("/api/measurements/batch") {
                     capturedPath = req.url?.path
                     capturedMethod = req.httpMethod
@@ -218,7 +218,7 @@ import Testing
             let harness = try makeCoordinator(api: api)
             let (coordinator, cache, lease) = (harness.coordinator, harness.cache, harness.lease)
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = #"""
                 {"data":{"processed":1,"inserted":0,"duplicates":1,"skipped":[],"entries":[{"index":0,"status":"duplicate"}]},"error":null}
                 """#
@@ -257,7 +257,7 @@ import Testing
                 lastPostedValue: 5000
             )
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = #"""
                 {"data":{"processed":1,"inserted":0,"duplicates":0,"skipped":[],"entries":[{"index":0,"status":"failed","reason":"persistence_error"}]},"error":null}
                 """#
@@ -289,7 +289,7 @@ import Testing
             let harness = try makeCoordinator(api: api)
             let (coordinator, cache, lease) = (harness.coordinator, harness.cache, harness.lease)
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = #"""
                 {"data":{"processed":1,"inserted":1,"duplicates":0,"skipped":[],"entries":[]},"error":null}
                 """#
@@ -329,7 +329,7 @@ import Testing
             )
 
             nonisolated(unsafe) var requestCount = 0
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // CU-07: `requestCount == 0` is only meaningful when a parallel
                 // suite's request cannot raise it — scope to the measurement
                 // route this coordinator uses (.post/.upsert both hit

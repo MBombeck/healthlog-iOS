@@ -8,7 +8,7 @@
     /// derived idempotency key (`OutboxStore.enqueue` inserts unconditionally).
     /// The coordinator must ask the retry queue first and treat an already
     /// pending row as queued.
-    @Suite("Daily-stats retry — no duplicate outbox rows under one key")
+    @Suite("Daily-stats retry — no duplicate outbox rows under one key", .mockURLSession)
     struct HealthKitStatsRetryDedupeTests {
         static let owner = "account-a"
 
@@ -38,7 +38,7 @@
         }
 
         private func respondFailed() {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = #"""
                 {"data":{"processed":1,"inserted":0,"duplicates":0,"skipped":[],"entries":[{"index":0,"status":"failed","reason":"persistence_error"}]},"error":null}
                 """#

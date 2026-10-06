@@ -40,7 +40,6 @@ struct AuthenticatedShell: View {
     @Environment(AppRouter.self) private var router
     // Non-private: read by the same-module shell extensions (+Capture / +AIConsent).
     @Environment(\.appContainer) var container
-    @Environment(FeatureFlagsStore.self) var featureFlags
     @State private var lastDestinationTab: TabIdentifier = .home
     /// W-FILELEN — `internal` (not `private`) so the `+Capture` /`+AIConsent`
     /// same-module extensions can read/flip these `@State` flags. Pure
@@ -51,7 +50,8 @@ struct AuthenticatedShell: View {
     /// picker resolves to a typed `CaptureAction`; on selection we
     /// dismiss it and present the chosen downstream surface (Measure
     /// sheet, Meds tab, or Mood screen).
-    @State private var showCapturePicker: Bool = false
+    /// T1 — internal so the +Capture extension's sheet gate can flip it.
+    @State var showCapturePicker: Bool = false
     /// v0.6.1.17 Y10.2 — drives the redesigned `MoodScreen` (Y10 5-icon
     /// hero layout) as the canonical mood-entry surface. Pre-Y10.2 the
     /// Erfassen → Stimmung row pushed `MoodQuickEntrySheet` (an emoji-
@@ -106,12 +106,19 @@ struct AuthenticatedShell: View {
     /// presents the sheet (`.sheet(item:)`) and seeds its picker. Reuses the
     /// SAME `MeasureSheetView` the central Erfassen path presents — no second
     /// capture UI — just with `initialKind` set.
-    @State private var measurePrefillKind: PrefilledMeasureKind?
+    /// T1 — internal so the +Capture extension's sheet gate can flip it.
+    @State var measurePrefillKind: PrefilledMeasureKind?
     /// W-INVITE-DEEPLINK (#16) — drives the non-destructive "invite can't be
     /// applied to a signed-in account" alert. Flipped on by the router's
     /// `inviteWhileSignedInNoticeCount` edge (an invite link tapped while already
     /// signed in). No token is held — this is a fact-of-tap acknowledgement only.
     @State private var showInviteWhileSignedInNotice: Bool = false
+    /// #115 · 1.1 T1 — the one owner of "which shell sheet is up". Every flag
+    /// above is flipped through `requestSheet(_:)` and released by that sheet's
+    /// `onDismiss`, so no request can preempt a sheet that is still on screen or
+    /// still animating (the 286 `SheetBridge` preemption crash). See
+    /// `ShellSheetGate`.
+    @State var sheetGate = ShellSheetGate()
 
     var body: some View {
         // SwiftUI braucht einen Bindable-View des @Observable Routers, damit
@@ -227,7 +234,8 @@ struct AuthenticatedShell: View {
         .onChange(of: container?.aiConsentStore.explicitPromptToken) { _, _ in
             requestExplicitConsentPrompt()
         }
-        .sheet(item: $pendingConsentProvider) { request in
+        // T1 — a shell sheet parked behind the consent sheet resumes once it is gone.
+        .sheet(item: $pendingConsentProvider, onDismiss: resumeParkedSheet) { request in
             AIConsentSheet(
                 provider: request.provider,
                 onAccept: {
@@ -236,26 +244,14 @@ struct AuthenticatedShell: View {
                     // to `.online` and every Coach surface appears. The receipt
                     // mint below still runs (the #24 thread: mint `ai_full` for
                     // `managedBy: "server"`) — consent is NOT bypassed.
-                    if request.serverManaged {
-                        container?.aiConsentStore.grantServerManaged()
-                        pendingConsentProvider = nil
-                        Task {
-                            await container?.syncServerAIConsentReceipt()
-                            await container?.insightsStore.load()
-                            await container?.dailyBriefingStore.load()
-                        }
-                        return
-                    }
-                    // Bug 2 (v0.14.8) — guard the accept path against a stray
-                    // `.unconfigured`, like the Coach path. `grant(.unconfigured)`
-                    // no-ops, so accepting would dismiss to a false "consent
-                    // missing" — the trust break the operator hit. Re-resolve live
-                    // (config may have arrived since the sheet opened); only grant
-                    // a real provider, else keep the gate closed.
-                    let resolved = container?.aiProviderStore.config?.resolvedProvider ?? .unconfigured
-                    let grantProvider = resolved == .unconfigured ? request.provider : resolved
-                    guard grantProvider != .unconfigured else { return }
-                    container?.aiConsentStore.grant(for: grantProvider)
+                    //
+                    // Bug 2 (v0.14.8) + J1 — the grant itself (server-managed
+                    // scope or the live-resolved provider, never a stray
+                    // `.unconfigured`) is `AppContainer.acceptAIConsent(_:)`.
+                    // A request that resolves to no provider grants nothing
+                    // and leaves the sheet up, exactly as before.
+                    guard let container,
+                          container.acceptAIConsent(request) != .noProvider else { return }
                     pendingConsentProvider = nil
                     // Kick off the gated stores so the user sees content
                     // immediately after granting (otherwise they'd have
@@ -263,9 +259,9 @@ struct AuthenticatedShell: View {
                     Task {
                         // v0.14.10 — mint the server consent receipt FIRST,
                         // else the loads below warm no-key fallbacks.
-                        await container?.syncServerAIConsentReceipt()
-                        await container?.insightsStore.load()
-                        await container?.dailyBriefingStore.load()
+                        await container.syncServerAIConsentReceipt()
+                        await container.insightsStore.load()
+                        await container.dailyBriefingStore.load()
                     }
                 },
                 onDecline: {
@@ -371,7 +367,7 @@ struct AuthenticatedShell: View {
         // bar re-emerges as Liquid Glass on scroll-up. iOS 18-25: no-op.
         .hlTabBarMinimizeOnScroll()
         .sensoryFeedback(.selection, trigger: router.selectedTab)
-        .sheet(isPresented: $showMeasureSheet) {
+        .sheet(isPresented: $showMeasureSheet, onDismiss: releaseSheet(.measure)) {
             // A6 §5 / user-report #4 — present at .large only. The earlier
             // [.medium, .large] combo caused a "half-open → pause → full"
             // animation because focus on the first TextField pushed the
@@ -385,7 +381,7 @@ struct AuthenticatedShell: View {
         // Vorsorge tile's "jetzt messen". Same `MeasureSheetView` as the central
         // Erfassen path, seeded to the due reminder's kind. `.sheet(item:)` so
         // the bound kind both presents the sheet and feeds `initialKind`.
-        .sheet(item: $measurePrefillKind) { prefill in
+        .sheet(item: $measurePrefillKind, onDismiss: releaseSheet(.measurePrefill)) { prefill in
             MeasureSheetView(initialKind: prefill.kind)
                 .hlSheetPresentation(.form)
         }
@@ -405,7 +401,7 @@ struct AuthenticatedShell: View {
         // `pendingCaptureAction`; an interactive-drag-down dismiss leaves
         // `pendingCaptureAction == nil` and the observer no-ops, which is
         // exactly the cancel semantics we want.
-        .sheet(isPresented: $showCapturePicker) {
+        .sheet(isPresented: $showCapturePicker, onDismiss: releaseSheet(.capturePicker)) {
             CapturePickerSheet(
                 pulseTrigger: captureTapPulse,
                 // v0.14.8 C4 — offer the gated cycle row only when the
@@ -450,7 +446,7 @@ struct AuthenticatedShell: View {
         // and the deep-link `mood.log.now` action. The legacy
         // `MoodQuickEntrySheet` (Unicode emoji selector) was retired —
         // the Y10 surface carries the icon pack the operator approved.
-        .sheet(isPresented: $showMoodQuickEntrySheet) {
+        .sheet(isPresented: $showMoodQuickEntrySheet, onDismiss: releaseSheet(.mood)) {
             // v0.14.8: MoodScreen now OWNS its host-sheet detent (it grows from a
             // compact `.medium` over the hero/faces to a tall detent the moment a
             // mood is logged, so the inline annotate panel — sliders + tags + note
@@ -463,7 +459,7 @@ struct AuthenticatedShell: View {
         }
         // v0.5.3-EQ-1 — medication quick-intake confirm flow. Replaces
         // the previous tab-flip to `.meds`.
-        .sheet(isPresented: $showMedicationQuickIntakeSheet) {
+        .sheet(isPresented: $showMedicationQuickIntakeSheet, onDismiss: releaseSheet(.medicationQuickIntake)) {
             MedicationQuickIntakeSheet(
                 onDismiss: { showMedicationQuickIntakeSheet = false },
                 onQueued: { surfaceQuickIntakeQueuedBanner() }
@@ -473,7 +469,7 @@ struct AuthenticatedShell: View {
         // v0.14.8 C4 — gated cycle day-log capture. Reachable only via the
         // CapturePicker `.cycle` row, which the CycleGate hides for ineligible /
         // opted-out users — so this sheet is unreachable for them by construction.
-        .sheet(isPresented: $showCycleCaptureSheet) {
+        .sheet(isPresented: $showCycleCaptureSheet, onDismiss: releaseSheet(.cycle)) {
             if let container {
                 CycleCaptureSheet(
                     store: container.cycleStore,
@@ -487,7 +483,8 @@ struct AuthenticatedShell: View {
             // v0.5.2-A4 — the picker has finished dismissing. Apply the
             // staged action on the next main-actor pass so SwiftUI has
             // committed the dismissal animation tear-down before we
-            // present any follow-up sheet.
+            // present any follow-up sheet. T1: the follow-up goes through the
+            // sheet gate, which parks it until the picker's `onDismiss`.
             guard oldValue, !newValue else { return }
             applyPendingCaptureAction()
         }
@@ -499,7 +496,7 @@ struct AuthenticatedShell: View {
         // `captureTapPulse` pattern just above.
         .onChange(of: router.moodQuickEntryRequestCount) { oldValue, newValue in
             guard newValue > oldValue else { return }
-            showMoodQuickEntrySheet = true
+            requestSheet(.mood)
         }
         // v0.14.x Q — surface the medication quick-intake confirm sheet when a
         // Home-Screen Quick Action ("Log an intake") signals intent via
@@ -510,7 +507,7 @@ struct AuthenticatedShell: View {
         // row presents, so there is one quick-intake surface, not two.
         .onChange(of: router.medicationQuickIntakeRequestCount) { oldValue, newValue in
             guard newValue > oldValue else { return }
-            showMedicationQuickIntakeSheet = true
+            requestSheet(.medicationQuickIntake)
         }
         // v0.15 W-FRONTDOORS — surface the type-prefilled measure sheet when the
         // Home Vorsorge tile signals "jetzt messen" via
@@ -520,7 +517,7 @@ struct AuthenticatedShell: View {
         .onChange(of: router.measurePrefillRequestCount) { oldValue, newValue in
             guard newValue > oldValue,
                   let kind = router.consumeMeasurePrefillKind() else { return }
-            measurePrefillKind = PrefilledMeasureKind(kind: kind)
+            requestSheet(.measurePrefill(kind))
         }
         .onChange(of: router.selectedTab) { oldValue, newValue in
             if newValue == .measure {
@@ -530,7 +527,9 @@ struct AuthenticatedShell: View {
                 // value flows into CapturePickerSheet as `pulseTrigger`
                 // so the row group inherits the same beat.
                 captureTapPulse &+= 1
-                showCapturePicker = true
+                // T1 — through the gate: a re-tap while a capture surface is
+                // up or still animating is dropped instead of preempting it.
+                requestSheet(.capturePicker)
                 // Snap zurück auf den vorherigen echten Tab — der Action-Slot
                 // soll sich wie ein Button anfühlen, nicht wie ein Ziel.
                 router.selectedTab = oldValue == .measure ? lastDestinationTab : oldValue

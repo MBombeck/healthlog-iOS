@@ -41,6 +41,37 @@ public struct DailyDigest: Codable, Sendable, Equatable {
     public let line: String
     /// Bounded 0–3 rail items, never padded (defensively re-bounded in `rail`).
     public let worthALook: [DailyPriorityItem]
+    /// **#114 / #115 · 0.2 — the three AI capabilities the digest carries text
+    /// or a card for** (server v1.39, required there): `briefing` (the lead and
+    /// the top signal), `coach` (the Coach check-in card) and `reactionLines`.
+    /// `nil` on an older server — then nothing is masked. Everything else in the
+    /// digest is data and renders whatever this says.
+    public let ai: DigestAI?
+
+    /// The digest's `ai` block. Each member is optional so a partial or
+    /// malformed block masks only what it can prove unavailable.
+    public struct DigestAI: Codable, Sendable, Equatable {
+        public let briefing: AICapabilityState?
+        public let coach: AICapabilityState?
+        public let reactionLines: AICapabilityState?
+
+        public init(
+            briefing: AICapabilityState? = nil,
+            coach: AICapabilityState? = nil,
+            reactionLines: AICapabilityState? = nil
+        ) {
+            self.briefing = briefing
+            self.coach = coach
+            self.reactionLines = reactionLines
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            briefing = try? c.decodeIfPresent(AICapabilityState.self, forKey: .briefing)
+            coach = try? c.decodeIfPresent(AICapabilityState.self, forKey: .coach)
+            reactionLines = try? c.decodeIfPresent(AICapabilityState.self, forKey: .reactionLines)
+        }
+    }
 
     /// The health score envelope. `band` is a `"green" | "yellow" | "red"`
     /// token (server-authoritative) mapped to the monochrome ring's cap-dot
@@ -115,7 +146,8 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         topSignal: TopSignal?,
         briefingLead: String?,
         line: String,
-        worthALook: [DailyPriorityItem]
+        worthALook: [DailyPriorityItem],
+        ai: DigestAI? = nil
     ) {
         self.generatedAt = generatedAt
         self.phase = phase
@@ -125,6 +157,7 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         self.briefingLead = briefingLead
         self.line = line
         self.worthALook = worthALook
+        self.ai = ai
     }
 
     public init(from decoder: Decoder) throws {
@@ -136,7 +169,8 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         topSignal = try c.decodeIfPresent(TopSignal.self, forKey: .topSignal)
         briefingLead = try c.decodeIfPresent(String.self, forKey: .briefingLead)
         line = try c.decodeIfPresent(String.self, forKey: .line) ?? ""
-        worthALook = try c.decodeLossyArrayIfPresent(DailyPriorityItem.self, forKey: .worthALook)
+        worthALook = try c.decodeLossyArray(DailyPriorityItem.self, forKey: .worthALook)
+        ai = try? c.decodeIfPresent(DigestAI.self, forKey: .ai)
     }
 }
 
@@ -148,18 +182,31 @@ public extension DailyDigest {
         phase != "final"
     }
 
+    /// #115 · 0.2 — whether model-written briefing text (the lead and the top
+    /// signal) may be shown. The server already nulls both while `briefing` is
+    /// unavailable; this keeps a body that says otherwise from painting them.
+    var showsBriefingText: Bool {
+        ai?.briefing?.isAvailable ?? true
+    }
+
     /// The briefing lead is the warmest read; the deterministic `line` is the
     /// floor a keyless self-hoster still gets. Prefer the lead for the hero.
     var lead: String {
-        if let briefingLead, !briefingLead.isEmpty { return briefingLead }
+        if showsBriefingText, let briefingLead, !briefingLead.isEmpty { return briefingLead }
         return line
     }
 
     /// True when a cached briefing actually backs the lead (drives the
     /// "read the full briefing" affordance).
     var hasBriefingLead: Bool {
-        guard let briefingLead else { return false }
+        guard showsBriefingText, let briefingLead else { return false }
         return !briefingLead.isEmpty
+    }
+
+    /// The top signal, or `nil` while the `briefing` capability is unavailable
+    /// (it is lifted from the briefing).
+    var visibleTopSignal: TopSignal? {
+        showsBriefingText ? topSignal : nil
     }
 
     /// Calm degrade (plan §3): a genuinely empty account — no score, no rail
@@ -171,8 +218,14 @@ public extension DailyDigest {
 
     /// Defensive re-bound of the rail to the documented 0–3 ceiling — the
     /// server never pads past it, but the hero never renders a fourth card.
+    ///
+    /// #115 · 0.2 — the Coach check-in card opens the Coach, so it is dropped
+    /// while the digest says `coach` is unavailable (the server does not build
+    /// it then; this covers a body that still carries one).
     var rail: [DailyPriorityItem] {
-        Array(worthALook.prefix(3))
+        let coachAvailable = ai?.coach?.isAvailable ?? true
+        let admitted = worthALook.filter { coachAvailable || $0.kindToken != .coachCheckin }
+        return Array(admitted.prefix(3))
     }
 }
 
@@ -246,7 +299,7 @@ public struct DailyPriorityItem: Codable, Sendable, Equatable {
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         body = try c.decodeIfPresent(String.self, forKey: .body)
         status = try c.decodeIfPresent(String.self, forKey: .status)
-        actions = try c.decodeLossyArrayIfPresent(Action.self, forKey: .actions)
+        actions = try c.decodeLossyArray(Action.self, forKey: .actions)
         moduleKey = try c.decodeIfPresent(String.self, forKey: .moduleKey)
     }
 }
@@ -303,35 +356,5 @@ public extension DailyPriorityItem {
     /// Bounded to 3 (defence-in-depth; the server already caps at 3).
     var boundedActions: [Action] {
         Array(actions.prefix(3))
-    }
-}
-
-// MARK: - Lossy array decode helper
-
-private extension KeyedDecodingContainer {
-    /// Decode an array element-by-element, SKIPPING any element that fails to
-    /// decode (and returning `[]` when the key is absent). A single malformed
-    /// rail item never nukes the whole digest — the hero paints what it can.
-    func decodeLossyArrayIfPresent<T: Decodable>(_: T.Type, forKey key: Key) throws -> [T] {
-        guard contains(key), try decodeNil(forKey: key) == false else { return [] }
-        var unkeyed = try nestedUnkeyedContainer(forKey: key)
-        var result: [T] = []
-        while !unkeyed.isAtEnd {
-            if let element = try? unkeyed.decode(T.self) {
-                result.append(element)
-            } else {
-                // Consume the undecodable element so the loop advances.
-                _ = try? unkeyed.decode(AnyDecodableSkip.self)
-            }
-        }
-        return result
-    }
-}
-
-/// A throwaway decodable that swallows one arbitrary JSON value so the lossy
-/// loop can step past an element the target type rejected.
-private struct AnyDecodableSkip: Decodable {
-    init(from decoder: Decoder) throws {
-        _ = try? decoder.singleValueContainer()
     }
 }

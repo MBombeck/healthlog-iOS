@@ -262,7 +262,7 @@ public final class AuthStore {
     public func login(email: String, password: String) async {
         guard await beginAuthenticationTransition() else { return }
         defer { finishAuthenticationTransition() }
-        await runAttempt { attempt in
+        await runAttempt(classify: failPasswordLogin) { attempt in
             switch try await self.auth.login(email: email, password: password) {
             case let .session(session):
                 // v0.6.0.9 — the server branch flips to `.authenticating(user)`
@@ -470,7 +470,7 @@ public final class AuthStore {
     public func loginWithPasskey(anchor: ASPresentationAnchorProvider) async {
         guard await beginAuthenticationTransition() else { return }
         defer { finishAuthenticationTransition() }
-        await runAttempt { attempt in
+        await runAttempt(classify: failPasskeyLogin) { attempt in // L1: a refusal is not an expiry
             do {
                 let session = try await self.auth.passkeyLogin(presentationAnchor: anchor)
                 self.acceptSession(session, for: attempt)
@@ -668,6 +668,14 @@ public final class AuthStore {
             // stale the shared authenticated-session lease BEFORE any wipe:
             // no suspended producer may publish into the closing session.
             self.invalidateAuthenticatedSession()
+            // N1 — the account's last word before its credentials go: a device
+            // that told the server it delivers medication reminders itself takes
+            // that back (`clientManaged`), so the server's APNs reminders resume
+            // for the account's other devices. Best effort, fail-fast, and it
+            // never aborts the sign-out.
+            if let hook = self.onBeforeRemoteSignOut {
+                await hook()
+            }
             try await self.auth.logout()
             // v0.7.0 W-LOGOUT (NEW-H-1): the Composition-Root sets
             // `onPostLogoutHook` to `AppContainer.performFullLocalLogout(reason:
@@ -703,6 +711,14 @@ public final class AuthStore {
     /// `LocalLLMBox`, …) which the HealthLogCore-resident AuthService can
     /// not see. See `AppContainer+Logout.swift`.
     public var onPostLogoutHook: (@Sendable () async -> Void)?
+
+    /// **N1** — runs during a user-initiated sign-out after the session lease
+    /// was invalidated and BEFORE `AuthService.logout()` revokes the refresh
+    /// token and wipes the keychain, so a final server write can still
+    /// authenticate as the account that is leaving. Set by the composition root
+    /// (`AppContainer+MedicationReminderDelivery`). Not run on a terminal 401
+    /// (no credentials left) or on account deletion (nothing left to tell).
+    public var onBeforeRemoteSignOut: (@Sendable () async -> Void)?
 
     /// GDPR-style account deletion. Workflow:
     /// 1. `AuthService.deleteAccount` ruft den Server-DELETE auf und wiped
@@ -870,10 +886,10 @@ public final class AuthStore {
             lastError = err
             HLLog.auth.error("Auth-Fehler: \(err.localizedDescription, privacy: .private)")
         } catch {
-            // `lastError` wird Richtung UI / Telemetry ausgeliefert — explizit redacten,
-            // damit der String nicht ungefiltert in der UI landet. Der HLLog-Call läuft
-            // ohnehin durch HLLogger → LogSanitizer.
-            lastError = .unknown(LogSanitizer.redact(String(describing: error)))
+            // `lastError` wird Richtung UI ausgeliefert (L1: `signInFacingDescription`
+            // zeigt `.unknown` wörtlich) — dort steht nur der Katalogsatz, nie die
+            // Fehlerbeschreibung. Die Diagnose geht redigiert ins Log darunter.
+            lastError = .unknown(String(localized: "Something went wrong. Please try again."))
             HLLog.auth.error("Unbekannter Auth-Fehler: \(String(describing: error), privacy: .private)")
         }
     }

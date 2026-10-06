@@ -36,6 +36,7 @@ extension WatchSnapshot {
         signedIn: Bool,
         healthScore: WatchSnapshot.HealthScoreGlance? = nil,
         latestMeasurement: WatchSnapshot.LatestMeasurement? = nil,
+        glucoseUnit: GlucoseUnit = .mgdL,
         now: Date = .now,
         calendar: Calendar = .current
     ) -> WatchSnapshot {
@@ -43,6 +44,8 @@ extension WatchSnapshot {
             medications.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
+        // v1.39.1 (#1033) — a medication kept as a record has no dose on the watch.
+        let derivedIntakes = MedicationIntake.excludingUntrackedMedications(derivedIntakes, medications: medications)
 
         let doses: [Dose] = derivedIntakes
             .sorted { $0.scheduledAt < $1.scheduledAt }
@@ -84,6 +87,7 @@ extension WatchSnapshot {
             signedIn: signedIn,
             healthScore: healthScore,
             latestMeasurement: latestMeasurement,
+            glucoseUnit: WatchGlucoseUnit(glucoseUnit),
             generatedAt: now
         )
     }
@@ -93,13 +97,14 @@ extension WatchSnapshot {
 
 extension WatchSnapshot.HealthScoreGlance {
     /// Build the watch score glance from the server `HealthScore`. Mirrors the
-    /// value + the server-authoritative `displayBand` verbatim — never recomputes
-    /// the number (server-first). `nil` in → `nil` glance.
+    /// value + the server-authoritative `displayBand` verbatim (`nil` when the
+    /// server sent none) — never recomputes the number (server-first). `nil` in
+    /// → `nil` glance.
     static func make(from score: HealthScore?) -> WatchSnapshot.HealthScoreGlance? {
         guard let score else { return nil }
         return WatchSnapshot.HealthScoreGlance(
             score: score.score,
-            band: score.displayBand.rawValue
+            band: score.displayBand?.rawValue
         )
     }
 }
@@ -125,6 +130,17 @@ extension WatchSnapshot.LatestMeasurement {
             symbol: widgetGlance.symbol,
             recordedAt: widgetGlance.recordedAt
         )
+    }
+}
+
+extension WatchGlucoseUnit {
+    /// #115 B5 — the account unit onto the wire token. Exhaustive, so a new
+    /// app unit asks for its watch arm instead of falling back silently.
+    init(_ unit: GlucoseUnit) {
+        switch unit {
+        case .mgdL: self = .mgdL
+        case .mmolL: self = .mmolL
+        }
     }
 }
 

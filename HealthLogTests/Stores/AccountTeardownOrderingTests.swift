@@ -74,7 +74,7 @@
     }
 
     @MainActor
-    @Suite("AccountTeardownOrderingTests", .serialized)
+    @Suite("AccountTeardownOrderingTests", .serialized, .mockURLSession)
     struct AccountTeardownOrderingTests {
         // MARK: - Harness
 
@@ -322,7 +322,7 @@
             let parkedWork = ParkedAuthenticatedWorkProbe()
             container.measurementsStore.seriesHydrationTask = Task { await parkedWork.run() }
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":{"deleted":true}}"#.utf8)
@@ -342,7 +342,7 @@
             // Failed deletion — the live lease must survive untouched.
             store.setPhaseForTesting(.authenticated(user("owner-a")))
             let retryLease = try #require(store.activateAuthenticatedSession(ownerID: "owner-a"))
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"Internal"}"#.utf8)

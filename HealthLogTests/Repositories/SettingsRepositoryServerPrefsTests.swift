@@ -14,7 +14,7 @@ import Testing
 ///     nil, no throw.
 ///   - `unitPreference()` GET decode + `setUnitPreference(_:)` PATCH path,
 ///     method, and exact body `{"unitPreference":"imperial"}` (echo-decoded).
-@Suite("SettingsRepository server-prefs (Build 9)", .serialized)
+@Suite("SettingsRepository server-prefs (Build 9)", .serialized, .mockURLSession)
 struct SettingsRepositoryServerPrefsTests {
     private func makeRepo() -> SettingsRepository {
         let env = AppEnvironment(
@@ -49,7 +49,7 @@ struct SettingsRepositoryServerPrefsTests {
     @Test("authMeServerPrefs decodes the full /me projection from the envelope")
     func decodesFullProjection() async throws {
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             let json = #"""
             {"data":{"id":"u1","username":"anna","avatarUrl":"/api/user/avatar/u1?v=1",
@@ -69,7 +69,7 @@ struct SettingsRepositoryServerPrefsTests {
 
     @Test("authMeServerPrefs tolerates an old-server payload without the new fields → all nil")
     func toleratesMissingFields() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // b239-style `/me` — none of the Build 9 pref fields present.
             let json = #"{"data":{"id":"u1","username":"anna","avatarUrl":null},"error":null}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
@@ -84,7 +84,7 @@ struct SettingsRepositoryServerPrefsTests {
 
     @Test("authMeAvatarURL still returns just the avatar (delegates onto the projection)")
     func avatarDelegates() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let json = #"{"data":{"id":"u1","avatarUrl":"/api/user/avatar/u1?v=42","unitPreference":"metric"},"error":null}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
         }
@@ -97,7 +97,7 @@ struct SettingsRepositoryServerPrefsTests {
     @Test("unitPreference GET decodes the resolved binary")
     func unitPreferenceGet() async throws {
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -114,7 +114,7 @@ struct SettingsRepositoryServerPrefsTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))

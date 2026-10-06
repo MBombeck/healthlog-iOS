@@ -84,7 +84,8 @@ struct UnifiedSharingScreen: View {
         HLSettingsCard(
             icon: "checklist",
             title: "sharing.unified.what.title",
-            subtitle: "sharing.unified.what.subtitle"
+            subtitle: "sharing.unified.what.subtitle",
+            subtitleWraps: true
         ) {
             UnifiedSharingSelectionSection(
                 store: store,
@@ -297,6 +298,9 @@ struct UnifiedSharingScreen: View {
                 }
                 .disabled(!store.canProduce || store.outcome == .working)
                 .accessibilityIdentifier("sharing.unified.produce")
+                // R2 / #115 A3 — a link the server wants a fresh proof for:
+                // confirm, then mint again with the elevation.
+                .stepUpConfirmation(linkStore?.stepUp) { await produce(store) }
 
                 UnifiedSharingResultSection(
                     store: store,
@@ -352,8 +356,8 @@ struct UnifiedSharingScreen: View {
             appVersion: Self.appVersion(),
             measurements: measurementsStore.recent,
             medications: medicationsStore.medications,
-            compliance: medicationsStore.compliance,
-            intakes: medicationsStore.todayIntakes,
+            // #115 · 1.2 — the FHIR bundle carries no adherence block; the
+            // PDF path reads the server's adherence itself.
             moodEntries: moodStore.entries
         )
     }

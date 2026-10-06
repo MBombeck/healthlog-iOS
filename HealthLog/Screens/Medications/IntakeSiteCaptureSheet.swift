@@ -37,8 +37,6 @@ struct IntakeSiteCaptureSheet: View {
 
     @State private var selectedSite: InjectionSite?
     @State private var recentSites: [InjectionSite] = []
-    /// #105 — pushes the global deny-list editor onto this sheet's own stack.
-    @State private var showManageSites = false
 
     var body: some View {
         NavigationStack {
@@ -72,14 +70,15 @@ struct IntakeSiteCaptureSheet: View {
                     .accessibilityIdentifier("meds.quick.site.skip")
                     // #105 — the one moment somebody thinks "never this site":
                     // the deny-list is one push away, on this sheet's own stack.
+                    // The push rides the shared HLButton carrier (FREEZE-A,
+                    // 1.0.4): the sheet names no presenter of its own.
                     HLButton(
                         String(localized: "Manage sites"),
                         icon: "circle.grid.cross",
                         variant: .secondary,
-                        size: .compact
-                    ) {
-                        showManageSites = true
-                    }
+                        size: .compact,
+                        destination: { SettingsInjectionSitesScreen() }
+                    )
                     .accessibilityIdentifier("meds.quick.site.manage")
                 }
                 .padding(.horizontal, HLSpace.lg)
@@ -87,9 +86,6 @@ struct IntakeSiteCaptureSheet: View {
                 .padding(.bottom, HLSpace.xl)
             }
             .hlScreenBackground()
-            .navigationDestination(isPresented: $showManageSites) {
-                SettingsInjectionSitesScreen()
-            }
             .navigationTitle(Text("Injektionsstelle"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

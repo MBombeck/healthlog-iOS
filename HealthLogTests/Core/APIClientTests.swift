@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-@Suite("APIClient", .serialized)
+@Suite("APIClient", .serialized, .mockURLSession)
 struct APIClientTests {
     private func makeClient(
         keychain: InMemoryKeychain = InMemoryKeychain(),
@@ -36,7 +36,7 @@ struct APIClientTests {
         try kc.setString("hlk_test", forKey: KeychainKey.authToken)
 
         nonisolated(unsafe) var capturedAuth: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedAuth = req.value(forHTTPHeaderField: "Authorization")
             // Server emits camelCase (Next.js + Prisma); APIClient does no snake-to-camel conversion.
             let body = #"{"data":{"id":"u1","email":"a@b.c","username":null,"displayName":null,"createdAt":"2026-04-22T10:00:00Z"}}"#
@@ -52,7 +52,7 @@ struct APIClientTests {
     func idempotency() async throws {
         let (api, _) = makeClient()
         nonisolated(unsafe) var capturedIdem: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedIdem = req.value(forHTTPHeaderField: "Idempotency-Key")
             let body = #"{"data":{}}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
@@ -66,7 +66,7 @@ struct APIClientTests {
     func cfHeaders() async {
         let (api, _) = makeClient(cf: ("client-id", "client-token"))
         nonisolated(unsafe) var captured: [String: String] = [:]
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             for h in ["cf-access-client-id", "cf-access-client-token"] {
                 captured[h] = req.value(forHTTPHeaderField: h)
             }
@@ -81,7 +81,7 @@ struct APIClientTests {
     @Test("401 throws unauthorized")
     func unauthorized() async {
         let (api, _) = makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, nil)
         }
         do {
@@ -99,7 +99,7 @@ struct APIClientTests {
     func retries() async {
         let (api, _) = makeClient()
         nonisolated(unsafe) var attempts = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             attempts += 1
             return (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }

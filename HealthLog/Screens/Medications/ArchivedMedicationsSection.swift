@@ -98,12 +98,13 @@ struct ArchivedMedicationsSection: View {
 
     /// W-PERF-SWR (High) — shared formatter. `RelativeDateTimeFormatter` is
     /// heavyweight to allocate; building one PER ROW in `relativeArchive` was
-    /// pure waste. Hoisted to a static configured identically (`.full` units,
-    /// `de_DE` locale) so the output is byte-for-byte unchanged.
+    /// pure waste. Hoisted to a static configured once (`.full` units). L1 —
+    /// the locale follows the app language (it was pinned to `de_DE`, so the
+    /// English UI read "Archiviert vor 3 Tagen").
     static let archiveRelativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .full
-        f.locale = Locale(identifier: "de_DE")
+        f.locale = Locale.current
         return f
     }()
 
@@ -112,7 +113,8 @@ struct ArchivedMedicationsSection: View {
     /// MainActor-isolated (the View is, and `RelativeDateTimeFormatter` is not
     /// `Sendable`). `relativeArchive` is a thin `now`-injecting wrapper.
     static func relativeArchiveLabel(for date: Date, relativeTo reference: Date) -> String {
-        "Archiviert \(archiveRelativeFormatter.localizedString(for: date, relativeTo: reference))"
+        let relative = archiveRelativeFormatter.localizedString(for: date, relativeTo: reference)
+        return String(localized: "medications.archived.relative \(relative)")
     }
 
     private func relativeArchive(_ date: Date) -> String {

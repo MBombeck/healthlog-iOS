@@ -239,15 +239,18 @@ struct MeasurementSourceWireTests {
         #expect(MeasurementSource.external.wire == .external)
     }
 
-    @Test("EXTERNAL is server-owned read-only and never mirrored into Apple Health")
-    func externalIsReadOnly() {
-        // `EXTERNAL` is absent from the server's `WRITABLE_MEASUREMENT_SOURCES`
-        // (`{MANUAL, APPLE_HEALTH}`) — a client-named source on the ingest path
-        // is refused with `measurement.batch.source_not_permitted`. So the row
-        // renders but never offers a value-edit path, and the server→Apple-
-        // Health mirror must never author it.
+    @Test("EXTERNAL is owner-editable (#111) and never mirrored into Apple Health")
+    func externalIsOwnerEditable() {
+        // Server PR #892 splits the two questions `WRITABLE_MEASUREMENT_SOURCES`
+        // used to answer together. A client may not NAME `EXTERNAL` (it stays
+        // off the write allowlist, so a client-named source on the ingest path
+        // is refused with `measurement.batch.source_not_permitted`), but the
+        // `PUT` edit gate reads `USER_CORRECTABLE_MEASUREMENT_SOURCES`, which
+        // holds it: the scale behind the token is the person's own. So the row
+        // offers the value edit — and the server→Apple-Health mirror still
+        // never authors it.
         let row = HealthLog.Measurement(id: "x", kind: .weight, recordedAt: Date(), value: .scalar(1), source: .external)
-        #expect(row.isServerDerivedReadOnly)
+        #expect(!row.isServerDerivedReadOnly)
         #expect(!MeasurementSource.external.isServerMirrorEligible)
     }
 
@@ -299,7 +302,7 @@ struct MeasurementSourceWireTests {
         // APPLE_HEALTH}`). Neither TELEGRAM nor MCP is in that list, so the app
         // shows them read-only like COMPUTED rather than offering an edit the
         // server would reject. Neither is on the closed Apple-Health mirror
-        // allowlist (`{withings, import_}`).
+        // allowlist (`{withings, import_, manual}`).
         let row = HealthLog.Measurement(id: "x", kind: .weight, recordedAt: Date(), value: .scalar(1), source: source)
         #expect(row.isServerDerivedReadOnly)
         #expect(!source.isServerMirrorEligible)

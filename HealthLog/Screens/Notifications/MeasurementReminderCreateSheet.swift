@@ -20,7 +20,10 @@ import SwiftUI
 /// nulling the anchor — is now active end-to-end: the PATCH is built by the
 /// pure `MeasurementReminderRow.editingPatch(…)` with exact omitted/null/set
 /// semantics (`RecordPatchField`), verified against the server's #62 recompute
-/// fix. The server owns `nextDueAt`; the client never sets or predicts due dates.
+/// fix. Since server v1.39.2 the patch carries only the fields the person
+/// changed, so an edit of an overdue check-up's label keeps it due (see
+/// `MeasurementReminderRow+EditingPatch.swift`). The server owns `nextDueAt`;
+/// the client never sets or predicts due dates.
 ///
 /// `onCreate` / `onUpdate` return `true` on success (the parent re-lists +
 /// dismisses).

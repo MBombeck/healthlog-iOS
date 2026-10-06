@@ -18,7 +18,7 @@ import Testing
     ///  4. **Offline persists `tagKeys`** — standalone write → read-back, no net.
     ///  5. **Adopt-on-pair carries `tagKeys`** — the bulk DTO encodes them.
     @MainActor
-    @Suite("Mood tag taxonomy (v0.14)", .serialized)
+    @Suite("Mood tag taxonomy (v0.14)", .serialized, .mockURLSession)
     struct MoodTagCatalogTests {
         // MARK: - Fixtures
 
@@ -95,7 +95,7 @@ import Testing
         @Test("Catalog decodes the server envelope into categories + tags")
         func catalogDecodes() async {
             let repo = MoodTagCatalogRepository(api: makeAPI())
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.catalogJSON)
             }
             let catalog = await repo.catalog()
@@ -109,7 +109,7 @@ import Testing
         @Test("Lucide icon names map to SF Symbols, not raw Lucide strings")
         func iconsMapToSFSymbols() async throws {
             let repo = MoodTagCatalogRepository(api: makeAPI())
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.catalogJSON)
             }
             let catalog = await repo.catalog()
@@ -124,7 +124,7 @@ import Testing
             let clock = ClockBox(now: Date(timeIntervalSince1970: 1_700_000_000))
             let repo = MoodTagCatalogRepository(api: makeAPI(), cacheTTL: 86400, clock: { clock.now })
             let hits = Counter()
-            MockURLProtocol.handler = { [hits] req in
+            MockURLProtocol.install { [hits] req in
                 hits.increment()
                 return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.catalogJSON)
             }
@@ -137,7 +137,7 @@ import Testing
         @Test("Network failure on first call returns the bundled fallback (no throw)")
         func networkFailureFallsBack() async {
             let repo = MoodTagCatalogRepository(api: makeAPI())
-            MockURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+            MockURLProtocol.install { _ in throw URLError(.notConnectedToInternet) }
             let catalog = await repo.catalog()
             // Bundled fallback seeds all five server categories.
             #expect(catalog.categories.map(\.key) == ["feelings", "sleep", "health", "social", "work"])
@@ -184,7 +184,7 @@ import Testing
         @Test("POST /api/mood-entries body carries the picked tagKeys")
         func saveIncludesTagKeys() async throws {
             let captured = CapturedBody()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured.capture(req)
                 // Echo a server-shaped created entry (status 201) including tagKeys.
                 let body = Data("""
@@ -205,7 +205,7 @@ import Testing
         @Test("Empty tagKeys are omitted from the POST body (lean legacy bodies)")
         func emptyTagKeysOmitted() async throws {
             let captured = CapturedBody()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured.capture(req)
                 let body = Data("""
                 { "data": { "id": "srv-2", "mood": "OKAY", "tags": [],
@@ -245,7 +245,7 @@ import Testing
         @Test("Standalone mood write persists tagKeys and reads them back, no /api/*")
         func standaloneRoundTripCarriesTagKeys() async throws {
             let fired = Counter()
-            MockURLProtocol.handler = { [fired] _ in
+            MockURLProtocol.install { [fired] _ in
                 fired.increment()
                 throw URLError(.notConnectedToInternet)
             }
@@ -267,7 +267,7 @@ import Testing
             let local = try LocalRepository(store: LocalStore(modelContainer: LocalStore.makeInMemory()))
             let gate = StandaloneGate(local: local, healthKit: EmptyHK(), isStandalone: { true })
             let repo = try MoodRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), standalone: gate)
-            MockURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+            MockURLProtocol.install { _ in throw URLError(.notConnectedToInternet) }
 
             let saved = try await repo.log(score: 4, tags: [], tagKeys: ["happy"], note: nil)
             let updated = try await repo.update(
@@ -328,7 +328,7 @@ import Testing
         @Test("Custom tag decodes custom=true + label, and renders label not labelKey")
         func customTagDecodes() async throws {
             let repo = MoodTagCatalogRepository(api: makeAPI())
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.customCatalogJSON)
             }
             let catalog = try await repo.managementCatalog()
@@ -347,7 +347,7 @@ import Testing
         @Test("Hidden catalogue tag decodes hidden=true (management read)")
         func hiddenFlagDecodes() async throws {
             let repo = MoodTagCatalogRepository(api: makeAPI())
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.customCatalogJSON)
             }
             let catalog = try await repo.managementCatalog()
@@ -361,7 +361,7 @@ import Testing
         @Test("A catalogue tag decodes custom=false + nil label (back-compat)")
         func catalogueTagDefaultsCustomFalse() async throws {
             let repo = MoodTagCatalogRepository(api: makeAPI())
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.catalogJSON)
             }
             let catalog = await repo.catalog()
@@ -393,7 +393,7 @@ import Testing
         func createCustomRequestShape() async throws {
             let captured = CapturedBody()
             let path = PathBox()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured.capture(req)
                 path.set(req.url?.path ?? "", method: req.httpMethod ?? "")
                 let body = Data("""
@@ -417,7 +417,7 @@ import Testing
         func patchCustomOmitsNil() async throws {
             let captured = CapturedBody()
             let path = PathBox()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured.capture(req)
                 path.set(req.url?.path ?? "", method: req.httpMethod ?? "")
                 let body = Data("""
@@ -438,7 +438,7 @@ import Testing
         @Test("DELETE custom: soft by default, ?purge=true when purging")
         func deleteCustomPurgeFlag() async throws {
             let path = PathBox()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 path.set(req.url?.path ?? "", method: req.httpMethod ?? "")
                 path.setQuery(req.url?.query)
                 // 200 + `{}` so the `EmptyResponse` decode is satisfied in the
@@ -458,7 +458,7 @@ import Testing
         func setCatalogueHiddenRequestShape() async throws {
             let captured = CapturedBody()
             let path = PathBox()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured.capture(req)
                 path.set(req.url?.path ?? "", method: req.httpMethod ?? "")
                 return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
@@ -473,7 +473,7 @@ import Testing
 
         @Test("422 over the cap surfaces as HLError.server (inline for the UI)")
         func createCustom422Surfaces() async {
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let body = Data("""
                 { "data": null, "error": { "code": "MOOD_TAG_CAP", "message": "You can create up to 50 tags." } }
                 """.utf8)

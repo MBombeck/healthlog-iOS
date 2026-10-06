@@ -57,6 +57,18 @@ public struct HealthScore: Codable, Sendable, Hashable {
     /// window"), never changes it. `nil` when no episode is active; the server
     /// omits the annotation entirely rather than sending `active: false`.
     public let restMode: RestModeAnnotation?
+    /// **#103 / #115 · 1.3 (server v1.38)** — what the score rests on: how many
+    /// distinct areas of health were counted against how many the method
+    /// recommends, and the resulting tier. A one-area score is computed with
+    /// the same arithmetic as a full one; this is the only thing on the wire
+    /// that tells them apart, so every surface that shows the number shows
+    /// this beside it. `nil` on older servers / cached cells — then nothing is
+    /// claimed about breadth.
+    public let scoreBasis: HealthScoreBasis?
+    /// **#103 (server v1.38)** — which pillars joined or left since the last
+    /// stored day. `nil` when absent or already dismissed server-side state is
+    /// not known.
+    public let compositionNotice: HealthScoreCompositionNotice?
 
     public init(
         score: Int,
@@ -68,7 +80,9 @@ public struct HealthScore: Codable, Sendable, Hashable {
         deltaReason: HealthScoreDeltaReason? = nil,
         scoreVersion: Int? = nil,
         bandSetter: HealthScorePillar? = nil,
-        restMode: RestModeAnnotation? = nil
+        restMode: RestModeAnnotation? = nil,
+        scoreBasis: HealthScoreBasis? = nil,
+        compositionNotice: HealthScoreCompositionNotice? = nil
     ) {
         self.score = score
         self.band = band
@@ -80,11 +94,14 @@ public struct HealthScore: Codable, Sendable, Hashable {
         self.scoreVersion = scoreVersion
         self.bandSetter = bandSetter
         self.restMode = restMode
+        self.scoreBasis = scoreBasis
+        self.compositionNotice = compositionNotice
     }
 
     private enum CodingKeys: String, CodingKey {
         case score, band, delta, confidence, composition, configured
         case deltaReason, scoreVersion, bandSetter, restMode
+        case scoreBasis, compositionNotice
     }
 
     /// Strictly optional past the three contractual fields. A malformed
@@ -105,35 +122,20 @@ public struct HealthScore: Codable, Sendable, Hashable {
         scoreVersion = try? c.decodeIfPresent(Int.self, forKey: .scoreVersion)
         bandSetter = try? c.decodeIfPresent(HealthScorePillar.self, forKey: .bandSetter)
         restMode = try? c.decodeIfPresent(RestModeAnnotation.self, forKey: .restMode)
-    }
-
-    /// **v0.14.10 §2 — iOS-side COLOUR band thresholds.**
-    ///
-    /// Fallback only: the colour banding the UI shows for a score when the
-    /// server emits no `band` token (older servers). Does NOT recompute the
-    /// score itself.
-    ///
-    /// - **green** for 67…100, **yellow** for 34…66, **red** for 0…33.
-    public static func colorBand(forScore score: Int) -> HealthScoreBand {
-        switch score {
-        case 67...: .green
-        case 34...: .yellow
-        default: .red
-        }
-    }
-
-    /// The colour band for THIS score's numeric value (see ``colorBand(forScore:)``).
-    public var colorBand: HealthScoreBand {
-        Self.colorBand(forScore: score)
+        scoreBasis = try? c.decodeIfPresent(HealthScoreBasis.self, forKey: .scoreBasis)
+        compositionNotice = try? c.decodeIfPresent(HealthScoreCompositionNotice.self, forKey: .compositionNotice)
     }
 
     /// **W-B187 / #27 — the band that drives the UI colour + label.**
     ///
-    /// Prefers the server-authoritative ``band`` token so the Dashboard tile
-    /// and the Insights score surfaces agree ("one engine"). Falls back to the
-    /// local numeric thresholds ONLY when the server emits no band.
-    public var displayBand: HealthScoreBand {
-        band ?? colorBand
+    /// The server-authoritative ``band`` token, so the Dashboard tile and the
+    /// Insights score surfaces agree ("one engine"). `nil` when the server sent
+    /// no band (older server, unknown token): the surfaces then stay neutral.
+    ///
+    /// **#115 B7:** until B7 a missing band fell back to iOS-side thresholds
+    /// (green ≥ 67, yellow ≥ 34) — a verdict the server never made.
+    public var displayBand: HealthScoreBand? {
+        band
     }
 }
 
@@ -174,6 +176,65 @@ public extension HealthScore {
     /// as "say nothing", never as "configured".
     var runsOnChosenComposition: Bool {
         configured == true
+    }
+}
+
+// MARK: - Score basis (#103, server v1.38)
+
+/// `HealthScoreBasis` — resolved server-side (`docs/api/openapi.yaml`):
+/// `{ domains, recommended, tier: "full" | "partial" | "minimal", physiological }`.
+public struct HealthScoreBasis: Codable, Sendable, Hashable {
+    /// Breadth tier. Tolerant: a new word lands on ``unknown``.
+    public enum Tier: String, Codable, Sendable, Hashable, TolerantServerEnum {
+        case full
+        case partial
+        case minimal
+        case unknown
+
+        public static let unknownFallback = Tier.unknown
+        public static let wireVocabulary: StaticString = "health score basis tier"
+    }
+
+    /// Distinct areas of health counted (not the pillar count).
+    public let domains: Int
+    /// Areas the method recommends (a recommendation, not a floor).
+    public let recommended: Int
+    public let tier: Tier
+    /// Whether any counted pillar rests on a physiological measurement.
+    public let physiological: Bool
+
+    public init(domains: Int, recommended: Int, tier: Tier, physiological: Bool) {
+        self.domains = domains
+        self.recommended = recommended
+        self.tier = tier
+        self.physiological = physiological
+    }
+
+    /// Below the recommended breadth — the tile gives the basis line weight.
+    public var isNarrow: Bool {
+        tier == .partial || tier == .minimal
+    }
+}
+
+/// `compositionNotice` (#103): pillars that left / joined since the last
+/// stored day. Dismissal goes through the server's notice path; the app only
+/// renders a notice the server still reports as not dismissed.
+public struct HealthScoreCompositionNotice: Codable, Sendable, Hashable {
+    public let itemKey: String
+    public let left: [HealthScorePillar]
+    public let joined: [HealthScorePillar]
+    public let dismissed: Bool
+
+    public init(itemKey: String, left: [HealthScorePillar], joined: [HealthScorePillar], dismissed: Bool) {
+        self.itemKey = itemKey
+        self.left = left
+        self.joined = joined
+        self.dismissed = dismissed
+    }
+
+    /// Something to say: not dismissed and at least one pillar moved.
+    public var isShowable: Bool {
+        !dismissed && !(left.isEmpty && joined.isEmpty)
     }
 }
 

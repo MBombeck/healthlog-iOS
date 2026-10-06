@@ -200,8 +200,14 @@ struct ComplianceRingCard: View {
     /// as `%lld` plus `% he` — a different signature, so the translation was
     /// dropped and German users read "66% today" on the dashboard.
     /// `CatalogFormatSignatureTests` pins the class.
-    nonisolated static func percentLabel(_ ratio: Double) -> String {
-        HLNumberFormat.percent(Int(ratio * 100))
+    ///
+    /// F1 (1.1.0) — rounded, not truncated: 2 of 3 is "67 %", where
+    /// `Int(ratio * 100)` read "66 %". The server sends only the counts for
+    /// today (`medsToday.scheduledToday` / `takenToday`), no percentage, so the
+    /// ratio of its two counts is the value; `hasSchedule` keeps 0/0 on the
+    /// "Nothing scheduled today" copy, never "0 %".
+    nonisolated static func percentLabel(_ ratio: Double, locale: Locale = .current) -> String {
+        HLNumberFormat.percent(fraction: ratio, locale: locale)
     }
 
     /// Last-14 daily-compliance-rate as percentages (0-100) sorted ascending

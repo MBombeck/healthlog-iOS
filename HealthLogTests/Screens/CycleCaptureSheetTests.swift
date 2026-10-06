@@ -9,7 +9,7 @@ import Testing
 /// `CycleDataLayerTests`; here we lock the form → contract `CycleDayLogWrite`
 /// mapping and the gated save no-op.
 @MainActor
-@Suite("CycleCaptureSheet — write body + gate", .serialized)
+@Suite("CycleCaptureSheet — write body + gate", .serialized, .mockURLSession)
 struct CycleCaptureSheetTests {
     private func date(_ iso: String) -> Date {
         let f = DateFormatter()
@@ -187,13 +187,8 @@ struct CycleCaptureSheetTests {
     }
 
     private func makeFlagsEnabled() async -> FeatureFlagsStore {
-        let repo = FeatureFlagsRepository(api: makeClient())
-        let store = FeatureFlagsStore(repo: repo)
-        MockURLProtocol.handler = { req in
-            let body = Data(#"{"data":{"flags":{"cycle.tracking":true}},"error":null}"#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
-        }
-        await store.refresh()
+        let store = FeatureFlagsStore()
+        store.setOverride(.cycleTracking, enabled: true)
         return store
     }
 
@@ -206,7 +201,7 @@ struct CycleCaptureSheetTests {
         """
         let meJSON = #"{"data":{"id":"u1","username":"u","email":"u@example.com","avatarUrl":null},"error":null}"#
         let hkJSON = #"{"data":{"entries":[],"lastSyncedAt":null},"error":null}"#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: String
             switch path {
@@ -246,7 +241,7 @@ struct CycleCaptureSheetTests {
          "predictionEnabled":true,"discreetNotifications":false,"sensitiveCategoryEncryption":false,
          "secondarySymptom":"CERVIX","updatedAt":"2026-06-10T00:00:00.000Z"},"error":null}
         """#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             rec.record(path)
             let body: String

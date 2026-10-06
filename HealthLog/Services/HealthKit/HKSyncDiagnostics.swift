@@ -371,20 +371,31 @@ public final class HKSyncDiagnostics {
     ///   already filter our own writes upstream). Pass `0` if the
     ///   observation fired but had nothing new — we still bump
     ///   `lastObservationAt` so the operator can see the heartbeat.
-    /// - Parameter samplesUploaded: subset of `samplesRead` that actually
-    ///   went up the batch route as a non-skipped entry (`inserted` +
-    ///   `duplicate`; explicit `skipped` rows DO NOT count — they are an
-    ///   "unknown to server" signal we want visible).
+    /// - Parameter samplesUploaded: rows the server stored — `inserted`,
+    ///   `updated` or `duplicate`, and nothing else (#113). A skipped row, a
+    ///   parked row and a row handed to another path are counted separately.
+    /// - Parameter samplesSkipped: rows the server refused for a deterministic
+    ///   reason; they sit in the skip register.
+    /// - Parameter samplesParked: rows the server could not take yet; they wait
+    ///   in the outbox.
+    /// - Parameter samplesHandedOff: rows the daily-statistics or HR-bucket path
+    ///   owns; that path records its own server actions.
     public func recordObservation(
         identifier: String,
         samplesRead: Int,
         samplesUploaded: Int,
+        samplesSkipped: Int = 0,
+        samplesParked: Int = 0,
+        samplesHandedOff: Int = 0,
         anchorAdvanced: Bool,
         at date: Date = Date()
     ) {
         var stats = byIdentifier[identifier] ?? KindStats(identifier: identifier)
         stats.samplesReadTotal += samplesRead
         stats.samplesUploadedTotal += samplesUploaded
+        stats.samplesSkippedTotal += samplesSkipped
+        stats.samplesParkedTotal += samplesParked
+        stats.samplesHandedOffTotal += samplesHandedOff
         stats.lastObservationAt = date
         if anchorAdvanced {
             stats.lastAnchorAdvancedAt = date
@@ -502,59 +513,4 @@ public final class HKSyncDiagnostics {
             return [:]
         #endif
     }()
-
-    /// Per-kind counters. All ints monotonically increase across the session;
-    /// timestamps are last-event semantics.
-    public struct KindStats: Sendable, Equatable {
-        public var identifier: String
-        /// Total foreign samples HK has handed us this session via the
-        /// observer/anchor pipeline.
-        public var samplesReadTotal: Int = 0
-        /// Subset of `samplesReadTotal` the server accepted (inserted +
-        /// duplicate). `samplesReadTotal - samplesUploadedTotal` = either
-        /// skipped (unknown to server) or still in-flight / errored.
-        public var samplesUploadedTotal: Int = 0
-        /// HK-STATS aggregator counters — only populated for the 5 cumulative
-        /// kinds that flow over `HealthKitStatisticsSyncCoordinator`.
-        public var statsPostedTotal: Int = 0
-        /// Later upserts of an already-posted `stats:<type>:<day>` row.
-        public var statsRepostedTotal: Int = 0
-        /// Last time the observer/anchor query fired for this identifier
-        /// with samples >= 0 (zero-sample wakeups still count — they are
-        /// proof of life for the observation pipeline).
-        public var lastObservationAt: Date?
-        /// Last time an anchor advance actually persisted — that is the
-        /// concrete proof that an upload round-trip succeeded.
-        public var lastAnchorAdvancedAt: Date?
-        /// Last time the HK-STATS path posted or upserted for this identifier.
-        public var lastStatsActionAt: Date?
-
-        public init(identifier: String) {
-            self.identifier = identifier
-        }
-
-        /// Merge two entries (used by `snapshotByKind` to combine BP-sys +
-        /// BP-dia into a single `.bloodPressure` row). Counters add; dates
-        /// pick the most recent.
-        func merging(_ other: KindStats) -> KindStats {
-            var merged = self
-            merged.samplesReadTotal += other.samplesReadTotal
-            merged.samplesUploadedTotal += other.samplesUploadedTotal
-            merged.statsPostedTotal += other.statsPostedTotal
-            merged.statsRepostedTotal += other.statsRepostedTotal
-            merged.lastObservationAt = Self.latest(lastObservationAt, other.lastObservationAt)
-            merged.lastAnchorAdvancedAt = Self.latest(lastAnchorAdvancedAt, other.lastAnchorAdvancedAt)
-            merged.lastStatsActionAt = Self.latest(lastStatsActionAt, other.lastStatsActionAt)
-            return merged
-        }
-
-        private static func latest(_ lhs: Date?, _ rhs: Date?) -> Date? {
-            switch (lhs, rhs) {
-            case let (.some(a), .some(b)): max(a, b)
-            case let (.some(a), nil): a
-            case let (nil, .some(b)): b
-            case (nil, nil): nil
-            }
-        }
-    }
 }

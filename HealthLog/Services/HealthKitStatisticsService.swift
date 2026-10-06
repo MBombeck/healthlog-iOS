@@ -54,6 +54,19 @@ public struct HealthKitDailyStatRow: Sendable, Equatable {
 /// Konfigurations-Bundle pro kumulativem HK-Type. Bindet einen
 /// `HKQuantityTypeIdentifier` an seine Wire-Unit-Strings + die HK-Unit
 /// die der Statistics-Query intern braucht.
+/// #115 / 0.3 — what one read of every cumulative type produced, and how
+/// many types could not be read at all. A read with `failedTypes > 0` did not
+/// cover its window, so the sweep that made it is not complete.
+public struct HealthKitDailyStatsRead: Sendable, Equatable {
+    public let rows: [HealthKitDailyStatRow]
+    public let failedTypes: Int
+
+    public init(rows: [HealthKitDailyStatRow], failedTypes: Int) {
+        self.rows = rows
+        self.failedTypes = failedTypes
+    }
+}
+
 public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
     public let identifier: String
     /// Server-wire-unit-string (siehe `06-ios-responsibilities.md` Tabelle +
@@ -247,27 +260,27 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
         }
 
         /// Convenience-Wrapper: Daily-Rows fuer alle Default-Configs in einem
-        /// Zeitraum. Liefert ein dictionary keyed by hkIdentifier; einzelne
-        /// Types deren Query throw'ed werden uebersprungen (per-type-error
-        /// blockiert nicht die anderen 4).
+        /// Zeitraum. Einzelne Types deren Query throw'ed werden uebersprungen
+        /// (per-type-error blockiert nicht die anderen 4) — aber gezaehlt:
+        /// #115 / 0.3, ein Fenster, das nicht gelesen wurde, ist nicht erledigt
+        /// (z.B. geschuetzte Daten bei gesperrtem Geraet im Hintergrund).
         public func dailyRowsForAllDefaults(
             from: Date,
             to: Date
-        ) async -> [String: [HealthKitDailyStatRow]] {
-            var out: [String: [HealthKitDailyStatRow]] = [:]
+        ) async -> HealthKitDailyStatsRead {
+            var rows: [HealthKitDailyStatRow] = []
+            var failedTypes = 0
             for config in HealthKitCumulativeTypeConfig.defaults {
                 do {
-                    let rows = try await dailyRows(for: config, from: from, to: to)
-                    if !rows.isEmpty {
-                        out[config.identifier] = rows
-                    }
+                    rows += try await dailyRows(for: config, from: from, to: to)
                 } catch {
+                    failedTypes += 1
                     HLLog.healthKit.error(
                         "Stats-Query \(config.identifier, privacy: .private) failed: \(error.localizedDescription, privacy: .private)"
                     )
                 }
             }
-            return out
+            return HealthKitDailyStatsRead(rows: rows, failedTypes: failedTypes)
         }
 
         /// **GH #48 / server v1.28 — nutrient day-totals.** Same day-anchored

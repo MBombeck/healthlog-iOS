@@ -11,7 +11,7 @@ import Testing
 /// assertions depend on the process-global `MockURLProtocol.handler`
 /// (audit-v0162 H2). The metric arm reads through the real `MeasurementsRepository`;
 /// the screening arm through a real `MentalHealthStore` + `MentalHealthRepository`.
-@Suite("Vorsorge detail model", .serialized)
+@Suite("Vorsorge detail model", .serialized, .mockURLSession)
 @MainActor
 struct VorsorgeDetailModelTests {
     private func makeAPI() -> APIClient {
@@ -67,7 +67,7 @@ struct VorsorgeDetailModelTests {
             "{\"id\":\"w2\",\"type\":\"WEIGHT\",\"value\":81.0,\"measuredAt\":\"\(iso(now))\"}," +
             "{\"id\":\"w1\",\"type\":\"WEIGHT\",\"value\":80.0,\"measuredAt\":\"\(iso(now.addingTimeInterval(-86400)))\"}]}}"
         let payload = Data(body.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
 
@@ -85,7 +85,7 @@ struct VorsorgeDetailModelTests {
     @Test("metric arm swallows a 500 — no chart, no throw")
     func metricArmServerError() async throws {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }
         let model = try makeModel(row: row(type: "WEIGHT"), api: api)
@@ -110,7 +110,7 @@ struct VorsorgeDetailModelTests {
         ]}}
         """#
         let payload = Data(body.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
 
@@ -141,7 +141,7 @@ struct VorsorgeDetailModelTests {
     func freeTextArmMakesNoNetworkCall() async throws {
         let api = makeAPI()
         let hits = HitBox()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             hits.record()
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data("{}".utf8))
         }

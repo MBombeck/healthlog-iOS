@@ -9,18 +9,27 @@ import SwiftUI
 struct HighlightInsightCard: View {
     let insight: Insight?
 
+    /// #115 B6 — the cards on this tile are rule-based since server v1.39
+    /// (`insights/cards` answers `provider: "rules"`), so neither the title nor
+    /// the symbol may suggest an assistant wrote them.
+    static let symbolName = "lightbulb"
+    static var title: String {
+        String(localized: "Insight", comment: "Dashboard insight card title — rule-based server cards, not AI (#115 B6)")
+    }
+
     var body: some View {
         if let insight {
             HLCard(style: .elevated) {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
                     HStack(spacing: HLSpace.xs) {
-                        Image(systemName: "sparkles")
+                        Image(systemName: Self.symbolName)
                             .foregroundStyle(HLText.primary)
-                        Text(String(localized: "Assistant insight", comment: "Dashboard assistant insight tile title"))
+                        Text(Self.title)
                             .font(.hlCaption.weight(.semibold))
                             .foregroundStyle(HLText.secondary)
                         Spacer()
-                        HLBadge(insight.providerLabel, tone: .neutral)
+                        // #115 · 0.2 — no provider badge: from server v1.39
+                        // `insights/cards` are rule-based (`provider: "rules"`).
                     }
                     Text(insight.title)
                         .font(.hlTitle3)
@@ -134,6 +143,8 @@ struct MetricsGrid: View {
     /// keep compiling with the pre-7.1 tile shape.
     var digest: ComprehensiveDigest?
     var targets: InsightsTargetsResponseDTO?
+    /// #115 · 1.1 — server weight verdict (`tiles.weightTrend.direction`).
+    var weightTrendSentiment: TrendDirectionSentiment?
     let onTap: (MetricKind) -> Void
 
     /// v0.14 A — needed for the long-press "remove from Home" affordance on
@@ -164,7 +175,8 @@ struct MetricsGrid: View {
                 matchedNamespace: matchedNamespace,
                 liveTodayStepsOverride: liveTodayStepsOverride,
                 digest: digest,
-                targets: targets
+                targets: targets,
+                weightTrendSentiment: weightTrendSentiment
             )
             // v0.11 perf: mark tile cache-paint so the ≤100 ms p95 budget is
             // measurable in Instruments. No behavioural effect.

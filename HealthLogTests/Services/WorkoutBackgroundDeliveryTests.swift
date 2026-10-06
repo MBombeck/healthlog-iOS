@@ -7,7 +7,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    @Suite("Workout HealthKit background-delivery lifecycle", .serialized)
+    @Suite("Workout HealthKit background-delivery lifecycle", .serialized, .mockURLSession)
     struct WorkoutBackgroundDeliveryTests {
         @Test("Observer executes before immediate delivery is enabled and before the initial sweep")
         func executeEnableSweepOrdering() async throws {

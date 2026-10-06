@@ -8,7 +8,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    @Suite("Workout series failure recovery integration", .serialized)
+    @Suite("Workout series failure recovery integration", .serialized, .mockURLSession)
     struct WorkoutSeriesFailureRecoveryIntegrationTests {
         @Test("Direct query failure sends nothing and retry attaches samples before anchor progress")
         @available(iOS, deprecated: 18.0, message: "Synthetic HealthKit fixture")
@@ -246,7 +246,7 @@ import Testing
         }
 
         private static func installAcceptedResponse(capture: WorkoutSeriesRequestCapture, status: String) {
-            MockURLProtocol.handler = { request in
+            MockURLProtocol.install { request in
                 guard request.url?.path == "/api/workouts/batch" else {
                     throw URLError(.unsupportedURL)
                 }

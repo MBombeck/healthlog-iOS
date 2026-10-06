@@ -111,10 +111,13 @@ struct NutrientReadDTOTests {
 
     @Test("Daily series nils a malformed reference instead of failing the decode")
     func dailySeriesMalformedReferenceNils() throws {
-        // Unknown `kind` — the reference nils, the series still decodes.
+        // Unknown `direction` — the reference nils, the series still decodes.
+        // (#115 B6: an unknown `kind` no longer drops it — it decodes to
+        // `.unknown`, see `ServerTokenToleranceB6Tests`. A wrong direction
+        // would colour the progress, so that one still hides.)
         let json = #"""
         {"nutrient":"zinc","unit":"mg","windowDays":1,"days":[{"day":"2026-07-06","amount":9}],
-         "reference":{"kind":"BOGUS","direction":"target","value":9,"source":"x"}}
+         "reference":{"kind":"PRI","direction":"BOGUS","value":9,"source":"x"}}
         """#
         let dto = try Self.decoder.decode(NutrientDailySeriesDTO.self, from: Data(json.utf8))
         #expect(dto.nutrient == .zinc)

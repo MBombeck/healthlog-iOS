@@ -26,11 +26,17 @@ struct PersonalRecordsScreenTests {
 
     @Test("Metric-type localisation covers the canonical set")
     func metricTypeLocalisation() {
-        #expect(MetricTypeLocalisation.label(forType: "WEIGHT") == "Weight")
-        #expect(MetricTypeLocalisation.label(forType: "PULSE") == "Pulse")
-        #expect(MetricTypeLocalisation.label(forType: "HRV") == "Herzfrequenzvariabilität")
+        // L1 — the labels resolve through the catalog in the app language.
+        let en = Locale(identifier: "en")
+        let de = Locale(identifier: "de")
+        #expect(MetricTypeLocalisation.label(forType: "WEIGHT", locale: en) == "Weight")
+        #expect(MetricTypeLocalisation.label(forType: "WEIGHT", locale: de) == "Gewicht")
+        #expect(MetricTypeLocalisation.label(forType: "PULSE", locale: en) == "Pulse")
+        #expect(MetricTypeLocalisation.label(forType: "HRV", locale: de) == "Herzfrequenzvariabilität")
+        #expect(MetricTypeLocalisation.label(forType: "HRV", locale: en) == "Heart rate variability")
         #expect(MetricTypeLocalisation.label(forType: "VO2_MAX") == "VO₂ max")
-        #expect(MetricTypeLocalisation.label(forType: "MOOD") == "Stimmung")
+        #expect(MetricTypeLocalisation.label(forType: "MOOD", locale: de) == "Stimmung")
+        #expect(MetricTypeLocalisation.label(forType: "MOOD", locale: en) == "Mood")
         // Unknown passes through `String.capitalized` (which capitalises each
         // word boundary). The exact transform isn't load-bearing — the
         // contract is "never empty / never the raw enum value".

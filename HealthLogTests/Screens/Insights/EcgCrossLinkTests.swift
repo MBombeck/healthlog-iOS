@@ -12,7 +12,7 @@ import Testing
 /// `ecg-cross-link.tsx:27-30`). It also must never say anything about the
 /// trace: the caption carries the count plus the DEVICE's last result, nothing
 /// derived.
-@Suite("ECG cross-link — pulse-only, data-gated, device-attributed", .serialized)
+@Suite("ECG cross-link — pulse-only, data-gated, device-attributed", .serialized, .mockURLSession)
 @MainActor
 struct EcgCrossLinkTests {
     private func makeStore() -> EcgStore {
@@ -28,7 +28,7 @@ struct EcgCrossLinkTests {
 
     private func respond(_ json: String) {
         let body = Data(json.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
     }

@@ -87,7 +87,7 @@ public struct TelegramConfig: Codable, Sendable, Equatable {
 /// secret header. The header **value** is write-only — the server returns
 /// only `hasHeaderValue`, never the secret (`route.ts:43-48`). There is no
 /// `webhookGlobal` availability flag, so the card always renders.
-public struct WebhookConfig: Codable, Sendable, Equatable {
+public struct WebhookConfig: Decodable, Sendable, Equatable {
     public var enabled: Bool
     /// Public webhook URL. SSRF-guarded server-side (`isPublicUrl`).
     public var url: String
@@ -96,15 +96,58 @@ public struct WebhookConfig: Codable, Sendable, Equatable {
     /// `true` when a header value (shared secret) is stored server-side. The
     /// value itself is never read back; mirrors the ntfy `hasAuthToken` shape.
     public var hasHeaderValue: Bool
+    /// #112 (server v1.38.21) — the body shape the server sends. Absent on an
+    /// older server, and on a config saved before the choice existed, both of
+    /// which mean `generic` (the server resolves it the same way).
+    public var format: WebhookFormat
 
-    public init(enabled: Bool, url: String, headerName: String = "", hasHeaderValue: Bool = false) {
+    public init(
+        enabled: Bool,
+        url: String,
+        headerName: String = "",
+        hasHeaderValue: Bool = false,
+        format: WebhookFormat = .generic
+    ) {
         self.enabled = enabled
         self.url = url
         self.headerName = headerName
         self.hasHeaderValue = hasHeaderValue
+        self.format = format
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled, url, headerName, hasHeaderValue, format
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decode(Bool.self, forKey: .enabled)
+        url = try c.decode(String.self, forKey: .url)
+        headerName = try c.decodeIfPresent(String.self, forKey: .headerName) ?? ""
+        hasHeaderValue = try c.decodeIfPresent(Bool.self, forKey: .hasHeaderValue) ?? false
+        format = try c.decodeIfPresent(WebhookFormat.self, forKey: .format) ?? .generic
     }
 
     public static let empty = WebhookConfig(enabled: false, url: "", headerName: "", hasHeaderValue: false)
+}
+
+/// #112 — `GET`/`PUT /api/settings/webhook` `format`. `generic` posts HealthLog's
+/// own JSON body; `gotify` posts `{ title, message, priority, extras }` for a
+/// Gotify `/message` URL (with `X-Gotify-Key` in the custom header slot).
+///
+/// Server-owned vocabulary, so an unknown value decodes to ``unknown`` — and
+/// ``unknown`` is never sent back: a save that does not name a format keeps the
+/// stored one server-side (`route.ts`, "An omitted format keeps the stored one").
+public enum WebhookFormat: String, Sendable, Equatable, CaseIterable, TolerantServerEnum {
+    case generic
+    case gotify
+    case unknown
+
+    public static let unknownFallback: WebhookFormat = .unknown
+    public static let wireVocabulary: StaticString = "WebhookFormat"
+
+    /// The formats a person can choose. ``unknown`` is not a choice.
+    public static let selectable: [WebhookFormat] = [.generic, .gotify]
 }
 
 /// Mirror of the notification-relevant subset of

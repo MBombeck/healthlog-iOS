@@ -70,6 +70,20 @@ public struct MedicationWireDTO: Codable, Sendable, Identifiable, Hashable {
     /// self-hosted server and a legacy cache blob still decode; absent reads as
     /// false, which is the schema default.
     public let asNeeded: Bool?
+    /// **`trackIntake` (v1.39.1, #1033) — intake tracking.** `false` keeps the
+    /// medication as a record: dose, dates and schedule stay stored, but nothing
+    /// is ever due, nothing reminds on any channel and no adherence figure
+    /// exists. The server then serves `schedules: []` and the stored schedule in
+    /// ``recordedSchedules``. Optional because a server older than v1.39.1 does
+    /// not send it; absent reads as `true`, the column default.
+    public let trackIntake: Bool?
+    /// **`recordedSchedules` (v1.39.1)** — present only when ``trackIntake`` is
+    /// `false`: the stored schedule, kept as information. Nothing derives a due
+    /// dose or a reminder from it.
+    public let recordedSchedules: [MedicationScheduleDTO]?
+    /// v1.39.4 — see ``MedicationCourseStatus`` and ``Medication/isIntakeActionable``.
+    public let courseStatus: MedicationCourseStatus?
+    public let intakeActionable: Bool?
     /// Course-window start (ISO `YYYY-MM-DD`). Anchors RRULE / rolling and
     /// floors every cadence. `nil` = active from creation.
     public let startsOn: String?
@@ -156,6 +170,8 @@ public struct MedicationWireDTO: Codable, Sendable, Identifiable, Hashable {
         runwayDays: Int? = nil,
         oneShot: Bool? = nil,
         asNeeded: Bool? = nil,
+        trackIntake: Bool? = nil,
+        recordedSchedules: [MedicationScheduleDTO]? = nil,
         startsOn: String? = nil,
         endsOn: String? = nil,
         deliveryForm: String? = nil,
@@ -169,7 +185,9 @@ public struct MedicationWireDTO: Codable, Sendable, Identifiable, Hashable {
         trackInjectionSites: Bool? = nil,
         allowedInjectionSites: [String]? = nil,
         externalSource: String? = nil,
-        externalId: String? = nil
+        externalId: String? = nil,
+        courseStatus: MedicationCourseStatus? = nil,
+        intakeActionable: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -178,6 +196,8 @@ public struct MedicationWireDTO: Codable, Sendable, Identifiable, Hashable {
         self.dosesPerUnit = dosesPerUnit
         self.unitsPerDose = unitsPerDose
         self.category = category
+        self.courseStatus = courseStatus
+        self.intakeActionable = intakeActionable
         self.active = active
         self.notificationsEnabled = notificationsEnabled
         self.schedules = schedules
@@ -187,6 +207,8 @@ public struct MedicationWireDTO: Codable, Sendable, Identifiable, Hashable {
         self.runwayDays = runwayDays
         self.oneShot = oneShot
         self.asNeeded = asNeeded
+        self.trackIntake = trackIntake
+        self.recordedSchedules = recordedSchedules
         self.startsOn = startsOn
         self.endsOn = endsOn
         self.deliveryForm = deliveryForm
@@ -506,6 +528,15 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
     /// plan simply has not been set up yet — both arrive with `schedules: []` —
     /// which is why the edit form reads it before it looks at the entries.
     public let asNeeded: Bool
+    /// **v1.39.1 (#1033) — the server's `trackIntake`, verbatim.** `nil` when
+    /// the server predates the field (or a cache blob does), which means
+    /// tracked. Read it through ``tracksIntake``.
+    public let trackIntake: Bool?
+    /// **v1.39.1 — the stored schedule of a medication kept as a record**
+    /// (`recordedSchedules`). Information only: ``schedule`` stays empty for
+    /// such a medication, so nothing that plans a reminder or a due dose ever
+    /// sees these entries. `nil` for a tracked medication.
+    public let recordedSchedule: MedicationSchedule?
     /// Route of administration (`ORAL | INJECTION | OTHER`); `nil` when the
     /// server omits it.
     public let deliveryForm: String?
@@ -567,6 +598,11 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
     /// ``MedicationWireDTO/runwayDays`` — `nil` is not `0`.
     public let runwayDays: Int?
 
+    /// v1.39.4 (#1040) — the server's `courseStatus` / `intakeActionable`,
+    /// verbatim (`nil` from an older server). Read through ``isIntakeActionable``.
+    public let courseStatus: MedicationCourseStatus?
+    public let intakeActionable: Bool?
+
     public init(
         id: String,
         name: String,
@@ -585,6 +621,8 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
         endsOn: Date? = nil,
         oneShot: Bool = false,
         asNeeded: Bool = false,
+        trackIntake: Bool? = nil,
+        recordedSchedule: MedicationSchedule? = nil,
         deliveryForm: String? = nil,
         createdAt: Date? = nil,
         nextDueAt: Date? = nil,
@@ -597,13 +635,17 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
         externalId: String? = nil,
         pausedAt: Date? = nil,
         stockDosesRemaining: Int? = nil,
-        runwayDays: Int? = nil
+        runwayDays: Int? = nil,
+        courseStatus: MedicationCourseStatus? = nil,
+        intakeActionable: Bool? = nil
     ) {
         self.id = id
         self.name = name
         self.dose = dose
         self.treatmentClass = treatmentClass
         self.category = category
+        self.courseStatus = courseStatus
+        self.intakeActionable = intakeActionable
         self.dosesPerUnit = dosesPerUnit
         self.unitsPerDose = unitsPerDose
         self.schedule = schedule
@@ -616,6 +658,8 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
         self.endsOn = endsOn
         self.oneShot = oneShot
         self.asNeeded = asNeeded
+        self.trackIntake = trackIntake
+        self.recordedSchedule = recordedSchedule
         self.deliveryForm = deliveryForm
         self.createdAt = createdAt
         self.nextDueAt = nextDueAt
@@ -726,10 +770,19 @@ public extension MedicationWireDTO {
     /// entries for the pre-v0.10 render paths.
     func toDomain() -> Medication {
         let isOneShot = oneShot ?? false
-        let entries = (schedules ?? []).map { ScheduleEntry.fromDTO($0, oneShot: isOneShot) }
+        // v1.39.1 (#1033) — a medication kept as a record plans nothing. The
+        // server already serves it with `schedules: []`; the domain schedule
+        // is emptied here as well, so no reminder, alarm, Live Activity or
+        // synthesised dose can ever be derived from a row that says otherwise.
+        let tracked = trackIntake != false
+        let entries = tracked ? (schedules ?? []).map { ScheduleEntry.fromDTO($0, oneShot: isOneShot) } : []
         let schedule: MedicationSchedule = entries.isEmpty
             ? MedicationSchedule(times: [])
             : MedicationSchedule(entries: entries)
+        let recordedEntries = (recordedSchedules ?? []).map { ScheduleEntry.fromDTO($0, oneShot: isOneShot) }
+        let recordedSchedule: MedicationSchedule? = tracked || recordedEntries.isEmpty
+            ? nil
+            : MedicationSchedule(entries: recordedEntries)
 
         return Medication(
             id: id,
@@ -748,10 +801,13 @@ public extension MedicationWireDTO {
             endsOn: Self.parseCourseDate(endsOn),
             oneShot: isOneShot,
             asNeeded: asNeeded ?? false,
+            trackIntake: trackIntake,
+            recordedSchedule: recordedSchedule,
             deliveryForm: deliveryForm,
             createdAt: createdAt,
-            nextDueAt: Self.parseNextDueAt(nextDueAt),
-            nextDueOverdue: nextDueOverdue,
+            // Nothing is due on a record; the server sends null here already.
+            nextDueAt: tracked ? Self.parseNextDueAt(nextDueAt) : nil,
+            nextDueOverdue: tracked ? nextDueOverdue : nil,
             liveActivityEnabled: liveActivityEnabled,
             criticalAlarmEnabled: criticalAlarmEnabled,
             trackInjectionSites: trackInjectionSites ?? false,
@@ -762,7 +818,9 @@ public extension MedicationWireDTO {
             // Propagated verbatim: nil stays nil, 0 stays 0, and nothing here
             // substitutes a derived figure for an absent one.
             stockDosesRemaining: stockDosesRemaining,
-            runwayDays: runwayDays
+            runwayDays: runwayDays,
+            courseStatus: courseStatus,
+            intakeActionable: intakeActionable
         )
     }
 

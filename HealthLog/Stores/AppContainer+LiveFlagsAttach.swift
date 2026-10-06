@@ -20,7 +20,8 @@ extension AppContainer {
         keychain: KeychainStoring,
         deletionReconciler: (any MeasurementDeletionReconciler)?,
         retryQueue: OutboxQueue,
-        authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry
+        authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry,
+        hrBucketSync: (any HealthKitHRBucketSyncing)? = nil
     ) {
         // v0.5.5 W-A3: hand the live FeatureFlagsServicing to HealthKitService
         // so it can honour the `enableDailyStats` gate. (The former Spezi-cutover
@@ -65,7 +66,10 @@ extension AppContainer {
                 deletionReconciler: deletionReconciler,
                 // Phase 07 Wave 2 — the durable landing place for a page the
                 // server did not terminally accept.
-                retryQueue: retryQueue
+                retryQueue: retryQueue,
+                // #12 — the per-sample path requests a bucket sweep whenever
+                // it hands heart rate over.
+                hrBucketSync: hrBucketSync
             )
             // Phase 07 Wave 2 — install the app-owned sample collection. The
             // Spezi `CollectSamples` declarations it replaces were removed in the
@@ -74,8 +78,11 @@ extension AppContainer {
             AppContainer.installAppOwnedHealthCollection(
                 keychain: keychainForSpezi,
                 registry: authenticatedSessionRegistry,
-                retryQueue: retryQueue
+                retryQueue: retryQueue,
+                uploader: uploader
             )
+        #else
+            _ = hrBucketSync
         #endif
     }
 }

@@ -24,7 +24,7 @@ import Foundation
 // shared `User.updatedAt`.
 //
 // **Auth:** `requireAuth()` only — deliberately NOT coach-gated (no
-// `requireAssistantSurface`), so no `assistantDisabled` mapping is needed.
+// `requireAssistantSurface`), so no `aiUnavailable` mapping is needed.
 // PUT is rate-limited 30/min per user (429 handled by `APIClient`).
 
 /// Response of `GET /api/coach/about-me` and the PUT echo. Field caps arrive

@@ -21,7 +21,7 @@
         import AuthenticationServices
     #endif
 
-    @Suite("Web-handoff token exchange (#65)", .serialized)
+    @Suite("Web-handoff token exchange (#65)", .serialized, .mockURLSession)
     struct WebLoginExchangeTests {
         // MARK: - Fixtures
 
@@ -76,7 +76,7 @@
             nonisolated(unsafe) var capturedBody: Data?
             nonisolated(unsafe) var capturedClientType: String?
             nonisolated(unsafe) var capturedPath: String?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 capturedPath = req.url?.path
                 capturedClientType = req.value(forHTTPHeaderField: "X-Client-Type")
                 capturedBody = req.httpBody ?? req.httpBodyStream.map { stream in
@@ -119,7 +119,7 @@
         func tokenExchangeFailureThrows() async throws {
             let kc = InMemoryKeychain()
             let (service, _) = makeService(kc)
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"Invalid code"}"#.utf8)
@@ -145,7 +145,7 @@
         @Test("webLoginAvailable — the frozen contract version (1.32.11) is available")
         func versionGateAtFloor() async {
             let (service, _) = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.versionBody("1.32.11"))
             }
             let available = await service.webLoginAvailable()
@@ -155,7 +155,7 @@
         @Test("webLoginAvailable — one patch below the floor is NOT available")
         func versionGateBelowFloor() async {
             let (service, _) = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.versionBody("1.32.10"))
             }
             let available = await service.webLoginAvailable()
@@ -165,7 +165,7 @@
         @Test("webLoginAvailable — a newer minor is available")
         func versionGateAboveFloor() async {
             let (service, _) = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.versionBody("1.33.0"))
             }
             let available = await service.webLoginAvailable()
@@ -175,7 +175,7 @@
         @Test("webLoginAvailable — a 500 fails closed to false")
         func versionGateServerErrorFailsClosed() async {
             let (service, _) = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"boom"}"#.utf8)
@@ -188,7 +188,7 @@
         @Test("webLoginAvailable — a transport error fails closed to false")
         func versionGateTransportErrorFailsClosed() async {
             let (service, _) = makeService()
-            MockURLProtocol.handler = { _ in
+            MockURLProtocol.install { _ in
                 throw URLError(.notConnectedToInternet)
             }
             let available = await service.webLoginAvailable()

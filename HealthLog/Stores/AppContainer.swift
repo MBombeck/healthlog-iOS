@@ -36,7 +36,7 @@ public final class AppContainer {
     public let refreshCoordinator: RefreshCoordinator
     let authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry
     public let measurementsRepo: MeasurementsRepository
-    let profileTimeZoneBox = ProfileTimeZoneBox() // AUD-3 D-3 — see ADR
+    let profileTimeZoneBox = ProfileTimeZoneBox.shared // AUD-3 D-3 — see ADR; #115 1.5 shared
     /// audit-v0162 M-7 — persisted "does this server materialise today's dose
     /// slots itself?" verdict; drives `MedicationsStore
     /// .derivedIntakeSynthesisEnabledProvider`. See the type doc for the
@@ -46,7 +46,6 @@ public final class AppContainer {
     // MARK: Repositories
 
     public let medicationsRepo: MedicationsRepository
-    public let featureFlagsRepo: FeatureFlagsRepository
     public let glp1LocalRepo: GLP1LocalRepository
     public let medicationTherapyLogRepo: MedicationTherapyLogRepository
     public let localRepo: LocalRepository
@@ -169,6 +168,9 @@ public final class AppContainer {
     public let healthScoreStore: HealthScoreStore
     public let achievementsStore: AchievementsStore
     public let settingsStore: SettingsStore
+    /// N1 — keeps `notificationPrefs.medication.clientManaged` true to this
+    /// device (wired in `AppContainer+MedicationReminderDelivery`).
+    let medicationReminderDelivery: MedicationReminderDeliveryCoordinator
     public let measurementRemindersStore: MeasurementRemindersStore // W-FRONTDOORS (PHI)
     public let labsStore: LabsStore // PHI
     public let customMetricsStore: CustomMetricsStore // PHI
@@ -208,6 +210,7 @@ public final class AppContainer {
     public let hkReadinessStore: HKReadinessStore // F7
     public let wellnessCardVisibilityStore: WellnessCardVisibilityStore // per-card Insights score-card hide (UI-pref)
     public let featureFlagsStore: FeatureFlagsStore
+    public let aiCapabilityGate: AICapabilityGate // #115 0.2 — `/api/auth/me` `ai`, loaded by ModuleGate
     public let serverStatsStores: ServerStatsStores // V052-A7
     public let onDeviceBriefingService: OnDeviceBriefingService
     public let trendObservationsService: TrendObservationsService
@@ -234,7 +237,11 @@ public final class AppContainer {
         environment: AppEnvironment = .loadFromBundle(),
         keychain: KeychainStoring = KeychainStore(),
         passkey: PasskeyServiceProtocol,
-        healthKit: AnyHealthKitWriter? = nil
+        healthKit: AnyHealthKitWriter? = nil,
+        // #10 — test seam for the composition's own APIClient transport; `nil` = `.default`.
+        apiSessionConfiguration: URLSessionConfiguration? = nil,
+        // N1 — test seam for the notification-permission read; `nil` = the system's.
+        notificationsAuthorized: (@Sendable () async -> Bool)? = nil
     ) {
         self.environment = environment
         self.keychain = keychain
@@ -249,7 +256,8 @@ public final class AppContainer {
             environment: environment,
             keychain: keychain,
             passkey: passkey,
-            unauthorizedRef: unauthorizedRef
+            unauthorizedRef: unauthorizedRef,
+            apiSessionConfiguration: apiSessionConfiguration
         )
         let apiClient = infra.api
         api = apiClient
@@ -280,7 +288,6 @@ public final class AppContainer {
         )
         measurementsRepo = repos.measurements
         medicationsRepo = repos.medications
-        featureFlagsRepo = repos.featureFlags
         glp1LocalRepo = repos.glp1Local
         medicationTherapyLogRepo = repos.medicationTherapyLog
         localRepo = repos.local // v0.11 W1/W2 — standalone local mirror (read-union active in standalone)
@@ -532,11 +539,12 @@ public final class AppContainer {
         #endif
         widgetSnapshotWriter = WidgetSnapshotWriter() // WWIDGET-2 — hooks in configureRuntimeWiring
         spotlightCoordinator = SpotlightCoordinator() // W-B187 QOL-2 — hooks in configureRuntimeWiring
-        let earlyFeatureFlagsStore = FeatureFlagsStore(repo: featureFlagsRepo) // D-2: moved up for MoodStore tag-extraction wiring
+        let earlyFeatureFlagsStore = FeatureFlagsStore() // D-2: moved up for MoodStore tag-extraction wiring
+        aiCapabilityGate = AICapabilityGate() // #115 0.2 — before MoodStore: its on-device tagger reads it
         moodStore = Self.makeMoodStore(
             repo: moodRepo,
             healthKit: healthKit,
-            featureFlagsStore: earlyFeatureFlagsStore,
+            aiCapabilities: aiCapabilityGate.reader,
             undoCoordinator: undo
         )
         moodTagCatalogStore = MoodTagCatalogStore(repo: moodTagCatalogRepo) // v0.14 Daylio picker
@@ -621,14 +629,13 @@ public final class AppContainer {
         // the derived history + the in-flight (PHI) answers until a submit
         // resolves; conforms to LogoutClearable so the cascade wipes it.
         mentalHealthStore = MentalHealthStore(repository: mentalHealthRepo)
-        // Apply the AI-consent gates to insights/briefing, wire the tolerant
+        // Apply the AI-consent gate to the briefing, wire the tolerant
         // dashboard-snapshot briefing fetch, and bind the PR snapshot box —
         // impl in `AppContainer+AIConsentGate.configureInsightsConsentAndPRBox`.
         // Returns the async gate threaded into `metricInsightsRepo` below.
         let asyncGate = Self.configureInsightsConsentAndPRBox(
             personalRecordsSnapshotBox: personalRecordsSnapshotBox,
             personalRecordsStore: serverStatsStores.personalRecords,
-            insightsStore: insightsStore,
             dailyBriefingStore: dailyBriefingStore,
             dashboardRepo: dashboardRepo,
             consentStore: aiConsentStore,
@@ -636,7 +643,7 @@ public final class AppContainer {
         )
         (metricInsightsRepo, insightsPrefetch) = Self.makeMetricInsights( // W3 (#22) — daily assessment cache + warmer
             apiClient: apiClient, consentGate: asyncGate, swr: coordinator, targetsRepo: serverStatsRepos.insightsTargets,
-            insightsRepo: insightsRepo, availability: availability
+            insightsRepo: insightsRepo, availability: availability, aiCapabilities: aiCapabilityGate.reader
         )
         // Secondary store cluster (charts / trends / doctor-report / research /
         // disclaimer / onboarding-tour / diabetes / injection-prefs /
@@ -761,18 +768,18 @@ public final class AppContainer {
             dailySync: nutrientDailySync
         )
         // GH #74 — the Apple-Health ECG upload pair (coordinator + opt-in
-        // switch). Built after `moduleGate` because the coordinator gates on the
-        // `insights` module — the same gate the ECG reads already sit behind.
+        // switch). No module gate: server v1.39 serves and accepts ECG
+        // recordings whatever the `insights` (AI analysis) module says, so the
+        // module map plays no part in building it (work order #115 · 0.1).
         let ecg = Self.makeEcgCluster(
             healthKit: healthKit,
             repo: serverStatsRepos.ecg,
             keychain: keychain,
-            moduleGate: moduleGate,
             authenticatedSessionRegistry: authenticatedSessionRegistry
         )
         ecgSync = ecg.sync
         ecgHealthSyncStore = ecg.store
-        let assistants = Self.makeAssistantServices(store: featureFlagsStore) // D-1 bundle: briefing+trend+smartReminder
+        let assistants = Self.makeAssistantServices(aiCapabilities: aiCapabilityGate.reader) // D-1 bundle
         // swiftformat:disable:next wrap wrapArguments
         (onDeviceBriefingService, trendObservationsService, smartReminderPhraseService) = (assistants.briefing, assistants.trend, assistants.smartReminder)
 
@@ -781,6 +788,10 @@ public final class AppContainer {
         // relative order, behaviour-identical: the closures fire later, never
         // during init). Runs BEFORE `wireLogoutHooks` so the logout cascade
         // hooks stay last (they weakly capture a fully initialised `self`).
+        medicationReminderDelivery = Self.makeMedicationReminderDelivery(
+            api: apiClient,
+            notificationsAuthorized: notificationsAuthorized
+        )
         configureRuntimeWiring(apiClient: apiClient, bgSync: bgSync)
         // Logout / 401 / account-delete / adopt-on-pair hooks — wiring lives in
         // `AppContainer+LogoutHooks.wireLogoutHooks`. Called here (not earlier)

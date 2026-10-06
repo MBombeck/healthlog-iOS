@@ -18,14 +18,11 @@ import Foundation
 /// nimmt deshalb String **oder** `{ message }` und ist ansonsten
 /// verhaltensgleich.
 ///
-/// **F-1 / v1.4.31 — `errorCode`:** the server emits a machine-readable
-/// `errorCode` on disabled-assistant responses, e.g.
-/// `errorCode: "assistant.disabled.briefing"` paired with a 403 status
-/// (server brief §5 + cross-coordination audit §c.1). `APIClient`
-/// intercepts that pair and throws ``HLError/assistantDisabled(_:)``
-/// so callers can mirror the operator state into
-/// ``FeatureFlagsStore`` without a follow-up `/api/feature-flags`
-/// round-trip.
+/// **`errorCode`:** the pre-v1.39 top-level machine code. Server v1.39 carries
+/// every code in `meta.errorCode` (with `meta.capability`, `meta.reason`,
+/// `meta.module`); `APIClient` reads `meta` first and falls back to this field
+/// only for an older server. An AI refusal surfaces as
+/// ``HLError/aiUnavailable(_:)`` (#114 / #115 · 0.2).
 public struct APIEnvelope<T: Decodable & Sendable>: Decodable, Sendable {
     public let data: T?
     public let error: String?
@@ -105,6 +102,19 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
     /// rule the selection missed). A raw string here on purpose: the transport
     /// carries the pair, the domain maps it to a sentence.
     public let reason: String?
+    /// #114 / #115 · 0.2 — on an AI refusal (server v1.39): the capability that
+    /// is unavailable, one of the `AiCapabilities` keys. Kept raw here; the
+    /// transport maps it through ``AIRefusal``.
+    public let capability: String?
+    /// #110 — `PUT /api/auth/me/report-selection` names the leaf ids this
+    /// server build does not know beside `report-selection.leaves.unknown`.
+    public let unknownLeaves: [String]?
+    /// #112 — a failed notification-channel test (`502`) says what the relay
+    /// answered: its HTTP status, the SMTP reply code, and at most 200
+    /// characters of the relay's own error text (never secret-shaped).
+    public let upstreamStatus: Int?
+    public let smtpCode: Int?
+    public let upstreamBody: String?
 
     public init(
         errorCode: String? = nil,
@@ -112,7 +122,12 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
         mfaRequired: Bool? = nil,
         mfaTicket: String? = nil,
         methods: [String]? = nil,
-        reason: String? = nil
+        reason: String? = nil,
+        capability: String? = nil,
+        unknownLeaves: [String]? = nil,
+        upstreamStatus: Int? = nil,
+        smtpCode: Int? = nil,
+        upstreamBody: String? = nil
     ) {
         self.errorCode = errorCode
         self.module = module
@@ -120,10 +135,16 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
         self.mfaTicket = mfaTicket
         self.methods = methods
         self.reason = reason
+        self.capability = capability
+        self.unknownLeaves = unknownLeaves
+        self.upstreamStatus = upstreamStatus
+        self.smtpCode = smtpCode
+        self.upstreamBody = upstreamBody
     }
 
     private enum CodingKeys: String, CodingKey {
-        case errorCode, module, mfaRequired, mfaTicket, methods, reason
+        case errorCode, module, mfaRequired, mfaTicket, methods, reason, capability
+        case unknownLeaves, upstreamStatus, smtpCode, upstreamBody
     }
 
     public init(from decoder: Decoder) throws {
@@ -134,6 +155,13 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
         mfaTicket = try c.decodeIfPresent(String.self, forKey: .mfaTicket)
         methods = try c.decodeIfPresent([String].self, forKey: .methods)
         reason = try? c.decodeIfPresent(String.self, forKey: .reason)
+        capability = try? c.decodeIfPresent(String.self, forKey: .capability)
+        // Detail fields decode tolerantly: a malformed one is simply absent,
+        // it never costs the `errorCode` beside it.
+        unknownLeaves = try? c.decodeIfPresent([String].self, forKey: .unknownLeaves)
+        upstreamStatus = try? c.decodeIfPresent(Int.self, forKey: .upstreamStatus)
+        smtpCode = try? c.decodeIfPresent(Int.self, forKey: .smtpCode)
+        upstreamBody = try? c.decodeIfPresent(String.self, forKey: .upstreamBody)
     }
 }
 

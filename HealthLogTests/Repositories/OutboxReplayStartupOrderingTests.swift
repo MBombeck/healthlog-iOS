@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-@Suite("Outbox replay startup ordering", .serialized)
+@Suite("Outbox replay startup ordering", .serialized, .mockURLSession)
 struct OutboxReplayStartupOrderingTests {
     @MainActor
     @Test("Immediate-online first dead letter is observed exactly once")

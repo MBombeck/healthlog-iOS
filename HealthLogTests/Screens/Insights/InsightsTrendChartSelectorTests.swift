@@ -118,24 +118,40 @@ struct InsightsTrendsRowChartTests {
         #expect(InsightsTrendsRow.chart(for: .weight, in: rows) == nil)
     }
 
-    @Test("Annotation distinguishes rising, falling, and steady (locale-agnostic)")
-    func annotationDirections() {
-        let rising = InsightsTrendsRow.annotation(for: .weight, series: [70, 80], title: "Weight")
-        let falling = InsightsTrendsRow.annotation(for: .weight, series: [80, 70], title: "Weight")
-        let steady = InsightsTrendsRow.annotation(for: .weight, series: [72.0, 72.1], title: "Weight")
-        // The three directions produce three distinct sentences regardless of
-        // the resolved locale, and all reference the metric title.
+    @Test("#115 1.3 — the sentence follows the server's 30-day slope, not the first and last point")
+    func annotationFollowsServerSlope() {
+        // Server says the 30-day regression is DOWN; the two visible points
+        // happen to rise (a spike on the last day). Before #115 the card read
+        // "trended up" off those two points.
+        let rising = InsightsTrendsRow.annotation(serverSlope: TrendSlope(slope: 0.2, direction: .up), title: "Weight")
+        let falling = InsightsTrendsRow.annotation(serverSlope: TrendSlope(slope: -0.2, direction: .down), title: "Weight")
+        let steady = InsightsTrendsRow.annotation(serverSlope: TrendSlope(slope: 0.001, direction: .stable), title: "Weight")
         #expect(rising != falling)
         #expect(steady != rising)
         #expect(steady != falling)
-        #expect(rising.contains("Weight"))
-        #expect(steady.contains("Weight"))
+        #expect(rising?.contains("Weight") == true)
+
+        let rows = [scalar(.weight, 70, daysAgo: 10), scalar(.weight, 80, daysAgo: 1)]
+        let digest = ComprehensiveDigest(summaries: [
+            "WEIGHT": MetricSummary(slope30: TrendSlope(slope: -0.1, direction: .down, confidence: 0.6))
+        ])
+        let chart = InsightsTrendsRow.chart(for: .weight, in: rows, digest: digest)
+        let expected = InsightsTrendsRow.annotation(
+            serverSlope: TrendSlope(slope: -0.1, direction: .down),
+            title: chart?.title ?? ""
+        )
+        #expect(chart?.annotation == expected)
+        #expect(chart?.annotation != InsightsTrendsRow.annotation(
+            serverSlope: TrendSlope(slope: 0.1, direction: .up),
+            title: chart?.title ?? ""
+        ))
     }
 
-    @Test("Annotation reports the no-data sentence for a single point")
-    func annotationInsufficient() {
-        let text = InsightsTrendsRow.annotation(for: .weight, series: [72], title: "Weight")
-        let real = InsightsTrendsRow.annotation(for: .weight, series: [70, 80], title: "Weight")
-        #expect(text != real)
+    @Test("#115 1.3 — no server slope (standalone, offline, unknown word) → no sentence at all")
+    func annotationWithoutServerSlope() {
+        #expect(InsightsTrendsRow.annotation(serverSlope: nil, title: "Weight") == nil)
+        #expect(InsightsTrendsRow.annotation(serverSlope: TrendSlope(direction: .unknown), title: "Weight") == nil)
+        let rows = [scalar(.weight, 70, daysAgo: 10), scalar(.weight, 80, daysAgo: 1)]
+        #expect(InsightsTrendsRow.chart(for: .weight, in: rows)?.annotation == nil)
     }
 }

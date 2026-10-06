@@ -12,7 +12,7 @@ import Testing
 /// - GET with both flat + nested shape: `ladder(forMetric:)` prefers nested
 /// - PUT round-trip echoes the persisted shape
 /// - cache fresh / cache stale ladder
-@Suite("SourcePriorityRepository — wire contract", .serialized)
+@Suite("SourcePriorityRepository — wire contract", .serialized, .mockURLSession)
 struct SourcePriorityRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -28,7 +28,7 @@ struct SourcePriorityRepositoryTests {
     @Test("fetch — decodes the fully-defaulted W5e shape")
     func fetchDefaultedShape() async throws {
         let repo = SourcePriorityRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"steps":["APPLE_HEALTH","WITHINGS","MANUAL"],"activeEnergy":["APPLE_HEALTH","WITHINGS","MANUAL"],"weight":["WITHINGS","APPLE_HEALTH","MANUAL"]},"error":null}
             """#.utf8)
@@ -43,7 +43,7 @@ struct SourcePriorityRepositoryTests {
     @Test("ladder(forMetric:) — nested metricPriority wins over flat alias")
     func nestedWinsOverFlat() async throws {
         let repo = SourcePriorityRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"weight":["MANUAL","APPLE_HEALTH"],"metricPriority":{"weight":["WITHINGS","APPLE_HEALTH","MANUAL"]}},"error":null}
             """#.utf8)
@@ -57,7 +57,7 @@ struct SourcePriorityRepositoryTests {
     func updateRoundTrip() async throws {
         let repo = SourcePriorityRepository(api: makeAPI())
         nonisolated(unsafe) var lastMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/auth/me/source-priority") { lastMethod = req.httpMethod }
             let body = Data(#"""
             {"data":{"weight":["APPLE_HEALTH","WITHINGS","MANUAL"]},"error":null}
@@ -76,7 +76,7 @@ struct SourcePriorityRepositoryTests {
         // explicit overload — assert the header lands on the wire.
         let repo = SourcePriorityRepository(api: makeAPI())
         nonisolated(unsafe) var lastIdempotencyKey: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/auth/me/source-priority") {
                 lastIdempotencyKey = req.value(forHTTPHeaderField: "Idempotency-Key")
             }
@@ -92,7 +92,7 @@ struct SourcePriorityRepositoryTests {
     func updateReplayOverloadPropagatesKey() async throws {
         let repo = SourcePriorityRepository(api: makeAPI())
         nonisolated(unsafe) var lastIdempotencyKey: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/auth/me/source-priority") {
                 lastIdempotencyKey = req.value(forHTTPHeaderField: "Idempotency-Key")
             }
@@ -108,7 +108,7 @@ struct SourcePriorityRepositoryTests {
     func fetchCacheHit() async throws {
         let repo = SourcePriorityRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/auth/me/source-priority") { calls += 1 }
             let body = Data(#"{"data":{"steps":["APPLE_HEALTH"]},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
@@ -124,7 +124,7 @@ struct SourcePriorityRepositoryTests {
         // the next user never sees the previous user's ladder.
         let repo = SourcePriorityRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/auth/me/source-priority") { calls += 1 }
             let body = Data(#"{"data":{"steps":["APPLE_HEALTH"]},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)

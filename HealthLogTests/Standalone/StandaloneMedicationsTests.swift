@@ -23,7 +23,7 @@
     import Testing
 
     @MainActor
-    @Suite("Standalone medications (W5)", .serialized)
+    @Suite("Standalone medications (W5)", .serialized, .mockURLSession)
     struct StandaloneMedicationsTests {
         private struct EmptyHK: StandaloneHealthKitReadServing {
             func standaloneRecentSamples(kind _: MetricKind, days _: Int, limit _: Int) async -> [SeriesPoint] {
@@ -50,7 +50,7 @@
                 appVersion: "0.1.0",
                 buildNumber: "1"
             )
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 recorder.hits += 1
                 recorder.paths.append(req.url?.path ?? "")
                 throw URLError(.notConnectedToInternet, userInfo: ["path": req.url?.path ?? ""])

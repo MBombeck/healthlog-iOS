@@ -20,7 +20,7 @@
     import Testing
 
     @MainActor
-    @Suite("Standalone read-union (W2)", .serialized)
+    @Suite("Standalone read-union (W2)", .serialized, .mockURLSession)
     struct StandaloneReadUnionTests {
         /// HK adapter stub — returns no HK samples so the assertions isolate the
         /// mirror contribution. (HK can't be exercised in the unit host anyway.)
@@ -52,7 +52,7 @@
                 appVersion: "0.1.0",
                 buildNumber: "1"
             )
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 recorder.hits += 1
                 // Any network hit in standalone is a bug — fail loudly.
                 throw URLError(.notConnectedToInternet, userInfo: ["path": req.url?.path ?? ""])
@@ -179,7 +179,10 @@
             _ = try await repo.recordStandaloneIntake(medicationId: "med-2", scheduledAt: .now, status: .taken)
             let comp = try await repo.standaloneCompliance(days: 84)
             // Both doses land on today's bucket; scheduled == taken ⇒ rate 1.0.
-            let today = comp.first { Calendar.current.isDateInToday($0.date) }
+            // #115 1.5 — days are UTC-midnight day anchors (the server shape), so
+            // "today" is matched by key, not by reading the anchor as an instant.
+            let todayKey = ProfileDay.key(for: .now, timeZone: .current)
+            let today = comp.first { ProfileDay.key(ofAnchor: $0.date) == todayKey }
             #expect(today?.taken == 2)
             #expect(today?.scheduled == 2)
             #expect(today?.rate == 1.0)

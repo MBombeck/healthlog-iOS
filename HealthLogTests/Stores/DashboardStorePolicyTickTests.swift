@@ -15,7 +15,7 @@ import Testing
 /// 1. `policyTick` starts at 0.
 /// 2. Recomputing the policy (test seam) increments `policyTick`.
 /// 3. `clearOnLogout` resets `policyTick` back to 0.
-@Suite("DashboardStore — V052-R3 A-H1 policy-tick re-render trigger", .serialized)
+@Suite("DashboardStore — V052-R3 A-H1 policy-tick re-render trigger", .serialized, .mockURLSession)
 struct DashboardStorePolicyTickTests {
     @MainActor
     private func makeStore() throws -> DashboardStore {
@@ -85,7 +85,7 @@ struct DashboardStorePolicyTickTests {
         let store = DashboardStore(repo: DashboardRepository(api: api))
 
         // Force a 500 so `recentAll()` throws and the catch-branch runs.
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let url = request.url ?? URL(fileURLWithPath: "/")
             let response = HTTPURLResponse(
                 url: url,

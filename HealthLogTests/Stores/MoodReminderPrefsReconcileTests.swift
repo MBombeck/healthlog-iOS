@@ -29,7 +29,7 @@ struct MoodReminderPrefsReconcileTests {
     @Test("toggling the reminder off announces enabled=false after the successful PATCH")
     func toggleOffAnnounces() async throws {
         let api = StubAPIClient()
-        await api.setHandler { _ in Self.profile(moodReminderEnabled: false) }
+        await api.setHandler { _ in ProfilePatchResult(profile: Self.profile(moodReminderEnabled: false)) }
         let suiteName = "MoodReminderPrefsReconcileTests.\(UUID().uuidString)"
         let store = try SettingsStore(
             repo: SettingsRepository(api: api),

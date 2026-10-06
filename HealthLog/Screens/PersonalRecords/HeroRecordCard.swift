@@ -22,6 +22,8 @@ struct HeroRecordCard: View {
     let onShare: (PersonalRecord) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// #115 P2 — the account's display units.
+    @Environment(\.unitPreferences) private var unitPreferences
     @State private var hasAppeared = false
 
     /// Audit-01 H3 — the hero value keeps its 56pt visual weight at the
@@ -177,28 +179,29 @@ struct HeroRecordCard: View {
         return MetricKindDescriptor.descriptor(for: kind).sfSymbol
     }
 
+    /// #115 P2 — the record in the account's unit (the row is canonical).
     private var formattedValue: String {
-        Self.numberFormatter.string(from: NSNumber(value: record.base.value)) ?? "\(record.base.value)"
+        let value = record.base.displayValue(unitPreferences)
+        return Self.numberFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
     private var unitLabel: String {
-        record.base.unit.isEmpty ? "" : record.base.unit
+        record.base.displayUnit(unitPreferences)
     }
 
     private var achievedAtLabel: String {
-        "Bestleistung · seit \(Self.dateFormatter.string(from: record.base.achievedAt))"
+        String(localized: "records.hero.since \(Self.dateFormatter.string(from: record.base.achievedAt))")
     }
 
     private var accessibilityLabel: Text {
         let metric = MetricTypeLocalisation.label(forType: record.base.metricType)
-        return Text(
-            "Persönlicher Rekord \(metric): \(formattedValue) \(unitLabel), erreicht am \(Self.dateFormatter.string(from: record.base.achievedAt))"
-        )
+        let date = Self.dateFormatter.string(from: record.base.achievedAt)
+        return Text("records.hero.a11y \(metric) \(formattedValue) \(unitLabel) \(date)")
     }
 
     private static let numberFormatter: NumberFormatter = {
         let f = NumberFormatter()
-        f.locale = Locale(identifier: "de_DE")
+        f.locale = Locale.current
         f.numberStyle = .decimal
         f.maximumFractionDigits = 1
         f.minimumFractionDigits = 0
@@ -207,7 +210,7 @@ struct HeroRecordCard: View {
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "de_DE")
+        f.locale = Locale.current
         f.dateStyle = .long
         return f
     }()

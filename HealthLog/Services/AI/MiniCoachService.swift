@@ -20,7 +20,7 @@ public struct MiniCoachOutcome: Sendable, Equatable {
         case refusedBySafetyFilter
         case unsupported
         case generationFailed
-        case featureFlagDisabled
+        case capabilityNotAllowed
     }
 
     public static func answered(_ reply: String) -> Self {
@@ -43,8 +43,8 @@ public struct MiniCoachOutcome: Sendable, Equatable {
         .init(reply: reply, disposition: .generationFailed)
     }
 
-    public static func featureFlagDisabled(_ reply: String) -> Self {
-        .init(reply: reply, disposition: .featureFlagDisabled)
+    public static func capabilityNotAllowed(_ reply: String) -> Self {
+        .init(reply: reply, disposition: .capabilityNotAllowed)
     }
 }
 
@@ -73,7 +73,7 @@ public struct MiniCoachContext: Sendable {
 /// Mini-Coach on-device service. Wraps Apple FoundationModels'
 /// `LanguageModelSession` behind a single `respond(to:context:locale:)`
 /// entry that:
-///   1. Gate-checks the feature flag.
+///   1. Gate-checks the `coach` capability (`onDeviceAllowed`).
 ///   2. Routes the user ask through ``MiniCoachAskClassifier``.
 ///   3. Binds pre-fetched data via ``MiniCoachDataBinder``.
 ///   4. Calls the model with a strict, locale-aware system prompt.
@@ -90,18 +90,22 @@ public struct MiniCoachContext: Sendable {
 /// stub `.unsupported(_:)` outcome with the localized "Mini-Coach
 /// requires iOS 26+" copy.
 public actor MiniCoachService {
-    public let featureFlags: any FeatureFlagsServicing
+    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// This service runs only while `.coach` allows on-device work
+    /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
+    /// never consults anything a previous build persisted.
+    public let aiCapabilities: any AICapabilityReading
     public let classifier: MiniCoachAskClassifier
     public let safetyFilter: MDRSafetyFilter
     public let history: MiniCoachHistory
 
     public init(
-        featureFlags: any FeatureFlagsServicing = UserDefaultsFeatureFlagsService(),
+        aiCapabilities: any AICapabilityReading = LegacyAICapabilities(),
         classifier: MiniCoachAskClassifier = MiniCoachAskClassifier(),
         safetyFilter: MDRSafetyFilter = MDRSafetyFilter(),
         history: MiniCoachHistory = MiniCoachHistory()
     ) {
-        self.featureFlags = featureFlags
+        self.aiCapabilities = aiCapabilities
         self.classifier = classifier
         self.safetyFilter = safetyFilter
         self.history = history
@@ -114,9 +118,9 @@ public actor MiniCoachService {
         context: MiniCoachContext,
         locale: Locale
     ) async -> MiniCoachOutcome {
-        guard featureFlags.isEnabled(.assistantCoach) else {
-            HLLog.api.info("MiniCoachService: feature flag off")
-            return .featureFlagDisabled(MiniCoachPrompt.refusalCopy(locale: locale))
+        guard aiCapabilities.allowsOnDevice(.coach) else {
+            HLLog.api.info("MiniCoachService: capability coach does not allow on-device")
+            return .capabilityNotAllowed(MiniCoachPrompt.refusalCopy(locale: locale))
         }
 
         // Pre-flight classifier.

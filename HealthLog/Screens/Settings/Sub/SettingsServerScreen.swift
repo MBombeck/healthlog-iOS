@@ -80,7 +80,7 @@ struct SettingsServerScreen: View {
     private var currentServerCard: some View {
         HLSettingsCard(
             icon: "server.rack",
-            title: "Aktueller Server",
+            title: "Current server",
             subtitle: "Data is synced against this address."
         ) {
             statRow(label: "Address", value: currentHostDisplay)
@@ -239,8 +239,16 @@ struct SettingsServerScreen: View {
             let info = try await api.fetchServerVersion()
             versionState = .loaded(info)
         } catch {
-            versionState = .failed(error.localizedDescription)
+            versionState = .failed(Self.versionFailureText(for: error))
         }
+    }
+
+    /// The sentence under "Version unavailable". H2 (1.1.0): `HLError` does not
+    /// conform to `LocalizedError`, so `localizedDescription` printed
+    /// "(HealthLog.HLError-Fehler 2.)" here — the shared user-facing sentence
+    /// instead, like every store.
+    nonisolated static func versionFailureText(for error: Error) -> String {
+        HLError.userFacingText(for: error)
     }
 }
 

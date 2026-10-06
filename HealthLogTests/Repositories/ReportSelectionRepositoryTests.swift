@@ -14,7 +14,7 @@ import Testing
 /// `.serialized` — every case installs the process-global
 /// ``MockURLProtocol/handler``, and the round-trip case depends on seeing only
 /// its own requests, in order.
-@Suite("ReportSelectionRepository — /api/auth/me/report-selection", .serialized)
+@Suite("ReportSelectionRepository — /api/auth/me/report-selection", .serialized, .mockURLSession)
 struct ReportSelectionRepositoryTests {
     private func makeRepo() -> ReportSelectionRepository {
         let env = AppEnvironment(
@@ -61,7 +61,7 @@ struct ReportSelectionRepositoryTests {
         nonisolated(unsafe) var stored: String?
         nonisolated(unsafe) var putBody: Data?
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             calls.append((req.httpMethod ?? "?", req.url?.path ?? ""))
             if req.httpMethod == "PUT" {
                 putBody = req.materializedBody()
@@ -111,14 +111,14 @@ struct ReportSelectionRepositoryTests {
     @Test("a missing `profile` key reads as 'never saved', same as an explicit null")
     func missingProfileKeyIsNil() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in Self.ok(req, #"{"data":{},"error":null}"#) }
+        MockURLProtocol.install { req in Self.ok(req, #"{"data":{},"error":null}"#) }
         #expect(try await repo.fetch() == nil)
     }
 
     @Test("the server's canonical leaf ordering is adopted, not the caller's")
     func adoptsServerOrdering() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.ok(req, #"""
             {"data":{"profile":{"v":2,"leaves":["PATIENT_IDENTITY","WEIGHT"],
             "format":"pdf","rangeDays":30,"includeCharts":false}},"error":null}
@@ -135,19 +135,19 @@ struct ReportSelectionRepositoryTests {
         #expect(echoed.selection.leaves == ["PATIENT_IDENTITY", "WEIGHT"])
     }
 
-    // MARK: - The three 422 classes
+    // MARK: - The three refusal classes (legacy top-level string form)
 
     @Test(
-        "each documented 422 surfaces as its own typed error",
+        "each documented refusal surfaces as its own typed error (pre-#110 string form)",
         arguments: [
             ("report-selection.body.invalid_json", ReportSelectionError.invalidJSON),
             ("report-selection.body.invalid_shape", ReportSelectionError.invalidShape),
-            ("report-selection.leaves.unknown", ReportSelectionError.unknownLeaves)
+            ("report-selection.leaves.unknown", ReportSelectionError.unknownLeaves(ids: []))
         ]
     )
     func typed422s(wireCode: String, expected: ReportSelectionError) async {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in Self.failure(req, status: 422, code: wireCode) }
+        MockURLProtocol.install { req in Self.failure(req, status: 422, code: wireCode) }
         await #expect(throws: expected) {
             try await repo.replace(Self.sampleProfile)
         }
@@ -156,16 +156,16 @@ struct ReportSelectionRepositoryTests {
 
     @Test("the three classes are distinguishable from one another")
     func classesAreDistinct() {
-        let all: [ReportSelectionError] = [.invalidJSON, .invalidShape, .unknownLeaves]
+        let all: [ReportSelectionError] = [.invalidJSON, .invalidShape, .unknownLeaves(ids: [])]
         #expect(Set(all.map(\.wireCode)).count == 3)
         #expect(ReportSelectionError.invalidJSON != .invalidShape)
-        #expect(ReportSelectionError.invalidShape != .unknownLeaves)
+        #expect(ReportSelectionError.invalidShape != .unknownLeaves(ids: []))
     }
 
-    @Test("the code is also honoured if a later server promotes it into meta.errorCode")
+    @Test("the code is also honoured from meta.errorCode alone")
     func metaErrorCodeIsHonoured() async {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
                 Data(#"""
@@ -174,7 +174,83 @@ struct ReportSelectionRepositoryTests {
                 """#.utf8)
             )
         }
-        await #expect(throws: ReportSelectionError.unknownLeaves) {
+        await #expect(throws: ReportSelectionError.unknownLeaves(ids: [])) {
+            try await repo.replace(Self.sampleProfile)
+        }
+    }
+
+    // MARK: - #110 — the v1.39.0 wire forms
+
+    /// `400` + `error: "Invalid JSON body"` + `meta.errorCode` — the literal
+    /// `apiError("Invalid JSON body", 400, { errorCode })` of
+    /// `src/app/api/auth/me/report-selection/route.ts` at v1.39.0.
+    @Test("#110: 400 invalid_json with the token in meta.errorCode is .invalidJSON")
+    func invalidJSONAt400() async {
+        let repo = makeRepo()
+        MockURLProtocol.install { req in
+            (
+                HTTPURLResponse(url: req.url!, statusCode: 400, httpVersion: nil, headerFields: nil)!,
+                Data(#"""
+                {"data":null,"error":"Invalid JSON body",
+                "meta":{"errorCode":"report-selection.body.invalid_json","requestId":"r1"}}
+                """#.utf8)
+            )
+        }
+        await #expect(throws: ReportSelectionError.invalidJSON) {
+            try await repo.replace(Self.sampleProfile)
+        }
+    }
+
+    /// `apiValidationError("report-selection.body.invalid_shape", issues, 422,
+    /// { errorCode })`: the token in `error` AND `meta.errorCode`, plus
+    /// `details.issues`.
+    @Test("#110: 422 invalid_shape with details.issues is .invalidShape")
+    func invalidShapeWithIssues() async {
+        let repo = makeRepo()
+        MockURLProtocol.install { req in
+            (
+                HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
+                Data(#"""
+                {"data":null,"error":"report-selection.body.invalid_shape",
+                "details":{"issues":[{"path":["rangeDays"],"message":"Too big"}]},
+                "meta":{"errorCode":"report-selection.body.invalid_shape"}}
+                """#.utf8)
+            )
+        }
+        await #expect(throws: ReportSelectionError.invalidShape) {
+            try await repo.replace(Self.sampleProfile)
+        }
+    }
+
+    /// `apiError("Report selection names leaves this build does not know", 422,
+    /// { errorCode, unknownLeaves })` — the ids must survive to the caller.
+    @Test("#110: 422 leaves.unknown carries meta.unknownLeaves through to the caller")
+    func unknownLeavesAreNamed() async {
+        let repo = makeRepo()
+        MockURLProtocol.install { req in
+            (
+                HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
+                Data(#"""
+                {"data":null,"error":"Report selection names leaves this build does not know",
+                "meta":{"errorCode":"report-selection.leaves.unknown","unknownLeaves":["LAB_RESULTS","SOMETHING_NEW"]}}
+                """#.utf8)
+            )
+        }
+        await #expect(throws: ReportSelectionError.unknownLeaves(ids: ["LAB_RESULTS", "SOMETHING_NEW"])) {
+            try await repo.replace(Self.sampleProfile)
+        }
+    }
+
+    @Test("#110: a 400 whose code is not one of the three passes through untouched")
+    func unrelated400PassesThrough() async {
+        let repo = makeRepo()
+        MockURLProtocol.install { req in
+            (
+                HTTPURLResponse(url: req.url!, statusCode: 400, httpVersion: nil, headerFields: nil)!,
+                Data(#"{"data":null,"error":"Bad","meta":{"errorCode":"something.else"}}"#.utf8)
+            )
+        }
+        await #expect(throws: HLError.server(status: 400, code: "something.else", message: "Bad")) {
             try await repo.replace(Self.sampleProfile)
         }
     }
@@ -182,7 +258,7 @@ struct ReportSelectionRepositoryTests {
     @Test("an unrelated 422 passes through untouched — no class is invented")
     func unrelated422PassesThrough() async {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in Self.failure(req, status: 422, code: "something.else") }
+        MockURLProtocol.install { req in Self.failure(req, status: 422, code: "something.else") }
         await #expect(throws: HLError.server(status: 422, code: nil, message: "something.else")) {
             try await repo.replace(Self.sampleProfile)
         }
@@ -191,7 +267,7 @@ struct ReportSelectionRepositoryTests {
     @Test("a non-422 carrying one of the codes is NOT reclassified")
     func wrongStatusIsNotReclassified() async {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.failure(req, status: 403, code: "report-selection.leaves.unknown")
         }
         do {
@@ -207,7 +283,7 @@ struct ReportSelectionRepositoryTests {
     @Test("GET maps the unknown-leaf 422 too")
     func getAlsoMaps422() async {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             Self.failure(req, status: 422, code: "report-selection.body.invalid_shape")
         }
         await #expect(throws: ReportSelectionError.invalidShape) {

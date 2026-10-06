@@ -25,7 +25,7 @@
         import AuthenticationServices
     #endif
 
-    @Suite("OIDC status + signup honesty (parity 2.9)", .serialized)
+    @Suite("OIDC status + signup honesty (parity 2.9)", .serialized, .mockURLSession)
     struct OidcStatusHonestyTests {
         // MARK: - Fixtures
 
@@ -87,7 +87,7 @@
         func statusAbsentHidesSSO() async {
             let service = makeService()
             nonisolated(unsafe) var capturedPath: String?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 capturedPath = req.url?.path
                 return (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -109,7 +109,7 @@
         @Test("IdP enabled alongside passwords — every door stays open, operator label honoured")
         func statusEnabledKeepsAllDoors() async {
             let service = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     Self.statusBody(enabled: true, only: false, label: "Sign in with Acme SSO")
@@ -127,7 +127,7 @@
         @Test("OIDC_ONLY — password, passkey and register must all be hidden")
         func statusOnlyHidesPasswordAffordances() async {
             let service = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     Self.statusBody(enabled: true, only: true, label: "Corporate login")
@@ -148,7 +148,7 @@
         @Test("an unreachable status probe shows every door rather than none")
         func statusProbeFailureFailsSoft() async {
             let service = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"boom"}"#.utf8)
@@ -186,7 +186,7 @@
         func registerBodyCarriesTimezone() async throws {
             let service = makeService()
             nonisolated(unsafe) var registerBody: Data?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let path = req.url?.path ?? ""
                 if path == "/api/auth/register" {
                     registerBody = Self.body(of: req)
@@ -232,7 +232,7 @@
         func registerHonoursExplicitTimezone() async throws {
             let service = makeService()
             nonisolated(unsafe) var registerBody: Data?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let path = req.url?.path ?? ""
                 if path == "/api/auth/register" {
                     registerBody = Self.body(of: req)

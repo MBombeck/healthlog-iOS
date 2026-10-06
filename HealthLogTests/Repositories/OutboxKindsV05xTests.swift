@@ -13,7 +13,7 @@ import Testing
 /// Idempotency-Key, (b) 4xx non-retryable drops the row without infinite
 /// retry. Real `APIClient` + `MockURLProtocol` per PROJECT_GUIDE.md anti-pattern
 /// guidance (mock-servers hide schema drift).
-@Suite("Outbox v0.5.x edit/delete kinds", .serialized)
+@Suite("Outbox v0.5.x edit/delete kinds", .serialized, .mockURLSession)
 struct OutboxKindsV05xTests {
     // MARK: - Helpers
 
@@ -100,7 +100,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { [resp = measurementPatchResponse] req in
+        MockURLProtocol.install { [resp = measurementPatchResponse] req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             // PUT (not PATCH): the server item route exports GET/PUT/DELETE
             // only — a PATCH would 405 and the edit would be silently lost.
@@ -128,7 +128,7 @@ struct OutboxKindsV05xTests {
             key: "key-um-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -149,7 +149,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let pathRecorder = PathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             pathRecorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             // `EmptyResponse` contract: 2xx + `{}` body decodes cleanly via the
             // envelope-fallback path in `APIClient.decodePayload`. Bare 204 with
@@ -175,7 +175,7 @@ struct OutboxKindsV05xTests {
             key: "key-dm-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -200,7 +200,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { [resp = moodPatchResponse] req in
+        MockURLProtocol.install { [resp = moodPatchResponse] req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             // PUT (not PATCH): the server item route exports GET/PUT/DELETE only.
             #expect(req.httpMethod == "PUT")
@@ -226,7 +226,7 @@ struct OutboxKindsV05xTests {
             key: "key-umood-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -247,7 +247,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let pathRecorder = PathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             pathRecorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -270,7 +270,7 @@ struct OutboxKindsV05xTests {
             key: "key-dmood-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -294,7 +294,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { [resp = medicationResponse] req in
+        MockURLProtocol.install { [resp = medicationResponse] req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             #expect(req.httpMethod == "POST")
             #expect(req.url?.path == "/api/medications")
@@ -318,7 +318,7 @@ struct OutboxKindsV05xTests {
             key: "key-cmed-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -343,7 +343,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { [resp = medicationResponse] req in
+        MockURLProtocol.install { [resp = medicationResponse] req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             #expect(req.httpMethod == "PUT")
             #expect(req.url?.path == "/api/medications/srv-med-1")
@@ -368,7 +368,7 @@ struct OutboxKindsV05xTests {
             key: "key-umed-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -389,7 +389,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let pathRecorder = PathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             pathRecorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -412,7 +412,7 @@ struct OutboxKindsV05xTests {
             key: "key-dmed-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -438,7 +438,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let recorder = KeyRecorder()
-        MockURLProtocol.handler = { [resp = intakeResponse] req in
+        MockURLProtocol.install { [resp = intakeResponse] req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             #expect(req.httpMethod == "PUT")
             #expect(req.url?.path == "/api/medications/srv-med-1/intake/srv-intake-1")
@@ -464,7 +464,7 @@ struct OutboxKindsV05xTests {
             key: "key-uintake-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)
@@ -488,7 +488,7 @@ struct OutboxKindsV05xTests {
         )
         try await outbox.enqueue(op)
         let pathRecorder = PathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             pathRecorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -518,7 +518,7 @@ struct OutboxKindsV05xTests {
             key: "key-dintake-2"
         )
         try await outbox.enqueue(op)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
         }
         let replay = makeReplay(api: api, outbox: outbox)

@@ -2,13 +2,13 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-@Suite("Cycle Build 5 request paths", .serialized)
+@Suite("Cycle Build 5 request paths", .serialized, .mockURLSession)
 struct CycleBuild5RequestTests {
     @Test("Day log GET uses the date query and accepts a null row")
     func dayLogByDate() async throws {
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var query: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // CU-07: the handler is process-global — record only OUR route so a
             // parallel suite's request cannot overwrite what we assert on.
             if request.targets("/api/cycle/day-logs") {
@@ -29,7 +29,7 @@ struct CycleBuild5RequestTests {
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var method: String?
         nonisolated(unsafe) var body: Data?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets("/api/cycle/day-logs/row-1") {
                 path = request.url?.path
                 method = request.httpMethod
@@ -64,7 +64,7 @@ struct CycleBuild5RequestTests {
 
     @Test("Retriable day log PATCH queues the exact tri-state edit")
     func updateDayLogQueuesPatch() async throws {
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             try Self.response(
                 request,
                 status: 500,
@@ -98,7 +98,7 @@ struct CycleBuild5RequestTests {
     func settingsRoundTrip() async throws {
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var body: Data?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets("/api/auth/me/cycle-prefs") {
                 path = request.url?.path
                 body = request.requestBodyData()
@@ -133,7 +133,7 @@ struct CycleBuild5RequestTests {
     @Test("Custom symptom list, create, update, and soft-delete use exact routes")
     func customCRUD() async throws {
         nonisolated(unsafe) var calls: [(String, String, String?)] = []
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             // CU-07: only the custom-symptom routes drive this request log (and
             // therefore the response phase) — foreign requests are ignored.
             if request.targets(prefixedBy: "/api/cycle/symptoms/custom") {
@@ -187,7 +187,7 @@ struct CycleBuild5RequestTests {
     func insightsPath() async throws {
         nonisolated(unsafe) var hits = 0
         nonisolated(unsafe) var path: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             if request.targets("/api/cycle/insights") {
                 hits += 1
                 path = request.url?.path
@@ -207,7 +207,7 @@ struct CycleBuild5RequestTests {
 
     @Test("Insights failures are not cached and a later retry succeeds")
     func insightsRetry() async throws {
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             try Self.response(
                 request,
                 status: 500,
@@ -219,7 +219,7 @@ struct CycleBuild5RequestTests {
             _ = try await repository.insights()
         }
 
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             try Self.response(
                 request,
                 status: 200,

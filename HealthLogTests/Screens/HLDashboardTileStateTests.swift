@@ -193,7 +193,7 @@ struct HLDashboardTileStateTests {
         #expect(TrendChip(trend: .unknown, polarity: .neutral).colorRole == .none)
     }
 
-    @Test("dashboard metric derives only supported unknown trends from its visible sparkline")
+    @Test("dashboard metric shows the server's trend only — no sparkline-derived arrow (#115 B7)")
     func dashboardMetricEffectiveTrend() {
         let supported = DashboardMetric(
             id: "sleep",
@@ -218,14 +218,14 @@ struct HLDashboardTileStateTests {
             updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
 
-        #expect(supported.dashboardTrend == .up)
+        #expect(supported.dashboardTrend == .unknown)
         #expect(clinical.dashboardTrend == .up)
-        #expect(supported.dashboardTrendMode == .dashboardDirection)
-        #expect(clinical.dashboardTrendMode == .polarityAware)
+        #expect(supported.dashboardTrendMode(weightSentiment: nil) == .dashboardDirection)
+        #expect(clinical.dashboardTrendMode(weightSentiment: nil) == .polarityAware)
         #expect(TrendChip(
             trend: clinical.dashboardTrend,
             polarity: clinical.kind.descriptor.trendPolarity,
-            mode: clinical.dashboardTrendMode
+            mode: clinical.dashboardTrendMode(weightSentiment: nil)
         ).colorRole == .statusBad)
     }
 }

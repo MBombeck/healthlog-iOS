@@ -13,7 +13,7 @@ import Testing
 ///   merged optimistic row even when the write path returns a row WITHOUT it,
 ///   so the pair stays linked for the next edit.
 @MainActor
-@Suite("MeasurementsStore — A360-5 integrity fixes", .serialized)
+@Suite("MeasurementsStore — A360-5 integrity fixes", .serialized, .mockURLSession)
 struct MeasurementsStoreIntegrityFixTests {
     /// HK read stub — no samples (isolates the mirror; HK is unavailable in the
     /// unit host anyway).
@@ -71,7 +71,7 @@ struct MeasurementsStoreIntegrityFixTests {
         // Delay the create POST on its (background) URLProtocol thread so the
         // mid-flight clobber lands while the create is still suspended. A short
         // sleep on the protocol thread is safe — it never blocks the main actor.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.httpMethod == "POST" {
                 Thread.sleep(forTimeInterval: 0.4)
                 let body = """

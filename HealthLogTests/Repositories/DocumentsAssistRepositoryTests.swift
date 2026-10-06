@@ -10,7 +10,7 @@ import Testing
 /// round-trips (real `APIClient` + stub `URLProtocol`, no mock server, per
 /// PROJECT_GUIDE.md). Split from `DocumentsRepositoryTests` to keep each suite under the
 /// type-body-length ceiling.
-@Suite("Documents assist data layer", .serialized)
+@Suite("Documents assist data layer", .serialized, .mockURLSession)
 struct DocumentsAssistRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -63,7 +63,7 @@ struct DocumentsAssistRepositoryTests {
 
     @Test("Usage decodes Phase 2 assistAvailable + contentIndex")
     func usageDecodesAssistAndIndex() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, #"""
             {"data":{"usedBytes":0,"quotaBytes":1000,"maxFileBytes":500,"acceptedExtensions":[],
              "linkedEpisodes":[],"assistAvailable":true,
@@ -80,7 +80,7 @@ struct DocumentsAssistRepositoryTests {
 
     @Test("Usage from a pre-P2 server → assistAvailable false, contentIndex nil")
     func usagePreP2Tolerant() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, #"""
             {"data":{"usedBytes":0,"quotaBytes":1000,"maxFileBytes":500,
              "acceptedExtensions":[],"linkedEpisodes":[]},"error":null}
@@ -95,7 +95,7 @@ struct DocumentsAssistRepositoryTests {
 
     @Test("Suggest posts to /suggest and decodes the draft; unknown kind → nil")
     func suggestHappyPath() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound/d1/suggest")
             #expect(req.httpMethod == "POST")
             // Root-cause guard (issue #43): VISION mode must send NO JSON body /
@@ -115,7 +115,7 @@ struct DocumentsAssistRepositoryTests {
         #expect(s.documentDate == "2026-02-01")
         #expect(s.hasAny)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, #"""
             {"data":{"suggestions":{"title":null,"kind":"WEIRD_FUTURE_KIND",
              "documentDate":null}},"error":null}
@@ -129,7 +129,7 @@ struct DocumentsAssistRepositoryTests {
 
     @Test("Summary passes ?mode= and decodes summary XOR text")
     func summaryModes() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound/d1/summary")
             #expect(req.url?.query?.contains("mode=summary") == true)
             // VISION mode: no JSON body / Content-Type (see suggestHappyPath).
@@ -139,7 +139,7 @@ struct DocumentsAssistRepositoryTests {
         let sum = try await makeRepo().summary(id: "d1", mode: .summary)
         #expect(sum.prose == "Kurzbeschreibung.")
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.query?.contains("mode=text") == true)
             return ok(req, #"{"data":{"text":"Roher Text."},"error":null}"#)
         }
@@ -149,7 +149,7 @@ struct DocumentsAssistRepositoryTests {
 
     @Test("Index posts to /index and decodes the result")
     func indexHappyPath() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound/d1/index")
             #expect(req.httpMethod == "POST")
             // VISION mode: no JSON body / Content-Type (see suggestHappyPath).
@@ -163,7 +163,7 @@ struct DocumentsAssistRepositoryTests {
 
     @Test("TEXT mode sends the JSON body + Content-Type (local-OCR path)")
     func textModeSendsJSONBody() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound/d1/suggest")
             // TEXT mode routes to the server's local-OCR handler, which needs the
             // `{ mode, text }` JSON body + Content-Type.
@@ -176,13 +176,13 @@ struct DocumentsAssistRepositoryTests {
 
     @Test("Reindex decodes enqueued from a bool or a numeric count")
     func reindexTolerant() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound/reindex")
             return ok(req, #"{"data":{"enqueued":true},"error":null}"#)
         }
         #expect(try await makeRepo().reindexAll().enqueued)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(req, #"{"data":{"enqueued":3},"error":null}"#)
         }
         #expect(try await makeRepo().reindexAll().enqueued)
@@ -190,7 +190,7 @@ struct DocumentsAssistRepositoryTests {
 
     @Test("Suggest surfaces a 422 providerUnsupported via the discriminator")
     func suggestProviderUnsupported() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             ok(
                 req,
                 #"{"data":null,"error":"no provider","meta":{"errorCode":"documents.inbound.providerUnsupported"}}"#,

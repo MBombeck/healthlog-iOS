@@ -14,7 +14,7 @@ import Testing
 /// share `MedFixtures`.
 ///
 /// `.serialized` — the suite installs a process-global `MockURLProtocol.handler`.
-@Suite("AppleHealthMedicationImporter — medication mirror", .serialized)
+@Suite("AppleHealthMedicationImporter — medication mirror", .serialized, .mockURLSession)
 struct AppleHealthMedicationImporterTests {
     // MARK: - Mirror upsert idempotency
 
@@ -24,7 +24,7 @@ struct AppleHealthMedicationImporterTests {
         let recorder = MedicationRequestRecorder()
         // The server list starts empty and gains the mirrored row once created —
         // exactly what the next sweep's reconcile reads back.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
@@ -72,7 +72,7 @@ struct AppleHealthMedicationImporterTests {
     func adoptsServerKnownMirrorWithoutPost() async throws {
         let (api, kc) = MedFixtures.makeAPI()
         let recorder = MedicationRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
@@ -99,7 +99,7 @@ struct AppleHealthMedicationImporterTests {
     func changedConceptIsReposted() async throws {
         let (api, kc) = MedFixtures.makeAPI()
         let recorder = MedicationRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
@@ -129,7 +129,7 @@ struct AppleHealthMedicationImporterTests {
     func unstableExternalIdRefusedBeforeThePost() async throws {
         let (api, kc) = MedFixtures.makeAPI()
         let recorder = MedicationRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
@@ -159,7 +159,7 @@ struct AppleHealthMedicationImporterTests {
     func mirrorLimitExceeded() async throws {
         let (api, kc) = MedFixtures.makeAPI()
         let recorder = MedicationRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
@@ -193,7 +193,7 @@ struct AppleHealthMedicationImporterTests {
     func bulkTolleratesUnstableExternalIdSkip() async throws {
         let (api, kc) = MedFixtures.makeAPI()
         let recorder = MedicationRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
@@ -248,7 +248,7 @@ struct AppleHealthMedicationImporterTests {
     @Test("A clean sweep reports no user-facing issue")
     func cleanSweepHasNoIssue() async throws {
         let (api, kc) = MedFixtures.makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             if path == "/api/medications", req.httpMethod == "GET" {
                 let rows = [(id: "srv-existing", name: "Med", externalId: Optional(MedFixtures.conceptA))]
@@ -272,7 +272,7 @@ struct AppleHealthMedicationImporterTests {
     func noTokenGate() async throws {
         let (api, kc) = MedFixtures.makeAPI(token: nil)
         let recorder = MedicationRequestRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(req)
             return (MedFixtures.ok(req), Data())
         }

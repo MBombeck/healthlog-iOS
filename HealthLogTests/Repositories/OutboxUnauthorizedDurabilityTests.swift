@@ -23,7 +23,7 @@ import Testing
 /// `MeasurementsRepository` now **enqueues** on a transient-refresh 401 instead
 /// of dropping, while still **NOT** enqueuing on ambiguous/permanent failures
 /// (`.decoding`, a 422).
-@Suite("Outbox durability on .unauthorized (WC / D1)", .serialized)
+@Suite("Outbox durability on .unauthorized (WC / D1)", .serialized, .mockURLSession)
 struct OutboxUnauthorizedDurabilityTests {
     // MARK: - Helpers
 
@@ -68,7 +68,7 @@ struct OutboxUnauthorizedDurabilityTests {
     func unauthorizedOnCreateEnqueues() async throws {
         let api = makeAPI(refresh: { .transient })
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!, nil)
         }
         let repo = MeasurementsRepository(api: api, outbox: outbox)
@@ -97,7 +97,7 @@ struct OutboxUnauthorizedDurabilityTests {
         let api = makeAPI(refresh: { .transient })
         let outbox = try OutboxQueue(inMemory: true)
         let body = #"{"error":{"code":"validation.failed","message":"Invalid value"}}"#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
                 Data(body.utf8)
@@ -118,7 +118,7 @@ struct OutboxUnauthorizedDurabilityTests {
         let api = makeAPI(refresh: { .transient })
         let outbox = try OutboxQueue(inMemory: true)
         // 200 OK but a body the response decoder cannot turn into a Measurement.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data("not a measurement envelope".utf8)

@@ -15,20 +15,15 @@ import SwiftUI
 /// screen. (The web keys its delta to a server analytics-range window; the iOS
 /// honest equivalent over the on-device series is the in-window split.)
 ///
-/// **Sentiment (mirrors web rules; rendered through the app's MONOCHROME tile
-/// grammar):**
-/// - `higherIsBetter` → a rise is favourable, a fall adverse.
-/// - `lowerIsBetter` → a fall is favourable, a rise adverse.
-/// - `neutral` (and every target-band metric) → ALWAYS neutral, direction shown
-///   but never tinted as good/bad.
-/// Colour stays signal-only and follows the canonical tile/`TrendChip` grammar
-/// (STANDARDS §7): **only an ADVERSE delta carries colour** (`HLColor.statusBad`,
-/// the lone signal tint trend glyphs use); favourable + neutral deltas render
-/// monochrome (`HLText.secondary`). We do NOT reintroduce a green "good" tint —
-/// the `statusOK`-green branch was intentionally retired from the tile grammar
-/// (T2-2/C-5) so the metric column never alternates green/red. The sentiment is
-/// still computed (web parity + accessibility + tests); it just maps favourable
-/// onto the calm mono treatment.
+/// **Sentiment — the server's, or none (#115 · 1.3).** The caption used to
+/// decide good or bad itself from a hard-coded per-metric polarity table
+/// (weight "lower is better" for everyone, pulse "lower is better", …). That is
+/// a clinical judgement the app does not own. The only verdict the server
+/// publishes today is the weight one (`tiles.weightTrend.direction`, judged
+/// against the person's own target); the weight page passes it, every other
+/// metric passes `nil` and the caption stays neutral — direction and size are
+/// shown, never tinted as good or bad. Colour stays signal-only (STANDARDS §7):
+/// only an ADVERSE server verdict carries `HLColor.statusBad`.
 ///
 /// **Self-suppression (calm doctrine):** with no prior-window data — fewer than
 /// two points in either half, or a zero/▏undefined prior mean — the view renders
@@ -38,14 +33,14 @@ struct MetricRangeDelta: View {
     /// The chart's loaded points for the selected range (chronological or not —
     /// the resolver sorts by date internally).
     let points: [SeriesPoint]
-    /// The metric's polarity — drives the sentiment colour (target-band metrics
-    /// pass `.neutral`).
-    let polarity: MetricKindDescriptor.TrendPolarity
+    /// The server's verdict on which way is progress (weight only, from the
+    /// dashboard snapshot). `nil` → neutral: no good/bad colouring.
+    let sentiment: TrendDirectionSentiment?
     /// The selected range, supplying the "vs prior <label>" suffix.
     let range: ChartDetailStore.Range
 
     var body: some View {
-        if let result = Self.resolve(points: points, polarity: polarity) {
+        if let result = Self.resolve(points: points, sentiment: sentiment) {
             HStack(spacing: HLSpace.xxs) {
                 Image(systemName: result.symbol)
                     .accessibilityHidden(true)
@@ -65,7 +60,22 @@ struct MetricRangeDelta: View {
     /// "vs prior <range>" suffix — the prior-window label localized off the
     /// selected range's accessibility name (e.g. "vs prior month").
     private var priorLabel: String {
-        String(localized: "insights.metric.rangeDelta.priorSuffix \(range.accessibilityLabel.lowercased())")
+        Self.priorLabel(for: range)
+    }
+
+    /// One catalog phrase per range (H2, 1.1.0). The suffix used to lowercase
+    /// the range's display name into a shared template, which German cannot
+    /// do: nouns keep their capital, and "ggü. Monat davor" is not how the
+    /// language says it — "ggü. Vormonat" is.
+    nonisolated static func priorLabel(for range: ChartDetailStore.Range, bundle: Bundle = .main) -> String {
+        switch range {
+        case .day: String(localized: "insights.metric.rangeDelta.prior.day", bundle: bundle)
+        case .week: String(localized: "insights.metric.rangeDelta.prior.week", bundle: bundle)
+        case .month: String(localized: "insights.metric.rangeDelta.prior.month", bundle: bundle)
+        case .sixMonths: String(localized: "insights.metric.rangeDelta.prior.sixMonths", bundle: bundle)
+        case .year: String(localized: "insights.metric.rangeDelta.prior.year", bundle: bundle)
+        case .all: String(localized: "insights.metric.rangeDelta.prior.all", bundle: bundle)
+        }
     }
 
     private func accessibilityText(_ result: Result) -> String {
@@ -114,7 +124,7 @@ struct MetricRangeDelta: View {
     /// numbers when integral.
     nonisolated static func resolve(
         points: [SeriesPoint],
-        polarity: MetricKindDescriptor.TrendPolarity
+        sentiment serverSentiment: TrendDirectionSentiment?
     ) -> Result? {
         let sorted = points.sorted { $0.at < $1.at }
         guard sorted.count >= 4,
@@ -135,7 +145,7 @@ struct MetricRangeDelta: View {
         let percent = (meanCurrent - meanPrior) / abs(meanPrior) * 100
         let rounded = (percent * 10).rounded() / 10
 
-        let sentiment = sentiment(percent: rounded, polarity: polarity)
+        let sentiment = sentiment(percent: rounded, server: serverSentiment)
         return Result(
             deltaText: format(percent: rounded),
             symbol: symbol(for: rounded),
@@ -145,20 +155,23 @@ struct MetricRangeDelta: View {
         )
     }
 
-    /// Sentiment from the signed percentage + polarity (mirrors web). A flat
-    /// delta (≈0%) is always neutral.
+    /// Sentiment from the signed percentage and the server's verdict. No
+    /// verdict → neutral. A flat delta (≈0%) is a level change, which only a
+    /// `hold` verdict reads as progress.
     nonisolated static func sentiment(
         percent: Double,
-        polarity: MetricKindDescriptor.TrendPolarity
+        server: TrendDirectionSentiment?
     ) -> Sentiment {
-        guard abs(percent) >= 0.05 else { return .neutral }
-        switch polarity {
-        case .neutral:
-            return .neutral
-        case .higherIsBetter:
-            return percent > 0 ? .favourable : .adverse
-        case .lowerIsBetter:
-            return percent < 0 ? .favourable : .adverse
+        guard let server else { return .neutral }
+        let change: TrendDirectionSentiment.Change = if abs(percent) < 0.05 {
+            .level
+        } else {
+            percent > 0 ? .rising : .falling
+        }
+        switch server.tone(for: change) {
+        case .favorable: return .favourable
+        case .adverse: return .adverse
+        case .neutral: return .neutral
         }
     }
 
@@ -169,7 +182,8 @@ struct MetricRangeDelta: View {
         let sign = percent > 0 ? "+" : "−"
         let magnitude = abs(percent)
         let number = magnitude.formatted(.number.precision(.fractionLength(0 ... 1)))
-        return "\(sign)\(number)\u{202F}%"
+        // F1 — the locale places the sign: "+4,2 %" in German, "+4.2%" in English.
+        return sign + HLNumberFormat.percent(formattedNumber: number)
     }
 
     nonisolated static func symbol(for percent: Double) -> String {

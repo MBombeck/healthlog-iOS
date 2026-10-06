@@ -13,7 +13,7 @@ import Testing
 ///     optimistic row + reports `.queued` (durably in the Outbox), instead of
 ///     the old `.failed`/drop that made the wrist-logged mood vanish.
 @MainActor
-@Suite("Watch ack mapping (WW/F1,F2)", .serialized)
+@Suite("Watch ack mapping (WW/F1,F2)", .serialized, .mockURLSession)
 struct WatchAckMappingTests {
     // MARK: - Outcome bridge
 
@@ -57,7 +57,7 @@ struct WatchAckMappingTests {
     func moodLogQueuedOnUnauthorized() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (Self.response(401, request: req), Data(#"{"error":"unauthorized"}"#.utf8))
         }
         let repo = MoodRepository(api: api, outbox: outbox)
@@ -79,7 +79,7 @@ struct WatchAckMappingTests {
     func moodLogSaved() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = """
             {"data":{"id":"mood-9","mood":"GUT","tags":[],\
             "moodLoggedAt":"2026-06-01T09:00:00Z","source":null,"note":null}}

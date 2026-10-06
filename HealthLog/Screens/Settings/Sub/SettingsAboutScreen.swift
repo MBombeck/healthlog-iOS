@@ -103,7 +103,7 @@ struct SettingsAboutScreen: View {
                 Spacer()
                 Image("BrandMark")
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .scaledToFit()
                     .frame(width: 56, height: 56)
                     .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
                     .accessibilityHidden(true)

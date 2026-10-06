@@ -13,19 +13,33 @@ public enum BiometricGate {
         case failed(String)
     }
 
+    /// Grund, den der System-Dialog unter „Face ID"/„Code eingeben" zeigt.
+    ///
+    /// J1 / F2 — war fest „HealthLog freischalten", der englische Build zeigte
+    /// dem Reviewer also deutschen Text im System-Prompt. Beide Texte kommen
+    /// jetzt aus dem String-Katalog (en + de).
+    public static var localizedReason: String {
+        String(localized: "applock.prompt.reason")
+    }
+
+    /// Titel des Ausweich-Knopfs im Face-ID-Dialog (Gerätecode).
+    public static var localizedFallbackTitle: String {
+        String(localized: "applock.prompt.fallback")
+    }
+
     /// Trigger Face ID / Touch ID. Wirft nicht — Caller handled `Result`.
-    public static func evaluate(reason: String = "HealthLog freischalten") async -> Result {
+    public static func evaluate(reason: String = BiometricGate.localizedReason) async -> Result {
         #if canImport(LocalAuthentication)
             let context = LAContext()
-            context.localizedFallbackTitle = "Geräte-Code"
+            context.localizedFallbackTitle = localizedFallbackTitle
             var error: NSError?
             guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-                return .unavailable(error?.localizedDescription ?? "Biometric nicht verfügbar")
+                return .unavailable(error?.localizedDescription ?? "biometrics unavailable")
             }
 
             do {
                 let ok = try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
-                return ok ? .success : .failed("Authentifizierung abgewiesen")
+                return ok ? .success : .failed("authentication rejected")
             } catch let laError as LAError {
                 switch laError.code {
                 case .userCancel, .systemCancel, .appCancel:
@@ -39,7 +53,7 @@ public enum BiometricGate {
                 return .failed(error.localizedDescription)
             }
         #else
-            return .unavailable("LocalAuthentication nicht verfügbar")
+            return .unavailable("LocalAuthentication unavailable")
         #endif
     }
 }

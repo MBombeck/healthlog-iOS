@@ -56,14 +56,9 @@ struct TrendObservationCardIntegrationTests {
 
     // MARK: - Service-fallback contract used by the card
 
-    @Test("Service returns nil observation when feature-flag off — card path can read serverObservationText")
+    @Test("Service returns nil observation when statusText disallows on-device — card path can read serverObservationText")
     func serviceNilWhenFlagOff() async {
-        struct OffFlags: FeatureFlagsServicing, @unchecked Sendable {
-            func isEnabled(_: FeatureFlag) -> Bool {
-                false
-            }
-        }
-        let service = TrendObservationsService(featureFlags: OffFlags())
+        let service = TrendObservationsService(aiCapabilities: StubFlags(enabled: false))
         let outcome = await service.observe(metric: .pulse, series: [], locale: .init(identifier: "de"))
         #expect(outcome.observation == nil)
     }

@@ -18,7 +18,7 @@ import Testing
 /// pre-load hook runs OFF the first-paint path. The harness uses the real
 /// `APIClient` over a stub `URLSession` (per the repo's "no mock-server for
 /// repository paths" doctrine) so the SWR series path is exercised end-to-end.
-@Suite("ChartDetailStore — non-blocking pre-load (#56) + range re-fetch (#55)", .serialized)
+@Suite("ChartDetailStore — non-blocking pre-load (#56) + range re-fetch (#55)", .serialized, .mockURLSession)
 @MainActor
 struct ChartDetailPreloadNonBlockingTests {
     private func makeAPIClient() -> APIClient {
@@ -53,7 +53,7 @@ struct ChartDetailPreloadNonBlockingTests {
 
     private func installSeriesHandler() {
         let series = weightSeriesPayload()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let path = request.url?.path ?? ""
             let ok = HTTPURLResponse(
                 url: request.url!,

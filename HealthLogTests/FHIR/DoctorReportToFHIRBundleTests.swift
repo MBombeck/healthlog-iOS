@@ -169,7 +169,7 @@ struct DoctorReportToFHIRBundleTests {
             return nil
         }.first)
         let patientID = try #require(patient.id?.value?.string)
-        let expectedRef = "Patient/\(patientID)"
+        let expectedRef = "urn:uuid:\(patientID)" // #115 R4 — the entry's fullUrl (bdl-7), like the server
 
         let observations = entries.compactMap { entry -> Observation? in
             if case let .observation(o) = entry.resource { return o }
@@ -223,19 +223,19 @@ struct DoctorReportToFHIRBundleTests {
         #expect(sections.count == 2)
 
         let vitalsSection = try #require(sections.first { $0.title?.value?.string == "Vital signs" })
-        #expect(vitalsSection.entry?.count == 3)
+        #expect(vitalsSection.entry?.count == 4) // #115 R4 — 3 Observations + the vitals report, else unreachable
 
         let medsSection = try #require(sections.first { $0.title?.value?.string == "Medications" })
         #expect(medsSection.entry?.count == 3)
 
-        // Composition.subject points at the bundled Patient
         let patient = try #require(entries.compactMap { entry -> Patient? in
             if case let .patient(p) = entry.resource { return p }
             return nil
         }.first)
         let patientID = try #require(patient.id?.value?.string)
-        #expect(composition.subject?.reference?.value?.string == "Patient/\(patientID)")
-        #expect(composition.author.first?.reference?.value?.string == "Patient/\(patientID)")
+        // #115 R4 — references name the target entry's urn:uuid fullUrl (bdl-7), as the server does.
+        #expect(composition.subject?.reference?.value?.string == "urn:uuid:\(patientID)")
+        #expect(composition.author.first?.reference?.value?.string == "urn:uuid:\(patientID)")
     }
 
     // MARK: - Fresh Patient ID + Bundle identifier
@@ -277,14 +277,14 @@ struct DoctorReportToFHIRBundleTests {
 
     // MARK: - Empty spec
 
-    @Test("Empty spec (no vitals, no medications, no charts) → Composition + Patient + DiagnosticReport")
+    @Test("Empty spec (no vitals, no medications, no charts) → Composition + Patient, no empty DiagnosticReport")
     func emptySpec() throws {
         let spec = makeSpec(vitals: nil, medications: nil, charts: nil)
         let bundle = try DoctorReportToFHIRBundle.bundle(from: spec)
 
         let entries = try #require(bundle.entry)
-        // Composition + Patient + DiagnosticReport (always present)
-        #expect(entries.count == 3)
+        // #115 R3 — Composition + Patient only: like server v1.39.3, no vitals report without a vital sign.
+        #expect(entries.count == 2)
 
         // No Observations, no MedicationStatements
         let observations = entries.compactMap { entry -> Observation? in
@@ -610,7 +610,7 @@ struct DoctorReportToFHIRBundleConformanceTests {
         // beneficiary references the bundle's Patient
         let resolvedPatient = try patient(in: bundle)
         let patientID = try #require(resolvedPatient.id?.value?.string)
-        #expect(coverage.beneficiary.reference?.value?.string == "Patient/\(patientID)")
+        #expect(coverage.beneficiary.reference?.value?.string == "urn:uuid:\(patientID)") // #115 R4 — fullUrl
         // payor → contained Organization via local #org ref
         #expect(coverage.payor.first?.reference?.value?.string == "#org")
         let contained = try #require(coverage.contained)

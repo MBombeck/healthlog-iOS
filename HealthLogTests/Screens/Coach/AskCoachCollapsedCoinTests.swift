@@ -141,7 +141,7 @@ struct AskCoachCollapsedCoinTests {
         // Task #53 — the header Coach is no longer `coachHeroDismissed`-gated
         // (W22 made it always-present when the assistant flag is on). Its live
         // gate is now the three-way AI-source choice: it surfaces in `.onDevice`
-        // and `.online` via `aiSurfacesVisible`, AND the `assistantCoach` flag.
+        // and `.online` via `aiSurfacesVisible`, AND the `coach` AI capability.
         // (The prior `coachHeroDismissed` assertion was obsolete — that token now
         // appears only inside an explanatory comment, which this source-grep
         // strips, so it asserted a contract the screen had already retired.)

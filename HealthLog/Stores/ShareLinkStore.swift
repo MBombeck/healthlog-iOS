@@ -49,6 +49,10 @@ public final class ShareLinkStore {
     /// as "nothing to share".
     public private(set) var hasSelectionVocabulary: Bool = false
 
+    /// R2 / #115 A3 — set when the server wants a fresh proof for the create;
+    /// the screen asks for it and runs the create again.
+    public let stepUp = StepUpRetry()
+
     private let repo: ShareLinkRepository
     private let capabilities: ServerCapabilitiesRepository
 
@@ -113,7 +117,7 @@ public final class ShareLinkStore {
         error = nil
         defer { isCreating = false }
         do {
-            let link = try await repo.create(body)
+            let link = try await repo.create(body, elevation: stepUp.take())
             freshToken = link.token
             freshLinkLabel = link.label
             freshPassphrase = link.passphrase
@@ -128,7 +132,7 @@ public final class ShareLinkStore {
             error = err.userFacingDescription
             return false
         } catch let err as HLError {
-            error = err.userFacingDescription
+            error = stepUp.requestIfProofRefusal(err) ? StepUpRetry.requiredMessage : err.userFacingDescription
             return false
         } catch {
             self.error = String(localized: "Couldn't create the share link. Please try again.")
@@ -176,5 +180,6 @@ public final class ShareLinkStore {
         freshQrUrl = nil
         freshProtected = false
         error = nil
+        stepUp.cancel()
     }
 }

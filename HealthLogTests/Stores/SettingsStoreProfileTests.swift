@@ -46,7 +46,7 @@ struct SettingsStoreProfileTests {
     @Test("Successful patch updates the profile snapshot")
     func successUpdatesProfile() async throws {
         let updated = Self.sampleProfile(displayName: "Anna-Lena")
-        let store = try await makeStore { _ in updated }
+        let store = try await makeStore { _ in ProfilePatchResult(profile: updated) }
         let patch = ProfilePatch(displayName: .some("Anna-Lena"))
 
         let ok = await store.updateProfile(patch)
@@ -59,7 +59,7 @@ struct SettingsStoreProfileTests {
     func emptyPatchNoOp() async throws {
         let store = try await makeStore { _ in
             Issue.record("API should not be called for empty patch")
-            return Self.sampleProfile()
+            return ProfilePatchResult(profile: Self.sampleProfile())
         }
         let ok = await store.updateProfile(ProfilePatch())
         #expect(ok == true)
@@ -90,7 +90,7 @@ struct SettingsStoreProfileTests {
         let counter = AsyncCounter()
         await api.setHandler { _ in
             let isFirst = await counter.next()
-            if isFirst { return baseline }
+            if isFirst { return ProfilePatchResult(profile: baseline) }
             throw HLError.offline
         }
         let repo = SettingsRepository(api: api)
@@ -106,6 +106,123 @@ struct SettingsStoreProfileTests {
         // Snapshot survives.
         #expect(store.profile?.displayName == "Anna")
         #expect(store.error == .offline)
+    }
+}
+
+/// #97 / #115 · 0.4 — `PATCH /api/user/profile` answers a PARTIAL save with
+/// 200 and `rejectedFields`. Before, iOS decoded only the profile half, so the
+/// store returned `true`, the form re-baselined, showed "Saved" and the
+/// person's correction was gone without a word.
+///
+/// The fixture is the v1.39.0 `ProfileUpdateResponse` shape
+/// (`docs/api/openapi.yaml`, `rejectedFields: [{ path, code, message }]`,
+/// produced by `applyProfileUpdate` → `sanitiseZodIssues`).
+@MainActor
+@Suite("SettingsStore.updateProfile — partial save (rejectedFields)")
+struct SettingsStoreProfileRejectedFieldsTests {
+    static let partialEnvelope = #"""
+    {"data":{
+      "username":"anna","displayName":"Anna-Lena","email":"anna@example.com",
+      "dateOfBirth":null,"gender":null,"heightCm":175,"locale":"de","timezone":"Europe/Berlin",
+      "timeFormat":"AUTO","dateFormat":"AUTO","moodReminderEnabled":false,
+      "fullName":null,"insurerName":null,"insurerIkNumber":null,"hasInsuranceNumber":false,
+      "rejectedFields":[
+        {"path":"heightCm","code":"too_big","message":"Number must be less than or equal to 300"},
+        {"path":"email","code":"rate_limited","message":"Too many email-address changes."}
+      ]
+    },"error":null}
+    """#
+
+    static let cleanEnvelope = #"""
+    {"data":{
+      "username":"anna","displayName":"Anna-Lena","email":"anna@example.com",
+      "dateOfBirth":null,"gender":null,"heightCm":180,"locale":"de","timezone":"Europe/Berlin",
+      "timeFormat":"AUTO","dateFormat":"AUTO","moodReminderEnabled":false,
+      "fullName":null,"insurerName":null,"insurerIkNumber":null,"hasInsuranceNumber":false
+    },"error":null}
+    """#
+
+    static func decodeResult(_ json: String) throws -> ProfilePatchResult {
+        let envelope = try JSONDecoder.hlDefault.decode(
+            APIEnvelope<ProfilePatchResult>.self, from: Data(json.utf8)
+        )
+        return try #require(envelope.data)
+    }
+
+    @Test("The 200 answer decodes both the saved profile and the skipped fields")
+    func decodesRejectedFields() throws {
+        let result = try Self.decodeResult(Self.partialEnvelope)
+        #expect(result.isPartial)
+        #expect(result.profile.displayName == "Anna-Lena")
+        #expect(result.rejectedFields == [
+            ProfileRejectedField(path: "heightCm", code: "too_big", message: "Number must be less than or equal to 300"),
+            ProfileRejectedField(path: "email", code: "rate_limited", message: "Too many email-address changes.")
+        ])
+        #expect(try Self.decodeResult(Self.cleanEnvelope).isPartial == false)
+    }
+
+    @Test("A partial save keeps the form open and names each field with its reason")
+    func partialSaveKeepsFormOpen() async throws {
+        let partial = try Self.decodeResult(Self.partialEnvelope)
+        let api = StubAPIClient()
+        await api.setHandler { _ in partial }
+        let store = try SettingsStore(
+            repo: SettingsRepository(api: api),
+            defaults: #require(UserDefaults(suiteName: "SettingsStoreProfileRejectedFieldsTests.\(UUID().uuidString)"))
+        )
+
+        let ok = await store.updateProfile(
+            ProfilePatch(displayName: .some("Anna-Lena"), heightCm: .some(999))
+        )
+
+        // `false` is what keeps EditProfileScreen from re-baselining + showing
+        // "Saved", and keeps the onboarding step from advancing.
+        #expect(ok == false)
+        // The sibling that DID land is applied — the server wrote it.
+        #expect(store.profile?.displayName == "Anna-Lena")
+        #expect(store.error == nil)
+        let rejected = store.rejectedProfileFields
+        #expect(rejected.map(\.path) == ["heightCm", "email"])
+        #expect(rejected.map(\.code) == ["too_big", "rate_limited"])
+        // Field + reason, as the notice renders them.
+        #expect(rejected.first?.fieldLabel == String(localized: "Height"))
+        #expect(rejected.first?.reasonText == String(localized: "profile.rejected.reason.tooBig"))
+        #expect(rejected.last?.reasonText == String(localized: "profile.rejected.reason.rateLimited"))
+        let line = try #require(rejected.first?.displayLine)
+        #expect(line.contains(String(localized: "Height")))
+        #expect(line.contains(String(localized: "profile.rejected.reason.tooBig")))
+    }
+
+    @Test("The next clean save clears the notice")
+    func cleanSaveClearsRejectedFields() async throws {
+        let partial = try Self.decodeResult(Self.partialEnvelope)
+        let clean = try Self.decodeResult(Self.cleanEnvelope)
+        let api = StubAPIClient()
+        let queue = ResultQueue([partial, clean])
+        await api.setHandler { _ in await queue.next() }
+        let store = try SettingsStore(
+            repo: SettingsRepository(api: api),
+            defaults: #require(UserDefaults(suiteName: "SettingsStoreProfileRejectedFieldsTests.\(UUID().uuidString)"))
+        )
+
+        #expect(await store.updateProfile(ProfilePatch(heightCm: .some(999))) == false)
+        #expect(store.rejectedProfileFields.isEmpty == false)
+        #expect(await store.updateProfile(ProfilePatch(heightCm: .some(180))) == true)
+        #expect(store.rejectedProfileFields.isEmpty)
+        #expect(store.profile?.heightCm == 180)
+    }
+}
+
+/// Hands out queued results in order (the last one repeats).
+private actor ResultQueue {
+    private var results: [ProfilePatchResult]
+
+    init(_ results: [ProfilePatchResult]) {
+        self.results = results
+    }
+
+    func next() -> ProfilePatchResult {
+        results.count > 1 ? results.removeFirst() : results[0]
     }
 }
 

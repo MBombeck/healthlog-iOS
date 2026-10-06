@@ -64,6 +64,10 @@ public final class NutrientStore {
     /// freshly granted permission lands its 30-day backfill immediately.
     private let dailySync: (any NutrientDailySyncing)?
     private var isReloading = false
+    /// #115 B5 — the zone and clock the optimistic today-row is keyed with.
+    /// Test seams; production reads the account zone (``ProfileDay``).
+    @ObservationIgnored var profileTimeZone: () -> TimeZone = { ProfileDay.timeZone }
+    @ObservationIgnored var now: () -> Date = { Date() }
 
     public init(
         repository: NutrientReadRepository,
@@ -322,7 +326,7 @@ public final class NutrientStore {
             rows.append(NutrientOverviewRowDTO(
                 nutrient: .water,
                 unit: "ml",
-                latestDay: Self.todayKey(),
+                latestDay: todayKey(),
                 latestAmount: deltaMl,
                 daysWithData: 1
             ))
@@ -348,11 +352,14 @@ public final class NutrientStore {
         lastError = HLError.userFacingText(for: error)
     }
 
-    /// `yyyy-MM-dd` for the current local day — the same day-key rule the sync
-    /// path uses for `stats:` keys.
-    private static func todayKey(now: Date = Date(), calendar: Calendar = .current) -> String {
-        let c = calendar.dateComponents([.year, .month, .day], from: now)
-        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    /// `yyyy-MM-dd` of today in the ACCOUNT zone (#115 B5) — the zone the
+    /// server keys a water quick-add without a `day` in (`userDayKey(now,
+    /// user.timezone)`) and the zone the upload keys its HealthKit day totals
+    /// in (Audit B-7, `HealthKitStatisticsService` on ``ProfileTimeZoneBox``).
+    /// It was the device day, so abroad the optimistic row named a day the
+    /// server never wrote.
+    func todayKey() -> String {
+        ProfileDay.key(for: now(), timeZone: profileTimeZone())
     }
 }
 

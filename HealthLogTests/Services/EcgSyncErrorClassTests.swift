@@ -14,7 +14,7 @@ import Testing
 ///
 /// `.serialized` — die Suite installiert den prozessweiten
 /// `MockURLProtocol.handler`.
-@Suite("EcgSyncCoordinator — Fehlerklassen + Anker", .serialized)
+@Suite("EcgSyncCoordinator — Fehlerklassen + Anker", .serialized, .mockURLSession)
 struct EcgSyncErrorClassTests {
     // MARK: - Error classes
 
@@ -22,7 +22,7 @@ struct EcgSyncErrorClassTests {
     func unprocessableRetainsCursorWithoutBlockingTheRest() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let counter = EventTimeline()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             guard req.targets("/api/insights/ecg") else {
                 return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
             }
@@ -58,7 +58,7 @@ struct EcgSyncErrorClassTests {
     @Test("403 heisst aufhören, nicht wiederholen — der Anker wird gehalten")
     func moduleDisabledStopsAndHoldsTheAnchor() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"module disabled","meta":{"errorCode":"module.disabled","module":"insights"}}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -83,7 +83,7 @@ struct EcgSyncErrorClassTests {
     @Test("429 heisst warten, nicht überspringen")
     func rateLimitHoldsTheAnchor() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(
                     url: req.url!,
@@ -96,12 +96,18 @@ struct EcgSyncErrorClassTests {
         }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let source = FakeEcgSource(recordings: [EcgSyncTestSupport.recording(id: "a-1")], volts: ["a-1": [0.001]])
-        let summary = await EcgSyncTestSupport.makeCoordinator(
+        let coordinator = EcgSyncTestSupport.makeCoordinator(
             api: api,
             keychain: kc,
             source: source,
             defaultsProvider: defaults
-        ).sync()
+        )
+        // S2 — the sweep now sits a short wait out; this wake's window ends
+        // at the first pause, which is the "stop and hold" case.
+        let windowEnds: @Sendable (TimeInterval) async throws -> Void = { _ in throw CancellationError() }
+        let summary = await EcgSyncPause.$sleep.withValue(windowEnds) {
+            await coordinator.sync()
+        }
         #expect(summary.stoppedBecause == .rateLimited)
         #expect(summary.skippedCount == 0)
         #expect(defaults().data(forKey: EcgSyncTestSupport.anchorKey) == nil)
@@ -133,7 +139,7 @@ struct EcgSyncErrorClassTests {
     @Test("Ein Netzfehler hält den Anker und wird nicht in die Outbox kopiert")
     func transportFailureHoldsAnchor() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
-        MockURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+        MockURLProtocol.install { _ in throw URLError(.notConnectedToInternet) }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let source = FakeEcgSource(recordings: [EcgSyncTestSupport.recording(id: "a-1")], volts: ["a-1": [0.001]])
         let summary = await EcgSyncTestSupport.makeCoordinator(
@@ -153,7 +159,7 @@ struct EcgSyncErrorClassTests {
     func accountLeasedUploadDisablesTransportRetries() async {
         let (api, keychain) = EcgSyncTestSupport.makeClient()
         let recorder = EcgRequestRecorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request)
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
@@ -185,7 +191,7 @@ struct EcgSyncErrorClassTests {
             }
         )
         let recorder = EcgRequestRecorder()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             recorder.record(request)
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
@@ -214,7 +220,7 @@ struct EcgSyncErrorClassTests {
     func waveformFailureSkipsOnlyThatRecording() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let source = FakeEcgSource(
             recordings: [EcgSyncTestSupport.recording(id: "broken-1"), EcgSyncTestSupport.recording(id: "fine-2")],
@@ -237,7 +243,7 @@ struct EcgSyncErrorClassTests {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let recorder = EcgRequestRecorder()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/insights/ecg") { recorder.record(req) }
             return reply(req)
         }
@@ -263,7 +269,7 @@ struct EcgSyncErrorClassTests {
     func anchorAdvancesAndIsReplayed() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let source = FakeEcgSource(
             recordings: [EcgSyncTestSupport.recording(id: "a-1")],
@@ -282,7 +288,7 @@ struct EcgSyncErrorClassTests {
     @Test("Der erste leere Durchlauf setzt den Anker NICHT — verweigerte Leserechte sehen aus wie ein leerer Speicher")
     func firstRunEmptySweepDoesNotBurnTheAnchor() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
         }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
@@ -294,7 +300,7 @@ struct EcgSyncErrorClassTests {
 
         // Run 2 — permission granted later: the full history must still arrive.
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let granted = FakeEcgSource(
             recordings: [EcgSyncTestSupport.recording(id: "old-1")],
             volts: ["old-1": [0.001]],
@@ -316,7 +322,7 @@ struct EcgSyncErrorClassTests {
     func resetAnchorClearsTheCursor() async {
         let (api, kc) = EcgSyncTestSupport.makeClient()
         let reply = EcgSyncTestSupport.okResponse("inserted", code: 201)
-        MockURLProtocol.handler = { reply($0) }
+        MockURLProtocol.install { reply($0) }
         let defaults = EcgSyncTestSupport.isolatedDefaults()
         let source = FakeEcgSource(
             recordings: [EcgSyncTestSupport.recording(id: "a-1")],

@@ -13,7 +13,7 @@ import Testing
 /// gender is real, and constructs a `FeatureFlagsStore` whose `cycleTracking`
 /// flag is flipped ON via the wire (default is OFF).
 @MainActor
-@Suite("CycleGate", .serialized)
+@Suite("CycleGate", .serialized, .mockURLSession)
 struct CycleGateTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -36,13 +36,8 @@ struct CycleGateTests {
     /// Feature-flags store with `cycle.tracking` deployed ON (wire flips the
     /// default-OFF). Returns a store that has already refreshed.
     private func makeFlagsStoreEnabled() async -> FeatureFlagsStore {
-        let repo = FeatureFlagsRepository(api: makeClient())
-        let store = FeatureFlagsStore(repo: repo)
-        MockURLProtocol.handler = { req in
-            let body = Data(#"{"data":{"flags":{"cycle.tracking":true}},"error":null}"#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
-        }
-        await store.refresh()
+        let store = FeatureFlagsStore()
+        store.setOverride(.cycleTracking, enabled: true)
         return store
     }
 
@@ -58,7 +53,7 @@ struct CycleGateTests {
         let cycleField = cycleEnabled.map { #","cycleTrackingEnabled":\#($0)"# } ?? ""
         let meJSON = #"{"data":{"id":"u1","username":"u","email":"u@example.com","avatarUrl":null\#(cycleField)},"error":null}"#
         let hkJSON = #"{"data":{"entries":[],"lastSyncedAt":null},"error":null}"#
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: String
             switch path {
@@ -78,13 +73,8 @@ struct CycleGateTests {
     func flagOffSuppresses() async {
         // Default is now ON, so test the suppression path by injecting the
         // server flag explicitly OFF (mirrors makeFlagsStoreEnabled with false).
-        let repo = FeatureFlagsRepository(api: makeClient())
-        let flags = FeatureFlagsStore(repo: repo)
-        MockURLProtocol.handler = { req in
-            let body = Data(#"{"data":{"flags":{"cycle.tracking":false}},"error":null}"#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
-        }
-        await flags.refresh()
+        let flags = FeatureFlagsStore()
+        flags.setOverride(.cycleTracking, enabled: false)
         installProfileRouter(gender: "female")
         let settings = makeSettings()
         await settings.load()

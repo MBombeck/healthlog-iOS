@@ -9,7 +9,7 @@ import Testing
 /// self-suppressed on those metric pages even though the operator has the data.
 /// Every id is VERIFIED present in the server `METRIC_STATUS_IDS` registry
 /// (`src/lib/insights/metric-status-registry.ts`).
-@Suite("MetricInsights — P2 metricStatusIDTable parity", .serialized)
+@Suite("MetricInsights — P2 metricStatusIDTable parity", .serialized, .mockURLSession)
 struct MetricStatusIDTableParityTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -41,7 +41,7 @@ struct MetricStatusIDTableParityTests {
     @Test("a stubbed metric-status response for STAIR_ASCENT_SPEED renders the assessment")
     func stairAscentAssessmentRenders() async throws {
         let repo = MetricInsightsRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // The generic metric-status route carries the registry id in `metric`.
             #expect(req.url?.path.hasSuffix("/insights/metric-status") == true)
             let query = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []

@@ -9,7 +9,7 @@ import Testing
 /// `MedicationsStore.markAllDueQuick` loops each due dose through the existing
 /// single-intake path. These tests pin the success/failure tally + that every
 /// due dose is patched to taken (no client dedup — each ride is independent).
-@Suite("MedicationsStore — markAllDueQuick batch confirm", .serialized)
+@Suite("MedicationsStore — markAllDueQuick batch confirm", .serialized, .mockURLSession)
 struct MedicationsStoreBatchIntakeTests {
     private static let scheduled = Date(timeIntervalSince1970: 1_714_550_400)
     private static let now = scheduled.addingTimeInterval(3600)
@@ -55,7 +55,7 @@ struct MedicationsStoreBatchIntakeTests {
     func allConfirmed() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // Echo a generic taken row — the store only needs a 200 + valid body.
             Self.ok(req, id: "intake-1", medId: "med-1")
         }
@@ -83,7 +83,7 @@ struct MedicationsStoreBatchIntakeTests {
     func queuedCountsAsConfirmed() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+        MockURLProtocol.install { _ in throw URLError(.notConnectedToInternet) }
         let repo = MedicationsRepository(api: api, outbox: outbox)
         let store = MedicationsStore(repo: repo)
         store._testForceSet(todayIntakes: [
@@ -107,7 +107,7 @@ struct MedicationsStoreBatchIntakeTests {
     func hardFailureCounted() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let response = HTTPURLResponse(
                 url: req.url!,
                 statusCode: 422,

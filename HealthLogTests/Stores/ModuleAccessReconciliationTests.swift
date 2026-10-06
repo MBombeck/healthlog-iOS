@@ -26,7 +26,7 @@ import Testing
 /// an earlier round of this suite stay green over a screen that read the raw
 /// map: the assertion pinned the RULE and left the WIRING unwatched.
 @MainActor
-@Suite("Audit A-7 — reconciled access state (fix round 1)", .serialized)
+@Suite("Audit A-7 — reconciled access state (fix round 1)", .serialized, .mockURLSession)
 struct ModuleAccessReconciliationTests {
     private func makeGate(modules: [String: Bool], access: [String: ModuleAccessState]) -> ModuleGate {
         ModuleGate(modules: modules, moduleAccess: access)
@@ -99,7 +99,7 @@ struct ModuleAccessReconciliationTests {
         // `illness` was `not_granted` (off). The echo of a `labs` toggle reports
         // it ON — the grant changed server-side between the two hops. The
         // sibling's stale reason must not survive that.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":{"modules":{"labs":true,"illness":true,"nutrients":false}},"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }

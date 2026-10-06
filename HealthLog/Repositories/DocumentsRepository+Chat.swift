@@ -144,6 +144,13 @@ public extension DocumentsRepository {
         }
         if isNotIndexed(error) { return DocumentChatError.notIndexed }
         if isConsentRequired(error) { return DocumentChatError.consentRequired }
+        // #115 · 0.2 — the v1.39 document-AI refusals, one state each.
+        switch aiRefusalKind(error) {
+        case .operatorDisabled: return DocumentChatError.operatorDisabled
+        case .recordNotPermitted: return DocumentChatError.recordNotPermitted
+        case .noProvider: return DocumentChatError.noProvider
+        case .unavailable, nil: break
+        }
         if case HLError.rateLimited = error { return DocumentChatError.limitReached }
         return error
     }
@@ -170,6 +177,9 @@ public extension DocumentsRepository {
         }
         if code == "documents.inbound.notIndexed" { return .notIndexed }
         if code == "consent.ai.required" { return .consentRequired }
+        if code.hasPrefix(AIRefusal.operatorDisabledPrefix) { return .operatorDisabled }
+        if code == AIRefusal.recordNotPermittedCode { return .recordNotPermitted }
+        if code == AIRefusal.providerNoneCode { return .noProvider }
         return .provider(code)
     }
 

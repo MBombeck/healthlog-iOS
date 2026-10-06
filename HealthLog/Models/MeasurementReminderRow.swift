@@ -185,80 +185,6 @@ public struct MeasurementReminderRow: Codable, Sendable, Identifiable, Equatable
         self.enabled = enabled
     }
 
-    /// **Build 6.4 — the edit-sheet's patch, as a pure function.**
-    ///
-    /// Builds the PATCH body for editing `row` with the form's current values,
-    /// including the now-active cadence SWITCHING (Interval ↔ RRULE) and the
-    /// explicit `anchorDate` clear. Kept a pure function (out of the `View`) so
-    /// the exact omitted/null/set wire contract is testable — the trap that hid
-    /// the original RRULE regression for months.
-    ///
-    /// **Cadence exclusivity + the #62 fix.** `intervalDays` and `rrule` are
-    /// EXCLUSIVE server-side (`api/measurement-reminders/[id]/route.ts`): setting
-    /// one while omitting the other clears the other, and — since server v1.32.1
-    /// (#62) — the recompute keys off `Object.hasOwn(updateData, …)` so a cleared
-    /// cadence can no longer leak the stale one into `nextDueAt`. So:
-    ///   - **Interval mode** → `intervalDays = .set(n)`, `rrule = .unchanged`
-    ///     (omitted). The server clears `rrule` via the exclusivity rule.
-    ///   - **RRULE mode** → `rrule = .set(rule)`, `intervalDays = .unchanged`
-    ///     (omitted). The server clears `intervalDays`. Sending the rule
-    ///     explicitly (the form can now edit it) is what carries a switch onto,
-    ///     or an edit of, a calendar schedule.
-    ///
-    /// Omitting the untouched cadence is a `RecordPatchField.unchanged` — dropped
-    /// from the wire — which is the `undefined` the server reads as "don't touch".
-    /// The clearable text fields (`measurementType`, `anchorDate`, `location`)
-    /// tri-state: a value → `.set`, an emptied field that HAD a value → `.clear`
-    /// (explicit JSON `null`), an empty field that never had one → `.unchanged`.
-    static func editingPatch(
-        for row: MeasurementReminderRow,
-        label: String,
-        measurementType: String?,
-        cadence: ReminderCadence,
-        anchorDate: Date?,
-        notifyHour: Int,
-        location: String?,
-        enabled: Bool
-    ) -> MeasurementReminderUpdate {
-        let intervalField: RecordPatchField<Int>
-        let rruleField: RecordPatchField<String>
-        switch cadence {
-        case let .interval(days):
-            intervalField = .set(days)
-            rruleField = .unchanged
-        case let .rrule(rule):
-            rruleField = .set(rule)
-            intervalField = .unchanged
-        }
-
-        return MeasurementReminderUpdate(
-            label: label,
-            measurementType: Self.clearableField(new: measurementType, had: row.measurementType != nil),
-            intervalDays: intervalField,
-            rrule: rruleField,
-            anchorDate: Self.clearableDate(new: anchorDate, had: row.anchorDate != nil),
-            notifyHour: notifyHour,
-            location: Self.clearableField(
-                new: location?.trimmingCharacters(in: .whitespacesAndNewlines),
-                had: row.location != nil
-            ),
-            enabled: enabled
-        )
-    }
-
-    /// Tri-state a clearable string field: a non-empty value → `.set`; an
-    /// empty/`nil` value that HAD a stored value → `.clear`; otherwise omit.
-    private static func clearableField(new value: String?, had: Bool) -> RecordPatchField<String> {
-        if let value, !value.isEmpty { return .set(value) }
-        return had ? .clear : .unchanged
-    }
-
-    /// Tri-state a clearable date field (the `anchorDate` null-out path).
-    private static func clearableDate(new value: Date?, had: Bool) -> RecordPatchField<Date> {
-        if let value { return .set(value) }
-        return had ? .clear : .unchanged
-    }
-
     /// `true` when this reminder is driven by an RFC-5545 `rrule` rather than a
     /// rolling interval. An empty string counts as "no rule" — the server treats
     /// the two cadences as exclusive, so a blank `rrule` means the row is on the
@@ -371,7 +297,13 @@ public struct MeasurementReminderCreate: Encodable, Sendable {
 
 /// `PATCH /api/measurement-reminders/{id}` body (OpenAPI
 /// `MeasurementReminderUpdate`). Partial — omitted fields are left untouched
-/// server-side, `nextDueAt` is recomputed after the cadence merge.
+/// server-side. Since server v1.39.2 `nextDueAt` is recomputed only when the
+/// cadence (`intervalDays`, `rrule`, `anchorDate` by calendar day) changes or a
+/// disabled reminder is switched back on; before that EVERY PATCH recomputed it
+/// from now, so saving the edit sheet of an overdue check-up rolled it to its
+/// next slot. The edit sheet therefore sends only the fields the person changed
+/// (``MeasurementReminderRow/editingPatch(for:label:measurementType:cadence:anchorDate:notifyHour:location:enabled:)``)
+/// and nothing at all when nothing changed (``isEmpty``).
 ///
 /// **Build 6.4 — tri-state clearable fields.** The cadence pair
 /// (`intervalDays`/`rrule`), the `anchorDate`, the `location`, and the
@@ -409,6 +341,15 @@ public struct MeasurementReminderUpdate: Encodable, Sendable, Equatable {
         self.notifyHour = notifyHour
         self.location = location
         self.enabled = enabled
+    }
+
+    /// `true` when the body would carry no key at all. The store answers such
+    /// an edit locally instead of sending `{}`: an older server recomputes
+    /// `nextDueAt` on any PATCH, so even an empty one could roll an overdue
+    /// check-up on.
+    public var isEmpty: Bool {
+        label == nil && measurementType == .unchanged && intervalDays == .unchanged && rrule == .unchanged
+            && anchorDate == .unchanged && notifyHour == nil && location == .unchanged && enabled == nil
     }
 
     private enum CodingKeys: String, CodingKey {

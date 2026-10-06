@@ -19,10 +19,24 @@ import SwiftUI
 struct HeroStrip: View {
     let store: ChartDetailStore
     var matchedNamespace: Namespace.ID? // W-IMPL-MOTION-POLISH destination ns.
-    // A360-5 C-1/C-2 — convert the hero value + flip the unit label to the
-    // user's chosen unit (kg→lb, mmHg→kPa), matching the dashboard. Glucose is
-    // already server-converted on the series payload (passed through).
-    @Environment(\.unitPreferences) private var units
+    /// A360-5 C-1/C-2 — convert the hero value + flip the unit label to the
+    /// user's chosen unit (kg→lb, mmHg→kPa), matching the dashboard. Glucose is
+    /// already server-converted on the series payload (passed through).
+    @Environment(\.unitPreferences) private var settingsUnits
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// #108 — glucose pinned to the unit the series arrived in.
+    private var units: UnitPreferences {
+        store.effectiveUnits(settingsUnits)
+    }
+
+    /// T4 — how far the one-line hero value may shrink before it would wrap.
+    static let valueMinimumScaleFactor: CGFloat = 0.5
+
+    /// T4 — from the AX text sizes on, the delta chip sits below the value.
+    static func stacksDeltaChip(_ size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
+    }
+
     var body: some View {
         HLCard(style: .elevated) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
@@ -58,15 +72,26 @@ struct HeroStrip: View {
         // header row top, so pinning this tick to the top of the Letzte-Messung
         // card's first row puts BOTH ticks at the SAME vertical position across
         // the two stacked cards (operator C3: the ticks must line up).
-        HStack(alignment: .top, spacing: HLSpace.xs) {
+        // T4 / public #15 — the value never breaks inside the number. A BP pair
+        // ("128/93") wrapped into "12 / 8/9 / 3" at a large text size, because
+        // the value had no line limit and the delta chip took the row's width.
+        // One line, scaled down when needed; from the accessibility sizes on,
+        // the chip moves BELOW the value instead of beside it. `AnyLayout` keeps
+        // the value's identity (and its matched-geometry zoom) across the switch.
+        let stacked = Self.stacksDeltaChip(dynamicTypeSize)
+        let row = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: HLSpace.xs))
+        row {
             HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
                 Text(formattedValue(latest)) // W-IMPL-MOTION-POLISH destination ↓
                     .font(.hlMetric(.largeTitle))
                     .foregroundStyle(HLText.primary)
                     .monospacedDigit()
-                    // v0.8.0 W6 — 0.6 → 0.75: keep the HeroStrip value legible at
-                    // large Dynamic Type instead of crushing it below its caption.
-                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
+                    // T4 — shrink (only when it must) rather than wrap.
+                    .minimumScaleFactor(Self.valueMinimumScaleFactor)
+                    .layoutPriority(1)
                     .matchedTileGeometry(
                         id: DashboardMatchedGeometryID.value(for: store.kind),
                         in: matchedNamespace
@@ -77,14 +102,19 @@ struct HeroStrip: View {
                 Text(store.displayUnit(units: units))
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            Spacer()
+            if !stacked {
+                Spacer(minLength: HLSpace.xs)
+            }
             if let delta = store.deltaVsPriorWindow {
                 // A360-5 — the prior-window delta + its label both convert for
                 // the re-unitable weight/BP families (purely multiplicative;
                 // glucose series deltas are already in the user's unit), so the
                 // chip never mixes a converted label with a canonical magnitude.
                 HeroDeltaChip(delta: store.convertDelta(delta, units: units), unit: store.displayUnit(units: units))
+                    .fixedSize()
             }
         }
         Text(latest.at, format: .dateTime.weekday(.wide).day().month().hour().minute())
@@ -168,7 +198,11 @@ struct ChartCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A360-5 C-1 — the scrub callout's unit label flips to the user's chosen
     /// unit (kg→lb, mmHg→kPa); the callout converts the value itself.
-    @Environment(\.unitPreferences) private var units
+    @Environment(\.unitPreferences) private var settingsUnits
+    /// #108 — glucose pinned to the unit the series arrived in.
+    private var units: UnitPreferences {
+        store.effectiveUnits(settingsUnits)
+    }
 
     let kind: MetricKind
     let store: ChartDetailStore
@@ -282,15 +316,22 @@ struct ChartCard: View {
     @ViewBuilder
     private var chartView: some View {
         let points = store.chartPoints
+        // #115 P2 — the plot, the y-axis and the audio graph read in the
+        // account's unit (`plotPoints`), the same unit as the hero and the
+        // stats row. The scrub callout still receives the canonical point
+        // (`points`) because it converts the value itself.
+        let plotted = store.plotPoints(units: units)
         if points.count >= 2 {
             Chart {
                 MetricChartContent.marks(
                     for: kind,
-                    points: points,
+                    points: plotted,
                     emphasisTint: emphasisTint
                 )
 
-                if let selectedDate, let selectedPoint = nearestPoint(to: selectedDate, in: points) {
+                if let selectedDate, let selectedPoint = nearestPoint(to: selectedDate, in: points),
+                   let plottedPoint = plotted.first(where: { $0.id == selectedPoint.id })
+                {
                     // Apple-Health-style scrubber: dashed vertical RuleMark
                     // anchored at the nearest point's x, with the floating
                     // callout pinned to top. The dashed pattern reads as
@@ -300,7 +341,7 @@ struct ChartCard: View {
                     // to the previous `.purple.opacity(0.55)` but sourced
                     // from the locked Theme-2.0 chart palette so any
                     // future accent swap propagates here automatically.
-                    RuleMark(x: .value("Auswahl", selectedPoint.at))
+                    RuleMark(x: .value("chart.scrubber.selection", selectedPoint.at))
                         .foregroundStyle(HLChartTints.seriesMid)
                         .lineStyle(StrokeStyle(
                             lineWidth: HLChartGrid.thresholdWidth,
@@ -318,22 +359,24 @@ struct ChartCard: View {
                                 isPersonalRecord: isPersonalRecord(selectedPoint, in: points),
                                 displayUnit: store.displayUnit(units: units)
                             )
+                            // #108 — the callout formats with the chart's units.
+                            .environment(\.unitPreferences, units)
                         }
                     // Highlighted point marker — emphasizes the value the
                     // callout describes. Larger than the per-metric symbols.
                     PointMark(
-                        x: .value("Auswahl", selectedPoint.at),
-                        y: .value("Wert", selectedPoint.value)
+                        x: .value("chart.scrubber.selection", plottedPoint.at),
+                        y: .value("Value", plottedPoint.value)
                     )
                     .foregroundStyle(HLChartTints.series)
                     .symbolSize(120)
-                    if let secondary = selectedPoint.secondary {
+                    if let secondary = plottedPoint.secondary {
                         // BP — emphasize both lines under the cursor. The
                         // diastolic dot matches the BP secondary-line tint
                         // (single accent at 70% opacity).
                         PointMark(
-                            x: .value("Auswahl", selectedPoint.at),
-                            y: .value("Diastolisch", secondary)
+                            x: .value("chart.scrubber.selection", selectedPoint.at),
+                            y: .value("Diastolic", secondary)
                         )
                         .foregroundStyle(HLChartTints.seriesMid)
                         .symbolSize(120)
@@ -358,7 +401,7 @@ struct ChartCard: View {
             // crash the chart. Linear mode falls through to the chart's
             // default domain (no `.chartYScale` modifier on that branch).
             .chartYScale(
-                domain: MetricChartMath.logDomain(for: points),
+                domain: MetricChartMath.logDomain(for: plotted),
                 type: store.useLogScale ? .log : .linear
             )
             // T2-3 (Theme-2.0): axis grid + labels follow the Tonal-Mono
@@ -377,8 +420,8 @@ struct ChartCard: View {
             }
             .chartYAxisLabel(position: .leading, alignment: .center) {
                 // W-B187 (#29) — server-resolved unit (glucose mg/dL | mmol/L);
-                // unchanged from `kind.unit` for un-stamped kinds.
-                Text(store.displayUnit)
+                // #115 P2 — the account's unit for every client-converted family.
+                Text(store.displayUnit(units: units))
                     .font(.hlCaption.weight(.semibold))
                     .foregroundStyle(HLText.secondary)
             }
@@ -402,9 +445,9 @@ struct ChartCard: View {
             .accessibilityChartDescriptor(
                 ChartDescriptor(
                     descriptor: ChartsAccessibility.makeDescriptor(
-                        for: store.displaySeries
-                            ?? MeasurementSeries(kind: kind, points: points, stats: MetricChartMath.statsFor(points)),
-                        kind: kind
+                        for: store.accessibilitySeries(units: units),
+                        kind: kind,
+                        unit: store.displayUnit(units: units)
                     )
                 )
             )
@@ -508,21 +551,12 @@ struct StatsRow: View {
         guard let kind else {
             return v.formatted(.number.precision(.fractionLength(0 ... 1)))
         }
-        switch kind.unitFamily {
-        case .weight:
-            // Match the hero/list canonical 1-dp (NOT `0...1`, which dropped the
-            // trailing `.0` for whole values and disagreed with the hero).
-            return units.convertWeight(v).formatted(.number.precision(.fractionLength(1)))
-        case .bloodPressure:
-            // Match `MetricValueFormatter.formatBloodPressure` per-leg precision:
-            // mmHg integer-grained, kPa 1-dp.
-            let converted = units.convertBloodPressure(v)
-            return units.bloodPressure == .mmHg
-                ? converted.safeServerIntString()
-                : converted.formatted(.number.precision(.fractionLength(1)))
-        case .glucose, .none:
-            // Glucose already server-converted; `.none` keeps canonical value.
-            return v.formatted(.number.precision(.fractionLength(0 ... 1)))
+        // #115 P2 — one central account-unit formatter. Series glucose is
+        // already server-converted (passed through); every other family
+        // converts from canonical SI; the identity branch keeps 0…1 dp.
+        // BP renders one leg at a time here: mmHg integer, kPa 1-dp.
+        return MetricValueFormatter.account(v, kind: kind, units: units, glucose: .seriesPreConvertedGlucose) {
+            $0.formatted(.number.precision(.fractionLength(0 ... 1)))
         }
     }
 }

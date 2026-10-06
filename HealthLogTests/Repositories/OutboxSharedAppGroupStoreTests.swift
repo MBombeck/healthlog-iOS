@@ -24,7 +24,7 @@ import Testing
 ///   2. an op enqueued through the extension's `IntentDependencies` path is
 ///      visible to an app-side `OutboxQueue` reading the same store, and a
 ///      subsequent app-side drain removes it.
-@Suite("Outbox shared App Group store (audit-v0162 H2)", .serialized)
+@Suite("Outbox shared App Group store (audit-v0162 H2)", .serialized, .mockURLSession)
 @MainActor
 struct OutboxSharedAppGroupStoreTests {
     // MARK: - Helpers
@@ -63,7 +63,7 @@ struct OutboxSharedAppGroupStoreTests {
             appVersion: "0.1.0",
             buildNumber: "1"
         )
-        MockURLProtocol.handler = behaviour
+        MockURLProtocol.install(behaviour)
         return APIClient(environment: env, keychain: InMemoryKeychain(), sessionConfiguration: .mock())
     }
 

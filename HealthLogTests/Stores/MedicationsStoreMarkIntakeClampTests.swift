@@ -15,7 +15,7 @@ import Testing
 /// write path). The scheduled slot is pinned in 2024 so it is unconditionally
 /// in the past relative to the store's internal `Date.now` — the clamp must
 /// therefore send the 2024 scheduled instant, never the current wall-clock.
-@Suite("MedicationsStore — mark(intake:) clamps a past scheduled slot (H3)", .serialized)
+@Suite("MedicationsStore — mark(intake:) clamps a past scheduled slot (H3)", .serialized, .mockURLSession)
 struct MedicationsStoreMarkIntakeClampTests {
     // 2024-05-01T08:00:00Z — a slot unconditionally in the past at test time.
     private static let scheduled = Date(timeIntervalSince1970: 1_714_550_400)
@@ -77,7 +77,7 @@ struct MedicationsStoreMarkIntakeClampTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = Self.bodyData(req)
             let body = """
             {"data":{"id":"intake-1","medicationId":"med-1",\
@@ -123,7 +123,7 @@ struct MedicationsStoreMarkIntakeClampTests {
     func voidMarkRollsBackOnNonRetriable() async throws {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(
                     url: req.url!,
@@ -155,7 +155,7 @@ struct MedicationsStoreMarkIntakeClampTests {
     @Test("mark(intake:) produces the same optimistic patch as markIntakeQuick")
     @MainActor
     func voidMarkParityWithQuickMark() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = """
             {"data":{"id":"intake-1","medicationId":"med-1",\
             "scheduledFor":"2024-05-01T08:00:00Z","takenAt":"2024-05-01T08:00:00Z",\

@@ -73,7 +73,7 @@ struct MedicationQuickIntakeOptions: Equatable {
             .sorted { $0.scheduledAt < $1.scheduledAt }
             .compactMap { intake -> IntakeOption? in
                 guard let med = medications.first(where: { $0.id == intake.medicationId }),
-                      med.active else { return nil }
+                      med.active, med.offersIntakeActions else { return nil }
                 return IntakeOption(intake: intake, medication: med)
             }
         // B6 — the second question. A PRN medication has no slot, so it is
@@ -82,7 +82,9 @@ struct MedicationQuickIntakeOptions: Equatable {
         // the due list under a materialised slot.
         let dueMedicationIDs = Set(due.map(\.medication.id))
         let asNeeded = medications
-            .filter { $0.active && $0.asNeeded && !dueMedicationIDs.contains($0.id) }
+            // v1.39.1 (#1033) — a medication kept as a record offers no intake;
+            // v1.39.4 (#1040) — nor one the server calls not actionable today.
+            .filter { $0.active && $0.asNeeded && $0.offersIntakeActions && !dueMedicationIDs.contains($0.id) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         return MedicationQuickIntakeOptions(due: due, asNeeded: asNeeded)
     }

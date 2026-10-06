@@ -55,7 +55,9 @@ struct EditMedicationFormStateTests {
         #expect(state.times.first?.minute == 0)
     }
 
-    @Test("Unknown category string falls back to .other (defensive against schema drift)")
+    /// R1 (server v1.39.4 #1041) — this used to pin `.other`, which is exactly
+    /// how an edit stored OTHER over a category the app had no row for.
+    @Test("Unknown category string opens as itself, not as .other")
     func prefillUnknownCategoryDefaultsToOther() {
         let medication = Medication(
             id: "srv-1",
@@ -66,7 +68,8 @@ struct EditMedicationFormStateTests {
             schedule: MedicationSchedule(times: [TimeOfDay(hour: 8, minute: 0)])
         )
         let state = EditMedicationFormState(from: medication)
-        #expect(state.category == .other)
+        #expect(state.category == nil)
+        #expect(state.unknownCategoryLabel == "Future New Category")
     }
 
     @Test("Nil treatmentClass defaults to .generic")

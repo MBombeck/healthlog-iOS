@@ -16,7 +16,7 @@ import Testing
 ///
 /// Serialized because `MockURLProtocol.handler` is shared process-wide state.
 @MainActor
-@Suite("CoachConversationHistoryStore — forget (delete) path", .serialized)
+@Suite("CoachConversationHistoryStore — forget (delete) path", .serialized, .mockURLSession)
 struct CoachConversationHistoryStoreTests {
     private func makeStore() -> CoachConversationHistoryStore {
         let env = AppEnvironment(
@@ -33,7 +33,7 @@ struct CoachConversationHistoryStoreTests {
 
     /// Seed the store's rail with a known three-row list via the list endpoint.
     private func seed(_ store: CoachConversationHistoryStore) async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":{"conversations":[\
             {"id":"c1","title":"Sleep","createdAt":"2026-06-10T08:00:00.000Z",\
@@ -56,7 +56,7 @@ struct CoachConversationHistoryStoreTests {
         await seed(store)
         #expect(store.conversations.count == 3)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // 200 + `{}` so EmptyResponse decodes (empty Data() is not valid JSON).
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (http, Data("{}".utf8))
@@ -72,7 +72,7 @@ struct CoachConversationHistoryStoreTests {
         let store = makeStore()
         await seed(store)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = """
             {"data":null,"error":"Not found"}
             """

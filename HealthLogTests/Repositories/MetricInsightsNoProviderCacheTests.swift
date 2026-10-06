@@ -14,7 +14,7 @@ import Testing
 /// `hasReadyText`, was written through the daily key, and then SERVED from
 /// cache for the rest of the Berlin day — so the metric sub-page kept showing
 /// the stale hint even after the server-side consent state recovered.
-@Suite("MetricInsightsRepository — no-provider bodies bypass the daily cache", .serialized)
+@Suite("MetricInsightsRepository — no-provider bodies bypass the daily cache", .serialized, .mockURLSession)
 struct MetricInsightsNoProviderCacheTests {
     private final class StubReach: ReachabilityProviding, @unchecked Sendable {
         var isOnlineStream: AsyncStream<Bool> {
@@ -66,7 +66,7 @@ struct MetricInsightsNoProviderCacheTests {
         let repo = MetricInsightsRepository(api: api, swr: coordinator)
 
         let counter = RequestCounter()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             counter.bump()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -98,7 +98,7 @@ struct MetricInsightsNoProviderCacheTests {
             payload: JSONEncoder.hlDefault.encode(poisoned)
         )
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 readyBody(text: "Dein Blutdruck liegt stabil im Zielbereich.")

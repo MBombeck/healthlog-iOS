@@ -111,113 +111,6 @@ public struct ComplianceSnapshot: Codable, Sendable, Equatable {
             localized: "Medication compliance today, \(takenToday) of \(scheduledToday) taken"
         )
     }
-
-    /// **v0.5.4.3 HP-6.** Operator screenshot (build 17) showed
-    /// "Medikamenten-Compliance / Heute nichts geplant" on a Dashboard
-    /// where intakes were demonstrably scheduled — the (since-deleted,
-    /// v0.14.8 AUDIT-HOME M6) `UpcomingMedicationsCard` rendered them right
-    /// above on the same surface. Root cause: the
-    /// server's `compliance.scheduledToday` aggregator uses a different
-    /// window than `/api/medications/intake?scope=today` (UTC-bucketed
-    /// vs. user-tz day-of), and the early-morning operator hit the
-    /// window mismatch every refresh.
-    ///
-    /// Mitigation without a server roundtrip: synthesise a corrected
-    /// snapshot from `todayIntakes` (the same payload `UpcomingMeds` is
-    /// authoritative on) for any user-tz calendar-day intake whose
-    /// parent medication is still `active`. We never *narrow* the
-    /// server's view — only widen it when the local view sees more.
-    /// If both sources see zero we keep the server snapshot so the
-    /// "nothing scheduled" branch still renders for truly empty days.
-    ///
-    /// - Parameters:
-    ///   - server: snapshot from `DashboardSummary.compliance`.
-    ///   - todayIntakes: `MedicationsStore.todayIntakes` (already
-    ///     server-canonical for the today scope per `route.ts:94-108`).
-    ///   - activeMedicationIDs: ids of `active == true` meds — intakes
-    ///     for archived meds don't count toward "planned today".
-    ///   - now: clock anchor (test-injectable).
-    ///   - calendar: used for `startOfDay` boundaries (test-injectable).
-    /// - Parameter medicationsLoaded: `true` once `MedicationsStore` has
-    ///   hydrated its medication list from cache or network
-    ///   (`MedicationsStore.hasLoadedMedications`). Distinguishes a genuine COLD
-    ///   START (meds not yet loaded → the local view is empty only because it has
-    ///   no data → trust the server snapshot) from "loaded, legitimately 0 slots
-    ///   scheduled today" (→ the empty day-anchored local view is authoritative,
-    ///   so a stale non-day-anchored server count must NOT leak through). This is
-    ///   the v0.14.8 INV-home-compliance-slot defence-in-depth: even if a stale
-    ///   `summary.compliance` somehow reaches here (e.g. a cache row that has not
-    ///   yet rolled), the reconciler prefers the empty local truth once meds are
-    ///   loaded rather than rendering "2 von 2 genommen".
-    /// - Returns: the snapshot a renderer should consume. When the local
-    ///   user-tz view produced any slot for today (`localScheduled > 0`) the
-    ///   local pair is returned verbatim — it is internally consistent
-    ///   (`taken ≤ scheduled` always), tz-correct, dedup-merged, and carries
-    ///   the optimistic-taken count from `markIntakeQuick`. When the local view
-    ///   is empty AND meds are loaded, the empty local pair (`0/0`) is returned
-    ///   so a genuinely-nothing-scheduled day renders the calm empty state rather
-    ///   than a stale server count. Only on a genuine cold start
-    ///   (`medicationsLoaded == false`) does it fall back to `server` so the
-    ///   first-paint "nothing scheduled" / cold-cache path still renders.
-    public static func reconciled(
-        server: ComplianceSnapshot,
-        todayIntakes: [MedicationIntake],
-        activeMedicationIDs: Set<String>,
-        medicationsLoaded: Bool,
-        now: Date = .now,
-        calendar: Calendar = .current
-    ) -> ComplianceSnapshot {
-        let startOfToday = calendar.startOfDay(for: now)
-        guard let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) else {
-            return server
-        }
-        let dayIntakes = todayIntakes.filter { intake in
-            guard activeMedicationIDs.contains(intake.medicationId) else { return false }
-            return intake.scheduledAt >= startOfToday && intake.scheduledAt < endOfToday
-        }
-        let localScheduled = dayIntakes.count
-        // **v0.14.1 DOSE-SAFETY.** A `.taken` intake whose `scheduledAt` is in
-        // the FUTURE must never count toward the taken total. The server can
-        // stamp a not-yet-due slot `taken` (the ±6h afternoon→19:00 explicit-
-        // write snap in `resolve-slot-instant.ts`, filed server-side), and a
-        // clock-skew edge could surface one too. Counting it makes
-        // `taken == scheduled` → the card reads "alles eingenommen" while the
-        // evening dose is still pending → the real dose gets masked. The
-        // invariant "a dose due in the future cannot have been taken" is the
-        // client-side dose-safety backstop. See
-        // `.planning/v0148-cycle-marathon/INV-med-phantom-taken.md`.
-        let localTaken = dayIntakes.filter { $0.status == .taken && $0.scheduledAt <= now }.count
-        // v0.10 R5: trust the local user-tz view as the single source of
-        // truth for the count. The previous per-axis `max(server, local)`
-        // merge (v0.5.4.3 HP-6 / v0.8.1 WC) was unsound across the UTC/user-tz
-        // seam: `max(scheduledA, scheduledB)` is not the count of any single
-        // coherent day, so the server's UTC-bucketed `scheduledToday` could
-        // leak a phantom extra dose (the "1 von 3" twice-daily Lisinopril bug)
-        // while `taken > scheduled` invariants were never preserved. The local
-        // pair is tz-correct, dedup-merged, and carries the optimistic-taken
-        // count (`markIntakeQuick` patches `todayIntakes` in place), so the
-        // never-narrow optimistic behaviour is preserved without `max`.
-        guard localScheduled > 0 else {
-            // No local slot for today. Two cases, distinguished by
-            // `medicationsLoaded` (v0.14.8 INV-home-compliance-slot):
-            //   • COLD START (meds not loaded): the local view is empty only
-            //     because it has no data yet — keep the server snapshot so the
-            //     cold-cache first-paint / "nothing scheduled" path renders.
-            //   • LOADED, 0 today-slots: the empty day-anchored local view is
-            //     authoritative (genuinely nothing scheduled today, or all slots
-            //     are on a different day). Prefer the empty local pair (0/0) over
-            //     the server count so a stale non-day-anchored
-            //     `summary.compliance` can never render a phantom "2 von 2
-            //     genommen" — the calm empty state shows instead.
-            return medicationsLoaded
-                ? ComplianceSnapshot(scheduledToday: 0, takenToday: 0)
-                : server
-        }
-        return ComplianceSnapshot(
-            scheduledToday: localScheduled,
-            takenToday: localTaken
-        )
-    }
 }
 
 public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
@@ -371,11 +264,16 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
     }
 }
 
-public enum TrendIndicator: String, Codable, Sendable {
+public enum TrendIndicator: String, Codable, Sendable, TolerantServerEnum {
     case up
     case down
     case flat
+    /// Also the landing case for a trend token this build does not know
+    /// (#115 · 1.7). The decode used to throw and fail the whole tile.
     case unknown
+
+    public static let unknownFallback = TrendIndicator.unknown
+    public static let wireVocabulary: StaticString = "dashboard trend"
 }
 
 public extension DashboardMetric {

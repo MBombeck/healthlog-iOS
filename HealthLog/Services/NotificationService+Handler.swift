@@ -88,6 +88,9 @@ import Foundation
             if payload?.eventType == Self.categoryMedication {
                 await refreshBadgeFromAttachedStoreIfAvailable()
             }
+            // v1.39.2 — a check-up reminder just went out; re-read what the
+            // server now says is due (it may stay due, or roll on if weekly).
+            await refreshRemindersAfterMeasurementReminder(payload: payload)
             // v0.14.1 notifications-bug H2 — the evening mood reminder is now a
             // repeating daily trigger (no background re-arm), so the "already
             // logged today → don't nag" gate lives here instead of at scheduling
@@ -230,6 +233,7 @@ import Foundation
                     // push carries none. Shared with the "Erledigt" action so
                     // the routing stays single-source.
                     handleMeasurementBodyTap(payload: payload)
+                    await refreshRemindersAfterMeasurementReminder(payload: payload)
                 } else if let medicationId = Self.validatedMedicationId(payload?.medicationId),
                           let url = URL(string: "healthlog://medications/\(medicationId)")
                 {
@@ -247,6 +251,7 @@ import Foundation
                     deepLinks.handle(url)
                 }
             }
+            await topUpAfterReminderAction(actionID)
         }
 
         @MainActor

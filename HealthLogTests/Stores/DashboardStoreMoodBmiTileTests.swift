@@ -23,7 +23,7 @@ import Testing
 /// Real `APIClient` + `MockURLProtocol` stub throughout (never a mock server) —
 /// per the PROJECT_GUIDE.md Outbox/schema-drift rule and the existing
 /// `DashboardStoreSeriesFallbackTests` template.
-@Suite("Dashboard mood + BMI tile data (b241)", .serialized)
+@Suite("Dashboard mood + BMI tile data (b241)", .serialized, .mockURLSession)
 struct DashboardStoreMoodBmiTileTests {
     @MainActor
     private func makeAPIClient() -> APIClient {
@@ -228,7 +228,7 @@ struct DashboardStoreMoodBmiTileTests {
         let store = DashboardStore(repo: DashboardRepository(api: api))
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let empty = emptyMeasurementsPayload()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -260,7 +260,7 @@ struct DashboardStoreMoodBmiTileTests {
         let store = DashboardStore(repo: DashboardRepository(api: api))
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let empty = emptyMeasurementsPayload()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -313,7 +313,7 @@ struct DashboardStoreMoodBmiTileTests {
             lastUpdated: base
         )
         let empty = emptyMeasurementsPayload()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -362,7 +362,7 @@ struct DashboardStoreMoodBmiTileTests {
                 + bmiRowIso + "\"}]}}").utf8
         )
         nonisolated(unsafe) var capturedTypeParams: [String] = []
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -406,7 +406,7 @@ struct DashboardStoreMoodBmiTileTests {
         )
         let emptyWide = emptyMeasurementsPayload()
         nonisolated(unsafe) var seriesCallCount = 0
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,

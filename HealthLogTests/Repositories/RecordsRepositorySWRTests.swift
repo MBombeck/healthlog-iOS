@@ -22,7 +22,7 @@ import Testing
 ///   by a fresh-enough cached row,
 /// - a filtered / paged read bypasses the cache (network-direct — no per-filter
 ///   cache-key explosion).
-@Suite("Records repos SWR cache-first (QOL-OFF-2)", .serialized)
+@Suite("Records repos SWR cache-first (QOL-OFF-2)", .serialized, .mockURLSession)
 struct RecordsRepositorySWRTests {
     private struct StubReach: ReachabilityProviding, @unchecked Sendable {
         let online: Bool
@@ -65,7 +65,7 @@ struct RecordsRepositorySWRTests {
         let swr = makeSWR(cache: cache, online: true)
         let repo = try LabsRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — only OUR route counts.
             if req.targets("/api/labs") { calls += 1 }
             return (
@@ -83,7 +83,7 @@ struct RecordsRepositorySWRTests {
     func labsOfflineServesCache() async throws {
         let cache = try SWRCache(modelContainer: SWRCache.makeInMemory())
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/labs") { calls += 1 }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -105,7 +105,7 @@ struct RecordsRepositorySWRTests {
         let swr = makeSWR(cache: cache, online: true)
         let repo = try LabsRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/labs") { calls += 1 }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -126,7 +126,7 @@ struct RecordsRepositorySWRTests {
         struct Probe: Codable, Sendable { let x: Int }
         try await cache.write(.labsResults, payload: JSONEncoder.hlDefault.encode(Probe(x: 1)))
         #expect(await cache.read(.labsResults, as: Probe.self) != nil)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Self.envelope(#"{"deleted":true}"#)
@@ -144,7 +144,7 @@ struct RecordsRepositorySWRTests {
         let swr = makeSWR(cache: cache, online: true)
         let repo = try AllergiesRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var listCalls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/allergies", method: "GET") { listCalls += 1 }
             let body = req.httpMethod == "DELETE" ? #"{"deleted":true}"# : "[]"
             return (
@@ -167,7 +167,7 @@ struct RecordsRepositorySWRTests {
         let swr = makeSWR(cache: cache, online: true)
         let repo = try AllergiesRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/allergies") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.envelope("[]"))
         }
@@ -185,7 +185,7 @@ struct RecordsRepositorySWRTests {
         let swr = makeSWR(cache: cache, online: true)
         let repo = try FamilyHistoryRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var listCalls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/family-history", method: "GET") { listCalls += 1 }
             let body = req.httpMethod == "DELETE" ? #"{"deleted":true}"# : "[]"
             return (
@@ -210,7 +210,7 @@ struct RecordsRepositorySWRTests {
         let swr = makeSWR(cache: cache, online: true)
         let repo = try MentalHealthRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/mental-health/assessments") { calls += 1 }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -229,7 +229,7 @@ struct RecordsRepositorySWRTests {
         let swr = makeSWR(cache: cache, online: true)
         let repo = try MentalHealthRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var calls = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets("/api/mental-health/assessments") { calls += 1 }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

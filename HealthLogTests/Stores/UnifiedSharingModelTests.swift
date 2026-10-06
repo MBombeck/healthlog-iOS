@@ -101,7 +101,7 @@ private final class BodyBox: @unchecked Sendable {
 /// over the real `APIClient` with a stubbed `URLSession` (`MockURLProtocol`) —
 /// never a mock server (PROJECT_GUIDE.md). `.serialized` because the handler is
 /// process-global.
-@Suite("UnifiedSharingModel", .serialized)
+@Suite("UnifiedSharingModel", .serialized, .mockURLSession)
 @MainActor
 struct UnifiedSharingModelTests {
     private func makeAPI() -> APIClient {
@@ -169,7 +169,7 @@ struct UnifiedSharingModelTests {
 
     @Test("Leere Vorauswahl bleibt — „Alles auswählen“ ist ein Tap, kein Zustand")
     func emptyDefaultWithSelectAll() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return UnifiedFixtures.ok(req, UnifiedFixtures.capabilitiesJSON())
             }
@@ -224,7 +224,7 @@ struct UnifiedSharingModelTests {
     @Test("Die Auswahl IST das gespeicherte Report-Profil — geladen und zurückgeschrieben")
     func selectionIsTheProfile() async {
         let captured = BodyBox()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.url?.path == "/api/meta/capabilities" {
                 return UnifiedFixtures.ok(req, UnifiedFixtures.capabilitiesJSON())
             }

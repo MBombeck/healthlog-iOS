@@ -68,6 +68,9 @@ struct AchievementsScreen: View {
         // W-B184 — WHOOP-style pull-to-refresh (custom glyph + checkmark + one
         // success haptic; the handshake driving the checkmark runs in the modifier).
         .hlPullToRefresh { await store.load() }
+        // K1 — the banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing (H2).
+        .hlReserveErrorBannerSpace(store.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: store.error) {
                 Task { await store.load() }
@@ -229,7 +232,7 @@ struct AchievementsScreen: View {
 
     private var percentLabel: String {
         guard store.totalPoints > 0 else { return HLNumberFormat.percent(0) }
-        let p = Int(progressValue * 100)
-        return HLNumberFormat.percent(p)
+        // F1 — rounded, not truncated (`Int(x * 100)` read 2/3 as 66 %).
+        return HLNumberFormat.percent(fraction: progressValue)
     }
 }

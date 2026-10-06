@@ -27,7 +27,7 @@ import Testing
 ///     on-device fallback (`DoctorReportScreen.generate()`) can take over,
 ///   - `422 export.selection.unknown_leaf` arriving as the typed contract
 ///     mismatch rather than a generic server error.
-@Suite("DoctorReportService — P3 canonical server-PDF route", .serialized)
+@Suite("DoctorReportService — P3 canonical server-PDF route", .serialized, .mockURLSession)
 struct DoctorReportServiceTests {
     private func makeAPI(keychain: InMemoryKeychain = InMemoryKeychain()) -> APIClient {
         let env = AppEnvironment(
@@ -71,7 +71,7 @@ struct DoctorReportServiceTests {
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedAccept: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedAccept = req.value(forHTTPHeaderField: "Accept")
@@ -124,7 +124,7 @@ struct DoctorReportServiceTests {
     func emptySelectionIsSent() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = Self.body(of: req)
             let http = HTTPURLResponse(
                 url: req.url!,
@@ -148,7 +148,7 @@ struct DoctorReportServiceTests {
     @Test("422 export.selection.unknown_leaf surfaces as the typed contract mismatch")
     func unknownLeafIsTyped() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
             let body = """
             {"error":"Unknown selection leaf: NOPE","meta":{"errorCode":"export.selection.unknown_leaf"}}
@@ -164,7 +164,7 @@ struct DoctorReportServiceTests {
     @Test("non-pdf Content-Type is rejected (guards a drifted response)")
     func contentTypeGuard() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(
                 url: req.url!,
                 statusCode: 200,
@@ -182,7 +182,7 @@ struct DoctorReportServiceTests {
     @Test("a server error bubbles as HLError so the on-device fallback can take over")
     func serverErrorBubbles() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let http = HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
             return (http, Data("{}".utf8))
         }

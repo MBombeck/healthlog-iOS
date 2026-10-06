@@ -267,7 +267,7 @@
 
             // Preservation: the visible metric label is already pure, localised
             // and never empty — it is exactly what the announcement must carry.
-            #expect(MetricTypeLocalisation.label(forType: "WEIGHT") == "Weight")
+            #expect(MetricTypeLocalisation.label(forType: "WEIGHT", locale: Locale(identifier: "en")) == "Weight")
             #expect(!MetricTypeLocalisation.label(forType: "SOMETHING_NEW").isEmpty, "unknown types still get a label")
             #expect(violations.isEmpty, "EXPECTED_RED: 08-02 accessibility celebration omitted its visible metric")
         }

@@ -196,7 +196,7 @@ public struct HLRing: View {
         .aspectRatio(1, contentMode: .fit)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabelText)
-        .accessibilityValue(Text(value ?? String(localized: "\(Int(progress * 100)) percent")))
+        .accessibilityValue(Text(value ?? String(localized: "\(HLNumberFormat.percentValue(ofFraction: progress)) percent")))
     }
 
     /// Resolves the VoiceOver label: an explicit override first, else the

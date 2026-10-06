@@ -32,34 +32,43 @@ extension AppContainer {
         }
     }
 
-    /// **W-B183 coherence — aggregate the SERVER ledger adherence into the one
-    /// account-level percentage the compliance widget's ring tracks.**
+    /// **The account-level percentage the compliance widget's ring tracks —
+    /// only when the server has one to give (#115 · 1.3).**
     ///
-    /// The widget shows a single ring for the whole account, but the server's
-    /// canonical compliance lives PER medication (`complianceCardSnapshots`,
-    /// fetched from `GET /api/medications/{id}/compliance` — the same value the
-    /// in-app card + `LedgerHistorySection` paint). We average the per-med
-    /// SHORT-window server rate (the headline rate the card shows first) across
-    /// the active medications that have a server value, rounded to an integer.
+    /// The server's canonical compliance lives PER medication
+    /// (`complianceCardSnapshots`, from `GET /api/medications/compliance`).
+    /// Until 1.0.3 this averaged the per-medication headline rates unweighted,
+    /// so a weekly injection with one missed dose weighed as much as a
+    /// twice-daily tablet with sixty doses — a number no server computes. The
+    /// server publishes no account-level rate, so:
     ///
-    /// Returns `nil` when no active medication has a server compliance value yet
-    /// (cold cache / offline / PRN-only catalog) so the widget falls back to the
-    /// today-count fraction instead of painting a recomputed number. We NEVER
-    /// recompute or dedup compliance here — we only read + average the server's
-    /// already-canonical per-med rates.
-    private static func aggregateServerCompliancePercent(
+    /// - exactly ONE applicable medication with a server value → its rate
+    ///   (that rate IS the account rate);
+    /// - otherwise → `nil`, and the widget ring shows the literal today
+    ///   count ("x of y doses") it already shows as its centre label.
+    ///
+    /// Not-applicable medications (`applicable: false`, NO_LOCAL_SCHEDULE)
+    /// carry zero placeholders and never count. The server issue for an
+    /// account-level rate is in the B2 report.
+    static func aggregateServerCompliancePercent(
         _ store: MedicationsStore
     ) -> Int? {
-        let activeIDs = Set(store.medications.filter(\.active).map(\.id))
-        let rates: [Int] = store.complianceCardSnapshots
-            .filter { activeIDs.contains($0.key) }
-            // The card's first (short) display row is the headline server rate;
-            // `displayRows` already prefers the server cadence-scaled window and
-            // falls back to the 7-day rate — the SAME row the in-app card paints.
+        serverCompliancePercent(
+            activeIDs: Set(store.medications.filter(\.active).map(\.id)),
+            snapshots: store.complianceCardSnapshots
+        )
+    }
+
+    /// Pure core of ``aggregateServerCompliancePercent(_:)``.
+    static func serverCompliancePercent(
+        activeIDs: Set<String>,
+        snapshots: [String: MedicationsStore.ComplianceCardSnapshot]
+    ) -> Int? {
+        let rates: [Int] = snapshots
+            .filter { activeIDs.contains($0.key) && $0.value.applicable }
             .compactMap { $0.value.displayRows.first?.rate }
-        guard !rates.isEmpty else { return nil }
-        let mean = Double(rates.reduce(0, +)) / Double(rates.count)
-        return Int(mean.rounded())
+        guard rates.count == 1 else { return nil }
+        return rates.first
     }
 
     /// **v0.10.0 W-Mood-B** — drive the interactive mood widget glance from

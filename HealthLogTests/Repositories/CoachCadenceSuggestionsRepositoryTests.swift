@@ -18,7 +18,7 @@ import Testing
 /// turn (covered in `CoachServerFallbackTests`). Real `APIClient` over a
 /// `MockURLProtocol` session (PROJECT_GUIDE.md doctrine — never a hand-rolled mock
 /// server) so envelope-shape drift is caught.
-@Suite("CoachCadenceSuggestionsRepository", .serialized)
+@Suite("CoachCadenceSuggestionsRepository", .serialized, .mockURLSession)
 struct CoachCadenceSuggestionsRepositoryTests {
     private struct RecordedCall {
         let method: String
@@ -57,7 +57,7 @@ struct CoachCadenceSuggestionsRepositoryTests {
     func actRoute() async throws {
         let repo = makeRepo()
         let log = RequestLog()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // MockURLProtocol surfaces the request body via httpBodyStream on some
             // paths; read the raw body the client encoded.
             let body = req.httpBody ?? req.httpBodyStream.map { stream -> Data in
@@ -92,7 +92,7 @@ struct CoachCadenceSuggestionsRepositoryTests {
     @Test("act surfaces a 404 (route not live) as a typed server error")
     func actNotLive() async throws {
         let repo = makeRepo()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!,
                 Data("{\"error\":{\"message\":\"not found\"}}".utf8)

@@ -711,39 +711,47 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
         self.glucoseContext = glucoseContext
     }
 
-    /// **v1.27.6 (#42) / v1.28.11 (#46) — server-owned rows are read-only.** A
-    /// `COMPUTED` measurement (e.g. a PHQ-9 / GAD-7 screening sum score,
-    /// re-attributed from `MANUAL` by server migration 0225) is derived
-    /// server-side; the provider-ingest sources `STRAVA` / `OURA` / `POLAR` /
-    /// `NIGHTSCOUT` are wearable/CGM rows the server owns and never accepts on a
-    /// client write path (not in `WRITABLE_MEASUREMENT_SOURCES`); `EXTERNAL`
-    /// (#106) is the same for rows an ingest Bearer token wrote. For all of
-    /// these, hand-editing or deleting the value is meaningless / would be
-    /// rejected, so the list surface gates its Edit/Delete affordances off when
-    /// this is `true` — the row renders but never offers a value-edit path.
+    /// **v1.27.6 (#42) / v1.28.11 (#46) — server-owned rows are read-only.** A `COMPUTED` measurement
+    /// (e.g. a PHQ-9 / GAD-7 screening sum score, re-attributed from `MANUAL` by server migration 0225) is
+    /// derived server-side; the provider-ingest sources `STRAVA` / `OURA` / `POLAR` / `NIGHTSCOUT` are
+    /// wearable/CGM rows the server owns and never accepts on a client write path (not in
+    /// `WRITABLE_MEASUREMENT_SOURCES`). For all of these, hand-editing or deleting the value is meaningless /
+    /// would be rejected, so the list surface gates its Edit/Delete affordances off when this is `true` — the
+    /// row renders but never offers a value-edit path.
     ///
-    /// **The server rule this mirrors**
-    /// (`src/app/api/measurements/[id]/route.ts:126-141`): a value edit is
-    /// refused with 409 `measurement.update.server_owned_source` whenever the
-    /// stored `source` is not in `WRITABLE_MEASUREMENT_SOURCES`
-    /// (`{MANUAL, APPLE_HEALTH}`). `TELEGRAM` and `MCP` are absent from that
-    /// list, so the server refuses their value edits exactly as it does
-    /// `COMPUTED`'s — they belong in this column. Two limits of the mirror are
-    /// deliberate and pre-date these cases: the server still allows a
+    /// **The server rule this mirrors** (`src/app/api/measurements/[id]/route.ts`,
+    /// `PUT`): a value edit is refused with 409
+    /// `measurement.update.server_owned_source` whenever the stored `source` is
+    /// outside the set the edit gate reads. Up to v1.39.0 that set is
+    /// `WRITABLE_MEASUREMENT_SOURCES` (`{MANUAL, APPLE_HEALTH}`). `TELEGRAM` and
+    /// `MCP` are absent from it, so the server refuses their value edits exactly
+    /// as it does `COMPUTED`'s — they belong in this column. Two limits of the
+    /// mirror are deliberate and pre-date these cases: the server still allows a
     /// `measuredAt` / note edit on a server-owned row, and its DELETE handler
-    /// (`route.ts:250`) carries no source gate at all, so this flag is
-    /// stricter than the server on both counts.
+    /// carries no source gate at all, so this flag is stricter than the server on
+    /// both counts.
+    ///
+    /// **#111 / server PR #892 — `EXTERNAL` is the owner's to correct.** A row
+    /// written through the `measurements:write` ingest token (Home Assistant
+    /// bridge, a scale script) carries `EXTERNAL`. No client may *name* that
+    /// source — it stays out of `WRITABLE_MEASUREMENT_SOURCES`, which the server
+    /// publishes as `ingest.writeAllowlist` — but the hardware behind the token is
+    /// the person's own, so #892 moves the edit gate onto a separate
+    /// `USER_CORRECTABLE_MEASUREMENT_SOURCES` that includes it. The value stays
+    /// editable, and so it sits in the editable column. (Nothing here ever sends
+    /// `source` back: the `PUT` body is value / `measuredAt` / notes only.)
     ///
     /// Exhaustive over `MeasurementSource` on purpose: adding a source forces a
     /// decision here (compiler-enforced), so a new read-only ingest can't slip
     /// through as accidentally editable. `whoop` / `fitbit` / `googleHealth` stay
     /// in the editable column to preserve their pre-#46 behaviour, even though
-    /// the server refuses their value edits too.
+    /// the server refuses their value edits too. #115 R3: a synthetic id
+    /// (`day:` / `hour:` / `sleep:`) names no row, whatever its source.
     var isServerDerivedReadOnly: Bool {
-        switch source {
-        case .computed, .strava, .oura, .polar, .nightscout, .external,
-             .telegram, .mcp: true
-        case .manual, .appleHealth, .withings, .whoop, .fitbit, .googleHealth, .import_: false
+        if isSyntheticServerRow { return true }
+        return switch source {
+        case .computed, .strava, .oura, .polar, .nightscout, .telegram, .mcp: true
+        case .manual, .appleHealth, .external, .withings, .whoop, .fitbit, .googleHealth, .import_: false
         // Audit B-4 — a source we cannot name is server-owned until proven
         // otherwise: `WRITABLE_MEASUREMENT_SOURCES` is `{MANUAL, APPLE_HEALTH}`
         // and every value added since is outside it, so offering a value edit
@@ -855,9 +863,12 @@ public enum MeasurementSource: String, Codable, Sendable {
     /// Client-Write-Pfad.
     case mcp
     /// Server-Wire-Form: `EXTERNAL` (Server-PR #892, iOS #106). Zeilen aus einem
-    /// Ingest-Bearer-Token (Home-Assistant-Bridges, Waagen-Skripte).
-    /// Server-owned read-only ingest — kein Client-Write-Pfad (nicht in
-    /// `WRITABLE_MEASUREMENT_SOURCES`).
+    /// Ingest-Bearer-Token (Home-Assistant-Bridges, Waagen-Skripte). Kein
+    /// Client darf diese Source *nennen* (nicht in
+    /// `WRITABLE_MEASUREMENT_SOURCES`), aber der Wert gehört der Person und
+    /// bleibt korrigierbar (#111, Server-PR #892:
+    /// `USER_CORRECTABLE_MEASUREMENT_SOURCES`), siehe
+    /// ``Measurement/isServerDerivedReadOnly``.
     case external
     case import_ = "import"
     /// Audit B-4 — a source value this build does not know (see

@@ -116,8 +116,9 @@ struct SettingsExportScreen: View {
 }
 
 /// The full JSON/CSV backup — the former `ExportScreen` body inlined as a card
-/// (SET-V2-A / B.1). Behaviour is carried over 1:1: `POST /api/export` with the
-/// picked format, persist into the temp directory under
+/// (SET-V2-A / B.1). `GET /api/export?type=all` with the picked format (R2 / A4 —
+/// it was a `POST`, which the route never answered but with 405), a step-up
+/// proof when the server asks for one (R2 / A3), persist into the temp directory under
 /// `.completeFileProtection`, then offer the file via `ShareLink`. The share
 /// row + error surfacing mirror `DomainCSVExportCard` below so the whole page
 /// speaks exactly one interaction language (Quality Doctrine §6).
@@ -128,6 +129,7 @@ private struct FullBackupExportCard: View {
     @State private var isWorking = false
     @State private var exportURL: URL?
     @State private var errorMessage: String?
+    @State private var stepUp = StepUpRetry()
 
     enum ExportFormat: String, CaseIterable, Identifiable {
         case json
@@ -188,6 +190,7 @@ private struct FullBackupExportCard: View {
                     Task { await runExport() }
                 }
                 .accessibilityIdentifier("export.create.button")
+                .stepUpConfirmation(stepUp) { await runExport() }
 
                 if let exportURL {
                     ShareLink(item: exportURL) {
@@ -230,9 +233,11 @@ private struct FullBackupExportCard: View {
         exportURL = nil
         defer { isWorking = false }
         do {
-            exportURL = try await store.downloadFullBackup(format.serviceFormat)
+            exportURL = try await store.downloadFullBackup(format.serviceFormat, elevation: stepUp.take())
         } catch let error as HLError {
-            errorMessage = error.userFacingDescription
+            errorMessage = stepUp.requestIfProofRefusal(error)
+                ? StepUpRetry.requiredMessage
+                : error.userFacingDescription
         } catch {
             errorMessage = String(localized: "Couldn't export. Please try again.")
         }
@@ -253,6 +258,7 @@ private struct EncryptedBackupExportCard: View {
     @State private var isWorking = false
     @State private var exportURL: URL?
     @State private var errorMessage: String?
+    @State private var stepUp = StepUpRetry()
 
     /// Minimum passphrase length the UI enforces before enabling export — the
     /// server bounds the upper end; this is a floor so a one-character archive
@@ -301,6 +307,7 @@ private struct EncryptedBackupExportCard: View {
                 }
                 .disabled(!canExport)
                 .accessibilityIdentifier("export.encrypted.button")
+                .stepUpConfirmation(stepUp) { await runExport() }
 
                 if let exportURL {
                     ShareLink(item: exportURL) {
@@ -338,13 +345,20 @@ private struct EncryptedBackupExportCard: View {
         exportURL = nil
         defer { isWorking = false }
         do {
-            exportURL = try await store.downloadEncryptedBackup(passphrase: passphrase)
+            exportURL = try await store.downloadEncryptedBackup(
+                passphrase: passphrase,
+                elevation: stepUp.take()
+            )
             // The passphrase has served its purpose — drop it from memory once the
             // archive is minted (it is unrecoverable server-side anyway).
             passphrase = ""
             confirmPassphrase = ""
         } catch let error as HLError {
-            errorMessage = error.userFacingDescription
+            // R2 / #115 A3 — an account with a second factor is asked for that
+            // factor (or a passkey); the passphrase stays for the retry.
+            errorMessage = stepUp.requestIfProofRefusal(error)
+                ? StepUpRetry.requiredMessage
+                : error.userFacingDescription
         } catch {
             errorMessage = String(localized: "Couldn't export. Please try again.")
         }

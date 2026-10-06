@@ -8,8 +8,9 @@ import SwiftUI
 /// 1. The full catalogue of tile-IDs the operator can flip on/off in the
 ///    new `SettingsInsightsCustomizationScreen`. IDs match the server's
 ///    `TargetItem.type` enum so the same identifier flows end-to-end
-///    from the API row through this preferences layer into the
-///    `InsightsTargetTileGrid` render.
+///    from the API row through this preferences layer. (The
+///    `InsightsTargetTileGrid` that rendered them was never mounted after
+///    the overview redesign and was deleted in #115 B7.)
 /// 2. The default-enabled set — the seven tiles Y3 shipped:
 ///    `WEIGHT`, `PULSE`, `RESTING_HR`, `MOOD_SCORE`, `MOOD_STABILITY`,
 ///    `ACTIVITY_STEPS`, `MEDICATION_COMPLIANCE`. Any new target the

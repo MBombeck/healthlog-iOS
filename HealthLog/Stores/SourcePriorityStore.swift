@@ -159,9 +159,11 @@ public final class SourcePriorityStore {
         "sleepDebt"
     ]
 
-    /// Maps a wire metric-key (`steps`, `weight`, …) to the user-facing
-    /// German label. Single source of truth for the read-only view +
-    /// snapshot tests. Dictionary-driven so SwiftLint's cyclomatic-
+    /// Maps a wire metric-key (`steps`, `weight`, …) to its String-Catalog
+    /// key; the screen renders it through `LocalizedStringKey`. Single source
+    /// of truth for the read-only view + snapshot tests. L1 — six entries were
+    /// German words, which are no catalog keys and rendered German in the
+    /// English UI. Dictionary-driven so SwiftLint's cyclomatic-
     /// complexity ceiling stays out of the picture as the list grows.
     public static func label(forMetricKey key: String) -> String {
         SourcePriorityStore.labels[key] ?? key.capitalized
@@ -169,24 +171,24 @@ public final class SourcePriorityStore {
 
     private static let labels: [String: String] = [
         "steps": "Steps",
-        "activeEnergy": "Aktive Energie",
-        "walkingRunningDistance": "Distanz (Gehen / Laufen)",
-        "flightsClimbed": "Stockwerke",
+        "activeEnergy": "Active energy",
+        "walkingRunningDistance": "records.metric.walkingRunningDistance",
+        "flightsClimbed": "Flights climbed",
         "sleep": "Sleep",
         "weight": "Weight",
         "bloodPressure": "Blood pressure",
         "pulse": "Pulse",
         "bodyFat": "Body fat",
-        "bodyTemperature": "Körpertemperatur",
+        "bodyTemperature": "records.metric.bodyTemperature",
         "spo2": "Oxygen saturation",
-        "hrv": "Herzfrequenzvariabilität",
+        "hrv": "Heart rate variability",
         "restingHeartRate": "Resting heart rate",
         "respiratoryRate": "Respiratory rate",
         "skinTemperature": "Skin temperature",
         "vo2Max": "VO₂ max",
         "recovery": "Recovery",
         "stress": "Stress",
-        "sleepDebt": "Schlafdefizit"
+        "sleepDebt": "sources.metric.sleepDebt"
     ]
 
     /// Kanonische Default-Reihenfolge pro Metrik. Mirrors server-side
@@ -280,22 +282,41 @@ public struct SourcePriorityRow: Sendable, Equatable, Identifiable {
     /// Translates a wire-source token (`APPLE_HEALTH` / `WITHINGS` /
     /// `MANUAL` / `IMPORT`) to a human-readable German label. Shared with
     /// `WorkoutDetailView.sourceLabel(_:)` — both call sites match.
+    ///
+    /// **#115 R3 (server v1.39.6)** — `EXTERNAL` (a workout or measurement
+    /// posted through a narrow ingest token, e.g. a headless bridge) reads
+    /// "External" / "Extern". A token this build does not know reads the
+    /// neutral "Unknown source" instead of its capitalised wire spelling
+    /// (`SOME_NEW_SOURCE` used to show as "Some_new_source"). Both are already
+    /// localized here, so a `LocalizedStringKey` consumer finds no key and
+    /// renders them verbatim.
     public static func displayLabel(forSource raw: String) -> String {
-        switch raw.uppercased() {
-        case "APPLE_HEALTH": "Apple Health"
-        case "WITHINGS": "Withings"
-        case "WHOOP": "WHOOP"
-        case "FITBIT": "Fitbit"
-        case "STRAVA": "Strava"
-        case "OURA": "Oura"
-        case "POLAR": "Polar"
-        case "NIGHTSCOUT": "Nightscout"
-        case "MANUAL": "Manual"
-        case "IMPORT": "Import"
-        case "COMPUTED": "Computed"
-        default: raw.capitalized
-        }
+        let token = raw.uppercased()
+        if let label = verbatimSourceLabels[token] { return label }
+        return token == "EXTERNAL"
+            ? String(localized: "measurement.source.external")
+            : String(localized: "measurement.source.unknown")
     }
+
+    /// Brand spellings (never `.capitalized`: "WHOOP", not "Whoop") and the
+    /// three synthetic sources, whose English word doubles as the catalogue key
+    /// for `LocalizedStringKey` consumers.
+    private static let verbatimSourceLabels: [String: String] = [
+        "APPLE_HEALTH": "Apple Health",
+        "WITHINGS": "Withings",
+        "WHOOP": "WHOOP",
+        "FITBIT": "Fitbit",
+        "GOOGLE_HEALTH": "Google Health",
+        "STRAVA": "Strava",
+        "OURA": "Oura",
+        "POLAR": "Polar",
+        "NIGHTSCOUT": "Nightscout",
+        "TELEGRAM": "Telegram",
+        "MCP": "MCP",
+        "MANUAL": "Manual",
+        "IMPORT": "Import",
+        "COMPUTED": "Computed"
+    ]
 
     /// SF Symbol for a wire-source token. Shared by the read-only settings
     /// display (`SettingsSourcesScreen`) and the reorder editor

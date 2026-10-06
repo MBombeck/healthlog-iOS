@@ -7,7 +7,7 @@ import Foundation
 /// Result of an on-device medication-draft extraction attempt.
 ///
 /// `nil` draft is the contract callers (`PhotoOfMedSheet`) inspect for
-/// fallback routing: any of {device-ineligible, feature-flag-off,
+/// fallback routing: any of {device-ineligible, capability-not-allowed,
 /// safety-refused, framework-unavailable, generation-failed} maps to
 /// `nil` so the heuristic-only path (commit 2's
 /// `MedicationDraftHeuristic`) takes over.
@@ -19,7 +19,7 @@ public struct MedicationExtractionOutcome: Sendable {
         case deviceIneligible
         case appleIntelligenceDisabled
         case modelNotReady
-        case featureFlagDisabled
+        case capabilityNotAllowed
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
@@ -52,14 +52,18 @@ public struct MedicationExtractionOutcome: Sendable {
 /// `.fallback(.deviceIneligible)` (or one of the more specific reasons)
 /// and the caller invokes `MedicationDraftHeuristic.extract(_:)` directly.
 public actor MedicationExtractionService {
-    public let featureFlags: any FeatureFlagsServicing
+    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// This service runs only while `.medicationExtract` allows on-device work
+    /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
+    /// never consults anything a previous build persisted.
+    public let aiCapabilities: any AICapabilityReading
     public let safetyFilter: MDRSafetyFilter
 
     public init(
-        featureFlags: any FeatureFlagsServicing = UserDefaultsFeatureFlagsService(),
+        aiCapabilities: any AICapabilityReading = LegacyAICapabilities(),
         safetyFilter: MDRSafetyFilter = MDRSafetyFilter()
     ) {
-        self.featureFlags = featureFlags
+        self.aiCapabilities = aiCapabilities
         self.safetyFilter = safetyFilter
     }
 
@@ -85,9 +89,9 @@ public actor MedicationExtractionService {
             return .fallback(.emptyInput)
         }
 
-        guard featureFlags.isEnabled(.assistantBriefing) else {
-            HLLog.api.info("MedicationExtractionService: feature flag off, route to heuristic")
-            return .fallback(.featureFlagDisabled)
+        guard aiCapabilities.allowsOnDevice(.medicationExtract) else {
+            HLLog.api.info("MedicationExtractionService: capability medicationExtract does not allow on-device, route to heuristic")
+            return .fallback(.capabilityNotAllowed)
         }
 
         #if canImport(FoundationModels)

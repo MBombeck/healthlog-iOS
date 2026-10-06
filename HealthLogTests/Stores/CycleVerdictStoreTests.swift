@@ -18,7 +18,7 @@ import Testing
 /// Real `APIClient` + `MockURLProtocol` per the test doctrine — never a mock
 /// server. `.serialized` because the handler is global.
 @MainActor
-@Suite("Z1 — server verdict, stored and restored", .serialized)
+@Suite("Z1 — server verdict, stored and restored", .serialized, .mockURLSession)
 struct CycleVerdictStoreTests {
     private struct StubReach: ReachabilityProviding, @unchecked Sendable {
         var online = true
@@ -42,13 +42,8 @@ struct CycleVerdictStoreTests {
     }
 
     private func makeFlagsEnabled() async -> FeatureFlagsStore {
-        let repo = FeatureFlagsRepository(api: makeClient())
-        let store = FeatureFlagsStore(repo: repo)
-        MockURLProtocol.handler = { req in
-            let body = Data(#"{"data":{"flags":{"cycle.tracking":true}},"error":null}"#.utf8)
-            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
-        }
-        await store.refresh()
+        let store = FeatureFlagsStore()
+        store.setOverride(.cycleTracking, enabled: true)
         return store
     }
 
@@ -60,7 +55,7 @@ struct CycleVerdictStoreTests {
         "avatarUrl":null,"dateOfBirth":null,"gender":"female","heightCm":170,\
         "locale":"de","timezone":"Europe/Berlin","moodReminderEnabled":false},"error":null}
         """
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: String? = switch path {
             case "/api/user/profile": profileJSON
@@ -110,7 +105,7 @@ struct CycleVerdictStoreTests {
         "typicalCycleLength":null,"typicalPeriodLength":null,"lutealPhaseLength":null,\
         "secondarySymptom":"MUCUS","updatedAt":"2026-06-10T00:00:00.000Z"},"error":null}
         """
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: String = switch path {
             case "/api/cycle/calendar": calendarJSON
@@ -184,7 +179,7 @@ struct CycleVerdictStoreTests {
             gate: gate,
             availability: BackendAvailability(syncMode: nil, authStore: nil)
         )
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         await offline.load()
@@ -221,7 +216,7 @@ struct CycleVerdictStoreTests {
             gate: gate,
             availability: BackendAvailability(syncMode: nil, authStore: nil)
         )
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         await offline.load()
@@ -260,7 +255,7 @@ struct CycleVerdictStoreTests {
         """
         // Bring the history in while online, then go offline.
         let warm = CycleStore(repository: repo, gate: gate)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: String = switch path {
             case "/api/cycle/cycles": cyclesJSON

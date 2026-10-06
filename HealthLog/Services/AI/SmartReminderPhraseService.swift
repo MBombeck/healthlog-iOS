@@ -92,7 +92,7 @@ extension ReminderPhrase: BriefingTextProvider {
 /// Result of an on-device reminder-phrasing attempt.
 ///
 /// `nil` phrase is the contract callers (`NotificationService.scheduleLocalReminder`)
-/// inspect for fallback routing: any of {device-ineligible, feature-flag-off,
+/// inspect for fallback routing: any of {device-ineligible, capability-not-allowed,
 /// safety-refused, framework-unavailable, generation-failed} maps to `nil` so
 /// the static-template path takes over.
 public struct ReminderPhraseOutcome: Sendable {
@@ -103,7 +103,7 @@ public struct ReminderPhraseOutcome: Sendable {
         case deviceIneligible
         case appleIntelligenceDisabled
         case modelNotReady
-        case featureFlagDisabled
+        case capabilityNotAllowed
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
@@ -139,14 +139,18 @@ public struct ReminderPhraseOutcome: Sendable {
 /// `.fallback(.deviceIneligible)` (or one of the more specific reasons)
 /// and the caller falls back to the static `NotificationService` template.
 public actor SmartReminderPhraseService {
-    public let featureFlags: any FeatureFlagsServicing
+    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// This service runs only while `.briefing` allows on-device work
+    /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
+    /// never consults anything a previous build persisted.
+    public let aiCapabilities: any AICapabilityReading
     public let safetyFilter: MDRSafetyFilter
 
     public init(
-        featureFlags: any FeatureFlagsServicing = UserDefaultsFeatureFlagsService(),
+        aiCapabilities: any AICapabilityReading = LegacyAICapabilities(),
         safetyFilter: MDRSafetyFilter = MDRSafetyFilter()
     ) {
-        self.featureFlags = featureFlags
+        self.aiCapabilities = aiCapabilities
         self.safetyFilter = safetyFilter
     }
 
@@ -165,9 +169,9 @@ public actor SmartReminderPhraseService {
             return .fallback(.emptyInput)
         }
 
-        guard featureFlags.isEnabled(.assistantBriefing) else {
-            HLLog.api.info("SmartReminderPhraseService: feature flag off, route to static template")
-            return .fallback(.featureFlagDisabled)
+        guard aiCapabilities.allowsOnDevice(.briefing) else {
+            HLLog.api.info("SmartReminderPhraseService: capability briefing does not allow on-device, route to static template")
+            return .fallback(.capabilityNotAllowed)
         }
 
         #if canImport(FoundationModels)

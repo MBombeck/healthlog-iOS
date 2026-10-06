@@ -13,10 +13,12 @@ import SwiftUI
 /// advanced. The operator (and any future debug session) can read this
 /// inline instead of attaching to Console.app.
 ///
-/// **Read-only, with no exception since 08-15** — the screen does not trigger
-/// sync, exposes no reset button (logout-cleanup happens implicitly via
-/// `HKSyncDiagnostics.reset()` when the auth store wipes) and can no longer
-/// change what this device uploads. A "Jetzt syncen" affordance lives one
+/// **Read-only except for one row since #113** — the screen does not trigger a
+/// sync and exposes no reset button (logout-cleanup happens implicitly via
+/// `HKSyncDiagnostics.reset()` when the auth store wipes). The one action is
+/// "Resend skipped": it offers readings the server already refused once more,
+/// the same rows, under the same account — it cannot make the device send
+/// anything new. A "Jetzt syncen" affordance lives one
 /// screen up in Integrations → Apple Health; pushing the same button here
 /// would be the wrong IA.
 ///
@@ -42,6 +44,12 @@ struct SettingsHKSyncDiagnosticsScreen: View {
     @Environment(\.appContainer) var container
     @State var serverSummary: HKServerSyncHealthSummary?
     @State var serverLoadFailed = false
+    /// #113 — the skip register of the signed-in account (`+Skipped`).
+    @State var skippedSnapshot: HealthKitSkippedRowSnapshot?
+    @State var resendSummary: HealthKitSkippedRowReoffer.Summary?
+    @State var isResending = false
+    /// #12 — the heart-rate bucket ledger of the signed-in account (`+HeartRateBuckets`).
+    @State var hrBucketSnapshot: HRBucketDiagnosticsSnapshot?
 
     var body: some View {
         HLSettingsPage(title: "settings.hkdiag.title") {
@@ -51,6 +59,8 @@ struct SettingsHKSyncDiagnosticsScreen: View {
             // Telefon selbstständig?", die einzige Hintergrund-Aussage, die
             // ohne Log-Wissen lesbar ist.
             serverHealthCard
+            skippedCard
+            heartRateBucketCard
             workoutDeliveryCard
             kindListCard
             explainerCard
@@ -61,6 +71,8 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await hkReadiness.refresh() }
         .task { await loadServerSyncHealth() }
+        .task { await loadSkipped() }
+        .task { loadHeartRateBuckets() }
     }
 
     // MARK: - Summary
@@ -280,7 +292,9 @@ struct SettingsHKSyncDiagnosticsScreen: View {
                 .font(.hlBody.monospacedDigit())
                 .foregroundStyle(HLText.secondary)
                 .multilineTextAlignment(.trailing)
-                .lineLimit(1)
+                // K1 — a localized outcome („Apple-Health-Abfrage
+                // fehlgeschlagen") is longer than the identifier it replaced.
+                .lineLimit(3)
         }
     }
 
@@ -327,7 +341,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         }
         let when = date.formatted(.relative(presentation: .named))
         guard let source = diagnostics.lastCollectionTriggerSource else { return when }
-        return "\(when) · \(source)"
+        return "\(when) · \(HKSyncDiagnosticsVocabulary.collectionTrigger(source))"
     }
 
     /// The full set of `MetricKind`s HealthLog syncs through the iOS HK
@@ -349,7 +363,11 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         let live = snapshot
         return Self.syncedKinds
             .map { kind in
-                KindRow(kind: kind, stats: live[kind] ?? HKSyncDiagnostics.KindStats(identifier: kind.rawValue))
+                KindRow(
+                    kind: kind,
+                    stats: live[kind] ?? HKSyncDiagnostics.KindStats(identifier: kind.rawValue),
+                    registeredSkipCount: registeredSkips[kind] ?? 0
+                )
             }
             .sorted { lhs, rhs in
                 let lhsDate = lhs.stats.lastObservationAt ?? lhs.stats.lastStatsActionAt
@@ -372,6 +390,9 @@ struct SettingsHKSyncDiagnosticsScreen: View {
 struct KindRow: Equatable {
     let kind: MetricKind
     let stats: HKSyncDiagnostics.KindStats
+    /// #113 — rows of this kind waiting in the skip register. Persistent, so the
+    /// warning survives the cold-launch reset of the session counters.
+    var registeredSkipCount: Int = 0
 
     /// Total HK-STATS aggregator actions (cumulative-kind path: Steps /
     /// Active Energy / Flights / Distance / Daylight). These flow over
@@ -402,6 +423,10 @@ struct KindRow: Equatable {
     /// classification has exactly one home (and tests can pin it without
     /// asserting on localized text).
     enum Status: Equatable {
+        /// #113 — rows of this kind were refused (skip register) or wait in the
+        /// outbox. Outranks everything else: "OK" while readings are not
+        /// stored is exactly the lie #113 was about.
+        case warning
         /// A successful round-trip happened on EITHER path.
         case healthy
         /// No sign of life at all this session.
@@ -412,11 +437,21 @@ struct KindRow: Equatable {
 
     /// Classify against `now` (injectable for deterministic tests).
     func status(now: Date = Date()) -> Status {
-        // Healthy when any successful round-trip happened on EITHER path —
+        if stats.samplesSkippedTotal > 0 || stats.samplesParkedTotal > 0 || registeredSkipCount > 0 {
+            return .warning
+        }
+        // Healthy when the server stored something on EITHER path —
         // crucially `statsActions > 0` rescues every cumulative kind whose
         // upload went up the HK-STATS path (the source of the old false
         // "Hängt").
-        if stats.samplesUploadedTotal > 0 || statsActions > 0 || stats.lastAnchorAdvancedAt != nil {
+        if stats.samplesUploadedTotal > 0 || statsActions > 0 {
+            return .healthy
+        }
+        // #113 — an anchor move alone is no longer proof: a page whose every row
+        // was refused moved it too. It counts only when nothing this path read
+        // is unaccounted for — nothing read at all (armed, quiet), or every row
+        // handed to the daily-statistics / HR-bucket path.
+        if stats.lastAnchorAdvancedAt != nil, stats.samplesReadTotal == stats.samplesHandedOffTotal {
             return .healthy
         }
         if stats.samplesReadTotal == 0, statsActions == 0, stats.lastObservationAt == nil {
@@ -435,6 +470,7 @@ struct KindRow: Equatable {
 
     var statusLabel: String {
         switch status() {
+        case .warning: String(localized: "settings.hkdiag.status_warn")
         case .healthy: String(localized: "settings.hkdiag.status_ok")
         case .idle: String(localized: "settings.hkdiag.status_idle")
         case .stalled: String(localized: "settings.hkdiag.status_stuck")
@@ -447,7 +483,10 @@ struct KindRow: Equatable {
         // `HLColor.statusWarn` token so a truly stalled sync reads as needing
         // attention. A daily-stats kind whose stats path is alive no longer
         // trips this.
-        status() == .stalled ? HLColor.statusWarn : HLText.tertiary
+        switch status() {
+        case .stalled, .warning: HLColor.statusWarn
+        case .healthy, .idle: HLText.tertiary
+        }
     }
 
     /// Compact detail: "read 32 / up 30" plus optional stats counter for
@@ -457,6 +496,12 @@ struct KindRow: Equatable {
         let read = stats.samplesReadTotal
         let uploaded = stats.samplesUploadedTotal
         let statsActions = stats.statsPostedTotal + stats.statsRepostedTotal
+        let skipped = max(stats.samplesSkippedTotal, registeredSkipCount)
+        if skipped > 0 || stats.samplesParkedTotal > 0 {
+            return String(
+                localized: "settings.hkdiag.detail_problems \(read) \(uploaded) \(skipped) \(stats.samplesParkedTotal)"
+            )
+        }
         if statsActions > 0 {
             return String(
                 localized: "settings.hkdiag.detail_stats \(read) \(uploaded) \(statsActions)"

@@ -52,7 +52,7 @@ public actor SleepNightRepository {
     ///   an EMPTY night (`main == nil`) so the screen shows the calm empty state,
     ///   never the error card — mirroring `NarrativeRepository.fetch`.
     public func night(for date: Date?) async throws -> SleepNightDTO {
-        try await night(forDayKey: date.map(Self.dayKey))
+        try await night(forDayKey: date.map { Self.dayKey(for: $0) })
     }
 
     /// Same contract as ``night(for:)``, addressed by a raw `YYYY-MM-DD`
@@ -105,23 +105,16 @@ public actor SleepNightRepository {
         }
     }
 
-    /// Formats `date` as the `YYYY-MM-DD` day-key the endpoint expects, anchored
-    /// to the user's CURRENT timezone (the night is keyed on the local wake day).
-    nonisolated static func dayKey(for date: Date) -> String {
-        dayKeyFormatter.string(from: date)
+    /// Formats `date` as the `YYYY-MM-DD` day-key the endpoint expects: the
+    /// wake day in the ACCOUNT zone (#115 1.5). The server keys nights on the
+    /// wake day in the profile zone, so "today" here is the account's today —
+    /// the device zone named a night the server has not reached (or already
+    /// left) for anyone whose phone and account disagree. The old formatter
+    /// also froze `.current` at first use, so it did not even follow the
+    /// device across a zone change.
+    nonisolated static func dayKey(for date: Date, timeZone: TimeZone = ProfileDay.timeZone) -> String {
+        ProfileDay.key(for: date, timeZone: timeZone)
     }
-
-    /// Local-timezone `YYYY-MM-DD` formatter. POSIX locale so the format is
-    /// stable regardless of the device's regional settings; `current` timezone
-    /// so the day-key matches the user's calendar day, not UTC.
-    private nonisolated static let dayKeyFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
 
     // MARK: - UTC day-key space (W-B180 night navigation)
 

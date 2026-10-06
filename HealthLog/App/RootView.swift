@@ -11,7 +11,6 @@ struct RootView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(AppRouter.self) private var router
     @Environment(HKReadinessStore.self) private var hkReadiness
-    @Environment(FeatureFlagsStore.self) private var featureFlags
     /// R1 — trägt die Frage vor allen anderen: kennt diese Installation
     /// überhaupt eine Serveradresse? Siehe ``needsServerAddressGate``.
     @Environment(BackendAvailability.self) private var backendAvailability
@@ -26,8 +25,9 @@ struct RootView: View {
     @Environment(\.appContainer) var container
     @Environment(\.scenePhase) private var scenePhase
     @State private var locked: Bool = false
-    @State private var lastBackgroundedAt: Date?
-    @State private var hasPerformedInitialAuth: Bool = false
+    /// J1 / F3 — decides when the lock is due (only a real background trip,
+    /// never right after an in-process sign-in). See ``AppLockClock``.
+    @State private var lockClock = AppLockClock()
     @State private var unlockInFlight: Bool = false
     @State private var didActivateHKBackground: Bool = false
     /// 08-09 — the locked session's own sign-out, behind the same destructive
@@ -36,9 +36,6 @@ struct RootView: View {
     /// the user is aiming at Unlock), and it was the one place that signed out
     /// on contact.
     @State private var lockLogoutConfirmation = LogoutConfirmationState()
-
-    /// Entsperr-Cooldown: Background-Pause unter dieser Schwelle bleibt unlocked.
-    private let unlockGracePeriod: TimeInterval = 30
 
     var body: some View {
         #if DEBUG
@@ -111,7 +108,6 @@ struct RootView: View {
             await loadProfileOnAuthenticationIfNeeded()
             await activateHealthKitBackgroundIfReady()
             await refreshPushRegistrationIfReady()
-            await refreshFeatureFlagsIfReady()
             await refreshDisclaimerAckIfReady()
             await refreshMfaEnrollmentIfReady()
             await refreshOnboardingTourIfReady()
@@ -290,17 +286,6 @@ struct RootView: View {
         container.preWarmAvatarOnLaunch()
     }
 
-    /// F-1 server-coord — pull `/api/feature-flags` once per session
-    /// + on every app-foreground transition. The store memoises
-    /// in-memory, so render-path reads stay synchronous and never
-    /// hit the network. Fail-open: on network error the last-known
-    /// snapshot stays in place (R5 operator-control philosophy).
-    /// Standalone-mode skips entirely — there is no server to ask.
-    private func refreshFeatureFlagsIfReady() async {
-        guard case .authenticated = authStore.phase else { return }
-        await featureFlags.refresh()
-    }
-
     /// #32 — reconcile the server-owned setup-completion state (the tour
     /// marker plus the account's own evidence, off `/api/auth/me` — 25-03) on
     /// the authentication tick. Server-authoritative: a completed answer from
@@ -456,10 +441,10 @@ struct RootView: View {
     }
 
     private func performInitialAuthIfNeeded() async {
-        guard authStore.phase.isUnlockEligible,
-              settings.biometricLockEnabled,
-              !hasPerformedInitialAuth else { return }
-        hasPerformedInitialAuth = true
+        guard lockClock.authPhaseChanged(
+            to: authStore.phase,
+            lockEnabled: settings.biometricLockEnabled
+        ) else { return }
         locked = true
         await tryUnlock()
     }
@@ -496,12 +481,16 @@ struct RootView: View {
     private func handle(scenePhase newPhase: ScenePhase) {
         switch newPhase {
         case .background, .inactive:
-            // Wenn das Lock-Overlay aktiv ist (oder Face-ID gerade läuft), wird
-            // `.inactive` durch das System-Sheet selbst getriggert. In dem Fall
-            // dürfen wir `lastBackgroundedAt` NICHT überschreiben — sonst
-            // entsteht ein Loop nach Sheet-Dismiss.
-            guard !locked, !unlockInFlight else { break }
-            lastBackgroundedAt = .now
+            // J1 / F3 — only `.background` starts the lock clock; `.inactive`
+            // (a system dialog over the app, or the Face ID sheet itself) does
+            // not. `lockBusy` keeps the lock's own sheet from re-arming it.
+            _ = lockClock.scenePhaseChanged(
+                to: newPhase,
+                now: .now,
+                eligible: authStore.phase.isUnlockEligible,
+                lockEnabled: settings.biometricLockEnabled,
+                lockBusy: locked || unlockInFlight
+            )
         case .active:
             // v0.8.4 WWIDGET-3 — a tap on the "Erfassen" control foregrounds
             // the app (scenePhase → .active) rather than changing phaseKey, so
@@ -519,16 +508,22 @@ struct RootView: View {
 
             guard authStore.phase.isUnlockEligible, settings.biometricLockEnabled else {
                 locked = false
+                _ = lockClock.scenePhaseChanged(
+                    to: newPhase, now: .now, eligible: false, lockEnabled: false, lockBusy: false
+                )
                 return
             }
-            // Re-Auth nur, wenn die App tatsächlich pausiert war UND die
-            // Grace-Period überschritten ist. `lastBackgroundedAt == nil`
-            // bedeutet hier "kein Pending Re-Lock" (Cold-Start ist separat).
-            guard let lastBg = lastBackgroundedAt,
-                  Date.now.timeIntervalSince(lastBg) > unlockGracePeriod else { return }
-            // Trigger sofort konsumieren — verhindert doppelten Task bei
+            // Re-Auth nur, wenn die App tatsächlich im Hintergrund war UND die
+            // Grace-Period überschritten ist (Cold-Start ist separat). Die Uhr
+            // konsumiert den Stempel selbst — kein doppelter Task bei
             // schnellen ScenePhase-Cycles.
-            lastBackgroundedAt = nil
+            guard lockClock.scenePhaseChanged(
+                to: newPhase,
+                now: .now,
+                eligible: true,
+                lockEnabled: true,
+                lockBusy: locked || unlockInFlight
+            ) else { return }
             locked = true
             Task { await tryUnlock() }
         @unknown default:
@@ -545,7 +540,7 @@ struct RootView: View {
         switch result {
         case .success:
             locked = false
-            lastBackgroundedAt = nil
+            lockClock.didUnlock()
         case .unavailable:
             // Gerät hat kein Biometric / kein Passcode → Schutz nicht durchsetzbar.
             // Bewusst NICHT auto-unlocken: User muss explizit weiter.

@@ -31,10 +31,11 @@ struct MoodScreen: View {
     @State private var showDatePicker = false
     @State private var lastTappedScore: Int?
     @State private var tapCount: Int = 0
-    /// Bumped on every face tap (before the network write) so the light
-    /// impact plays the instant the user commits — independent of the
-    /// `.success` cue (`tapCount`) that only fires on a confirmed save.
+    /// Bumped on every face tap (before the network write) so the light impact plays the instant
+    /// the user commits — independent of the `.success` cue (`tapCount`) that only fires on a confirmed save.
     @State private var tapImpactCount: Int = 0
+    /// #115 R3 — the annotation saved, but the server dropped some tag/factor keys.
+    @State private var showDroppedKeys = false
 
     // MARK: - MD1 inline annotate (v0.11 W26)
 
@@ -57,12 +58,10 @@ struct MoodScreen: View {
     /// user never touched is absent (no "0" rating) and is simply not sent.
     @State private var annotateRatings: [String: Int] = [:]
     @FocusState private var annotateNoteFocused: Bool
-    /// v0.14.8 — host-sheet detent, driven programmatically. Pre-log the sheet
-    /// sits compact (`.medium`) over just the hero + 5 faces; the moment a mood
-    /// is logged (`annotatingEntry != nil`) it grows to a tall detent so the
-    /// whole annotate panel — sliders + tag grid + tag-management link + note +
-    /// "Fertig" — is visible WITHOUT internal scrolling. The growth animates
-    /// (reduce-motion gated) so the surface "opens wide".
+    /// v0.14.8 — host-sheet detent, driven programmatically. Pre-log the sheet sits compact (`.medium`)
+    /// over just the hero + 5 faces; the moment a mood is logged (`annotatingEntry != nil`) it grows to a tall
+    /// detent so the whole annotate panel — sliders + tag grid + tag-management link + note + "Fertig" — is
+    /// visible WITHOUT internal scrolling. The growth animates (reduce-motion gated) so the surface "opens wide".
     @State private var sheetDetent: PresentationDetent = .medium
 
     /// The tall detent the sheet grows to once a mood is logged. ~92 % of the
@@ -110,6 +109,7 @@ struct MoodScreen: View {
             .sheet(isPresented: $showDatePicker) {
                 datePickerSheet
             }
+            .hlAcknowledgeAlert("mood.droppedKeys.title", message: "mood.droppedKeys.message", isPresented: $showDroppedKeys) { dismiss() }
         }
         // v0.14.8 — own the host-sheet detent so the screen can grow itself the
         // moment a mood is logged. Pre-log: compact `.medium` over the hero +
@@ -393,7 +393,7 @@ struct MoodScreen: View {
             )
         }
         annotatingEntry = nil
-        dismiss()
+        if store.lastWriteDroppedKeys.isEmpty { dismiss() } else { showDroppedKeys = true } // #115 R3 — tell, then close
     }
 
     /// Project the selected tag-key set into a stable, catalog-ordered array.

@@ -35,8 +35,6 @@ struct SettingsFHIRExportScreenTests {
             appVersion: "0.6.0 (1)",
             measurements: [],
             medications: [],
-            compliance: [],
-            intakes: [],
             moodEntries: []
         )
         let spec = DoctorReportSpecBuilder.build(
@@ -72,8 +70,6 @@ struct SettingsFHIRExportScreenTests {
             appVersion: "0.8.0 (1)",
             measurements: [],
             medications: [],
-            compliance: [],
-            intakes: [],
             moodEntries: []
         )
         let spec = DoctorReportSpecBuilder.build(

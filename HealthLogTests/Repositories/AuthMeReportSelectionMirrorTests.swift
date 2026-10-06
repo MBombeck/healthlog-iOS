@@ -18,7 +18,7 @@ import Testing
 ///
 /// Writes never go through here: `PUT /api/auth/me/report-selection` via
 /// ``ReportSelectionRepository`` is the only write path.
-@Suite("GET /api/auth/me — reportSelection mirror", .serialized)
+@Suite("GET /api/auth/me — reportSelection mirror", .serialized, .mockURLSession)
 struct AuthMeReportSelectionMirrorTests {
     private func makeRepo() -> SettingsRepository {
         let env = AppEnvironment(
@@ -33,7 +33,7 @@ struct AuthMeReportSelectionMirrorTests {
     }
 
     private func respond(_ json: String) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(json.utf8)

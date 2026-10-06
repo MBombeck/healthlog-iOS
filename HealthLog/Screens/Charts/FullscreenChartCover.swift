@@ -20,6 +20,12 @@ struct FullscreenChartCover: View {
     @Bindable var store: ChartDetailStore
     @Binding var selectedDate: Date?
     @Environment(\.dismiss) private var dismiss
+    /// #115 P2 — plot, axis, callout and audio graph in the account's unit,
+    /// glucose pinned to the unit the series arrived in (same as `ChartCard`).
+    @Environment(\.unitPreferences) private var settingsUnits
+    private var units: UnitPreferences {
+        store.effectiveUnits(settingsUnits)
+    }
 
     var body: some View {
         NavigationStack {
@@ -57,10 +63,11 @@ struct FullscreenChartCover: View {
     }
 
     private func chart(for series: MeasurementSeries) -> some View {
-        Chart {
+        let plotted = store.plotPoints(series.points, units: units)
+        return Chart {
             MetricChartContent.marks(
                 for: kind,
-                points: series.points,
+                points: plotted,
                 // v0.14 light-mode walk: refined graphite chart ink (matches
                 // the `HLChartTints.series` default — softer than near-black text).
                 emphasisTint: HLColor.inkGraphite
@@ -68,9 +75,10 @@ struct FullscreenChartCover: View {
             if let selectedDate,
                let selectedPoint = series.points.min(by: {
                    abs($0.at.timeIntervalSince(selectedDate)) < abs($1.at.timeIntervalSince(selectedDate))
-               })
+               }),
+               let plottedPoint = plotted.first(where: { $0.id == selectedPoint.id })
             {
-                RuleMark(x: .value("Auswahl", selectedPoint.at))
+                RuleMark(x: .value("chart.scrubber.selection", selectedPoint.at))
                     .foregroundStyle(HLChartTints.seriesMid)
                     .lineStyle(StrokeStyle(
                         lineWidth: HLChartGrid.thresholdWidth,
@@ -83,22 +91,27 @@ struct FullscreenChartCover: View {
                         // the callout never clips above the plot (see HLChartScrubber).
                         overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))
                     ) {
+                        // The callout converts the canonical point itself; before
+                        // #115 P2 it had no `displayUnit` and printed a converted
+                        // lb value next to the fallback "kg".
                         SelectedPointCallout(
                             point: selectedPoint,
                             kind: kind,
-                            isPersonalRecord: false
+                            isPersonalRecord: false,
+                            displayUnit: store.displayUnit(units: units)
                         )
+                        .environment(\.unitPreferences, units)
                     }
                 PointMark(
-                    x: .value("Auswahl", selectedPoint.at),
-                    y: .value("Wert", selectedPoint.value)
+                    x: .value("chart.scrubber.selection", plottedPoint.at),
+                    y: .value("Value", plottedPoint.value)
                 )
                 .foregroundStyle(HLChartTints.series)
                 .symbolSize(160)
-                if let secondary = selectedPoint.secondary {
+                if let secondary = plottedPoint.secondary {
                     PointMark(
-                        x: .value("Auswahl", selectedPoint.at),
-                        y: .value("Diastolisch", secondary)
+                        x: .value("chart.scrubber.selection", plottedPoint.at),
+                        y: .value("Diastolic", secondary)
                     )
                     .foregroundStyle(HLChartTints.seriesMid)
                     .symbolSize(160)
@@ -107,7 +120,7 @@ struct FullscreenChartCover: View {
         }
         .chartXSelection(value: $selectedDate)
         .chartYScale(
-            domain: MetricChartMath.logDomain(for: series.points),
+            domain: MetricChartMath.logDomain(for: plotted),
             type: store.useLogScale ? .log : .linear
         )
         .chartYAxis {
@@ -122,7 +135,7 @@ struct FullscreenChartCover: View {
             }
         }
         .chartYAxisLabel(position: .leading, alignment: .center) {
-            Text(kind.unit)
+            Text(store.displayUnit(units: units))
                 .font(.hlCaption.weight(.semibold))
                 .foregroundStyle(HLText.secondary)
         }
@@ -142,7 +155,11 @@ struct FullscreenChartCover: View {
         .hlAnimation(.snappy(duration: 0.35), value: store.range)
         .accessibilityChartDescriptor(
             FullscreenChartDescriptor(
-                descriptor: ChartsAccessibility.makeDescriptor(for: series, kind: kind)
+                descriptor: ChartsAccessibility.makeDescriptor(
+                    for: store.accessibilitySeries(units: units),
+                    kind: kind,
+                    unit: store.displayUnit(units: units)
+                )
             )
         )
     }

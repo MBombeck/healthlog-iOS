@@ -14,7 +14,7 @@ import Testing
 ///     `HLError.server(status: 409, …)`,
 /// plus the `CoachConversationStore.submitFeedback` state machine
 /// (register → submit → locked; 409 → locked; transport error → retryable).
-@Suite("Coach message feedback — wire shape + store state", .serialized)
+@Suite("Coach message feedback — wire shape + store state", .serialized, .mockURLSession)
 struct CoachFeedbackTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -50,7 +50,7 @@ struct CoachFeedbackTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -72,7 +72,7 @@ struct CoachFeedbackTests {
     @Test("a repeat submission (409 already_rated) surfaces as HLError.server(409)")
     func conflictSurfaces() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":null,"error":"already_rated"}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -96,7 +96,7 @@ struct CoachFeedbackTests {
     @Test("submitFeedback locks the row on a 201 ack")
     func storeMarksRated() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":{"id":"fb-1","createdAt":"2026-06-11T10:00:00.000Z"},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -120,7 +120,7 @@ struct CoachFeedbackTests {
     @Test("submitFeedback treats 409 already_rated as locked (no error surface)")
     func storeLocksOnConflict() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let payload = #"{"data":null,"error":"already_rated"}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))
@@ -141,7 +141,7 @@ struct CoachFeedbackTests {
     @Test("a non-409 failure leaves the row ratable (retry stays possible)")
     func storeKeepsRatableOnFailure() async {
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // 422 — non-retriable, non-409: the store must NOT lock the row.
             let payload = #"{"data":null,"error":"feedback.body.invalid"}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!

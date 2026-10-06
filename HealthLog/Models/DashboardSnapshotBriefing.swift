@@ -103,6 +103,18 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
     /// `null` when the rollup coverage is cold or the composite is not `ok` —
     /// an honest "no score yet", never a zero.
     public let healthScore: HealthScore?
+    /// **#114 / #115 · 0.2 — the `briefing` capability** (server v1.39
+    /// `briefingAi`), applied on every server read after the cache: while it is
+    /// unavailable the server nulls `briefing`. `nil` on an older server or an
+    /// older cached body.
+    public let briefingAi: AICapabilityState?
+    /// **#115 · 1.1 (server v1.39)** — `tiles.weightTrend`: which way a weight
+    /// change counts as progress, judged by the server against the person's
+    /// own target. A snapshot without the block resolves to the server's
+    /// documented reading (``WeightTrendJudgement/legacyReading``, `up-bad`);
+    /// only a block whose shape this build cannot read at all stays `nil`, so
+    /// the tile colours nothing rather than guessing.
+    public let weightTrend: WeightTrendJudgement?
 
     public init(
         briefing: DailyBriefing? = nil,
@@ -110,7 +122,9 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         briefingUpdatedAt: Date? = nil,
         briefingStale: Bool = false,
         scoreRings: [DashboardScoreRing] = [],
-        healthScore: HealthScore? = nil
+        healthScore: HealthScore? = nil,
+        briefingAi: AICapabilityState? = nil,
+        weightTrend: WeightTrendJudgement? = .legacyReading
     ) {
         self.briefing = briefing
         self.briefingState = briefingState
@@ -118,10 +132,16 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         self.briefingStale = briefingStale
         self.scoreRings = scoreRings
         self.healthScore = healthScore
+        self.briefingAi = briefingAi
+        self.weightTrend = weightTrend
     }
 
     private enum CodingKeys: String, CodingKey {
-        case briefing, briefingState, briefingUpdatedAt, briefingStale, scoreRings, healthScore
+        case briefing, briefingState, briefingUpdatedAt, briefingStale, scoreRings, healthScore, briefingAi, tiles
+    }
+
+    private enum TilesKeys: String, CodingKey {
+        case weightTrend
     }
 
     public init(from decoder: Decoder) throws {
@@ -149,6 +169,18 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         // absent field (older server) and a shape this client cannot parse all
         // degrade to nil, so the score never poisons the snapshot read.
         healthScore = try? c.decodeIfPresent(HealthScore.self, forKey: .healthScore)
+        briefingAi = try? c.decodeIfPresent(AICapabilityState.self, forKey: .briefingAi)
+        weightTrend = Self.decodeWeightTrend(from: c)
+    }
+
+    /// `tiles.weightTrend`, tolerant. Absent `tiles` or absent block → the
+    /// server's documented `up-bad` reading; a block that fails to decode →
+    /// `nil` (no judgement), never a guess and never a failed snapshot.
+    private static func decodeWeightTrend(from c: KeyedDecodingContainer<CodingKeys>) -> WeightTrendJudgement? {
+        guard let tiles = try? c.nestedContainer(keyedBy: TilesKeys.self, forKey: .tiles),
+              tiles.contains(.weightTrend),
+              (try? tiles.decodeNil(forKey: .weightTrend)) == false else { return .legacyReading }
+        return try? tiles.decode(WeightTrendJudgement.self, forKey: .weightTrend)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -159,6 +191,11 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         try c.encode(briefingStale, forKey: .briefingStale)
         try c.encode(scoreRings, forKey: .scoreRings)
         try c.encodeIfPresent(healthScore, forKey: .healthScore)
+        try c.encodeIfPresent(briefingAi, forKey: .briefingAi)
+        if let weightTrend {
+            var tiles = c.nestedContainer(keyedBy: TilesKeys.self, forKey: .tiles)
+            try tiles.encode(weightTrend, forKey: .weightTrend)
+        }
     }
 }
 
@@ -193,6 +230,12 @@ public extension DashboardSnapshotBriefing {
     ///    deterministic fallback — never a spinner the server can't resolve.
     /// 5. Only `preparing` without stale content shows a preparing hint.
     var renderPolicy: DashboardBriefingRenderPolicy {
+        // #115 · 0.2 — the `briefing` capability wins over any text in the
+        // slot: no model prose while it is unavailable (the server maps the
+        // state the same way: `no_provider` → deterministic, else hidden).
+        if let briefingAi, !briefingAi.isAvailable {
+            return briefingAi.reason == .noProvider ? .deterministicFallback : .hidden
+        }
         if briefingStale, let briefing {
             return .prose(briefing, asOf: briefingUpdatedAt, stale: true)
         }

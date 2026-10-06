@@ -15,7 +15,7 @@ import Testing
 /// nicht im PATCH-Echo**. Getestet über den echten `SettingsRepository` +
 /// `APIClient` über `MockURLProtocol`, damit die Zusicherung am produktiven
 /// Decoding-Pfad hängt.
-@Suite("CU-21 — GET /api/integrations/healthkit: Sync-Gesundheit", .serialized)
+@Suite("CU-21 — GET /api/integrations/healthkit: Sync-Gesundheit", .serialized, .mockURLSession)
 struct HealthKitSyncHealthDecodingTests {
     private static let env = AppEnvironment(
         baseURL: URL(string: "https://test.healthlog.local")!,
@@ -33,7 +33,7 @@ struct HealthKitSyncHealthDecodingTests {
     }
 
     private func respond(_ json: String) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let response = HTTPURLResponse(
                 url: req.url!,
                 statusCode: 200,

@@ -7,6 +7,12 @@ import SwiftUI
 extension CycleCaptureSheet {
     // MARK: - Labels
 
+    /// K1 — the flow segments' labels, in order, for `HLAdaptiveSegmentedPicker`
+    /// to measure.
+    static var flowLabels: [LocalizedStringKey] {
+        CycleFlowLevel.allCases.map(flowLabel)
+    }
+
     static func flowLabel(_ level: CycleFlowLevel) -> LocalizedStringKey {
         switch level {
         case .none: "cycle.flow.none"
@@ -79,7 +85,12 @@ extension CycleCaptureSheet {
         }
     }
 
-    static func bbtFormatted(_ value: Double) -> String {
-        String(format: String(localized: "cycle.capture.bbt.value"), value)
+    /// `value` is canonical °C; an imperial account reads it in °F.
+    nonisolated static func bbtFormatted(_ value: Double, units: UnitPreferences = .standard) -> String {
+        let transform = units.transform(for: .bodyTemperature)
+        guard let suffix = transform.suffix else {
+            return String(format: String(localized: "cycle.capture.bbt.value"), value)
+        }
+        return "\(transform.display(value).formatted(.number.precision(.fractionLength(2)))) \(suffix)"
     }
 }

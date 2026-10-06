@@ -30,7 +30,7 @@ struct MiniCoachOnboardingTests {
         }
         defaults.removePersistentDomain(forName: suite)
         let store = MiniCoachStore(
-            service: MiniCoachService(featureFlags: StubFlags(enabled: true)),
+            service: MiniCoachService(aiCapabilities: StubFlags(enabled: true)),
             defaults: defaults
         )
         #expect(!store.isOnboarded)

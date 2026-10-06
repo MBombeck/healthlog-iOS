@@ -18,7 +18,11 @@ public extension MetricKindDescriptor {
                 tint: HLSurface.secondary,
                 title: LocalizedStringResource("Weight", comment: "Metric title — weight"),
                 unitLabel: LocalizedStringResource("kg", comment: "Unit — kilograms"),
-                trendPolarity: .lowerIsBetter,
+                // #115 · 1.1 — no client verdict on weight. Which way is
+                // progress depends on the person's own target and is the
+                // server's call (`tiles.weightTrend`); surfaces that have that
+                // verdict colour by it, every other surface stays neutral.
+                trendPolarity: .neutral,
                 renderHint: .scalar,
                 supportsDrillDown: true,
                 formatStyle: .decimal1,

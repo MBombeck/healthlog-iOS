@@ -724,7 +724,7 @@ private struct RingEffectPreviewCase: Identifiable {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: HLSpace.xl) {
             ForEach(cases) { item in
                 VStack(spacing: HLSpace.sm) {
-                    HLScoreRing(fraction: item.fraction, value: "\(Int(item.fraction * 100))", signal: .ok)
+                    HLScoreRing(fraction: item.fraction, value: "\(HLNumberFormat.percentValue(ofFraction: item.fraction))", signal: .ok)
                         .frame(width: 120, height: 120)
                         .insightsRingEffect(item.effect, fraction: item.fraction, isHero: true)
                     Text(item.name)

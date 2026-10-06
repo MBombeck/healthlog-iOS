@@ -165,7 +165,7 @@
             let burstCoalesced = burstComputes == 1
             let neverOnMain = ledger.mainThreadComputeCount == 0
 
-            #expect(sectionsEmitted == 35, "five body evaluations must emit all seven sections each")
+            #expect(sectionsEmitted == 30, "five body evaluations must emit all six sections each")
             #expect(
                 renderComputedOncePerKey,
                 "five renders of one key ran \(renderComputes) analyses; one windowed slice and one full-history spine is the whole bill"

@@ -49,6 +49,11 @@ public final class ModuleGate {
 
     private let repo: ModuleGateRepository?
 
+    /// **#114 / #115 · 0.2** — the AI capability gate fed from the same
+    /// `/api/auth/me` response this gate already loads (no extra request).
+    /// Wired by the composition root; `nil` in unit tests that do not care.
+    @ObservationIgnored public weak var aiCapabilityGate: AICapabilityGate?
+
     public init(
         repo: ModuleGateRepository? = nil,
         modules: [String: Bool]? = nil,
@@ -216,6 +221,8 @@ public final class ModuleGate {
         if let resolved = try? await repo.fetchModuleGateState() {
             modules = resolved.modules
             moduleAccess = resolved.moduleAccess
+            // #115 · 0.2 — `ai` rides the same response. Absent → legacy.
+            aiCapabilityGate?.apply(resolved.ai)
         }
     }
 
@@ -278,5 +285,8 @@ public final class ModuleGate {
     public func clearOnLogout() {
         modules = nil
         moduleAccess = nil
+        // #115 · 0.2 — the `ai` block rides the same `/api/auth/me` load, so it
+        // is dropped with it; the next account loads its own.
+        aiCapabilityGate?.clearOnLogout()
     }
 }

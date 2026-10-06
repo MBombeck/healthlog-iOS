@@ -19,7 +19,7 @@ import Testing
 ///   4. `source: nil` delegates to the canonical unfiltered path (no param).
 ///   5. An older deploy (422 on the filter) degrades to the global page with
 ///      an honest client-side slice.
-@Suite("MeasurementsRepository — server-side sourceEq filter", .serialized)
+@Suite("MeasurementsRepository — server-side sourceEq filter", .serialized, .mockURLSession)
 struct MeasurementsRepositorySourceEqTests {
     private func makeRepo() throws -> MeasurementsRepository {
         let env = AppEnvironment(
@@ -90,7 +90,7 @@ struct MeasurementsRepositorySourceEqTests {
         let page = listPayload(rows: [
             WireRow(id: "w-1", type: "WEIGHT", value: 82.4, at: t1)
         ])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let url = req.url!
             recorder.record(url)
             return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, page)
@@ -118,7 +118,7 @@ struct MeasurementsRepositorySourceEqTests {
         let diaPage = listPayload(rows: [
             WireRow(id: "dia-1", type: "BLOOD_PRESSURE_DIA", value: 82, at: t1, source: "MANUAL")
         ])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let url = req.url!
             recorder.record(url)
             let payload: Data = switch Self.queryValue(url, "type") {
@@ -157,7 +157,7 @@ struct MeasurementsRepositorySourceEqTests {
                 source: "APPLE_HEALTH"
             )
         ])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let url = req.url!
             recorder.record(url)
             return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, page)
@@ -180,7 +180,7 @@ struct MeasurementsRepositorySourceEqTests {
         let page = listPayload(rows: [
             WireRow(id: "w-1", type: "WEIGHT", value: 82.4, at: t1)
         ])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let url = req.url!
             recorder.record(url)
             return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, page)
@@ -200,7 +200,7 @@ struct MeasurementsRepositorySourceEqTests {
             WireRow(id: "w-1", type: "WEIGHT", value: 82.4, at: t1, source: "WITHINGS"),
             WireRow(id: "w-2", type: "WEIGHT", value: 83.1, at: t1.addingTimeInterval(-3600), source: "MANUAL")
         ])
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let url = req.url!
             if Self.queryValue(url, "sourceEq") != nil {
                 return (HTTPURLResponse(url: url, statusCode: 422, httpVersion: nil, headerFields: nil)!, Data())

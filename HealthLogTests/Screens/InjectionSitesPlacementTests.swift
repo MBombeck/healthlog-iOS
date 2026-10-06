@@ -1,5 +1,6 @@
 import Foundation
 @testable import HealthLog
+import SwiftUI
 import Testing
 
 /// #105 — the global injection-site deny-list is a statement about the user's
@@ -40,6 +41,42 @@ struct InjectionSitesPlacementTests {
         let sheet = try Self.source("HealthLog/Screens/Medications/IntakeSiteCaptureSheet.swift")
         #expect(sheet.contains("SettingsInjectionSitesScreen()"))
         #expect(sheet.contains("\"meds.quick.site.manage\""))
+    }
+
+    /// FREEZE-A (1.0.4) — the push to the deny-list is carried by the shared
+    /// `HLButton` push form (`destination:`), not by a sheet-local
+    /// `.navigationDestination`. The PHI presentation census froze before #105
+    /// and admits no new presenter, so the sheet names no presenter of its own;
+    /// the button keeps its R9 look (`.secondary`, `.compact`) and still pushes
+    /// onto the sheet's own NavigationStack.
+    @Test("the deny-list push rides the shared HLButton carrier, look unchanged")
+    func sitePickerPushesThroughTheSharedCarrier() throws {
+        let sheet = try Self.source("HealthLog/Screens/Medications/IntakeSiteCaptureSheet.swift")
+        #expect(!sheet.contains(".navigationDestination("))
+        #expect(!sheet.contains("showManageSites"))
+        #expect(sheet.contains("destination: { SettingsInjectionSitesScreen() }"))
+        #expect(sheet.contains("NavigationStack {"))
+        let manage = try #require(sheet.range(of: "String(localized: \"Manage sites\")"))
+        let call = sheet[manage.lowerBound...].prefix(400)
+        #expect(call.contains("variant: .secondary"))
+        #expect(call.contains("size: .compact"))
+        #expect(call.contains("icon: \"circle.grid.cross\""))
+    }
+
+    /// The carrier itself: the `destination:` form is a push, the action form is not.
+    @Test("HLButton's destination form is a push; its action form is not")
+    @MainActor
+    func hlButtonDestinationFormPushes() {
+        let push = HLButton(
+            "Manage sites",
+            icon: "circle.grid.cross",
+            variant: .secondary,
+            size: .compact,
+            destination: { Text(verbatim: "list") }
+        )
+        #expect(push.pushesDestination)
+        let action = HLButton("Manage sites", variant: .secondary) {}
+        #expect(!action.pushesDestination)
     }
 
     /// Same rule the Medications door had: only for somebody the deny-list

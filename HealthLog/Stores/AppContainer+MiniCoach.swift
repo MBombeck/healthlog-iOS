@@ -15,7 +15,7 @@ import Foundation
 
 public extension AppContainer {
     /// Lazy-instantiated singleton — first read on the MainActor wires
-    /// the service against the live feature-flag store. Cached on the
+    /// the service against the live AI capability gate (#115 · 0.2). Cached on the
     /// associated-object box so subsequent reads return the same
     /// actor (state — conversation history etc. — persists across
     /// reads for the session, per C3).
@@ -23,7 +23,7 @@ public extension AppContainer {
         if let existing = MiniCoachBox.shared.service(for: self) {
             return existing
         }
-        let created = MiniCoachService(featureFlags: featureFlagsStore.liveService())
+        let created = MiniCoachService(aiCapabilities: aiCapabilityGate.reader)
         MiniCoachBox.shared.set(created, for: self)
         return created
     }

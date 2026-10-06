@@ -37,7 +37,6 @@ struct InsightProviderTests {
         """#.utf8)
         let insight = try decoder.decode(Insight.self, from: json)
         #expect(insight.provider == value)
-        #expect(!insight.providerLabel.isEmpty)
     }
 
     @Test(
@@ -52,30 +51,15 @@ struct InsightProviderTests {
         ]
     )
     func providerLabel(provider: String, expected: String) {
-        let insight = Insight(
-            id: "i-1",
-            title: "T",
-            summary: "S",
-            severity: .info,
-            generatedAt: Date(),
-            provider: provider
-        )
-        #expect(insight.providerLabel == expected)
+        #expect(AIInsightResponse.providerFamilyLabel(provider) == expected)
     }
 
     @Test("Unknown provider tidies separators in the fallback label")
     func providerLabelFallback() {
-        let insight = Insight(
-            id: "i-1",
-            title: "T",
-            summary: "S",
-            severity: .info,
-            generatedAt: Date(),
-            provider: "future-model_2027"
-        )
+        let label = AIInsightResponse.providerFamilyLabel("future-model_2027")
         // Expect title-cased, separators replaced with spaces.
-        #expect(insight.providerLabel.contains("Future"))
-        #expect(insight.providerLabel.contains("Model"))
-        #expect(!insight.providerLabel.contains("_"))
+        #expect(label.contains("Future"))
+        #expect(label.contains("Model"))
+        #expect(!label.contains("_"))
     }
 }

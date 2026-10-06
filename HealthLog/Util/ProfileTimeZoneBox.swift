@@ -27,23 +27,47 @@ import os
 /// an absent or unparseable identifier falls back to `.current` exactly as
 /// before.
 public final class ProfileTimeZoneBox: Sendable {
-    /// Audit B-7 — the mirror's `UserDefaults` key. App-scoped (not the app
-    /// group): every consumer of the box lives in the main app process.
+    /// Audit B-7 — the mirror's `UserDefaults` key, app-scoped. #115 B5: the
+    /// widget extension reads the account-scoped App-Group copy instead
+    /// (``SharedAccountPrefs``), because this domain is invisible to it.
     static let defaultsKey = "hl.profile.timeZoneIdentifier"
 
-    private let storage: OSAllocatedUnfairLock<TimeZone>
+    /// #115 1.5 — the app-wide box. `AppContainer` feeds THIS instance from the
+    /// settings store, so every day key the app cuts (``ProfileDay``) reads the
+    /// same zone the medication / dashboard / measurement keys already use,
+    /// including from a view or a repository that holds no container.
+    ///
+    /// #115 B5 — it also mirrors into the account-scoped App-Group entry
+    /// (``SharedAccountPrefs/live``), so the widget extension, whose
+    /// `.standard` domain never saw the app's mirror, cuts the same days.
+    public static let shared = ProfileTimeZoneBox(sharedPrefs: .live)
+
+    /// `nil` until a zone was pushed or the seed was read — see ``current``.
+    private let storage: OSAllocatedUnfairLock<TimeZone?>
     /// `nonisolated(unsafe)` because `UserDefaults` is not `Sendable` in the
     /// Swift 6 sense while being documented as thread-safe. The box is read from
     /// off-main-actor `@Sendable` providers, which is the whole point of it.
     private nonisolated(unsafe) let defaults: UserDefaults
+    /// #115 B5 — the account-scoped App-Group mirror, or `nil` (tests).
+    private let sharedPrefs: SharedAccountPrefs?
 
-    /// - Parameter defaults: where the last resolved identifier is mirrored.
-    ///   Injectable so a test can seed one without touching the process store.
-    public init(defaults: UserDefaults = .standard) {
+    /// - Parameters:
+    ///   - defaults: where the last resolved identifier is mirrored.
+    ///     Injectable so a test can seed one without touching the process store.
+    ///   - sharedPrefs: #115 B5 — the App-Group mirror an extension reads.
+    public init(defaults: UserDefaults = .standard, sharedPrefs: SharedAccountPrefs? = nil) {
         self.defaults = defaults
-        storage = OSAllocatedUnfairLock<TimeZone>(
-            initialState: Self.seedZone(identifier: defaults.string(forKey: Self.defaultsKey))
-        )
+        self.sharedPrefs = sharedPrefs
+        storage = OSAllocatedUnfairLock<TimeZone?>(initialState: nil)
+    }
+
+    /// #115 B5 — the seed, in order: the account-scoped App-Group entry for
+    /// the account signed in now, the app's own mirror, the device zone. Read
+    /// once, on first use rather than at construction, so the Keychain lookup
+    /// behind the account check never runs on a path that never asks.
+    private func seed() -> TimeZone {
+        if let zone = sharedPrefs?.timeZone() { return zone }
+        return Self.seedZone(identifier: defaults.string(forKey: Self.defaultsKey))
     }
 
     /// Audit B-7 — the pure seeding rule: a stored IANA identifier this device
@@ -59,7 +83,15 @@ public final class ProfileTimeZoneBox: Sendable {
     /// Latest resolved server-profile timezone (the mirrored one until the
     /// first profile emission of this launch, `.current` when there is none).
     public var current: TimeZone {
-        storage.withLock { $0 }
+        if let zone = storage.withLock({ $0 }) { return zone }
+        // The seed reads UserDefaults and the Keychain — outside the unfair
+        // lock. A push that lands meanwhile wins over the seed.
+        let seeded = seed()
+        return storage.withLock { state in
+            if let zone = state { return zone }
+            state = seeded
+            return seeded
+        }
     }
 
     /// Push the latest resolved zone. Called on the main actor whenever the
@@ -70,6 +102,19 @@ public final class ProfileTimeZoneBox: Sendable {
     public func update(_ timeZone: TimeZone) {
         storage.withLock { $0 = timeZone }
         defaults.set(timeZone.identifier, forKey: Self.defaultsKey)
+        sharedPrefs?.setTimeZone(timeZone)
+    }
+
+    /// **#115 B5 — the update path into the App-Group mirror.** An install that
+    /// resolved its account zone before this build has it only in the app's own
+    /// mirror; the extension would keep answering the device zone until the next
+    /// `/me` emission. Copy it across once, when the shared entry for the
+    /// signed-in account is still empty. Never overwrites a shared entry.
+    public func mirrorIntoSharedIfUnset() {
+        guard let sharedPrefs, sharedPrefs.timeZone() == nil,
+              let identifier = defaults.string(forKey: Self.defaultsKey),
+              let zone = TimeZone(identifier: identifier) else { return }
+        sharedPrefs.setTimeZone(zone)
     }
 
     /// **Audit B-7 (fix round 1) — push a zone only when the profile has

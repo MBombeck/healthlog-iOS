@@ -82,6 +82,14 @@ public struct CorrelationsPanel: View {
         self.onAskCoach = onAskCoach
     }
 
+    /// #115 P2 — the weight axis (title and scatter values) reads in the
+    /// account's unit; the digest scatter is canonical kg.
+    @Environment(\.unitPreferences) private var unitPreferences
+
+    private var weightAxisTitle: String {
+        String(localized: "Weight (\(unitPreferences.unitLabel(for: .weight)))")
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
             // MED-2: the section label is owned by the ONE canonical
@@ -122,10 +130,10 @@ public struct CorrelationsPanel: View {
                     interpretation: "",
                     r: corr.r,
                     n: corr.n,
-                    xAxisTitle: String(localized: "Weight (kg)"),
+                    xAxisTitle: weightAxisTitle,
                     yAxisTitle: String(localized: "Systolic (mmHg)"),
                     points: scatter,
-                    xValue: { $0.weight },
+                    xValue: { [unitPreferences] in unitPreferences.displayValue($0.weight, kind: .weight) },
                     yValue: { $0.sysBP },
                     tone: HLText.secondary,
                     onAskCoach: onAskCoach.map { handler in { handler(.weightBp) } }
@@ -183,10 +191,10 @@ public struct CorrelationsPanel: View {
                     r: corr.r,
                     n: corr.n,
                     xAxisTitle: String(localized: "Mood (1–5)"),
-                    yAxisTitle: String(localized: "Weight (kg)"),
+                    yAxisTitle: weightAxisTitle,
                     points: scatter,
                     xValue: { $0.mood },
-                    yValue: { $0.weight },
+                    yValue: { [unitPreferences] in unitPreferences.displayValue($0.weight, kind: .weight) },
                     tone: HLText.secondary,
                     onAskCoach: onAskCoach.map { handler in { handler(.moodWeight) } }
                 )
@@ -330,6 +338,7 @@ private struct CorrelationCard<Point: Sendable>: View {
     /// A360 H2 — fired when the user taps "Ask the coach about this" on this card.
     /// `nil` hides the affordance (Coach gated off / standalone).
     var onAskCoach: (() -> Void)?
+    @Environment(\.appContainer) private var appContainer
 
     var body: some View {
         // v0.14.1 §5/§8 — the Zusammenhänge block reads as grey flowing text in
@@ -393,7 +402,8 @@ private struct CorrelationCard<Point: Sendable>: View {
             // A360 H2 — discreet "Ask the coach about this" footer link, scoped to
             // both metrics in the pair. Monochrome, footnote-weight — a quiet
             // affordance, never a loud CTA (the medication-card restraint rule).
-            if let onAskCoach {
+            // #115 · 0.2 — only while the `coach` capability offers an entry.
+            if let onAskCoach, appContainer.offersCoach {
                 Button(action: onAskCoach) {
                     HStack(spacing: HLSpace.xs) {
                         Image(systemName: "sparkles")

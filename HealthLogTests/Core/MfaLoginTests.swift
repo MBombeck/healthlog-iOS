@@ -24,7 +24,7 @@
         import AuthenticationServices
     #endif
 
-    @Suite("MFA login (#37)", .serialized)
+    @Suite("MFA login (#37)", .serialized, .mockURLSession)
     struct MfaLoginTests {
         /// Passkey stub — verifyMFA(TOTP/recovery) never touches it.
         private final class NoopPasskey: PasskeyServiceProtocol, @unchecked Sendable {
@@ -87,7 +87,7 @@
         @Test("MFA-required 200 → .mfaRequired (not a thrown 'no Bearer token' error)")
         func loginReturnsMfaRequired() async throws {
             let (service, kc) = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.mfaRequiredBody)
             }
             let outcome = try await service.login(email: "u@e.co", password: "pw")
@@ -105,7 +105,7 @@
         @Test("Normal 200 → .session (no regression)")
         func loginReturnsSession() async throws {
             let (service, kc) = makeService()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.bundleBody())
             }
             let outcome = try await service.login(email: "u@e.co", password: "pw")
@@ -125,7 +125,7 @@
         func verifyMfaPersists() async throws {
             let (service, kc) = makeService()
             nonisolated(unsafe) var capturedBody: Data?
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 // URLProtocol strips httpBody onto httpBodyStream; read either.
                 capturedBody = req.httpBody ?? req.httpBodyStream.map { stream in
                     stream.open()
@@ -165,7 +165,7 @@
             let store = AuthStore(auth: service, keychain: kc)
 
             // 1) Password login → server demands a second factor.
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.mfaRequiredBody)
             }
             await store.login(email: "u@e.co", password: "pw")
@@ -177,7 +177,7 @@
 
             // 2) Correct code → verify returns the bundle → challenge cleared,
             //    phase joins the normal post-login handoff.
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.bundleBody())
             }
             await store.verifyMFA(method: .totp, code: "123456")
@@ -201,14 +201,14 @@
             let (service, _) = makeService(kc)
             let store = AuthStore(auth: service, keychain: kc)
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.mfaRequiredBody)
             }
             await store.login(email: "u@e.co", password: "pw")
             #expect(store.mfaChallenge != nil)
 
             // Server rejects a wrong code with 401 + body "Invalid code".
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"Invalid code"}"#.utf8)
@@ -229,14 +229,14 @@
             let (service, _) = makeService(kc)
             let store = AuthStore(auth: service, keychain: kc)
 
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.mfaRequiredBody)
             }
             await store.login(email: "u@e.co", password: "pw")
             #expect(store.mfaChallenge != nil)
 
             // Server reports a dead ticket with 401 + body "Invalid or expired challenge".
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"Invalid or expired challenge"}"#.utf8)
@@ -256,7 +256,7 @@
             let kc = InMemoryKeychain()
             let (service, _) = makeService(kc)
             let store = AuthStore(auth: service, keychain: kc)
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.mfaRequiredBody)
             }
             await store.login(email: "u@e.co", password: "pw")

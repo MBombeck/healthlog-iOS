@@ -43,7 +43,7 @@ enum LAStrings {
     static func dueAt(_ date: Date, timeFormatRaw: String) -> String {
         let time = (HLTimeFormat(rawValue: timeFormatRaw) ?? .auto).formatTime(date)
         return String(
-            format: String(localized: "la.med.due_at", defaultValue: "fällig um %@"),
+            format: String(localized: "la.med.due_at", defaultValue: "due at %@"),
             time
         )
     }
@@ -54,7 +54,7 @@ enum LAStrings {
     static func takenAt(_ date: Date, timeFormatRaw: String) -> String {
         let time = (HLTimeFormat(rawValue: timeFormatRaw) ?? .auto).formatTime(date)
         return String(
-            format: String(localized: "la.med.taken_at", defaultValue: "Genommen um %@"),
+            format: String(localized: "la.med.taken_at", defaultValue: "Taken at %@"),
             time
         )
     }
@@ -63,7 +63,7 @@ enum LAStrings {
     /// eingenommen".
     static func takenHint(_ medicationName: String) -> String {
         String(
-            format: String(localized: "la.med.action.taken.hint", defaultValue: "Erfasst %@ als eingenommen"),
+            format: String(localized: "la.med.action.taken.hint", defaultValue: "Records %@ as taken"),
             medicationName
         )
     }
@@ -78,8 +78,8 @@ enum LAStrings {
             .units(allowed: [.hours, .minutes], width: .wide, maximumUnitCount: 2)
         )
         let template = overdue
-            ? String(localized: "la.med.a11y.overdue", defaultValue: "Überfällig seit %@")
-            : String(localized: "la.med.a11y.due_in", defaultValue: "Fällig in %@")
+            ? String(localized: "la.med.a11y.overdue", defaultValue: "Overdue by %@")
+            : String(localized: "la.med.a11y.due_in", defaultValue: "Due in %@")
         return String(format: template, spoken)
     }
 

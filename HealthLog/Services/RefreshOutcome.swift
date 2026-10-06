@@ -71,7 +71,7 @@ public enum RefreshOutcome: Sendable, Equatable {
         // (the refresh leg carries no idempotency key), and it says "retry",
         // which is the definition of transient.
         case .network, .offline, .rateLimited, .canceled, .decoding,
-             .assistantDisabled, .moduleDisabled, .notPersisted,
+             .aiUnavailable, .moduleDisabled, .notPersisted,
              .writeConflictUnresolved, .serverNotConfigured, .refusedWithReason,
              .idempotencyReplayInFlight, .unknown:
             return .transient

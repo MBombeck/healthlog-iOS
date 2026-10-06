@@ -7,7 +7,7 @@ import Testing
 /// return `Void` and the orchestrator burnt the flag unconditionally after it
 /// returned, so a wake killed mid-sweep (or a held sweep) left every later
 /// sweep at 7 days and the historical day-rows never arrived.
-@Suite("Daily-stats all-time backfill — one-shot burns only on completion")
+@Suite("Daily-stats all-time backfill — one-shot burns only on completion", .mockURLSession)
 struct HealthKitDailyStatsBackfillOneShotTests {
     @Test("a held sweep (no admitted account) reports incomplete")
     func heldSweepReportsIncomplete() async throws {

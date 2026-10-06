@@ -13,6 +13,12 @@ public actor CycleRepository {
     private let outbox: OutboxQueue
     private let encoder: JSONEncoder
     private let swr: SWRCoordinator?
+    /// #115 B6 — told when a queued period boundary reached the server, so the
+    /// cycle screen refetches (the boundary can move, absorb or restore a start).
+    private var onBoundaryReplayed: (@Sendable () async -> Void)?
+    /// A boundary replayed before the sink was attached (a background drain
+    /// that beat the composition root) — flushed on attach, never lost.
+    private var boundaryReplayedBeforeSink = false
 
     public init(
         api: APIClientProtocol,
@@ -195,10 +201,12 @@ public actor CycleRepository {
         }
     }
 
-    /// `DELETE /api/cycle/cycles/{id}` (soft).
+    /// `DELETE /api/cycle/cycles/{id}` (soft). 204 with no body, also for a
+    /// cycle that is already deleted (v1.39): `sendVoid`, because `send`
+    /// cannot decode an empty body.
     public func deleteCycle(id: String) async throws {
-        let req: APIRequest<EmptyResponse> = .delete("/api/cycle/cycles/\(id)")
-        _ = try await api.send(req)
+        let req: APIRequest<EmptyPayload> = .delete("/api/cycle/cycles/\(id)")
+        try await api.sendVoid(req)
         await invalidateTimeline()
     }
 
@@ -330,8 +338,23 @@ public actor CycleRepository {
     public func replayLogDayLog(write: CycleDayLogWrite, idempotencyKey: String) async throws {
         // Drain through the bulk endpoint (single entry) — the externalId UPSERT
         // makes a doubly-delivered replay idempotent server-side.
-        _ = try await bulk([write], idempotencyKey: IdempotencyKey(raw: idempotencyKey))
+        let response = try await bulk([write], idempotencyKey: IdempotencyKey(raw: idempotencyKey))
+        // #115 / 0.3 — HTTP 200 is not storage. The route answers a failed
+        // write with `skipped` + `upsert_failed` | `constraint` (day-logs/bulk
+        // at v1.39.0); draining the row then lost a day whose HealthKit anchor
+        // had already moved. Only a stored row, or the one verdict a retry can
+        // never change, lets the row go.
+        guard let result = response.entries.first(where: { $0.index == 0 }) else {
+            throw HLError.network(.other("cycle day-log replay: no per-entry result"))
+        }
+        if result.status == .skipped, result.reason != Self.unstableExternalIdReason {
+            throw HLError.network(.other("cycle day-log replay not stored: \(result.reason ?? "no reason")"))
+        }
     }
+
+    /// The one cycle bulk skip a retry cannot change: the `externalId` is not
+    /// stable enough to dedupe on (`UNSTABLE_EXTERNAL_ID_REASON`).
+    static let unstableExternalIdReason = "unstable_external_id"
 
     @discardableResult
     public func replayUpdateDayLog(id: String, patch: CycleDayLogPatch, idempotencyKey: String) async throws -> CycleDayLogDTO {
@@ -349,6 +372,25 @@ public actor CycleRepository {
             idempotencyKey: IdempotencyKey(raw: idempotencyKey)
         )
         _ = try await api.send(req)
+        // #115 B6 — the live path refreshes the calendar after a boundary; the
+        // replay did not, so an offline start or end stayed invisible (or the
+        // optimistic guess stayed on screen) until the next manual refresh.
+        await invalidateTimeline()
+        if let onBoundaryReplayed {
+            await onBoundaryReplayed()
+        } else {
+            boundaryReplayedBeforeSink = true
+        }
+    }
+
+    /// Composition-root wiring for ``replayPeriod(request:idempotencyKey:)``:
+    /// the cycle store reloads through this sink. Idempotent; flushes a replay
+    /// that happened before the sink existed.
+    public func attachBoundaryReplaySink(_ sink: @escaping @Sendable () async -> Void) async {
+        onBoundaryReplayed = sink
+        guard boundaryReplayedBeforeSink else { return }
+        boundaryReplayedBeforeSink = false
+        await sink()
     }
 
     private func invalidateTimeline() async {
@@ -383,11 +425,12 @@ public actor CycleRepository {
     }
 
     private func deleteDayLogRequest(id: String, idempotencyKey: IdempotencyKey) async throws {
-        let req: APIRequest<EmptyResponse> = .delete(
+        // 204, no body (day-logs/[id] at v1.39.0).
+        let req: APIRequest<EmptyPayload> = .delete(
             "/api/cycle/day-logs/\(id)",
             idempotencyKey: idempotencyKey
         )
-        _ = try await api.send(req)
+        try await api.sendVoid(req)
         await invalidateTimeline()
     }
 

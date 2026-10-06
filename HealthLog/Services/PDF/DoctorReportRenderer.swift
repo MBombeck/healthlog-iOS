@@ -59,7 +59,7 @@ public actor DoctorReportRenderer {
             // Pre-render chart bitmaps on @MainActor.
             let chartImages: [ChartImage] = if let chartsBlock = spec.charts {
                 await MainActor.run {
-                    DoctorReportChartRenderer.renderImages(chartsBlock)
+                    DoctorReportChartRenderer.renderImages(chartsBlock, glucoseUnit: spec.glucoseUnit, units: spec.printUnits)
                 }
             } else {
                 []

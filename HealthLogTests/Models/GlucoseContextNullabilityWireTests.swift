@@ -22,7 +22,7 @@ import Testing
 ///    Wire-Decoder das Literal ab.
 ///
 /// Getrieben über den **echten** ``APIClient`` mit `MockURLProtocol`.
-@Suite("CU-18 — glucoseContext nullbar + tolerant", .serialized)
+@Suite("CU-18 — glucoseContext nullbar + tolerant", .serialized, .mockURLSession)
 struct GlucoseContextNullabilityWireTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -37,7 +37,7 @@ struct GlucoseContextNullabilityWireTests {
     }
 
     private func respond(_ json: String) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(json.utf8)

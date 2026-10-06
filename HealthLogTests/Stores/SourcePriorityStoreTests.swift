@@ -13,7 +13,7 @@ import Testing
 ///
 /// v0.5.4-SP4: erweitert um Write-Path-Tests für den Editor —
 /// `updateLadder(forMetric:to:)` + `resetToDefaults()` + Rollback-Verhalten.
-@Suite("SourcePriorityStore — metric ladder derivation", .serialized)
+@Suite("SourcePriorityStore — metric ladder derivation", .serialized, .mockURLSession)
 @MainActor
 struct SourcePriorityStoreTests {
     private func makeAPI() -> APIClient {
@@ -70,7 +70,7 @@ struct SourcePriorityStoreTests {
         // Both must be labelled — an unlabelled key falls back to `capitalized`
         // and would render "Sleepdebt" in the settings matrix.
         #expect(SourcePriorityStore.label(forMetricKey: "stress") == "Stress")
-        #expect(SourcePriorityStore.label(forMetricKey: "sleepDebt") == "Schlafdefizit")
+        #expect(SourcePriorityStore.label(forMetricKey: "sleepDebt") == "sources.metric.sleepDebt")
     }
 
     @Test("WHOOP signature metric keys are surfaced + labelled")
@@ -91,7 +91,7 @@ struct SourcePriorityStoreTests {
         #expect(SourcePriorityStore.label(forMetricKey: "steps") == "Steps")
         #expect(SourcePriorityStore.label(forMetricKey: "weight") == "Weight")
         #expect(SourcePriorityStore.label(forMetricKey: "bloodPressure") == "Blood pressure")
-        #expect(SourcePriorityStore.label(forMetricKey: "hrv") == "Herzfrequenzvariabilität")
+        #expect(SourcePriorityStore.label(forMetricKey: "hrv") == "Heart rate variability")
         #expect(SourcePriorityStore.label(forMetricKey: "vo2Max") == "VO₂ max")
         // Unknown keys pass through capitalised so the row never reads empty.
         // The exact transform isn't load-bearing — the contract is "never
@@ -203,7 +203,7 @@ struct SourcePriorityStoreTests {
     @Test("updateLadder(forMetric:to:) — Erfolgsfall echoed Server-Shape")
     func updateLadderHappyPath() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // GET returns initial shape; PUT returns echoed shape.
             let body = Data(#"""
             {"data":{"weight":["APPLE_HEALTH","WITHINGS","MANUAL"]},"error":null}
@@ -211,7 +211,7 @@ struct SourcePriorityStoreTests {
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         await store.load()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // PUT echo
             let body = Data(#"""
             {"data":{"weight":["WITHINGS","APPLE_HEALTH","MANUAL"]},"error":null}
@@ -227,7 +227,7 @@ struct SourcePriorityStoreTests {
     @Test("updateLadder — 422-Fehler rollt auf vorigen Snapshot zurück")
     func updateLadderRollback() async {
         let store = makeStore()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"weight":["APPLE_HEALTH","WITHINGS","MANUAL"]},"error":null}
             """#.utf8)
@@ -235,7 +235,7 @@ struct SourcePriorityStoreTests {
         }
         await store.load()
         let before = store.ladder
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":{"code":"VALIDATION","message":"bad shape"}}
             """#.utf8)
@@ -251,7 +251,7 @@ struct SourcePriorityStoreTests {
     func resetToDefaultsHappyPath() async {
         let store = makeStore()
         // Initial GET — empty-ish ladder so we can prove the reset wrote.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"weight":["MANUAL"]},"error":null}
             """#.utf8)
@@ -260,7 +260,7 @@ struct SourcePriorityStoreTests {
         await store.load()
         nonisolated(unsafe) var receivedBody: Data?
         nonisolated(unsafe) var method: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             method = req.httpMethod
             if let stream = req.httpBodyStream {
                 stream.open()

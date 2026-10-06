@@ -4,6 +4,9 @@ import SwiftUI
 
 struct ScheduleSection: View {
     let schedule: MedicationSchedule
+    /// v1.39.1 (#1033) — intake tracking is off: the schedule is information
+    /// only, and the section says so under it.
+    var isRecordOnly: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
@@ -50,6 +53,13 @@ struct ScheduleSection: View {
                             .foregroundStyle(HLText.tertiary)
                             .monospacedDigit()
                             .lineLimit(1)
+                    }
+                    if isRecordOnly {
+                        Text("med.schedule.recordOnly.hint")
+                            .font(.hlCaption)
+                            .foregroundStyle(HLText.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("med.schedule.recordOnly.hint")
                     }
                 }
             }

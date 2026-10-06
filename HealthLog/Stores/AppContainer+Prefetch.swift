@@ -19,9 +19,12 @@ public extension AppContainer {
         swr: SWRCoordinator,
         targetsRepo: InsightsTargetsRepository,
         insightsRepo: InsightsRepository,
-        availability: BackendAvailability
+        availability: BackendAvailability,
+        aiCapabilities: any AICapabilityReading
     ) -> (MetricInsightsRepository, InsightsPrefetchService) {
-        let metricInsightsRepo = MetricInsightsRepository(api: apiClient, consentGate: consentGate, swr: swr)
+        let metricInsightsRepo = MetricInsightsRepository(
+            api: apiClient, consentGate: consentGate, swr: swr, aiCapabilities: aiCapabilities // #115 0.2
+        )
         let prefetch = InsightsPrefetchService(
             metricInsightsRepo: metricInsightsRepo,
             targetsRepo: targetsRepo,

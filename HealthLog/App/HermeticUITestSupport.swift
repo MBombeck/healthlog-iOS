@@ -226,6 +226,7 @@
             // clean dashboard.
             UserDefaults.standard.set(true, forKey: FirstLoginSyncBanner.completedDefaultsKey)
             purgePermissionPromptingResidue()
+            SweepFixtures.seedSkippedRows(ownerID: seededUserID)
             HermeticURLProtocol.activate()
         }
 

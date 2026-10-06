@@ -98,6 +98,12 @@ public actor OutboxQueue {
         /// kinds without an optimistic-id chain. See `OutboxOperation.clientEntityId`.
         public var clientEntityId: String?
 
+        /// C4 — the replay's last note on this row, read back so an
+        /// "unconfirmed since" marker survives between passes (see
+        /// `OutboxReplayService+Interruption`). Read-only mirror of
+        /// `OutboxOperation.lastError`; nothing new is persisted.
+        public var lastError: String?
+
         public init(
             id: UUID = UUID(),
             kind: Kind,
@@ -108,7 +114,8 @@ public actor OutboxQueue {
             lastAttemptAt: Date? = nil,
             ownerUserID: String? = nil,
             delivered: Bool = false,
-            clientEntityId: String? = nil
+            clientEntityId: String? = nil,
+            lastError: String? = nil
         ) {
             self.id = id
             self.kind = kind
@@ -120,6 +127,7 @@ public actor OutboxQueue {
             self.ownerUserID = ownerUserID
             self.delivered = delivered
             self.clientEntityId = clientEntityId
+            self.lastError = lastError
         }
 
         // `Kind` is declared in `OutboxQueue+Kind.swift` (an extension on
@@ -647,7 +655,7 @@ public actor OutboxQueue {
         }
     }
 
-    private func resolvedStore() async -> OutboxStore {
+    func resolvedStore() async -> OutboxStore {
         if let openedStore { return openedStore }
         if let openInFlight { return await openInFlight.value }
         let open = openStore
@@ -1027,7 +1035,8 @@ private extension OutboxQueue.Operation {
             lastAttemptAt: snap.lastAttemptAt,
             ownerUserID: snap.ownerUserID,
             delivered: snap.delivered,
-            clientEntityId: snap.clientEntityId
+            clientEntityId: snap.clientEntityId,
+            lastError: snap.lastError
         )
     }
 }

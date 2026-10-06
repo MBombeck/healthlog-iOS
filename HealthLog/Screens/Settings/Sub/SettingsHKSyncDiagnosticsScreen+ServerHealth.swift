@@ -110,13 +110,11 @@ struct HKServerSyncHealthSummary: Equatable {
         case .parked: return String(localized: "settings.hkdiag.verdict_parked")
         case .pendingFirstSync: return String(localized: "settings.hkdiag.verdict_pending_first_sync")
         case .disconnected: return String(localized: "settings.hkdiag.verdict_disconnected")
-        case let .unknown(raw):
-            // Ein neues Server-Wort wird wörtlich gezeigt statt verschwiegen.
-            // Leerer Rohwert (Feld vorhanden, aber ohne `verdict`) fällt auf die
-            // generische Unbekannt-Zeile zurück.
-            return raw.isEmpty
-                ? String(localized: "settings.hkdiag.verdict_unknown")
-                : raw
+        case .unknown:
+            // K1 — ein neues Server-Wort ist ein Bezeichner, kein Satz. Es wird
+            // neutral „Unbekannt" gelesen (und nicht rot gefärbt, siehe
+            // `verdictTint`), statt als Rohwert im UI zu stehen.
+            return HKSyncDiagnosticsVocabulary.unknown
         }
     }
 
@@ -126,7 +124,7 @@ struct HKServerSyncHealthSummary: Equatable {
     }
 
     /// Lokalisiertes Wort für den zuletzt gesehenen Auslöser; ein unbekanntes
-    /// Server-Wort wird wörtlich durchgereicht.
+    /// Server-Wort liest sich neutral „Unbekannt" (K1).
     var triggerLabel: String {
         guard let raw = lastSyncTrigger else {
             return String(localized: "settings.hkdiag.never")
@@ -135,7 +133,7 @@ struct HKServerSyncHealthSummary: Equatable {
         case .foreground: return String(localized: "settings.hkdiag.trigger_foreground")
         case .background: return String(localized: "settings.hkdiag.trigger_background")
         case .push: return String(localized: "settings.hkdiag.trigger_push")
-        case nil: return raw
+        case nil: return HKSyncDiagnosticsVocabulary.unknown
         }
     }
 }
@@ -227,7 +225,7 @@ extension SettingsHKSyncDiagnosticsScreen {
             } else {
                 ForEach(freshness) { row in
                     HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-                        Text(row.type)
+                        Text(HKSyncDiagnosticsVocabulary.freshnessType(row.type))
                             .font(.hlCaption)
                             .foregroundStyle(HLText.primary)
                         Spacer(minLength: HLSpace.sm)

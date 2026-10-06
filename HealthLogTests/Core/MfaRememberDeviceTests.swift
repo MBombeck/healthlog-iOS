@@ -23,7 +23,7 @@
         import AuthenticationServices
     #endif
 
-    @Suite("MFA remember-device threading (parity 2.4)", .serialized)
+    @Suite("MFA remember-device threading (parity 2.4)", .serialized, .mockURLSession)
     struct MfaRememberDeviceTests {
         /// Passkey stub — the TOTP / recovery paths never touch it.
         private final class NoopPasskey: PasskeyServiceProtocol, @unchecked Sendable {
@@ -106,7 +106,7 @@
         func serviceSendsFlagWhenOptedIn() async throws {
             let (service, _) = makeService()
             nonisolated(unsafe) var captured = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured = Self.body(of: req)
                 return (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -123,7 +123,7 @@
         func serviceOmitsFlagWhenNotOptedIn() async throws {
             let (service, _) = makeService()
             nonisolated(unsafe) var captured = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured = Self.body(of: req)
                 return (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -145,7 +145,7 @@
             let keychain = InMemoryKeychain()
             let (service, _) = makeService(keychain)
             let store = AuthStore(auth: service, keychain: keychain)
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                     Self.mfaRequiredBody
@@ -162,7 +162,7 @@
             #expect(store.mfaChallenge != nil)
 
             nonisolated(unsafe) var captured = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured = Self.body(of: req)
                 return (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -180,7 +180,7 @@
             let (store, _) = await challengedStore()
 
             nonisolated(unsafe) var captured = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured = Self.body(of: req)
                 return (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -197,7 +197,7 @@
             let (store, _) = await challengedStore()
 
             nonisolated(unsafe) var captured = ""
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 captured = Self.body(of: req)
                 return (
                     HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

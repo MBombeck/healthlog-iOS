@@ -14,6 +14,12 @@ public final class InsightsStore {
     /// the UI actually paints — derived from the same data sources as
     /// comprehensive but already iOS-shaped (id/title/summary/severity).
     public private(set) var cards: [Insight] = []
+    /// F1 (1.1.0) — `true` once `insights/cards` has answered (fresh, cached,
+    /// or a failure that kept a last-known list). Only then is an empty
+    /// ``cards`` the server's word ("no rule fired") rather than "not asked
+    /// yet"; the overview's empty state keys off this, never off a list that
+    /// was simply never loaded.
+    public private(set) var hasDeliveredCards: Bool = false
     public private(set) var correlations: [CorrelationFinding] = []
     public private(set) var lastFetched: Date?
     public private(set) var isLoading: Bool = false
@@ -41,22 +47,9 @@ public final class InsightsStore {
     private let repo: InsightsRepository
     private let swr: SWRCoordinator?
 
-    /// Closure the store calls before any insight fetch — must return true
-    /// to proceed. Lets `AppContainer` wire the AIConsentStore + active
-    /// provider without InsightsStore knowing about either. Default `nil`
-    /// (no gate) keeps unit tests building.
-    public var consentGate: (@MainActor () -> Bool)?
-
     public init(repo: InsightsRepository, swr: SWRCoordinator? = nil) {
         self.repo = repo
         self.swr = swr
-    }
-
-    /// True if the consent-gate has been wired AND consents the call.
-    /// When the gate is nil we permit the call (back-compat for tests).
-    private func isConsentGateOpen() -> Bool {
-        guard let consentGate else { return true }
-        return consentGate()
     }
 
     /// Load both surfaces in parallel — comprehensive (digest fields, cards)
@@ -67,11 +60,14 @@ public final class InsightsStore {
     ///
     /// Failures surface via ``error`` and leave the previously-loaded payload
     /// intact (graceful degradation).
+    ///
+    /// **#114 / #115 · 0.2 — no AI-consent gate.** `insights/comprehensive` and
+    /// `insights/cards` are deterministic data (server v1.39: cards are always
+    /// `provider: "rules"`); no model is reached and nothing leaves the
+    /// account, so they load whatever the consent or the AI capabilities say.
+    /// The consent gate stays on the one generating call, `POST
+    /// insights/generate` (``DailyBriefingStore``).
     public func load() async {
-        guard isConsentGateOpen() else {
-            HLLog.ui.info("InsightsStore.load gated by AI consent — skipped")
-            return
-        }
         // 14-06 — see `MedicationsStore.load`. `.insightsWarm` is a member of the
         // same bounded foreground pass, so this stream meets the same 250 ms
         // cancellation the medications list does. Declared before the first
@@ -121,6 +117,7 @@ public final class InsightsStore {
             let (response, cardsList) = try await (comp, cardsResult)
             comprehensive = response
             cards = cardsList
+            hasDeliveredCards = true
             lastFetched = Date()
         } catch let err as HLError {
             error = err
@@ -173,11 +170,14 @@ public final class InsightsStore {
                 break
             case let .cached(value, _):
                 cards = value
+                hasDeliveredCards = true
             case let .fresh(value):
                 cards = value
+                hasDeliveredCards = true
             case let .failed(_, lastKnown):
                 if let lastKnown {
                     cards = lastKnown
+                    hasDeliveredCards = true
                 }
             }
         }
@@ -212,6 +212,7 @@ public final class InsightsStore {
     public func clearOnLogout() {
         comprehensive = nil
         cards = []
+        hasDeliveredCards = false
         correlations = []
         lastFetched = nil
         lastUpdatedAt = nil

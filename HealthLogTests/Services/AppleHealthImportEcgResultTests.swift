@@ -24,7 +24,7 @@ import Testing
 /// server — PROJECT_GUIDE.md), so a server-side shape change fails here as a decode
 /// error rather than as a silently blank block on the screen. `.serialized`
 /// because the suite owns the global stub handler.
-@Suite("CU-37 — Apple-Health-Import: result.ecg", .serialized)
+@Suite("CU-37 — Apple-Health-Import: result.ecg", .serialized, .mockURLSession)
 struct AppleHealthImportEcgResultTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -43,7 +43,7 @@ struct AppleHealthImportEcgResultTests {
     }
 
     private func respond(_ json: String) {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(json.utf8)

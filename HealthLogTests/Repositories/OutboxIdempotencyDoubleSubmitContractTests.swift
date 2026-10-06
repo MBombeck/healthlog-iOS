@@ -26,7 +26,7 @@ import Testing
 ///
 /// `.serialized` — owns the process-global `MockURLProtocol.handler` per test
 /// (audit-v0162 H2).
-@Suite("Outbox idempotency double-submit contract", .serialized)
+@Suite("Outbox idempotency double-submit contract", .serialized, .mockURLSession)
 struct OutboxIdempotencyDoubleSubmitContractTests {
     /// The outbox-backed create kinds this contract covers. Each maps to a
     /// fixture (payload + create route + a server-true 2xx envelope).
@@ -169,7 +169,7 @@ struct OutboxIdempotencyDoubleSubmitContractTests {
         // A per-pass switch: fail the first drain retriably (503), succeed the
         // second (200). Both attempts must carry the SAME persisted key.
         let outcome = OutcomeGate()
-        MockURLProtocol.handler = { [path = fx.createPath, ok = fx.successBody] req in
+        MockURLProtocol.install { [path = fx.createPath, ok = fx.successBody] req in
             guard req.httpMethod == "POST", req.url?.path == path else {
                 // Any off-route request would mean the wrong kind drained.
                 return (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, nil)

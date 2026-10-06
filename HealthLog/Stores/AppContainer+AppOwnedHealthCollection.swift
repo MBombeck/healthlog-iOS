@@ -26,7 +26,9 @@
         static func installAppOwnedHealthCollection(
             keychain: KeychainStoring,
             registry: AuthenticatedSessionLeaseRegistry,
-            retryQueue: OutboxQueue
+            retryQueue: OutboxQueue,
+            uploader: MeasurementBatchUploader,
+            skipRegister: HealthKitSkippedRowRegister = .shared
         ) {
             let admission: @Sendable () throws -> HealthSyncAuthenticatedLease = {
                 let owner = keychain.getString(forKey: KeychainKey.userID) ?? ""
@@ -56,12 +58,51 @@
                 ),
                 cursors: cursors,
                 admission: admission,
-                cutoff: cutoff
+                cutoff: cutoff,
+                reoffer: Self.skippedRowReoffer(uploader: uploader, register: skipRegister)
             )
             Task { @MainActor in
                 AppOwnedHealthCollection.installSampleCollection { trigger in
                     await coordinator.run(trigger)
                 }
+                // #113 — Sync Diagnostics reads and resends the register only
+                // under the same admission the collection uses.
+                HealthKitSkippedRowAccess.install(
+                    snapshot: {
+                        guard let lease = try? admission() else { return nil }
+                        return await HealthKitSkippedRowSnapshot(
+                            rows: skipRegister.rows(ownerID: lease.ownerID),
+                            overflow: skipRegister.overflowCount(ownerID: lease.ownerID),
+                            parkedOutboxRows: retryQueue.parkedRowCount(ownerID: lease.ownerID)
+                        )
+                    },
+                    resend: { await coordinator.resendSkipped() }
+                )
+            }
+        }
+
+        /// The re-offer bound to one admission: the upload carries the
+        /// admission's own owner and bearer, and refuses when the uploader's
+        /// credential belongs to anyone else.
+        private static func skippedRowReoffer(
+            uploader: MeasurementBatchUploader,
+            register: HealthKitSkippedRowRegister
+        ) -> @Sendable (HealthSyncAuthenticatedLease, Bool) async -> HealthKitSkippedRowReoffer.Summary {
+            { lease, force in
+                let reoffer = HealthKitSkippedRowReoffer(register: register) { entries in
+                    try await lease.admitting {
+                        let credential = try await uploader.captureAuthenticationLeaseIfConfigured()
+                        if let credential, credential.ownerUserID != lease.ownerID {
+                            throw HealthSyncLeaseRefusal.staleSession
+                        }
+                        return try await uploader.upload(entries, requiring: credential)
+                    }
+                }
+                return await reoffer.run(
+                    ownerID: lease.ownerID,
+                    build: HealthKitSkipRegisterBuild.current,
+                    force: force
+                )
             }
         }
     }

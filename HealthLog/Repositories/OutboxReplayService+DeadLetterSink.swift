@@ -39,17 +39,17 @@ import Foundation
 public struct OutboxDiscardNotice: Sendable, Equatable {
     /// Why the replay stopped carrying this write.
     public enum Reason: String, Sendable, Equatable {
-        /// The server understood the request and refused it permanently
-        /// (400/404/409/422 …). The row was removed.
+        /// The server refused it permanently (400/404/409/422 …). C4: retained
+        /// as a dead-letter, removed only when that loses nothing (a delete).
         case serverRejected
-        /// The write went out but its response could not be read, so whether it
-        /// landed is unknown. The row was removed.
+        /// Its response could not be read within the server's idempotency
+        /// window. C4: retained as a dead-letter, never sent again blind.
         case responseUnreadable
         /// This build could not decode its OWN stored payload. Not a server
         /// verdict, so the row is RETAINED as a recoverable dead-letter.
         case payloadUnreadable
         /// The op could not be dispatched at all by this build (an unwired
-        /// repository, a kind no arm claims). The row was removed.
+        /// repository, a kind no arm claims). C4: retained as a dead-letter.
         case unroutable
     }
 
@@ -120,6 +120,9 @@ public extension OutboxReplayService {
     /// Split out of `runOnce` when Phase 07 added the quarantine gate, so the
     /// pass loop stays inside its complexity budget.
     internal func sweepDeadLetters(now: Date) async {
+        // INT-A — a HealthKit page that would age out goes to the skip register
+        // first (see `transferUnconfirmedHealthKitRows`).
+        await transferUnconfirmedHealthKitRows(now: now)
         guard let newlyDead = try? await outbox.markDeadLetters(
             maxAttempts: maxAttempts, minAge: deadLetterMinAge, now: now
         ), !newlyDead.isEmpty else { return }

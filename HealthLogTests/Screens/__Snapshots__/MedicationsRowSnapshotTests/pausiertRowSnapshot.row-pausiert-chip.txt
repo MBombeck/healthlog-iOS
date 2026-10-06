@@ -47,6 +47,8 @@
     - endsOn: nil
     - oneShot: false
     - asNeeded: false
+    - trackIntake: nil
+    - recordedSchedule: nil
     - deliveryForm: nil
     - createdAt: nil
     - nextDueAt: nil
@@ -59,4 +61,6 @@
     - externalId: nil
     - stockDosesRemaining: nil
     - runwayDays: nil
+    - courseStatus: nil
+    - intakeActionable: nil
   - displayState: HealthLog.ActiveMedicationDisplayState.pausiert

@@ -11,7 +11,7 @@ import UIKit
 /// never a mock-server) so the load path exercises production request
 /// building + envelope decode.
 @MainActor
-@Suite("AvatarStore", .serialized)
+@Suite("AvatarStore", .serialized, .mockURLSession)
 struct AvatarStoreTests {
     private func makeStore(
         cache: AvatarCache = AvatarCache.shared,
@@ -56,7 +56,7 @@ struct AvatarStoreTests {
     func notFoundFallsBack() async {
         let store = makeStore(cache: AvatarCache.shared)
         AvatarCache.shared.clearMemory()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let json = #"{"data":null,"error":"Avatar not found"}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
         }
@@ -72,7 +72,7 @@ struct AvatarStoreTests {
         let png = tinyPNG()
         let key = "/api/user/avatar/u1?v=success"
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — count only the avatar routes.
             if req.targets(prefixedBy: "/api/user/avatar") { requestCount += 1 }
             return (
@@ -118,7 +118,7 @@ struct AvatarStoreTests {
         let staleKey = "/api/user/avatar/u1?v=100"
 
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets(prefixedBy: "/api/user/avatar") { requestCount += 1 }
             // Upload POST returns the fresh ?v= url; any GET would be a stale
             // refetch we want to assert never happens.
@@ -154,7 +154,7 @@ struct AvatarStoreTests {
         let png = tinyPNG()
         let key = "/api/user/avatar/u1?v=force"
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — count only the avatar routes.
             if req.targets(prefixedBy: "/api/user/avatar") { requestCount += 1 }
             return (
@@ -188,7 +188,7 @@ struct AvatarStoreTests {
         // @Sendable handler closure captures bytes, not the test's `self`.
         let png = tinyPNG()
         nonisolated(unsafe) var lastPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             if req.targets(prefixedBy: "/api/user/avatar") { lastPath = req.url?.path }
             if req.httpMethod == "POST" {
                 let json = #"{"data":{"avatarUrl":"/api/user/avatar/u1?v=10","contentType":"image/jpeg"}}"#
@@ -225,7 +225,7 @@ struct AvatarStoreTests {
         cache.clearMemory()
         let store = makeStore(cache: cache)
         nonisolated(unsafe) var version = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: only the avatar collection route (the upload target)
             // advances the version counter — never a parallel suite's request.
             if req.targets("/api/user/avatar") { version += 1 }
@@ -248,7 +248,7 @@ struct AvatarStoreTests {
         cache.clearMemory()
         let store = makeStore(cache: cache)
         let png = tinyPNG()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(
                     url: req.url!,
@@ -284,7 +284,7 @@ struct AvatarStoreTests {
         let png = tinyPNG()
         let key = "/api/user/avatar/u1?v=reauth"
         nonisolated(unsafe) var requestCount = 0
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             // CU-07: the handler is process-global — count only the avatar routes.
             if req.targets(prefixedBy: "/api/user/avatar") { requestCount += 1 }
             return (

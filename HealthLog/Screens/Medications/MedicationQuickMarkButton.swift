@@ -266,7 +266,7 @@ struct QuickMarkQueuedBanner: View {
                 // routine state-change cue, not ambient noise. Reduce-motion
                 // gated (the icon stays static when motion is disabled).
                 .symbolEffect(.pulse, isActive: !reduceMotion)
-            Text(String(localized: "medication.quick_mark.queued_offline"))
+            Text(String(localized: "medication.quick_mark.queued"))
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.primary)
             Spacer()

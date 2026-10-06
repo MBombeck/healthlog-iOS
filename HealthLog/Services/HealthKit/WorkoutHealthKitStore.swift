@@ -27,7 +27,7 @@ import Synchronization
             return .cancelled
         case let .server(status, _, _) where status < 500:
             return .serverRejected
-        case .refusedWithReason, .assistantDisabled, .moduleDisabled, .serverNotConfigured:
+        case .refusedWithReason, .aiUnavailable, .moduleDisabled, .serverNotConfigured:
             return .serverRejected
         default:
             return .transport

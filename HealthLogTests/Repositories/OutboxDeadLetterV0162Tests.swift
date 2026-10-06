@@ -14,7 +14,7 @@ import Testing
 /// on the pre-fix code (which dead-lettered on attempts alone, counted degraded
 /// 5xx, permanently deleted swept rows, flashed false success, dropped a
 /// dependent update on a 404, and lost an offline edit to a stale optimistic id).
-@Suite("Outbox reliability audit-v0162 (H1 / M2 / H-4)", .serialized)
+@Suite("Outbox reliability audit-v0162 (H1 / M2 / H-4)", .serialized, .mockURLSession)
 struct OutboxDeadLetterV0162Tests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -117,7 +117,7 @@ struct OutboxDeadLetterV0162Tests {
         // Control: server 503 but NOT degraded → attempt is counted.
         let control = try OutboxQueue(inMemory: true)
         try await enqueueAllergyCreate(control, clientEntityId: "c1", at: .now)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         await makeReplay(api: makeAPI(), outbox: control, deadLetterMinAge: 7 * 24 * 3600, serverHealthDegraded: { false })
@@ -128,7 +128,7 @@ struct OutboxDeadLetterV0162Tests {
         // attempt is stamped (lastAttemptAt) but NOT counted toward dead-letter.
         let degraded = try OutboxQueue(inMemory: true)
         try await enqueueAllergyCreate(degraded, clientEntityId: "d1", at: .now)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         await makeReplay(api: makeAPI(), outbox: degraded, deadLetterMinAge: 7 * 24 * 3600, serverHealthDegraded: { true })
@@ -204,7 +204,7 @@ struct OutboxDeadLetterV0162Tests {
         )
 
         let recorder = MethodPathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             // The create POST fails retriably; a PATCH (if it were attempted with
             // the stale optimistic id) would 404 and be DROPPED — the bug M2 fixes.
@@ -235,7 +235,7 @@ struct OutboxDeadLetterV0162Tests {
         )
 
         let recorder = MethodPathRecorder()
-        MockURLProtocol.handler = { [resp = Self.allergyResponse] req in
+        MockURLProtocol.install { [resp = Self.allergyResponse] req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             // The create lands with server id "srv-a-1"; the PATCH must be
             // retargeted to /api/allergies/srv-a-1, NOT the optimistic id.

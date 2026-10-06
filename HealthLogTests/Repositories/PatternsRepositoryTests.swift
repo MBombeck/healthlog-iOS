@@ -20,7 +20,7 @@ import Testing
 ///   validates with a `strictObject`, so `{ "dismissed": … }` and nothing else
 /// - that dismissal is REVERSIBLE (`dismissed: false` is accepted the same way)
 /// - that a withdrawn pattern's `404` is thrown, not swallowed
-@Suite("PatternsRepository — Muster-Ledger + Verwerfen ist umkehrbar (CU-33)", .serialized)
+@Suite("PatternsRepository — Muster-Ledger + Verwerfen ist umkehrbar (CU-33)", .serialized, .mockURLSession)
 struct PatternsRepositoryTests {
     private func makeRepo() -> PatternsRepository {
         let env = AppEnvironment(
@@ -54,7 +54,7 @@ struct PatternsRepositoryTests {
     func fetchDecodesFullItemShape() async throws {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             let body = Data(#"""
@@ -104,7 +104,7 @@ struct PatternsRepositoryTests {
 
     @Test("fetch — unbekanntes family-Literal bricht die Zeile nicht (offener String)")
     func fetchToleratesUnknownFamily() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":{"patterns":[
               {"id":"p1","canonicalKey":"p1:cccc","family":"SOME_FUTURE_FAMILY",
@@ -124,7 +124,7 @@ struct PatternsRepositoryTests {
 
     @Test("fetch — 403 module.disabled (insights aus) → nil → Fläche versteckt sich")
     func fetchModuleDisabledIsNil() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"""
             {"data":null,"error":"Module disabled","meta":{"errorCode":"module.disabled","module":"insights"}}
             """#.utf8)
@@ -135,7 +135,7 @@ struct PatternsRepositoryTests {
 
     @Test("fetch — 404 (Route nicht deployed) → nil, kein Fehler")
     func fetch404IsNil() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await makeRepo().fetch() == nil)
@@ -143,7 +143,7 @@ struct PatternsRepositoryTests {
 
     @Test("fetch — echter 500 wirft (keine stille Leermenge)")
     func fetchServerErrorThrows() async {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
         }
         await #expect(throws: HLError.self) {
@@ -158,7 +158,7 @@ struct PatternsRepositoryTests {
         nonisolated(unsafe) var capturedPath: String?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             capturedMethod = req.httpMethod
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
@@ -191,7 +191,7 @@ struct PatternsRepositoryTests {
     @Test("setDismissed(false) — dieselbe Route nimmt das Verwerfen zurück (umkehrbar)")
     func patchIsReversible() async throws {
         nonisolated(unsafe) var capturedBody: Data?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedBody = req.httpBody ?? req.httpBodyStream.flatMap(Self.consumeStream(_:))
             let body = Data(#"""
             {"data":{"id":"p9","canonicalKey":"p1:dddd","dismissed":false,
@@ -215,7 +215,7 @@ struct PatternsRepositoryTests {
         // `where: { id, userId, isCurrent: true }` — a withdrawn pattern can be
         // neither dismissed nor restored. A write that did not happen must never
         // look like one that did.
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":"Correlation pattern not found"}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, body)
         }

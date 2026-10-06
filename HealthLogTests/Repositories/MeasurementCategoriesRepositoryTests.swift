@@ -19,7 +19,7 @@ import Testing
 ///   3. **Fallback-Disziplin:** Bei Netz-/Decoding-Fehler liefert das
 ///      Repo den letzten Snapshot zurück (stale-while-revalidate) oder,
 ///      wenn nie online gewesen, den hartcodierten `bundledFallback`.
-@Suite("MeasurementCategoriesRepository — Server-overlay consumption", .serialized)
+@Suite("MeasurementCategoriesRepository — Server-overlay consumption", .serialized, .mockURLSession)
 struct MeasurementCategoriesRepositoryTests {
     // MARK: - Helpers
 
@@ -104,7 +104,7 @@ struct MeasurementCategoriesRepositoryTests {
     func firstCallFetchesFromServer() async {
         let (repo, _) = makeRepo()
         let hits = Counter()
-        MockURLProtocol.handler = { [hits] req in
+        MockURLProtocol.install { [hits] req in
             hits.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -123,7 +123,7 @@ struct MeasurementCategoriesRepositoryTests {
     func cacheServedWithinTTL() async {
         let (repo, clock) = makeRepo(cacheTTL: 600)
         let hits = Counter()
-        MockURLProtocol.handler = { [hits] req in
+        MockURLProtocol.install { [hits] req in
             hits.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -140,7 +140,7 @@ struct MeasurementCategoriesRepositoryTests {
     func cacheRefreshAfterTTL() async {
         let (repo, clock) = makeRepo(cacheTTL: 600)
         let hits = Counter()
-        MockURLProtocol.handler = { [hits] req in
+        MockURLProtocol.install { [hits] req in
             hits.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -156,7 +156,7 @@ struct MeasurementCategoriesRepositoryTests {
     @Test("Network failure on first call returns bundled fallback (no throw)")
     func networkFailureFallsBack() async {
         let (repo, _) = makeRepo()
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let map = await repo.categoryMap()
@@ -169,7 +169,7 @@ struct MeasurementCategoriesRepositoryTests {
     func staleWhileRevalidate() async {
         let (repo, clock) = makeRepo(cacheTTL: 600)
         let hits = Counter()
-        MockURLProtocol.handler = { [hits] req in
+        MockURLProtocol.install { [hits] req in
             let phase = hits.value
             hits.increment()
             if phase == 0 {
@@ -192,7 +192,7 @@ struct MeasurementCategoriesRepositoryTests {
     func explicitInvalidationRefetches() async {
         let (repo, _) = makeRepo(cacheTTL: 600)
         let hits = Counter()
-        MockURLProtocol.handler = { [hits] req in
+        MockURLProtocol.install { [hits] req in
             hits.increment()
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,

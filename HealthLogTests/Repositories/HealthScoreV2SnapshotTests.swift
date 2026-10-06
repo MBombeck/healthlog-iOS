@@ -21,7 +21,7 @@ import Testing
 ///
 /// Real `APIClient` + `MockURLProtocol` (never a mock server), `.serialized`
 /// because the protocol handler is global.
-@Suite("Health Score v2 — snapshot wire", .serialized)
+@Suite("Health Score v2 — snapshot wire", .serialized, .mockURLSession)
 struct HealthScoreV2SnapshotTests {
     // MARK: - Harness
 
@@ -86,7 +86,7 @@ struct HealthScoreV2SnapshotTests {
     func readsFromSnapshotRoute() async throws {
         let api = makeAPIClient()
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             capturedPath = request.url?.path
             return (Self.ok(request), Data(Self.fullSnapshotJSON.utf8))
         }
@@ -104,7 +104,7 @@ struct HealthScoreV2SnapshotTests {
     @Test("the minimal envelope decodes with the three contractual fields only")
     func minimalEnvelopeDecodes() async throws {
         let api = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Data(Self.minimalSnapshotJSON.utf8))
         }
 
@@ -121,7 +121,7 @@ struct HealthScoreV2SnapshotTests {
     @Test("a null healthScore surfaces the honest empty state, not a zero")
     func nullScoreIsAnEmptyState() async {
         let api = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Data(#"{"data":{"healthScore":null,"briefingState":"ready"}}"#.utf8))
         }
 
@@ -158,7 +158,7 @@ struct HealthScoreV2SnapshotTests {
     @Test("MED_COMPLIANCE renders the server score, never a recomputed dose ratio")
     func medComplianceIsNeverRecomputed() async throws {
         let api = makeAPIClient()
-        MockURLProtocol.handler = { request in
+        MockURLProtocol.install { request in
             (Self.ok(request), Data(Self.fullSnapshotJSON.utf8))
         }
 

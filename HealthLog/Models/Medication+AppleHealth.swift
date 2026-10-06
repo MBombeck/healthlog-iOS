@@ -19,7 +19,10 @@ public extension Medication {
     /// every manual dose-logging affordance so a dose is never double-counted
     /// against the Apple Health source of truth. `true` for app-managed meds.
     var allowsManualDoseLogging: Bool {
-        !isAppleHealthMirrored
+        // v1.39.1 (#1033) — a medication kept as a record offers no intake
+        // buttons either: nothing about it is tracked. v1.39.4 (#1040) — nor
+        // does one the server calls not actionable today (an ended course).
+        !isAppleHealthMirrored && offersIntakeActions
     }
 
     /// Return a copy stamped with Apple-Health provenance. Used by the mirror
@@ -43,6 +46,9 @@ public extension Medication {
             startsOn: startsOn,
             endsOn: endsOn,
             oneShot: oneShot,
+            asNeeded: asNeeded,
+            trackIntake: trackIntake,
+            recordedSchedule: recordedSchedule,
             deliveryForm: deliveryForm,
             createdAt: createdAt,
             nextDueAt: nextDueAt,
@@ -52,7 +58,9 @@ public extension Medication {
             trackInjectionSites: trackInjectionSites,
             allowedInjectionSites: allowedInjectionSites,
             externalSource: IntakeSource.appleHealth.wireValue,
-            externalId: externalId ?? self.externalId
+            externalId: externalId ?? self.externalId,
+            courseStatus: courseStatus,
+            intakeActionable: intakeActionable
         )
     }
 }

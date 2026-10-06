@@ -20,7 +20,7 @@ import Testing
 ///
 /// `.serialized` because every case installs its own `MockURLProtocol.handler`
 /// and some assert on the request URL the handler saw.
-@Suite("IntradayPulse — wire contract + gating", .serialized)
+@Suite("IntradayPulse — wire contract + gating", .serialized, .mockURLSession)
 struct IntradayPulseRepositoryTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -56,7 +56,7 @@ struct IntradayPulseRepositoryTests {
     func fetchFullEnvelope() async throws {
         let repo = IntradayPulseRepository(api: makeAPI())
         let body = Data(groundTruth.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let dto = try #require(try await repo.fetch(dateKey: nil, todayKey: "2026-07-24"))
@@ -92,7 +92,7 @@ struct IntradayPulseRepositoryTests {
           "resolution":"tenMin"
         },"error":null}
         """#.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let dto = try #require(try await repo.fetch(dateKey: "2026-07-23", todayKey: "2026-07-24"))
@@ -114,7 +114,7 @@ struct IntradayPulseRepositoryTests {
           "baseline":null,"baselineSource":"none","tension":null,"resolution":"hourly"
         },"error":null}
         """#.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let dto = try #require(try await repo.fetch(dateKey: "2026-01-02", todayKey: "2026-07-24"))
@@ -136,7 +136,7 @@ struct IntradayPulseRepositoryTests {
           "baseline":61,"baselineSource":"future","tension":null,"resolution":"fiveMin"
         },"error":null}
         """#.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let dto = try #require(try await repo.fetch(dateKey: "2026-07-24", todayKey: "2026-07-24"))
@@ -149,7 +149,7 @@ struct IntradayPulseRepositoryTests {
     @Test("fetch — 403 MODULE_DISABLED → nil (block hidden, no error)")
     func fetch403IsNil() async throws {
         let repo = IntradayPulseRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let body = Data(#"{"data":null,"error":{"message":"Module disabled","code":"MODULE_DISABLED"}}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -159,7 +159,7 @@ struct IntradayPulseRepositoryTests {
     @Test("fetch — 404 (route absent on an older server) → nil")
     func fetch404IsNil() async throws {
         let repo = IntradayPulseRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch(dateKey: nil, todayKey: "2026-07-24") == nil)
@@ -168,7 +168,7 @@ struct IntradayPulseRepositoryTests {
     @Test("fetch — 422 (rejected date) → nil, never an error")
     func fetch422IsNil() async throws {
         let repo = IntradayPulseRepository(api: makeAPI())
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!, Data())
         }
         #expect(try await repo.fetch(dateKey: "nonsense", todayKey: "2026-07-24") == nil)
@@ -178,7 +178,7 @@ struct IntradayPulseRepositoryTests {
     func queryWiring() async throws {
         let seen = SeenURLs()
         let body = Data(groundTruth.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             seen.record(req.url?.absoluteString ?? "")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
@@ -195,7 +195,7 @@ struct IntradayPulseRepositoryTests {
     func pastDayMemo() async throws {
         let seen = SeenURLs()
         let body = Data(groundTruth.utf8)
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             seen.record(req.url?.absoluteString ?? "")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }

@@ -116,7 +116,7 @@ import Foundation
             guard let challengeData = Data(base64URLEncoded: challenge),
                   let userIDData = Data(base64URLEncoded: userID) ?? userID.data(using: .utf8) else
             {
-                throw HLError.unknown("Passkey-Challenge ungültig")
+                throw HLError.unknown(String(localized: "auth.passkey.error.invalidChallenge"))
             }
             let resolvedAnchor = anchor.anchor()
             try Self.requirePresentableAnchor(resolvedAnchor)
@@ -143,7 +143,7 @@ import Foundation
             anchor: ASPresentationAnchorProvider
         ) async throws -> PasskeyAssertion {
             guard let challengeData = Data(base64URLEncoded: challenge) else {
-                throw HLError.unknown("Passkey-Challenge ungültig")
+                throw HLError.unknown(String(localized: "auth.passkey.error.invalidChallenge"))
             }
             let resolvedAnchor = anchor.anchor()
             try Self.requirePresentableAnchor(resolvedAnchor)
@@ -205,7 +205,7 @@ import Foundation
         @MainActor
         private static func requirePresentableAnchor(_ anchor: ASPresentationAnchor) throws {
             guard anchor.windowScene != nil else {
-                throw HLError.unknown("Kein präsentierbares Fenster für die Passkey-Anfrage.")
+                throw HLError.unknown(String(localized: "auth.passkey.error.noWindow"))
             }
         }
     }
@@ -293,7 +293,7 @@ import Foundation
                 cont.resume(returning: result)
                 return
             }
-            fail(HLError.unknown("Unerwartete Passkey-Antwort"))
+            fail(HLError.unknown(String(localized: "auth.passkey.error.unexpectedResponse")))
         }
 
         func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
@@ -366,14 +366,14 @@ import Foundation
             userID: String, userName: String, displayName: String,
             anchor: ASPresentationAnchorProvider
         ) async throws -> PasskeyRegistration {
-            throw HLError.unknown("Passkeys nicht verfügbar")
+            throw HLError.unknown(String(localized: "auth.passkey.error.unavailable"))
         }
 
         @MainActor public func assert(
             challenge: String, rpId: String, allowCredentialIDs: [String],
             anchor: ASPresentationAnchorProvider
         ) async throws -> PasskeyAssertion {
-            throw HLError.unknown("Passkeys nicht verfügbar")
+            throw HLError.unknown(String(localized: "auth.passkey.error.unavailable"))
         }
     }
 #endif

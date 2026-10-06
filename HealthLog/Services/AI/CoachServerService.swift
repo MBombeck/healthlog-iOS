@@ -305,7 +305,7 @@ public actor CoachServerService {
     /// assistant-message timestamp (`nil` when none exists) so a client can key a
     /// local seen-mirror on a stable value. Coach-gated server-side
     /// (`requireAssistantSurface("coach")` → 403 maps to
-    /// ``HLError/assistantDisabled(_:)``); the caller never invokes this when the
+    /// ``HLError/aiUnavailable(_:)``); the caller never invokes this when the
     /// `coach` module is off / offline.
     public func nudgeStatus() async throws -> CoachNudgeStatus {
         let request: APIRequest<CoachNudgeStatus> = .get("/api/insights/coach/nudge-status")
@@ -339,7 +339,7 @@ public actor CoachServerService {
     /// (`already_rated`); there is no un-rate, so the UI locks the row
     /// after a successful submit. Coach-gated like the chat route
     /// (`requireAssistantSurface("coach")` → 403 maps to
-    /// ``HLError/assistantDisabled(_:)`` in `APIClient`).
+    /// ``HLError/aiUnavailable(_:)`` in `APIClient`).
     public func submitFeedback(messageID: String, rating: CoachFeedbackRating) async throws {
         let request: APIRequest<CoachFeedbackAck> = try .post(
             "/api/insights/chat/messages/\(messageID)/feedback",

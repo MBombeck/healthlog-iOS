@@ -19,7 +19,7 @@ import Testing
     import AuthenticationServices
 #endif
 
-@Suite("AuthService.deleteAccount", .serialized)
+@Suite("AuthService.deleteAccount", .serialized, .mockURLSession)
 struct AccountDeletionTests {
     /// Lokaler Passkey-Stub — die `StubPasskeyService`-Variante aus dem App-Target
     /// existiert nur in Non-iOS-Builds, hier brauchen wir aber etwas, das die
@@ -198,7 +198,7 @@ struct AccountDeletionTests {
         let ownerCleanup = CleanupSpy()
         await service.setOnLogoutCleanup { ownerCleanup.record(owner: $0) }
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             captured.capture(req)
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -248,7 +248,7 @@ struct AccountDeletionTests {
         try seedAuthenticatedKeychain(kc)
         let service = makeService(keychain: kc)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!,
                 nil
@@ -282,7 +282,7 @@ struct AccountDeletionTests {
         let cleanup = CleanupSpy()
         store.localCleanupHook = { cleanup.record() }
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":{"deleted":true}}"#.utf8)
@@ -303,7 +303,7 @@ struct AccountDeletionTests {
         try seedAuthenticatedKeychain(kc)
         let service = makeService(keychain: kc)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Confirmation missing"}"#.utf8)
@@ -328,7 +328,7 @@ struct AccountDeletionTests {
         try seedAuthenticatedKeychain(kc)
         let service = makeService(keychain: kc)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Fresh two-factor confirmation required","errorCode":"auth.stepup.required"}"#.utf8)
@@ -365,7 +365,7 @@ struct AccountDeletionTests {
         try seedAuthenticatedKeychain(kc)
         let service = makeService(keychain: kc)
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Internal"}"#.utf8)

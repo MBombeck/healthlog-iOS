@@ -61,26 +61,6 @@ struct HealthScoreTileStateTests {
         assertSnapshot(of: descriptor, as: .dump)
     }
 
-    /// v0.14.10 §2 — the tile's COLOUR band (ring + headline) is now driven by the
-    /// numeric score against fixed iOS thresholds, NOT the server's band token:
-    /// green ≥67 / amber (yellow) 34–66 / red ≤33. Pins the boundary scores so a
-    /// refactor can't silently shift the bands.
-    @Test("Colour band follows the numeric thresholds green≥67 / amber 34–66 / red≤33")
-    func colourBandThresholds() {
-        let cases: [(Int, HealthScoreBand)] = [
-            (100, .green),
-            (67, .green), // lower green boundary
-            (66, .yellow), // upper amber boundary
-            (50, .yellow),
-            (34, .yellow), // lower amber boundary
-            (33, .red), // upper red boundary
-            (0, .red)
-        ]
-        for (score, expected) in cases {
-            #expect(HealthScore.colorBand(forScore: score) == expected)
-        }
-    }
-
     /// W-B187 / #27 — the COLOUR band now follows the server-authoritative `band`
     /// token via `HealthScore.displayBand`. When the server emits a band it wins,
     /// even if the local numeric thresholds would land elsewhere.
@@ -90,34 +70,29 @@ struct HealthScoreTileStateTests {
         // displayBand must honour the server token.
         let serverRed = HealthScore(score: 72, band: .red, delta: nil)
         #expect(serverRed.displayBand == .red)
-        #expect(serverRed.colorBand == .green) // local thresholds untouched
 
         // Score 20 → local threshold .red, server says .green.
         let serverGreen = HealthScore(score: 20, band: .green, delta: nil)
         #expect(serverGreen.displayBand == .green)
-        #expect(serverGreen.colorBand == .red)
 
         // Score 50 → local .yellow, server says .green.
         let serverGreenMid = HealthScore(score: 50, band: .green, delta: nil)
         #expect(serverGreenMid.displayBand == .green)
     }
 
-    /// W-B187 / #27 — tolerant fallback: a nil server band (older server) keeps the
-    /// pre-existing local-threshold behaviour exactly.
-    @Test("Nil server band falls back to local numeric thresholds")
-    func nilBandFallsBackToLocalThresholds() {
-        let cases: [(Int, HealthScoreBand)] = [
-            (100, .green),
-            (67, .green),
-            (66, .yellow),
-            (34, .yellow),
-            (33, .red),
-            (0, .red)
-        ]
-        for (score, expected) in cases {
+    /// #115 B7 — a nil server band (older server, unknown token) no longer falls
+    /// back to iOS-side 67/34 thresholds: the tile, the widget and the watch
+    /// stay neutral instead of naming a band the server never gave.
+    @Test("Nil server band stays nil everywhere — no local threshold verdict")
+    func nilBandStaysNeutral() throws {
+        for score in [100, 67, 66, 34, 33, 0] {
             let s = HealthScore(score: score, band: nil, delta: nil)
-            #expect(s.displayBand == expected)
-            #expect(s.displayBand == s.colorBand) // identical to old behaviour
+            #expect(s.displayBand == nil, "score \(score) must not acquire a band")
+            let widget = try #require(WidgetSnapshot.HealthScoreGlance.make(from: s))
+            #expect(widget.band == nil)
+            let watch = try #require(WatchSnapshot.HealthScoreGlance.make(from: s))
+            #expect(watch.band == nil)
+            #expect(watch.signalBand == nil)
         }
     }
 

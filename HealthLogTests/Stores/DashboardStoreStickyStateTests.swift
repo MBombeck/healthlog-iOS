@@ -8,7 +8,7 @@ import Testing
 /// `.loading → .empty → .ready` mid-fan-out. Operator-reported v0.5.2 bug:
 /// "gehen immer mal wieder kurz andere Kacheln auf, die gehen dann immer
 /// wieder weg".
-@Suite("DashboardStore — V053-D3 sticky state transitions")
+@Suite("DashboardStore — V053-D3 sticky state transitions", .mockURLSession)
 struct DashboardStoreStickyStateTests {
     private static func sample(_ kind: MetricKind, value: Double = 1.0) -> HealthLog.Measurement {
         HealthLog.Measurement(
@@ -98,7 +98,7 @@ struct DashboardStoreStickyStateTests {
 /// from `.refreshable`). Without it pull-to-refresh would have no way to
 /// recover from a `.ready` that needs to be re-derived (e.g. user deleted
 /// the last sample on the server).
-@Suite("DashboardStore — V053-D3 sticky reset on pull-to-refresh", .serialized)
+@Suite("DashboardStore — V053-D3 sticky reset on pull-to-refresh", .serialized, .mockURLSession)
 @MainActor
 struct DashboardStoreStickyResetTests {
     private func makeStore() throws -> DashboardStore {

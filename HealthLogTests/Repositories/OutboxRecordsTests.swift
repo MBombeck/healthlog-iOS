@@ -11,7 +11,7 @@ import Testing
 ///
 /// Real `APIClient` + `MockURLProtocol` (stub `URLSession`) per PROJECT_GUIDE.md — NO
 /// mock server.
-@Suite("Outbox structured-records durable writes", .serialized)
+@Suite("Outbox structured-records durable writes", .serialized, .mockURLSession)
 struct OutboxRecordsTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -46,7 +46,7 @@ struct OutboxRecordsTests {
     func createAllergyEnqueues() async throws {
         let outbox = try OutboxQueue(inMemory: true)
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let repo = AllergiesRepository(api: api, outbox: outbox)
@@ -67,7 +67,7 @@ struct OutboxRecordsTests {
         try await outbox.enqueue(.init(kind: .createAllergy, payload: JSONEncoder.hlDefault.encode(payload), idempotencyKey: key))
 
         let recorder = OutboxRecordsKeyRecorder()
-        MockURLProtocol.handler = { [resp = allergyResponse] req in
+        MockURLProtocol.install { [resp = allergyResponse] req in
             recorder.record(req.value(forHTTPHeaderField: "Idempotency-Key"))
             #expect(req.httpMethod == "POST")
             #expect(req.url?.path == "/api/allergies")
@@ -86,7 +86,7 @@ struct OutboxRecordsTests {
         try await outbox.enqueue(.init(kind: .updateAllergy, payload: JSONEncoder.hlDefault.encode(payload), idempotencyKey: "key-up-1"))
 
         let recorder = OutboxRecordsPathRecorder()
-        MockURLProtocol.handler = { [resp = allergyResponse] req in
+        MockURLProtocol.install { [resp = allergyResponse] req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(resp.utf8))
         }
@@ -109,7 +109,7 @@ struct OutboxRecordsTests {
         ))
 
         let recorder = OutboxRecordsPathRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             recorder.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -125,7 +125,7 @@ struct OutboxRecordsTests {
     func createFamilyEnqueues() async throws {
         let outbox = try OutboxQueue(inMemory: true)
         let api = makeAPI()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, nil)
         }
         let repo = FamilyHistoryRepository(api: api, outbox: outbox)

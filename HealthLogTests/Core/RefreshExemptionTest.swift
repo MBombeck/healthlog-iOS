@@ -23,7 +23,7 @@ import Testing
 ///
 /// Source of truth for the exempt table: `APIClient.isAuthExempt(path:)`
 /// (private — mirrored here verbatim so a typo on either side fails the test).
-@Suite("Refresh-bridge exemption contract (M-1)", .serialized)
+@Suite("Refresh-bridge exemption contract (M-1)", .serialized, .mockURLSession)
 struct RefreshExemptionTest {
     /// Canonical exempt routes. Mirrors `APIClient.isAuthExempt(path:)` —
     /// keep these in sync with the implementation. Each entry is a path that
@@ -103,7 +103,7 @@ struct RefreshExemptionTest {
             }
         )
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Invalid credentials"}"#.utf8)
@@ -138,7 +138,7 @@ struct RefreshExemptionTest {
             }
         )
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"Invalid token"}"#.utf8)
@@ -182,7 +182,7 @@ struct RefreshExemptionTest {
         // `APIClient.isAuthExempt(path:)`.
         let candidate = "/api/auth/sso/start"
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             (
                 HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
                 Data(#"{"data":null,"error":"SSO declined"}"#.utf8)

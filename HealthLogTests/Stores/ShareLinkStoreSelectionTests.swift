@@ -24,7 +24,7 @@
     ///
     /// `.serialized` — the cases share the process-global `MockURLProtocol.handler`.
     @MainActor
-    @Suite("ShareLinkStore — retired links + selection refusals (CU-12)", .serialized)
+    @Suite("ShareLinkStore — retired links + selection refusals (CU-12)", .serialized, .mockURLSession)
     struct ShareLinkStoreSelectionTests {
         private func makeAPI() -> APIClient {
             let env = AppEnvironment(
@@ -48,7 +48,7 @@
         @Test("a needsReselection row lands in retiredLinks and out of activeLinks")
         func retiredLinkSurfaces() async {
             let api = makeAPI()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let payload = """
                 {"data":{"shareLinks":[\
                 {"id":"sl_dead","label":"Dr. Schmidt","rangeStart":"2026-01-01T00:00:00Z","rangeEnd":null,\
@@ -77,7 +77,7 @@
         @Test("no retired rows → no hint state at all")
         func noRetiredLinksWhenServerSendsNone() async {
             let api = makeAPI()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let payload = """
                 {"data":{"shareLinks":[\
                 {"id":"sl_live","label":"Dr. Neu","rangeStart":"2026-06-01T00:00:00Z","rangeEnd":null,\
@@ -96,7 +96,7 @@
         @Test("a forbidden-leaf 422 becomes readable copy, not the wire code")
         func forbiddenLeafSurfacesReadableCopy() async {
             let api = makeAPI()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let payload = #"{"data":null,"error":"share-link.selection.forbidden_leaf"}"#
                 let http = HTTPURLResponse(url: req.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!
                 return (http, Data(payload.utf8))
@@ -125,7 +125,7 @@
         @Test("the offered vocabulary comes from capabilities.share.leaves, minus INSURANCE")
         func vocabularyComesFromCapabilitiesMinusForbidden() async {
             let api = makeAPI()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let payload = """
                 {"data":{"apiContractVersion":"1.34.2","share":{"supported":true,"maxDays":90,\
                 "reportDownload":["fhir","pdf"],"selectionVersion":2,"groups":["VITALS","REPORT"],\
@@ -148,7 +148,7 @@
         @Test("a capabilities failure leaves the picker honestly unavailable — never a local fallback")
         func vocabularyFailureDegradesHonestly() async {
             let api = makeAPI()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let payload = #"{"data":null,"error":"boom"}"#
                 let http = HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
                 return (http, Data(payload.utf8))
@@ -167,7 +167,7 @@
         @Test("an old server without a v2 vocabulary is treated as unusable, not as empty")
         func staleSelectionVersionIsUnusable() async {
             let api = makeAPI()
-            MockURLProtocol.handler = { req in
+            MockURLProtocol.install { req in
                 let payload = """
                 {"data":{"apiContractVersion":"1.30.0","share":{"supported":true,"maxDays":90,\
                 "selectionVersion":1,"leaves":["WEIGHT"]}},"error":null}

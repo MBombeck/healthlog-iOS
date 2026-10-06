@@ -26,10 +26,9 @@ public struct OnDeviceBriefingHero: View {
     /// local stores.
     public let moodEntries: [MoodEntry]
     public let compliance: ComplianceSnapshotInput?
-    /// Injected service. Default value reads the legacy UserDefaults
-    /// flags; AppContainer-instantiated callers should pass a service
-    /// constructed with `FeatureFlagsStore.liveService()` so the
-    /// on-device path honours server-deployed flag state (F-1, R5).
+    /// Injected service. AppContainer-instantiated callers pass the container's
+    /// service, which reads the live `briefing` AI capability (#115 · 0.2), so
+    /// the on-device path follows `onDeviceAllowed`.
     public let service: OnDeviceBriefingService
     /// I-3 ITEM 3 — when the user has **server AI active** (`aiMode == .online`)
     /// the server-generated briefing is richer than the on-device / Statistik
@@ -45,6 +44,9 @@ public struct OnDeviceBriefingHero: View {
     /// instant swap (RA4: animations reduce-motion-aware; 200-300 ms
     /// perceptual budget honoured when motion is allowed).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// #115 P2 — the Statistik floor prints weight/temperature/glucose in the
+    /// account's unit.
+    @Environment(\.unitPreferences) private var unitPreferences
 
     public init(
         measurements: [Measurement],
@@ -144,7 +146,8 @@ public struct OnDeviceBriefingHero: View {
             moodEntries: moodEntries,
             compliance: compliance,
             healthScore: healthScore,
-            locale: locale
+            locale: locale,
+            units: unitPreferences
         )
 
         // v0.5.4 BF-1 — fast path #1 (REWRITTEN): truly-empty inputs (no

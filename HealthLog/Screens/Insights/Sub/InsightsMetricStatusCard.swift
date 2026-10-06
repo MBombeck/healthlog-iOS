@@ -218,7 +218,11 @@ struct InsightsMetricStatusCard: View {
                     .font(.hlMetric(.largeTitle))
                     .foregroundStyle(HLText.primary)
                     .monospacedDigit()
-                    .minimumScaleFactor(0.75)
+                    // T4 / #15 — a BP average ("128/88") stays on one line and
+                    // shrinks instead of breaking inside the number.
+                    .lineLimit(1)
+                    .minimumScaleFactor(HeroStrip.valueMinimumScaleFactor)
+                    .layoutPriority(1)
                 // C2 — unit only; the "· 30-day avg" hint moved to the section
                 // heading the screen renders ABOVE this card.
                 if !descriptor.unitCaption.isEmpty {

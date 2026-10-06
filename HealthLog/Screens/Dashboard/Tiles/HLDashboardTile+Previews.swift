@@ -58,7 +58,7 @@ import SwiftUI
         .hlScreenBackground()
 }
 
-#Preview("Tile — weight (lowerIsBetter, down=green)") {
+#Preview("Tile — weight (server up-bad, down=green)") {
     let metric = DashboardMetric(
         id: "weight",
         kind: .weight,
@@ -70,7 +70,7 @@ import SwiftUI
         sparkline: [73.6, 73.4, 73.0, 72.9, 72.7, 72.5, 72.4],
         updatedAt: Date()
     )
-    HLDashboardTile(metric: metric)
+    HLDashboardTile(metric: metric, weightTrendSentiment: .upBad)
         .padding()
         .hlScreenBackground()
 }

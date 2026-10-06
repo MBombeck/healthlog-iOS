@@ -64,7 +64,7 @@ struct LogMoodIntent: AppIntent {
             // will sync on the next app foreground (incl. a transient-refresh
             // 401 the repo durably enqueued). Tell the user it is saved
             // (not lost) so an offline log still feels reliable.
-            return .result(dialog: IntentCopy.queuedOffline)
+            return .result(dialog: IntentCopy.queued(after: error))
         } catch {
             return .result(dialog: IntentCopy.writeFailed)
         }

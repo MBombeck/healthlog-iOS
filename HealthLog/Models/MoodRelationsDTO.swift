@@ -37,15 +37,21 @@ public struct MoodRelationsResponse: Codable, Sendable, Equatable {
     /// This is the actual analytical USE of the slider rating VALUES. Tolerant:
     /// a pre-v1.14.0 payload decodes to `[]`.
     public let factorCrosstab: [FactorMetricCrosstabRow]
+    /// #115 · 1.3 — the server's day-to-day stability (`stability`, `null`
+    /// below the server's day floor). The Mood analysis renders it instead of
+    /// computing its own. Tolerant: absent or unreadable → `nil`.
+    public let stability: MoodStability?
 
     public init(
         tagInfluence: TagInfluence = .empty,
         betterDays: [BetterDayFactor] = [],
-        factorCrosstab: [FactorMetricCrosstabRow] = []
+        factorCrosstab: [FactorMetricCrosstabRow] = [],
+        stability: MoodStability? = nil
     ) {
         self.tagInfluence = tagInfluence
         self.betterDays = betterDays
         self.factorCrosstab = factorCrosstab
+        self.stability = stability
     }
 
     /// Tolerant additive decode: a payload missing a slice (pre-v1.11.5 server,
@@ -57,6 +63,7 @@ public struct MoodRelationsResponse: Codable, Sendable, Equatable {
         tagInfluence = try container.decodeIfPresent(TagInfluence.self, forKey: .tagInfluence) ?? .empty
         betterDays = try container.decodeIfPresent([BetterDayFactor].self, forKey: .betterDays) ?? []
         factorCrosstab = try container.decodeIfPresent([FactorMetricCrosstabRow].self, forKey: .factorCrosstab) ?? []
+        stability = try? container.decodeIfPresent(MoodStability.self, forKey: .stability)
     }
 }
 
@@ -285,25 +292,27 @@ public extension TagInfluenceRow {
 /// whole board.
 public struct BetterDayFactor: Codable, Sendable, Equatable, Identifiable {
     /// Whether this factor is a mood TAG or a tracked health METRIC.
-    public enum Source: String, Codable, Sendable, Equatable {
+    public enum Source: String, Codable, Sendable, Equatable, TolerantServerEnum {
         case tag
         case metric
+        /// #115 · 1.7 — an unrecognised source. Used to be coerced to `.tag`,
+        /// which put a metric-shaped factor through the tag renderer.
+        case unknown
 
-        public init(from decoder: Decoder) throws {
-            let raw = try decoder.singleValueContainer().decode(String.self)
-            self = Source(rawValue: raw) ?? .tag
-        }
+        public static let unknownFallback = Source.unknown
+        public static let wireVocabulary: StaticString = "better-day factor source"
     }
 
     /// `up` = associated with HIGHER mood; `down` = with LOWER mood.
-    public enum Direction: String, Codable, Sendable, Equatable {
+    public enum Direction: String, Codable, Sendable, Equatable, TolerantServerEnum {
         case up
         case down
+        /// #115 · 1.7 — an unrecognised direction. Used to decode to `.up`,
+        /// which claimed "goes with better days" for a value nobody read.
+        case unknown
 
-        public init(from decoder: Decoder) throws {
-            let raw = try decoder.singleValueContainer().decode(String.self)
-            self = Direction(rawValue: raw) ?? .up
-        }
+        public static let unknownFallback = Direction.unknown
+        public static let wireVocabulary: StaticString = "better-day factor direction"
     }
 
     public let source: Source

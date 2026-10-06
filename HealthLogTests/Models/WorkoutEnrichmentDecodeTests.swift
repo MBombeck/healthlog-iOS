@@ -210,37 +210,36 @@ struct WorkoutSourceLabelEnrichmentTests {
 }
 
 /// 7.8 — unit-adaptive pace formatter (min/km · min/mi).
+///
+/// #115 P2 — the account's unit system decides, not the device locale.
 @Suite("WorkoutFormatter — pace formatter (metric + imperial)")
 struct WorkoutPaceFormatterTests {
-    private let metric = Locale(identifier: "de_DE")
-    private let imperial = Locale(identifier: "en_US")
-
-    @Test("Metric locale renders min/km")
+    @Test("Metric account renders min/km")
     func metricPace() {
-        #expect(WorkoutFormatter.usesImperialPace(metric) == false)
+        #expect(WorkoutFormatter.usesImperialPace(.metric) == false)
         // 330 s/km → 5:30 /km.
-        #expect(WorkoutFormatter.paceLabel(secondsPerKm: 330, locale: metric) == "5:30 /km")
+        #expect(WorkoutFormatter.paceLabel(secondsPerKm: 330, system: .metric) == "5:30 /km")
     }
 
-    @Test("US locale converts to min/mi")
+    @Test("Imperial account converts to min/mi")
     func imperialPace() {
-        #expect(WorkoutFormatter.usesImperialPace(imperial) == true)
+        #expect(WorkoutFormatter.usesImperialPace(.imperial) == true)
         // 330 s/km × 1.609344 = 531.08 s/mi → 8:51 /mi.
-        #expect(WorkoutFormatter.paceLabel(secondsPerKm: 330, locale: imperial) == "8:51 /mi")
+        #expect(WorkoutFormatter.paceLabel(secondsPerKm: 330, system: .imperial) == "8:51 /mi")
     }
 
     @Test("Non-positive pace yields nil rather than 0:00")
     func nonPositivePaceIsNil() {
-        #expect(WorkoutFormatter.paceLabel(secondsPerKm: 0) == nil)
-        #expect(WorkoutFormatter.paceLabel(secondsPerKm: -5) == nil)
+        #expect(WorkoutFormatter.paceLabel(secondsPerKm: 0, system: .metric) == nil)
+        #expect(WorkoutFormatter.paceLabel(secondsPerKm: -5, system: .metric) == nil)
     }
 
     @Test("Pace-from-totals derives km-pace then formats")
     func paceFromTotals() {
         // 5000 m in 1500 s → 300 s/km → 5:00 /km.
-        #expect(WorkoutFormatter.paceLabel(metres: 5000, durationSec: 1500, locale: metric) == "5:00 /km")
-        #expect(WorkoutFormatter.paceLabel(metres: 0, durationSec: 1500, locale: metric) == nil)
-        #expect(WorkoutFormatter.paceLabel(metres: 5000, durationSec: 0, locale: metric) == nil)
+        #expect(WorkoutFormatter.paceLabel(metres: 5000, durationSec: 1500, system: .metric) == "5:00 /km")
+        #expect(WorkoutFormatter.paceLabel(metres: 0, durationSec: 1500, system: .metric) == nil)
+        #expect(WorkoutFormatter.paceLabel(metres: 5000, durationSec: 0, system: .metric) == nil)
     }
 }
 

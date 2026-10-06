@@ -69,6 +69,18 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
     /// edit panel can pre-fill the sliders. Defaults to `[]` so older cached
     /// responses / pre-v2 servers decode unchanged.
     public let ratedFactors: [RatedFactorOutput]
+    /// **#115 R3 (server v1.39.7, additive)** — tag / rated-factor keys the
+    /// server did NOT store on this write because they are unknown or archived
+    /// (`POST` / `PUT /api/mood-entries`, each `/bulk` result). Absent on the
+    /// wire means everything arrived, so both default to `[]`. Only a write
+    /// response carries them; a list read never does.
+    public var droppedTagKeys: [String] = []
+    public var droppedFactorKeys: [String] = []
+
+    /// Every key the server dropped on this write (tags first, then factors).
+    public var droppedKeys: [String] {
+        droppedTagKeys + droppedFactorKeys
+    }
 
     public init(id: String, recordedAt: Date, score: Int, tags: [String] = [], tagKeys: [String] = [], note: String? = nil) {
         self.id = id
@@ -129,6 +141,7 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, mood, tags, tagKeys, moodLoggedAt, source, note, ratedFactors
+        case droppedTagKeys, droppedFactorKeys
     }
 
     public init(from decoder: Decoder) throws {
@@ -149,6 +162,10 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
         // `ratedFactors` is a v1.12.0 read-side addition — tolerate older cached
         // responses / pre-v2 servers that omit it by defaulting to an empty set.
         ratedFactors = try c.decodeIfPresent([RatedFactorOutput].self, forKey: .ratedFactors) ?? []
+        // #115 R3 — tolerant: absent, `null` or a malformed value all mean
+        // "nothing reported dropped"; a stray shape never fails the save.
+        droppedTagKeys = (try? c.decodeIfPresent([String].self, forKey: .droppedTagKeys)) ?? []
+        droppedFactorKeys = (try? c.decodeIfPresent([String].self, forKey: .droppedFactorKeys)) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -168,6 +185,12 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
         // no-op; the write path uses `MoodEntryPatch.ratedFactors` instead).
         if !ratedFactors.isEmpty {
             try c.encode(ratedFactors, forKey: .ratedFactors)
+        }
+        if !droppedTagKeys.isEmpty {
+            try c.encode(droppedTagKeys, forKey: .droppedTagKeys)
+        }
+        if !droppedFactorKeys.isEmpty {
+            try c.encode(droppedFactorKeys, forKey: .droppedFactorKeys)
         }
     }
 }

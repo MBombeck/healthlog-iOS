@@ -61,6 +61,10 @@ public actor CorrelationsDiscoveryRepository {
             // graceful arm hides the block quietly instead of erroring it. A
             // genuine auth `403` (no `assistant.disabled.*` code) still throws.
             return nil
+        } catch let HLError.aiUnavailable(refusal) where refusal.errorCode.hasPrefix(AIRefusal.operatorDisabledPrefix) {
+            // #115 · 0.2 — since the transport reads `meta.errorCode`, the same
+            // operator refusal arrives typed; hide the block the same way.
+            return nil
         }
     }
 

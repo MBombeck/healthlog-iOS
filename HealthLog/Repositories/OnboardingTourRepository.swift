@@ -87,10 +87,16 @@ public struct AuthMeOnboarding: Decodable, Sendable, Equatable {
 /// stops. The string ids are opaque module identifiers shared with the web
 /// tour — iOS never interprets them, it only round-trips them.
 public struct TourProgress: Codable, Sendable, Equatable {
-    public enum Status: String, Codable, Sendable {
+    public enum Status: String, Codable, Sendable, TolerantServerEnum {
         case inProgress = "in_progress"
         case completed
         case skipped
+        /// #115 · 1.7 — a tour state this build does not know. Read-only: iOS
+        /// never posts it (checkpoints are always `inProgress`).
+        case unknown
+
+        public static let unknownFallback = Status.unknown
+        public static let wireVocabulary: StaticString = "tour progress status"
     }
 
     public let lastStopId: String?

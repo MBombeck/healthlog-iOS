@@ -60,16 +60,15 @@ struct WatchPayloadLogicTests {
 
     // MARK: - Health-score complication glance
 
-    @Test("health-score signal band prefers the server band, else derives from thresholds")
+    @Test("health-score signal band is the server band; without one it stays neutral (#115 B7)")
     func healthScoreSignalBand() {
         // Server band wins verbatim.
         #expect(WatchSnapshot.HealthScoreGlance(score: 10, band: "green").signalBand == "green")
-        // No band → numeric thresholds (>=70 green / >=40 yellow / else red).
-        #expect(WatchSnapshot.HealthScoreGlance(score: 85, band: nil).signalBand == "green")
-        #expect(WatchSnapshot.HealthScoreGlance(score: 55, band: nil).signalBand == "yellow")
-        #expect(WatchSnapshot.HealthScoreGlance(score: 20, band: nil).signalBand == "red")
-        // An unknown band string is ignored → derived from thresholds.
-        #expect(WatchSnapshot.HealthScoreGlance(score: 90, band: "chartreuse").signalBand == "green")
+        // No band → neutral (the >=70 / >=40 threshold fallback is gone).
+        #expect(WatchSnapshot.HealthScoreGlance(score: 85, band: nil).signalBand == nil)
+        #expect(WatchSnapshot.HealthScoreGlance(score: 20, band: nil).signalBand == nil)
+        // An unknown band string is ignored → neutral.
+        #expect(WatchSnapshot.HealthScoreGlance(score: 90, band: "chartreuse").signalBand == nil)
     }
 
     @Test("health-score clamps to 0…100 and reports a 0…1 fraction")

@@ -2,41 +2,40 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Tests around the Settings feature-flag gate for the Mini-Coach (C6).
+/// Tests around the Settings capability gate for the Mini-Coach (C6).
 ///
 /// The Settings view itself isn't rendered — we lock the underlying
-/// invariants the view consumes:
-///   1. `FeatureFlag.assistantCoach.defaultValue` is true so a fresh
-///      install + missing snapshot still surfaces the row.
-///   2. `FeatureFlagsStoreSnapshot` honors an explicit `false` (operator
-///      kill-switch) which the view then hides on.
+/// invariants the view consumes (#115 · 0.2: the server's `coach` capability
+/// replaced the never-delivered `assistant.coach` flag):
+///   1. Without an `ai` block (server < v1.39, or before `/me` loaded) the
+///      on-device Coach stays allowed — the 1.0.3 behaviour.
+///   2. An operator-closed `coach` capability hides it
+///      (`onDeviceAllowed == false`).
 ///   3. Defaults keys are nonisolated string constants so the view's
 ///      `@AppStorage(MiniCoachDefaultsKeys.enabled)` does NOT drag
 ///      MainActor isolation into the nonisolated Settings destination
 ///      enum.
-@Suite("MiniCoach — settings feature-flag gate (C6)")
+@Suite("MiniCoach — settings capability gate (C6)")
+@MainActor
 struct MiniCoachSettingsGateTests {
-    @Test("assistant.coach defaults to ON pre-snapshot")
-    func assistantCoachDefaultsOn() {
-        #expect(FeatureFlag.assistantCoach.defaultValue)
+    @Test("No ai block → on-device Coach allowed (legacy)")
+    func legacyAllowsOnDevice() {
+        let gate = AICapabilityGate()
+        #expect(gate.allowsOnDevice(.coach))
     }
 
-    @Test("Operator kill-switch (false) is honoured by the live snapshot")
+    @Test("Operator-closed coach capability is honoured on the device")
     func killSwitchHonoured() {
-        let snapshot = FeatureFlagsStoreSnapshot(flags: [.assistantCoach: false])
-        #expect(!snapshot.isEnabled(.assistantCoach))
+        let gate = AICapabilityGate(account: AICaps.block([.coach: AICaps.operatorDisabled]))
+        #expect(!gate.allowsOnDevice(.coach))
+        #expect(!gate.offersEntryPoint(.coach))
     }
 
-    @Test("Operator on-flag is honoured by the live snapshot")
-    func explicitlyEnabledHonoured() {
-        let snapshot = FeatureFlagsStoreSnapshot(flags: [.assistantCoach: true])
-        #expect(snapshot.isEnabled(.assistantCoach))
-    }
-
-    @Test("Missing flag falls back to the per-flag default (fail-open)")
-    func missingFlagFailsOpen() {
-        let snapshot = FeatureFlagsStoreSnapshot(flags: [:])
-        #expect(snapshot.isEnabled(.assistantCoach))
+    @Test("Missing server provider still allows the on-device Coach")
+    func noProviderKeepsDevice() {
+        let gate = AICapabilityGate(account: AICaps.block([.coach: AICaps.noProvider]))
+        #expect(gate.allowsOnDevice(.coach))
+        #expect(!gate.isAvailable(.coach))
     }
 
     @Test("Default enabled-toggle is OFF on a fresh defaults bucket")

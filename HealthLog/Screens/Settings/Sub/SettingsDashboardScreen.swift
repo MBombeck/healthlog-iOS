@@ -113,7 +113,8 @@ struct SettingsDashboardScreen: View {
         HLSettingsCard(
             icon: "circle.hexagongrid",
             title: "Score rings",
-            subtitle: "Pick up to three scores and their order. They appear on your dashboard and in Insights."
+            subtitle: "Pick up to three scores and their order. They appear on your dashboard and in Insights.",
+            subtitleWraps: true
         ) {
             // R10 — die Zeile öffnet ein Sheet, also `pencil` statt Chevron.
             HLSettingsActionRow(title: "Choose score rings", presents: .sheet) {

@@ -17,7 +17,7 @@ import Testing
 ///  2. the actual PUT wire the save produces, via a REAL `APIClient` +
 ///     `MoodRepository` + stub `URLProtocol` (no mock server), proving the
 ///     `ratedFactors` + `tagKeys` reach `PUT /api/mood-entries/[id]`.
-@Suite("EditMoodSheet rated round-trip (FIX 1)", .serialized)
+@Suite("EditMoodSheet rated round-trip (FIX 1)", .serialized, .mockURLSession)
 struct EditMoodSheetRoundTripTests {
     // MARK: - Prefill transform (exact mirror of EditMoodSheet.prefill + payload)
 
@@ -128,7 +128,7 @@ struct EditMoodSheetRoundTripTests {
         nonisolated(unsafe) var capturedBody: Data?
         nonisolated(unsafe) var capturedMethod: String?
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedMethod = req.httpMethod
             capturedPath = req.url?.path
             capturedBody = req.httpBody ?? Self.drainStream(req.httpBodyStream)

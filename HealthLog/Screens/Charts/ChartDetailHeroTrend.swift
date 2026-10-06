@@ -100,6 +100,9 @@ private struct TrendSlopeChip: View {
         case .up: "arrow.up.right"
         case .down: "arrow.down.right"
         case .stable, .none: "arrow.right"
+        // #115 · 1.7 — a direction this build does not know is shown as
+        // unknown, never as "stable".
+        case .unknown: "questionmark"
         }
     }
 
@@ -108,6 +111,7 @@ private struct TrendSlopeChip: View {
         case .up: String(localized: "rising")
         case .down: String(localized: "falling")
         case .stable, .none: String(localized: "stable")
+        case .unknown: String(localized: "unknown")
         }
         return String(localized: "Trend \(window.shortLabel): \(direction)")
     }

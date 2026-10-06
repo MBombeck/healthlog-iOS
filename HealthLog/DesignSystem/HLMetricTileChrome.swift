@@ -8,7 +8,9 @@ import SwiftUI
 // shared primitives so there is a single code path rendering each shared
 // fragment — without forcing the three distinct tile compositions into one
 // monolith. Each tile keeps its own `body` (and its own data/layout logic)
-// but draws its shared fragments from here.
+// but draws its shared fragments from here. (`HLMetricTile` itself was never
+// mounted after the Insights overview redesign and was deleted in #115 B7;
+// the Dashboard tile and the Sleep composite remain.)
 //
 // **Pixel contract (do NOT drift):** these literals are the canonical values
 // the three call sites previously duplicated verbatim:

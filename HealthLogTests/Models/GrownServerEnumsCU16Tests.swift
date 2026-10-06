@@ -31,7 +31,7 @@ private func makeCU16API() -> APIClient {
 
 private func respondCU16(_ json: String, status: Int = 200) {
     let body = Data(json.utf8)
-    MockURLProtocol.handler = { req in
+    MockURLProtocol.install { req in
         (HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, body)
     }
 }
@@ -40,7 +40,7 @@ private func respondCU16(_ json: String, status: Int = 200) {
 
 /// `sportType` is a raw `String?` on the wire, so decoding was never the risk —
 /// the risk was a row landing on the generic fallback title/glyph forever.
-@Suite("CU-16 — workout sportType grew `badminton`", .serialized)
+@Suite("CU-16 — workout sportType grew `badminton`", .serialized, .mockURLSession)
 struct CU16WorkoutSportTypeTests {
     private func makeRepo() throws -> WorkoutsRepository {
         try WorkoutsRepository(api: makeCU16API(), outbox: OutboxQueue(inMemory: true), cacheTTL: 60)
@@ -99,7 +99,7 @@ struct CU16WorkoutSportTypeTests {
 /// `AIProviderConfig.resolvedProvider` folds that onto `.unconfigured`. That is
 /// tolerant, but for a provider the server IS actually serving with it is also
 /// a lie ("Nicht konfiguriert" over a working Coach) — hence the typed case.
-@Suite("CU-16 — AI provider grew `OPENAI_COMPATIBLE`", .serialized)
+@Suite("CU-16 — AI provider grew `OPENAI_COMPATIBLE`", .serialized, .mockURLSession)
 struct CU16AIProviderTests {
     private func configJSON(provider: String) -> String {
         """
@@ -163,7 +163,7 @@ struct CU16AIProviderTests {
 /// `RhythmClassification` has SIX values in Prisma; the ECG OpenAPI publishes
 /// three. `GET /api/insights/rhythm-events` passes all six through, and the
 /// column is shared with the ECG rows.
-@Suite("CU-16 — RhythmClassification has six values, not three", .serialized)
+@Suite("CU-16 — RhythmClassification has six values, not three", .serialized, .mockURLSession)
 struct CU16EcgClassificationTests {
     private func listJSON(classification: String) -> String {
         """
@@ -248,7 +248,7 @@ struct CU16EcgClassificationTests {
 // MARK: - Rhythm events surface
 
 /// The same six values on the surface that actually receives all of them.
-@Suite("CU-16 — rhythm-events passes all six classifications through", .serialized)
+@Suite("CU-16 — rhythm-events passes all six classifications through", .serialized, .mockURLSession)
 struct CU16RhythmEventsTests {
     private func eventsJSON(classification: String) -> String {
         """
@@ -295,7 +295,7 @@ struct CU16RhythmEventsTests {
 /// the verification the plan asked for: the catalogue is rendered server-side
 /// and nothing about a tag key is hardcoded on the client, so new rows appear
 /// with no iOS release.
-@Suite("CU-16 — mood-tag catalogue is server-rendered, not hardcoded", .serialized)
+@Suite("CU-16 — mood-tag catalogue is server-rendered, not hardcoded", .serialized, .mockURLSession)
 struct CU16MoodTagCatalogTests {
     private func catalogJSON(tagKey: String, labelKey: String, icon: String) -> String {
         """
@@ -347,7 +347,7 @@ struct CU16MoodTagCatalogTests {
 
 // MARK: - Catalogue presence for the copy this unit added
 
-@Suite("CU-16 — new catalogue keys resolve in DE and EN")
+@Suite("CU-16 — new catalogue keys resolve in DE and EN", .mockURLSession)
 struct CU16LocalizationKeyTests {
     private static let addedKeys = [
         "insights.ecg.result.low",

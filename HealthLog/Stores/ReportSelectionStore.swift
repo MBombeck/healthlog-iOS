@@ -238,8 +238,11 @@ public final class ReportSelectionStore {
                 )
             )
             adopt(saved)
-        } catch ReportSelectionError.unknownLeaves {
-            await rebuildFromCapabilities()
+        } catch let ReportSelectionError.unknownLeaves(ids) {
+            // #110 — the server names the refused ids; narrow by them too, so a
+            // leaf the capabilities vocabulary still lists but this PUT refuses
+            // cannot keep the panel in a save → refuse → rebuild loop.
+            await rebuildFromCapabilities(refusing: Set(ids))
         } catch {
             saveError = Self.message(for: error)
         }
@@ -264,14 +267,14 @@ public final class ReportSelectionStore {
     /// Re-read the live vocabulary and narrow the chosen scope to it. Never
     /// widens: a leaf the server dropped simply stops being part of the
     /// selection, and the user is told it happened.
-    func rebuildFromCapabilities() async {
+    func rebuildFromCapabilities(refusing refused: Set<String> = []) async {
         guard let caps = try? await capabilities.fetch(), caps.share.hasSelectionVocabulary else {
             phase = .unavailable(.noVocabulary)
             return
         }
-        vocabulary = caps.share.leaves
+        vocabulary = caps.share.leaves.filter { !refused.contains($0) }
         groups = caps.share.groups
-        chosen = chosen.intersection(caps.share.leaves)
+        chosen = chosen.intersection(vocabulary)
         phase = .ready
         notice = .rebuiltFromCapabilities
     }

@@ -366,6 +366,8 @@ public enum EndpointFailureDiagnostics {
     /// that must NOT produce a line (cancellation).
     static func classify(_ error: any Error) -> EndpointFailureClass? {
         if error is CancellationError { return nil }
+        // #110 / #112 — a detailed refusal is a server answer like `.server`.
+        if error is APIRefusalDetail { return .status }
         guard let hlError = error as? HLError else {
             if let urlError = error as? URLError, urlError.code == .cancelled { return nil }
             return .transport
@@ -376,15 +378,15 @@ public enum EndpointFailureDiagnostics {
         case .network: .transport
         case .offline: .offline
         case .decoding: .decoding
-        // Everything the server *answered* with. `.assistantDisabled` and
-        // `.moduleDisabled` are only ever thrown by `ensureSuccess` for a 403.
+        // Everything the server *answered* with. `.aiUnavailable` and
+        // `.moduleDisabled` are only ever thrown by `ensureSuccess` for a server answer.
         // `.writeConflictUnresolved` is the CU-20 give-up after a run of 409s —
         // every one of those WAS a server answer, so it classifies as `.status`.
         // `.refusedWithReason` likewise: the server understood the request and
         // answered it with a stated refusal.
         // Audit B-2 — `.idempotencyReplayInFlight` is a 409 the server answered
         // with, so it belongs to the answered class like every other verdict.
-        case .server, .unauthorized, .rateLimited, .assistantDisabled, .moduleDisabled,
+        case .server, .unauthorized, .rateLimited, .aiUnavailable, .moduleDisabled,
              .writeConflictUnresolved, .refusedWithReason, .idempotencyReplayInFlight: .status
         // `.unknown` is the URL-construction failure; `.notPersisted` never
         // originates in `APIClient`. `.serverNotConfigured` heisst, dass es
@@ -397,12 +399,14 @@ public enum EndpointFailureDiagnostics {
     /// The HTTP status to report. `0` means "no HTTP response was ever seen"
     /// — deliberately numeric so the line stays machine-parseable.
     static func status(for error: any Error) -> Int {
+        if let detail = error as? APIRefusalDetail { return detail.status }
         guard let hlError = error as? HLError else { return 0 }
         return switch hlError {
         case let .server(status, _, _): status
         case .unauthorized: 401
         case .rateLimited: 429
-        case .assistantDisabled, .moduleDisabled: 403
+        case let .aiUnavailable(refusal): refusal.httpStatus
+        case .moduleDisabled: 403
         case .idempotencyReplayInFlight: 409
         default: 0
         }

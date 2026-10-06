@@ -1,0 +1,43 @@
+{
+  "serverTag": "v1.39.0",
+  "issue": "healthlog-iOS#7",
+  "sources": {
+    "openapi": "docs/api/openapi.yaml — components.schemas.AppleHealthBatchEntry.properties.unit.description",
+    "mapping": "src/lib/measurements/apple-health-mapping.ts — percentFromFraction (line 239) as convertToDbUnit of HKQuantityTypeIdentifierBodyFatPercentage (line 268) and HKQuantityTypeIdentifierOxygenSaturation (line 408)",
+    "ranges": "src/lib/validations/measurement.ts — VALUE_RANGES.BODY_FAT (line 413), VALUE_RANGES.OXYGEN_SATURATION (line 426)",
+    "order": "src/app/api/measurements/batch/route.ts — mapAppleHealthEntry (convertToDbUnit) runs first, validateMeasurementRange on the converted value second, a miss is skipped as value_out_of_range (lines 340-371)",
+    "preFixMapping": "src/lib/measurements/apple-health-mapping.ts at v1.38.24 — convertToDbUnit: (v) => v * 100 for both identifiers (line 388 for SpO2)"
+  },
+  "openapiQuote": "A waist circumference sent as `0.86` in `m` is stored as `86` `cm`; an oxygen saturation sent as `0.98` in `fraction` is stored as `98` `%`. Send the sample in Apple's unit, not in HealthLog's.",
+  "serverSource": {
+    "percentFromFraction": "function percentFromFraction(value: number): number { return value > 1 ? value : value * 100; }",
+    "preFixConvertToDbUnit": "(v) => v * 100"
+  },
+  "percentFromFraction": {
+    "fractionCeiling": 1,
+    "factor": 100
+  },
+  "types": [
+    {
+      "hkIdentifier": "HKQuantityTypeIdentifierOxygenSaturation",
+      "measurementType": "OXYGEN_SATURATION",
+      "range": { "min": 50, "max": 100 }
+    },
+    {
+      "hkIdentifier": "HKQuantityTypeIdentifierBodyFatPercentage",
+      "measurementType": "BODY_FAT",
+      "range": { "min": 1, "max": 80 }
+    }
+  ],
+  "cases": [
+    { "hkIdentifier": "HKQuantityTypeIdentifierOxygenSaturation", "healthKitFraction": 0.97, "wireValue": 0.97, "storedValue": 97 },
+    { "hkIdentifier": "HKQuantityTypeIdentifierOxygenSaturation", "healthKitFraction": 0.98, "wireValue": 0.98, "storedValue": 98 },
+    { "hkIdentifier": "HKQuantityTypeIdentifierOxygenSaturation", "healthKitFraction": 1.0, "wireValue": 1.0, "storedValue": 100 },
+    { "hkIdentifier": "HKQuantityTypeIdentifierBodyFatPercentage", "healthKitFraction": 0.25, "wireValue": 0.25, "storedValue": 25 },
+    { "hkIdentifier": "HKQuantityTypeIdentifierBodyFatPercentage", "healthKitFraction": 0.234, "wireValue": 0.234, "storedValue": 23.4 }
+  ],
+  "preFixServerResponseForScaledValue": {
+    "note": "Recorded by the reporter against v1.38.16 on 2026-09-14 (healthlog-iOS#7) for exactly the value the 1.0.3 app sent for a 0.97 HealthKit sample (value 97, unit %).",
+    "response": {"data":{"processed":1,"inserted":0,"updated":0,"duplicates":0,"failed":0,"skipped":[{"index":0,"reason":"value_out_of_range"}],"entries":[{"index":0,"status":"skipped","reason":"value_out_of_range"}]},"error":null}
+  }
+}

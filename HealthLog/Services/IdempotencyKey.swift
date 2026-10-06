@@ -29,4 +29,20 @@ public extension IdempotencyKey {
     /// ``APIClient`` omits the header for an empty value rather than sending a
     /// blank one, so this is genuinely "absent", not "present and useless".
     static let notSent = IdempotencyKey(raw: "")
+
+    /// The key for the `index`-th request of ONE logical write that the client
+    /// splits into several POSTs to the same path (blood pressure: systolic,
+    /// then diastolic).
+    ///
+    /// The server's replay cache is keyed on `(user, key, method, path)` and
+    /// not on the body, so two such POSTs under one key collapse into the
+    /// first one's response (T3 / public #15). Part 0 is the key itself, so a
+    /// single-request write and an already-queued outbox entry are sent exactly
+    /// as before; every later part derives a key from it that is just as stable
+    /// across retries. `:` is in the server's key alphabet
+    /// (`[A-Za-z0-9_\-:.]{8,128}`).
+    func part(_ index: Int) -> IdempotencyKey {
+        guard index > 0, !raw.isEmpty else { return self }
+        return IdempotencyKey(raw: "\(raw):p\(index)")
+    }
 }

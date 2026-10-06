@@ -12,7 +12,7 @@ import Testing
 /// this suite pins the enqueue side end-to-end through the store
 /// surface the IntakeHistoryRow context-menu actions actually consume,
 /// plus the cross-app-restart survival contract.
-@Suite("Intake retro-mutate round-trip — APIClient + Outbox", .serialized)
+@Suite("Intake retro-mutate round-trip — APIClient + Outbox", .serialized, .mockURLSession)
 struct MedicationsIntakeRetroMutateRoundTripTests {
     private func makeAPI() -> APIClient {
         let env = AppEnvironment(
@@ -52,7 +52,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         let store = MedicationsStore(repo: repo)
 
         let captured = RetroMethodRecorder()
-        MockURLProtocol.handler = { [resp = Self.intakeResp] req in
+        MockURLProtocol.install { [resp = Self.intakeResp] req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             let body = #"{"data":\#(resp)}"#
             return (
@@ -87,7 +87,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         let store = MedicationsStore(repo: repo)
 
         // Phase 1 — offline retro-mark.
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let outcome = await store.updateIntake(
@@ -104,7 +104,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         // Phase 2 — network recovers, replay drains. Same idempotency-key
         // must be reused (server-side dedup integrity).
         let captured = RetroMethodRecorder()
-        MockURLProtocol.handler = { [resp = Self.intakeResp] req in
+        MockURLProtocol.install { [resp = Self.intakeResp] req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             captured.recordKey(req.value(forHTTPHeaderField: "Idempotency-Key"))
             let body = #"{"data":\#(resp)}"#
@@ -137,7 +137,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         let store = MedicationsStore(repo: repo)
 
         let captured = RetroMethodRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             // The server returns 204 with an empty body. `APIClient.send` decodes
             // an `EmptyResponse` via the envelope path; an empty `Data()` triggers
@@ -170,7 +170,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         let repo = MedicationsRepository(api: api, outbox: outbox)
         let store = MedicationsStore(repo: repo)
 
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let outcome = await store.deleteIntake(medicationId: "srv-med-1", eventId: "srv-intake-1")
@@ -180,7 +180,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         #expect(queued.first?.kind == .deleteIntake)
 
         let captured = RetroMethodRecorder()
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             // 204+empty body trips JSONDecoder; return the canonical envelope.
             return (
@@ -217,7 +217,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         let storeA = MedicationsStore(repo: repoA)
 
         // Offline — enqueue both kinds on the first facade.
-        MockURLProtocol.handler = { _ in
+        MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
         let upd = await storeA.updateIntake(
@@ -255,7 +255,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
 
         // Network recovers; replay drains both rows on the fresh facade.
         let captured = RetroMethodRecorder()
-        MockURLProtocol.handler = { [resp = Self.intakeResp] req in
+        MockURLProtocol.install { [resp = Self.intakeResp] req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")
             captured.recordKey(req.value(forHTTPHeaderField: "Idempotency-Key"))
             if req.httpMethod == "DELETE" {

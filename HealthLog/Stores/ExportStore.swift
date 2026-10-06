@@ -59,11 +59,12 @@ public final class ExportStore {
 
     // MARK: - Full backup / per-domain CSV / health-record package
 
-    /// Download the full JSON/CSV backup (`POST /api/export`) and persist it to
-    /// the temp dir under complete file protection. Returns the shareable URL.
-    /// Throws `HLError` (rate-limit, network, …) so the card can surface it.
-    public func downloadFullBackup(_ format: ExportService.BackupFormat) async throws -> URL {
-        let export = try await ExportService(api: api).downloadFullBackup(format)
+    /// Download the full JSON/CSV backup (`GET /api/export?type=all`, R2 / A4)
+    /// and persist it to the temp dir under complete file protection. Returns
+    /// the shareable URL. Throws `HLError` (step-up, rate-limit, network, …) so
+    /// the card can surface it; `elevation` is the single-use `X-Step-Up` proof.
+    public func downloadFullBackup(_ format: ExportService.BackupFormat, elevation: String? = nil) async throws -> URL {
+        let export = try await ExportService(api: api).downloadFullBackup(format, elevation: elevation)
         let filename = "healthlog-export-\(Self.dayStamp(Date.now)).\(format.rawValue)"
         return try await persistExport(data: export.data, filename: filename)
     }
@@ -89,8 +90,11 @@ public final class ExportStore {
     /// disk or a log — it is passed straight to the service and forgotten.
     /// Throws `HLError` (422 not-configured, 403 MFA step-up, 429, network) so
     /// the card surfaces it honestly.
-    public func downloadEncryptedBackup(passphrase: String) async throws -> URL {
-        let export = try await ExportService(api: api).downloadEncryptedBackup(passphrase: passphrase)
+    public func downloadEncryptedBackup(passphrase: String, elevation: String? = nil) async throws -> URL {
+        let export = try await ExportService(api: api).downloadEncryptedBackup(
+            passphrase: passphrase,
+            elevation: elevation
+        )
         return try await persistExport(data: export.data, filename: export.suggestedFilename)
     }
 

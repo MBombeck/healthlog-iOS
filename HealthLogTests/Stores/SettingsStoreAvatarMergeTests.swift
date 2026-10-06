@@ -17,7 +17,7 @@ import Testing
 /// demands. Routes responses by URL path so `/profile`, `/auth/me`, and
 /// `/integrations/healthkit` each answer independently.
 @MainActor
-@Suite("SettingsStore avatar merge (auth/me)", .serialized)
+@Suite("SettingsStore avatar merge (auth/me)", .serialized, .mockURLSession)
 struct SettingsStoreAvatarMergeTests {
     private func makeClient() -> APIClient {
         let env = AppEnvironment(
@@ -61,7 +61,7 @@ struct SettingsStoreAvatarMergeTests {
         }()
         let hkJSON = #"{"data":{"entries":[],"lastSyncedAt":null},"error":null}"#
 
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let path = req.url?.path ?? ""
             let body: String
             switch path {
@@ -142,7 +142,7 @@ struct SettingsStoreAvatarMergeTests {
 }
 
 /// **v0.8.1 WD** — repository-level contract for the new `/auth/me` avatar read.
-@Suite("SettingsRepository.authMeAvatarURL", .serialized)
+@Suite("SettingsRepository.authMeAvatarURL", .serialized, .mockURLSession)
 struct SettingsRepositoryAuthMeTests {
     private func makeRepo() -> SettingsRepository {
         let env = AppEnvironment(
@@ -161,7 +161,7 @@ struct SettingsRepositoryAuthMeTests {
     @Test("GET /api/auth/me decodes avatarUrl from the envelope")
     func decodesAvatarURL() async throws {
         nonisolated(unsafe) var capturedPath: String?
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             capturedPath = req.url?.path
             let json = #"{"data":{"id":"u1","username":"anna","avatarUrl":"/api/user/avatar/u1?v=42"},"error":null}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
@@ -174,7 +174,7 @@ struct SettingsRepositoryAuthMeTests {
 
     @Test("GET /api/auth/me tolerates a null avatarUrl (no photo uploaded)")
     func tolerantNullAvatar() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let json = #"{"data":{"id":"u1","username":"anna","avatarUrl":null},"error":null}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
         }
@@ -185,7 +185,7 @@ struct SettingsRepositoryAuthMeTests {
 
     @Test("GET /api/auth/me tolerates an omitted avatarUrl key (older server)")
     func tolerantMissingKey() async throws {
-        MockURLProtocol.handler = { req in
+        MockURLProtocol.install { req in
             let json = #"{"data":{"id":"u1","username":"anna"},"error":null}"#
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
         }

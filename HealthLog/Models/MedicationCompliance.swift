@@ -66,17 +66,36 @@ public struct MedicationCompliancePayload: Codable, Sendable {
     /// Optional: nil against a pre-2026-06-01 server / older fixtures, in which
     /// case the card falls back to the fixed 7/30 `compliance7`/`compliance30`.
     public let complianceDisplay: ComplianceDisplay?
+    /// #115 · 1.3 — `applicable` (server v1.37+): `false` for a scheduled
+    /// medication with no HealthLog-owned expected-dose grid
+    /// (`notApplicableReason: NO_LOCAL_SCHEDULE`). Its `compliance7/30` are
+    /// then all-zero compatibility placeholders that must not be rendered as a
+    /// percentage. `nil` on older servers, which always meant "applicable".
+    public let applicable: Bool?
+    /// Why adherence does not apply (`notApplicableReason`). `nil` when the
+    /// server sent none (applicable, or a server older than v1.37). See
+    /// ``ComplianceNotApplicableReason``.
+    public let notApplicableReason: ComplianceNotApplicableReason?
 
     public init(
         compliance7: ComplianceWindowResult,
         compliance30: ComplianceWindowResult,
         dailyCompliance: [String: DailyComplianceBucket] = [:],
-        complianceDisplay: ComplianceDisplay? = nil
+        complianceDisplay: ComplianceDisplay? = nil,
+        applicable: Bool? = nil,
+        notApplicableReason: ComplianceNotApplicableReason? = nil
     ) {
         self.compliance7 = compliance7
         self.compliance30 = compliance30
         self.dailyCompliance = dailyCompliance
         self.complianceDisplay = complianceDisplay
+        self.applicable = applicable
+        self.notApplicableReason = notApplicableReason
+    }
+
+    /// `false` only when the server said so.
+    public var isApplicable: Bool {
+        applicable != false
     }
 
     /// **v0.10 W-Meds-A2 (v1.7.0 SB-SCHED-2) — capability detection by field
@@ -107,6 +126,10 @@ public struct MedicationComplianceSummaryEntry: Codable, Sendable, Equatable, Id
     public let compliance7: ComplianceWindowResult
     public let compliance30: ComplianceWindowResult
     public let complianceDisplay: ComplianceDisplay?
+    /// #115 · 1.3 — see ``MedicationCompliancePayload/applicable``.
+    public let applicable: Bool?
+    /// See ``MedicationCompliancePayload/notApplicableReason``.
+    public let notApplicableReason: ComplianceNotApplicableReason?
 
     public var id: String {
         medicationId
@@ -116,13 +139,41 @@ public struct MedicationComplianceSummaryEntry: Codable, Sendable, Equatable, Id
         medicationId: String,
         compliance7: ComplianceWindowResult,
         compliance30: ComplianceWindowResult,
-        complianceDisplay: ComplianceDisplay? = nil
+        complianceDisplay: ComplianceDisplay? = nil,
+        applicable: Bool? = nil,
+        notApplicableReason: ComplianceNotApplicableReason? = nil
     ) {
         self.medicationId = medicationId
         self.compliance7 = compliance7
         self.compliance30 = compliance30
         self.complianceDisplay = complianceDisplay
+        self.applicable = applicable
+        self.notApplicableReason = notApplicableReason
     }
+
+    /// `false` only when the server said so.
+    public var isApplicable: Bool {
+        applicable != false
+    }
+}
+
+/// **`notApplicableReason` on the compliance reads** (server-owned vocabulary).
+///
+/// - `NO_LOCAL_SCHEDULE` (v1.37) — the medication has no HealthLog-owned
+///   expected-dose grid.
+/// - `INTAKE_NOT_TRACKED` (v1.39.1, #1033) — intake tracking is switched off:
+///   the schedule is kept as information and nothing is expected from it.
+///
+/// Either way the rates beside it are all-zero placeholders and are never
+/// painted. A reason this build does not know decodes to ``unknown`` and is
+/// rendered like any other not-applicable answer: no number, no guess.
+public enum ComplianceNotApplicableReason: String, Codable, Sendable, Equatable, TolerantServerEnum {
+    case noLocalSchedule = "NO_LOCAL_SCHEDULE"
+    case intakeNotTracked = "INTAKE_NOT_TRACKED"
+    case unknown
+
+    public static let unknownFallback: ComplianceNotApplicableReason = .unknown
+    public static let wireVocabulary: StaticString = "compliance.notApplicableReason"
 }
 
 /// **v0.14.1 #127 — server cadence-scaled card display block.**

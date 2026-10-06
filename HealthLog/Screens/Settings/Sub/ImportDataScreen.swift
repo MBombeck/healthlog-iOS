@@ -73,7 +73,8 @@ struct ImportDataScreen: View {
         HLSettingsCard(
             icon: "square.and.arrow.down.on.square",
             title: "import.action.title",
-            subtitle: "import.action.subtitle"
+            subtitle: "import.action.subtitle",
+            subtitleWraps: true
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 switch phase {

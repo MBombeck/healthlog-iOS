@@ -443,9 +443,18 @@ public struct MedicationInventoryItemDTO: Codable, Sendable, Hashable, Identifia
     }
 }
 
-/// GET list envelope: `{ items, meta: { total } }` inside `data`.
+/// GET list envelope: `{ items, summary, meta: { total } }` inside `data`.
+///
+/// **#25 / #115 · 1.3 — `summary` (server v1.19.0).** The server computes the
+/// Bestand headline through its one canonical supply helper
+/// (`MedicationSupplySummary` in `docs/api/openapi.yaml`). The app renders it
+/// and no longer sums containers itself, which also brings `expiredUnits` on
+/// screen. Optional and tolerant: a server before v1.19 (or a shape this build
+/// cannot read) yields `nil`, and the headline shows "—" for what it does not
+/// know rather than a local sum.
 public struct MedicationInventoryListDTO: Codable, Sendable, Hashable {
     public let items: [MedicationInventoryItemDTO]
+    public let summary: MedicationSupplySummary?
     public let meta: Meta
 
     public struct Meta: Codable, Sendable, Hashable {
@@ -455,9 +464,21 @@ public struct MedicationInventoryListDTO: Codable, Sendable, Hashable {
         }
     }
 
-    public init(items: [MedicationInventoryItemDTO], meta: Meta) {
+    public init(items: [MedicationInventoryItemDTO], summary: MedicationSupplySummary? = nil, meta: Meta) {
         self.items = items
+        self.summary = summary
         self.meta = meta
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case items, summary, meta
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        items = try c.decode([MedicationInventoryItemDTO].self, forKey: .items)
+        summary = try? c.decodeIfPresent(MedicationSupplySummary.self, forKey: .summary)
+        meta = try c.decode(Meta.self, forKey: .meta)
     }
 }
 

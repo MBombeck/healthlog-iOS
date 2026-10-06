@@ -10,8 +10,10 @@ import Testing
 ///
 ///   1. `DashboardScreen` tile drill-down (routes to the Insights tab)
 ///   2. `InsightsScreen` notable-trend chip
-///   3. `PerKindInsightsBlock` long-tail metric tile
-///   4. `InsightsTargetTileGrid` target tile
+///
+/// (`PerKindInsightsBlock` and `InsightsTargetTileGrid` were entry points 3 and
+/// 4; neither was ever mounted again after the web-mirror overview landed, and
+/// both were deleted in #115 B7.)
 ///
 /// (`BMIDetailScreen` was a 4th entry point until v0.14.8 — the screen was an
 /// orphan since the Insights web-mirror landed and was deleted per audit Q2.4.
@@ -269,20 +271,6 @@ struct ChartDetailCutoverTests {
         // dead-end `trendChartMetric` push.
         let code = try CodeOnlySwift.strip(loadSource("Screens", "Insights", "InsightsScreen.swift"))
         #expect(code.contains("router.selectInsightsMetric("))
-    }
-
-    @Test("Long-tail Insights tile drills into InsightsMetricScreen")
-    func perKindTileUsesWebMirror() throws {
-        let code = try CodeOnlySwift.strip(loadSource("Screens", "Insights", "PerKindInsightsBlock.swift"))
-        #expect(code.contains("InsightsMetricScreen("))
-    }
-
-    @Test("Insights target tile drills into InsightsMetricScreen")
-    func targetTileUsesWebMirror() throws {
-        let code = try CodeOnlySwift.strip(
-            loadSource("Screens", "Insights", "Sub", "Tiles", "InsightsTargetTileGrid.swift")
-        )
-        #expect(code.contains("InsightsMetricScreen("))
     }
 
     /// W-B187 (Settings consolidation §A.2) — the legacy-chart-view PARKING ROW

@@ -107,6 +107,21 @@ public enum SignOutEverywhereElse {
     public static func sparesThisDevice(on server: ServerVersionInfo) -> Bool {
         server.isAtLeast(minimumServerVersion)
     }
+
+    /// R2 / #115 A7 — v1.39.3: the same call also ends AI-assistant
+    /// connections, API tokens and clinician share links (the latter unless
+    /// `?keepShareLinks=1`). Below it those keep working, so the copy must not
+    /// say they end.
+    public static let endsConnectionsMinimumServerVersion = "1.39.3"
+
+    /// Whether "sign out everywhere" also ends assistants, tokens and share
+    /// links on the given server build. An unreadable version answers `false`
+    /// and the screen keeps its pre-v1.39.3 wording (the harsher "this device
+    /// too" text, see ``sparesThisDevice(on:)``); the share-link toggle stays
+    /// hidden there because nothing would honour it.
+    public static func endsConnectionsAndLinks(on server: ServerVersionInfo) -> Bool {
+        server.isAtLeast(endsConnectionsMinimumServerVersion)
+    }
 }
 
 public enum MedicationSlotMaterialization {

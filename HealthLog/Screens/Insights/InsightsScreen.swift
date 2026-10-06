@@ -7,8 +7,10 @@ import SwiftUI
 ///    loud provenance + whole-card tap → AskCoach.
 /// 2. **Zone 2 — Dynamics:** alarming alerts + notable-trend chips (only when
 ///    present, OUT of the AI gate).
-/// 3. **Zone 3 — Tiles:** the unified `HLMetricTile` grid + BMI + BP + mood +
-///    long-tail; tap → chart, `✦` → per-tile AI explainer. Data-only.
+/// 3. **Zone 3 — Tiles:** the customizable overview sections (vitals, BMI, BP,
+///    mood, …); tap → chart. Data-only. (The `HLMetricTile` target grid, the
+///    long-tail block and the per-tile `✦` explainer they fed were never mounted
+///    after the redesign and were deleted in #115 B7.)
 /// 4. **Zone 4 — Go deeper:** Trends + Correlations footer links + data-quality
 ///    footnote.
 ///
@@ -28,8 +30,8 @@ struct InsightsScreen: View {
     // floor on the hero, matching Dashboard wiring.
     @Environment(MoodStore.self) private var moodStore
     @Environment(DashboardStore.self) private var dashboardStore
-    /// v0.6.1.1 — backs the new `InsightsTargetTileGrid` (Gewicht, Ruhepuls,
-    /// Mood, Mood-Stabilität, Compliance, Schritte). The store hits
+    /// v0.6.1.1 — personal targets (Gewicht, Ruhepuls, Mood, Mood-Stabilität,
+    /// Compliance, Schritte), warmed here for the metric pages. The store hits
     /// `GET /api/insights/targets`, which already powers the Ziele tab —
     /// reading it here costs no extra round-trip when the operator
     /// reaches Insights, the server-side 60s TTL absorbs the parallel use.
@@ -108,12 +110,6 @@ struct InsightsScreen: View {
     /// turn narrows the snapshot to that metric. `nil` for the generic header/hero
     /// entries; cleared on dismiss alongside `coachSeed`.
     @State private var coachLaunchScope: CoachLaunchScope?
-
-    /// v0.10.0 W-Insights (R2 Phase B) — the metric whose per-tile AI
-    /// explainer sheet is presented (tap on a tile's `✦`). nil → no sheet.
-    /// State lives here (not in the grid) so `HLMetricTile` stays a reusable,
-    /// state-free primitive.
-    @State private var aiExplainerMetric: AIExplainerMetric?
 
     /// W22-W22 #4 — the overview no longer owns a `NavigationStack`; the
     /// container hosts ONE shared stack (sticky strip → scroll-edge glass, no
@@ -212,7 +208,6 @@ struct InsightsScreen: View {
             //   - `briefingStore.load()`     → Daily Briefing summary
             //   - `healthScoreStore.refresh` → Health Score tile
             //   - `measurementsStore.load()` → TrendObservationCard
-            //                                  + PerKindInsightsBlock
             //   - `measurementsStore.loadAvailability()`
             //                                → the per-kind has-data set the
             //                                  Insights TAB STRIP gates every
@@ -346,25 +341,6 @@ struct InsightsScreen: View {
         }, content: {
             AskCoachSheet(seed: coachSeed, launchScope: coachLaunchScope)
         })
-        // v0.10.0 W-Insights (R2 Phase B) — per-tile on-device AI explainer.
-        // Presented when the operator taps a tile's `✦`. Wraps the existing
-        // `TrendObservationsService` output as a `.medium` sheet; "Ask the
-        // coach about this" pulses the AskCoach surface.
-        .sheet(item: $aiExplainerMetric) { selected in
-            MetricAIExplainerSheet(
-                metric: selected.kind,
-                locale: .current,
-                service: appContainer?.trendObservationsService ?? TrendObservationsService(),
-                onAskCoach: {
-                    // A360 H2 — hand the tile's metric to the Coach: a localized
-                    // opener (composer seed) + the wire scope so the snapshot
-                    // narrows to this metric instead of opening blank.
-                    coachSeed = AskCoachSheet.metricSeed(for: selected.kind)
-                    coachLaunchScope = selected.kind.coachScopeSource.map { CoachLaunchScope(metric: $0) }
-                    presentAskCoach = true
-                }
-            )
-        }
         // POLISH-COACH (v0.5.5.6) — `.coach` deep-link wakeup. The
         // router pulses `askCoachRequestCount`; we surface the sheet.
         .onChange(of: router.askCoachRequestCount) { _, _ in
@@ -396,7 +372,8 @@ struct InsightsScreen: View {
     /// the surfaces appear live when Apple Intelligence becomes ready.
     private var aiSurfacesVisible: Bool {
         guard let container = appContainer else { return false }
-        return container.aiMode != .none || container.onDeviceAICapable
+        // #115 · 0.2 — and the server's `coach` capability offers an entry.
+        return (container.aiMode != .none || container.onDeviceAICapable) && container.offersCoach
     }
 
     /// BRIEFING-LOAD-FIX (v0.14.8) — warms the `.week` narrative that backs the
@@ -448,10 +425,10 @@ struct InsightsScreen: View {
     }
 }
 
-// W52 extractions (kept this file under the length cap after the inline Vitals
-// block landed): `tileGridCoveredKinds(_:)` → `Sub/InsightsScreen+Helpers.swift`
-// (the `hasCorrelationSignal(_:)` gate retired in I-1 D when the correlation
-// cards were relocated to the per-metric pages); `AIExplainerMetric` →
-// `Sub/AIExplainerMetric.swift`.
+// W52 extractions: the `hasCorrelationSignal(_:)` gate retired in I-1 D when the
+// correlation cards were relocated to the per-metric pages. `tileGridCoveredKinds(_:)`
+// and the per-tile `✦` explainer sheet (`MetricAIExplainerSheet`,
+// `AIExplainerMetric`) went with the never-mounted target grid and long-tail
+// block in #115 B7 — nothing on the overview could present the sheet.
 // `InsightsBriefingHero` (the on-device Daily-Briefing wrapper, v0.9.0 W2) lives
 // in `Sub/InsightsBriefingHero.swift` (extracted v0.11 W-C to cap this file).

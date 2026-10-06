@@ -46,6 +46,9 @@ final class WatchSessionCoordinator: NSObject {
     /// glance is absent (complication shows its em-dash placeholder).
     var scoreProvider: (() -> WatchSnapshot.HealthScoreGlance?)?
     var latestMeasurementProvider: (() -> WatchSnapshot.LatestMeasurement?)?
+    /// #115 B5 — the account's glucose unit, which the wrist enters glucose in.
+    /// `nil` ⇒ mg/dL (wired after the settings store exists).
+    var glucoseUnitProvider: (() -> GlucoseUnit)?
 
     private let session: WCSession?
     /// A-SEC M-1 — route through the central `HLLog` (LogSanitizer-backed)
