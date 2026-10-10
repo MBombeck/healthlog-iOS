@@ -122,4 +122,82 @@ struct DashboardTileTargetResolverTests {
         // is explicit so a future BP target row can't surface a systolic-only band.
         #expect(DashboardTileTargetResolver.targetBand(for: .bloodPressure, targets: weightTarget(), units: .standard) == nil)
     }
+
+    // MARK: - #20 pulse vs resting pulse
+
+    /// The server `PULSE` target row is the resting-pulse band (`label:
+    /// "Resting pulse"`, computed from the resting series, HealthLog
+    /// `vitals-builder.ts`), so it belongs to the resting tile only.
+    private func restingPulseTarget() -> InsightsTargetsResponseDTO {
+        let item = InsightsTargetsResponseDTO.TargetItem(
+            type: "PULSE",
+            label: "Resting pulse",
+            current: 72,
+            average30: 71,
+            trend: .stable,
+            unit: "bpm",
+            range: .init(min: 61, max: 77),
+            classification: nil,
+            source: "CDC/NCHS 2011",
+            daysInRange7d: 7,
+            daysLogged7d: 7,
+            daysInRange30d: 30,
+            daysLogged30d: 30,
+            lastMetGoalAt: nil,
+            streakDays: 30,
+            insufficientData: false,
+            consistency7d: []
+        )
+        return InsightsTargetsResponseDTO(
+            targets: [item],
+            pageSummary: .init(targetsMetThisWeek: 1, totalTargets: 1, streakHighlight: nil),
+            bpDiastolic: nil,
+            profile: nil
+        )
+    }
+
+    private var pulseAndRestingDigest: ComprehensiveDigest {
+        ComprehensiveDigest(summaries: [
+            "PULSE": MetricSummary(count: 400, avg7: 80, avg30: 81),
+            "RESTING_HEART_RATE": MetricSummary(count: 30, avg7: 72, avg30: 71)
+        ])
+    }
+
+    @Test("resting + raw: the resting tile carries the resting averages and the resting band")
+    func restingTileCarriesRestingBand() {
+        let averages = DashboardTileTargetResolver.averages(for: .restingHeartRate, digest: pulseAndRestingDigest)
+        #expect(averages?.avg7 == 72)
+        #expect(averages?.avg30 == 71)
+        let band = DashboardTileTargetResolver.targetBand(
+            for: .restingHeartRate,
+            targets: restingPulseTarget(),
+            units: .standard
+        )
+        #expect(band?.lowerLabel == "61")
+        #expect(band?.upperLabel == "77")
+        #expect(band?.pctInRange == 100)
+    }
+
+    @Test("raw pulse never carries the resting band (HealthLog#584), whatever the targets say")
+    func rawPulseNeverCarriesRestingBand() {
+        #expect(DashboardTileTargetResolver.targetBand(for: .pulse, targets: restingPulseTarget(), units: .standard) == nil)
+        // Its averages stay raw heart rate, matching its raw headline.
+        let averages = DashboardTileTargetResolver.averages(for: .pulse, digest: pulseAndRestingDigest)
+        #expect(averages?.avg7 == 80)
+        #expect(averages?.avg30 == 81)
+    }
+
+    @Test("raw only: the pulse tile shows raw averages and no band")
+    func rawOnlyNoBand() {
+        let rawOnly = ComprehensiveDigest(summaries: ["PULSE": MetricSummary(count: 400, avg7: 80, avg30: 81)])
+        #expect(DashboardTileTargetResolver.averages(for: .pulse, digest: rawOnly)?.avg7 == 80)
+        #expect(DashboardTileTargetResolver.averages(for: .restingHeartRate, digest: rawOnly) == nil)
+        #expect(DashboardTileTargetResolver.targetBand(for: .pulse, targets: restingPulseTarget(), units: .standard) == nil)
+    }
+
+    @Test("no targets: neither pulse tile shows a band")
+    func noTargetsNoBand() {
+        #expect(DashboardTileTargetResolver.targetBand(for: .pulse, targets: nil, units: .standard) == nil)
+        #expect(DashboardTileTargetResolver.targetBand(for: .restingHeartRate, targets: nil, units: .standard) == nil)
+    }
 }

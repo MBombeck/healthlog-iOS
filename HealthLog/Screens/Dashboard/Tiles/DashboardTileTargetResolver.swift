@@ -46,6 +46,10 @@ enum DashboardTileTargetResolver {
     /// blood-pressure tile (its systolic-only band would misrepresent the
     /// paired reading — the Insights BP panel carries the full sys/dia bands).
     ///
+    /// **#20** — the target row is picked by ``MetricChartMath/bandTargetType(for:)``,
+    /// not by the summary key: the server's `PULSE` row is the resting-pulse band,
+    /// so it lands on `.restingHeartRate` and never on raw `.pulse`.
+    ///
     /// **#115 P2** — `units` are the account's display units; the band's
     /// canonical bounds convert into them, the same way the headline and the
     /// 7-/30-day averages above it do.
@@ -55,8 +59,10 @@ enum DashboardTileTargetResolver {
         units: UnitPreferences
     ) -> RangeBand? {
         guard kind.descriptor.formatStyle != .bloodPressureCompound else { return nil }
-        guard let key = kind.availabilitySummaryKey,
-              let target = targets?.targets.first(where: { $0.type == key }) else { return nil }
+        // #20 — the band row follows the tile's SERIES: the resting-pulse band
+        // (server type `PULSE`) belongs to the resting tile, raw pulse gets none.
+        guard let type = MetricChartMath.bandTargetType(for: kind),
+              let target = targets?.targets.first(where: { $0.type == type }) else { return nil }
         return InsightsTargetRangeBand.rangeBand(
             range: target.range,
             insufficient: target.insufficientData,

@@ -184,7 +184,7 @@ struct DocumentUploadSheet: View {
 
     private func acceptedTypesCaption(_ usage: DocumentUsage) -> some View {
         let extensions = usage.acceptedExtensions.isEmpty ? Self.fallbackExtensions : usage.acceptedExtensions
-        return Text(verbatim: extensions.joined(separator: " · "))
+        return Text(verbatim: extensions.joined(separator: ", "))
             .font(.hlCaption2)
             .foregroundStyle(HLText.tertiary)
             .frame(maxWidth: .infinity, alignment: .leading)

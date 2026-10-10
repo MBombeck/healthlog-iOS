@@ -31,6 +31,10 @@ struct InsightsPageHeader<Actions: View>: View {
     /// Optional sub-line rendered below the title (the page's count / window
     /// caption). Mirrors `InsightsMetricScreen.descriptionSlot` placement.
     var subtitle: LocalizedStringKey?
+    /// When set, VoiceOver reads the sub-line with this label. Without it the
+    /// sub-line stays hidden from VoiceOver (a visual caption only). #19 — the
+    /// Workouts page sets it so the workout total is announced.
+    var subtitleAccessibilityLabel: String?
     /// Stable accessibility identifier suffix for the title (e.g. "mood").
     var accessibilityIdentifierSuffix: String?
     /// The trailing equal-circle action slot. Empty for pages with no
@@ -40,11 +44,13 @@ struct InsightsPageHeader<Actions: View>: View {
     init(
         _ title: LocalizedStringKey,
         subtitle: LocalizedStringKey? = nil,
+        subtitleAccessibilityLabel: String? = nil,
         accessibilityIdentifierSuffix: String? = nil,
         @ViewBuilder actions: @escaping () -> Actions = { EmptyView() }
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.subtitleAccessibilityLabel = subtitleAccessibilityLabel
         self.accessibilityIdentifierSuffix = accessibilityIdentifierSuffix
         self.actions = actions
     }
@@ -68,7 +74,8 @@ struct InsightsPageHeader<Actions: View>: View {
                     .font(.hlBody)
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityHidden(true)
+                    .accessibilityLabel(subtitleAccessibilityLabel.map { Text(verbatim: $0) } ?? Text(subtitle))
+                    .accessibilityHidden(subtitleAccessibilityLabel == nil)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

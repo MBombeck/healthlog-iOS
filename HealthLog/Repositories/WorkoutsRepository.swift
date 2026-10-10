@@ -27,6 +27,13 @@ protocol WorkoutBatchUploading: Sendable {
 /// since, until, sportType) so different views sharing the repo don't
 /// step on each other's slices.
 ///
+/// **Page coherence (#19):** a page one read from the network evicts the
+/// cached follow-up pages of the same filter. Otherwise a pull-to-refresh
+/// would pair a fresh first page with a 59-second-old second page, and a
+/// workout that moved across the boundary in between would be lost or shown
+/// twice. Mirrors the server, which slices every page of one filter from a
+/// single deduped projection.
+///
 /// **Detail path (`workout(id:)`):** separate cache slot keyed on the
 /// workout id. Same TTL.
 public actor WorkoutsRepository: WorkoutBatchUploading {
@@ -44,6 +51,8 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
     private struct CachedList {
         let payload: WorkoutListResponseDTO
         let cachedAt: Date
+        /// The query without `limit`/`offset`; groups the pages of one list.
+        let filter: String
     }
 
     private struct CachedDetail {
@@ -74,16 +83,18 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
     ///
     /// SWR ladder: cache fresh → return. Cache stale → network. Network
     /// fails with stale present → return stale + log. Network fails
-    /// with no cache → throw.
+    /// with no cache → throw. `bypassFreshCache` skips the first rung (the
+    /// list's end-of-list check of page one, #19); the stale fallback stays.
     public func list(
         limit: Int = 50,
         offset: Int = 0,
         since: Date? = nil,
         until: Date? = nil,
-        sportType: String? = nil
+        sportType: String? = nil,
+        bypassFreshCache: Bool = false
     ) async throws -> WorkoutListResponseDTO {
         let key = Self.cacheKey(limit: limit, offset: offset, since: since, until: until, sportType: sportType)
-        if let entry = listCache[key], clock().timeIntervalSince(entry.cachedAt) < cacheTTL {
+        if !bypassFreshCache, let entry = listCache[key], clock().timeIntervalSince(entry.cachedAt) < cacheTTL {
             return entry.payload
         }
         do {
@@ -102,7 +113,11 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
             }
             let req: APIRequest<WorkoutListResponseDTO> = .get("/api/workouts", query: query)
             let payload = try await api.send(req)
-            listCache[key] = CachedList(payload: payload, cachedAt: clock())
+            let filter = Self.filterKey(since: since, until: until, sportType: sportType)
+            if offset == 0 {
+                listCache = listCache.filter { $0.value.filter != filter }
+            }
+            listCache[key] = CachedList(payload: payload, cachedAt: clock(), filter: filter)
             return payload
         } catch {
             if let stale = listCache[key]?.payload {
@@ -326,8 +341,12 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
         until: Date?,
         sportType: String?
     ) -> String {
+        "\(limit)|\(offset)|\(filterKey(since: since, until: until, sportType: sportType))"
+    }
+
+    private static func filterKey(since: Date?, until: Date?, sportType: String?) -> String {
         let s = since.map { ISO8601DateFormatter.fractional.string(from: $0) } ?? ""
         let u = until.map { ISO8601DateFormatter.fractional.string(from: $0) } ?? ""
-        return "\(limit)|\(offset)|\(s)|\(u)|\(sportType ?? "")"
+        return "\(s)|\(u)|\(sportType ?? "")"
     }
 }

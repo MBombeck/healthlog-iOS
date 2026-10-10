@@ -111,19 +111,19 @@ enum DidITakeMedicationCopy {
                 let time = at.formatted(date: .omitted, time: .shortened)
                 return LocalizedStringResource(
                     "intents.didITake.taken.at",
-                    defaultValue: "Yes — you took \(name) at \(time).",
+                    defaultValue: "Yes, you took \(name) at \(time).",
                     comment: "AppIntents — per-med query, taken with time; %1$@ name, %2$@ time"
                 )
             }
             return LocalizedStringResource(
                 "intents.didITake.taken",
-                defaultValue: "Yes — you've already taken \(name) today.",
+                defaultValue: "Yes, you've already taken \(name) today.",
                 comment: "AppIntents — per-med query, taken (no recorded time); %@ is the medication name"
             )
         case .notYet:
             return LocalizedStringResource(
                 "intents.didITake.notYet",
-                defaultValue: "No — you haven't taken \(name) yet today.",
+                defaultValue: "No, you haven't taken \(name) yet today.",
                 comment: "AppIntents — per-med query, not taken yet; %@ is the medication name"
             )
         case .noneScheduled:

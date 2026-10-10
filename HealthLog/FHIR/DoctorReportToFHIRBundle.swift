@@ -534,7 +534,7 @@ enum DoctorReportToFHIRBundle {
         // already the operator-edited display strings.
         let dosage = Dosage()
         if !row.dose.isEmpty {
-            dosage.text = FHIRString("\(row.dose) — \(row.schedule)").asPrimitive()
+            dosage.text = FHIRString("\(row.dose), \(row.schedule)").asPrimitive()
         } else if !row.schedule.isEmpty {
             dosage.text = FHIRString(row.schedule).asPrimitive()
         }
@@ -578,7 +578,7 @@ enum DoctorReportToFHIRBundle {
         // human-readable narrative on the Composition (the legally-renderable
         // content). Generate a minimal `status = generated` XHTML summary of
         // the report period + section counts (FHIR-R4 conformance — audit D2).
-        let summaryHTML = "<p>HealthLog Doctor Report — \(reportPeriodText(spec.cover))</p>"
+        let summaryHTML = "<p>HealthLog Doctor Report: \(reportPeriodText(spec.cover))</p>"
             + "<p>\(observationRefs.count) Observation(s), \(medicationRefs.count) Medication(s), "
             + "\(labRefs.count) Lab result(s), \(conditionRefs.count) Condition resource(s).</p>"
         composition.text = makeNarrative(html: summaryHTML)
@@ -652,7 +652,7 @@ enum DoctorReportToFHIRBundle {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
-        return "\(formatter.string(from: cover.periodStart)) – \(formatter.string(from: cover.periodEnd))"
+        return "\(formatter.string(from: cover.periodStart)) to \(formatter.string(from: cover.periodEnd))"
     }
 
     // MARK: - DiagnosticReport

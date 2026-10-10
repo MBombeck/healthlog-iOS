@@ -135,8 +135,33 @@ public extension HLError {
         return false
     }
 
+    /// Server v1.40: `503` + `encryption.key_mismatch`.
+    /// The server's encryption key does not match its data, so every route but
+    /// `/api/health` and `/api/version` refuses. A server configuration problem
+    /// for the operator, not an outage: it does not go away on a retry, so it
+    /// is not retried in the request, and it never reads as "offline".
+    static let encryptionKeyMismatchCode = "encryption.key_mismatch"
+
+    /// Server v1.42: a dose against a medication kept
+    /// as a record only (`trackIntake: false`). `422` on the intake routes; the
+    /// bulk route reports it per entry as ``medicationIntakeNotTrackedReason``.
+    /// Final: resending gives the same answer.
+    static let medicationIntakeNotTrackedCode = "medication.intake.notTracked"
+    static let medicationIntakeNotTrackedReason = "intake_not_tracked"
+
+    var isMedicationIntakeNotTracked: Bool {
+        if case .server(422, Self.medicationIntakeNotTrackedCode, _) = self { return true }
+        return false
+    }
+
+    var isServerKeyMismatch: Bool {
+        if case .server(503, Self.encryptionKeyMismatchCode, _) = self { return true }
+        return false
+    }
+
     var isRetriable: Bool {
-        switch self {
+        if isServerKeyMismatch { return false }
+        return switch self {
         case .network(.writeCancelled):
             false
         case .network, .offline:
@@ -202,7 +227,9 @@ public extension HLError {
     }
 
     var shouldPersistToOutbox: Bool {
-        isRetriable || self == .unauthorized || self == .network(.writeCancelled)
+        // A key mismatch is fixed by the operator, not refused for the write:
+        // the change is kept and goes out once the server can read its data.
+        isRetriable || self == .unauthorized || self == .network(.writeCancelled) || isServerKeyMismatch
     }
 
     /// The detailed sentence for this error. Kept for logs and for the few
@@ -267,6 +294,10 @@ public extension HLError {
             String(localized: "This is still being processed. We'll retry automatically.")
         case .canceled:
             ""
+        case .server where isServerKeyMismatch:
+            String(localized: "error.server.keyMismatch")
+        case .server where isMedicationIntakeNotTracked:
+            String(localized: "med.intake.error.notTracked")
         case let .server(status, _, message) where (400 ... 499).contains(status):
             // 4xx envelopes carry a user-friendly message string from the server
             // (`apiError` already localises). Surface it verbatim.

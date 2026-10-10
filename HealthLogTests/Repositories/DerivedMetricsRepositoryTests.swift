@@ -381,8 +381,8 @@ struct DerivedMetricsRepositoryTests {
         // Catalog resolves to the host locale; the window (30) + source come
         // straight from the server provenance, never fabricated.
         #expect([
-            "From your last 30 days · daily data",
-            "Aus deinen letzten 30 Tagen · täglich-Daten"
+            "From your last 30 days, daily data",
+            "Aus deinen letzten 30 Tagen, täglich-Daten"
         ].contains(InsightsDerivedBlock.provenanceLine(for: prov)))
     }
 

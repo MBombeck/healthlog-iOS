@@ -268,7 +268,7 @@ struct DocumentCardRow: View {
 
     private var metaLine: String {
         [DocumentFormat.mediumDate(document.displayDate), DocumentFormat.bytes(document.byteSize)]
-            .joined(separator: " · ")
+            .joined(separator: ", ")
     }
 
     private var accessibilityText: Text {

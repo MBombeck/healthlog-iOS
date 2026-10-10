@@ -344,39 +344,53 @@ public extension HealthKitDailyStatsCache {
     /// alten Bytes bleiben unter `hkstats-quarantined-<epoch>.sqlite` liegen,
     /// und Restart-Survival ueberlebt einen Schema-Konflikt.
     static func makeWithRecovery() -> HealthKitDailyStatsCache {
-        do {
-            return try HealthKitDailyStatsCache(modelContainer: makePersistent())
-        } catch {
-            HLLog.healthKit
-                .warning(
-                    "HK-STATS persistent cache unavailable: \(error.localizedDescription, privacy: .public)"
-                )
-        }
-        do {
-            try quarantinePersistentStore()
-            let container = try makePersistent()
-            HLLog.healthKit.warning("HK-STATS store moved aside; a fresh persistent store was opened")
-            return HealthKitDailyStatsCache(modelContainer: container)
-        } catch {
-            HLLog.healthKit
-                .warning(
-                    "HK-STATS quarantine/reopen failed, falling back to in-memory: \(error.localizedDescription, privacy: .public)"
-                )
-            let container = ModelContainerRecovery.recoveredInMemoryContainer(
-                log: HLLog.healthKit,
-                subsystem: "HKStats",
-                build: HealthKitDailyStatsCache.makeInMemory
-            )
-            return HealthKitDailyStatsCache(modelContainer: container)
-        }
+        HealthKitDailyStatsCache(modelContainer: openWithRecovery(
+            openPersistent: makePersistent,
+            persistentStoreURL: { try? persistentStoreURL() },
+            makeInMemory: makeInMemory
+        ))
+    }
+
+    /// The ladder behind ``makeWithRecovery()``, with its file system and
+    /// SwiftData edges passed in so a test can drive it.
+    ///
+    /// 1.2 (INT-N, open point from V2): the ladder used to move the store
+    /// aside on ANY open failure, also when the file was only sealed by data
+    /// protection in a background launch before the first unlock. It now goes
+    /// through ``ModelContainerRecovery/openPersistentOrDegrade`` like the
+    /// other stores: transient keeps the files and degrades to memory for this
+    /// process; only a readable but rejected store is moved aside (never
+    /// deleted) and reopened.
+    static func openWithRecovery(
+        openPersistent: () throws -> ModelContainer,
+        persistentStoreURL: () -> URL?,
+        makeInMemory: () throws -> ModelContainer
+    ) -> ModelContainer {
+        ModelContainerRecovery.openPersistentOrDegrade(
+            log: HLLog.healthKit,
+            subsystem: "HK-STATS",
+            openPersistent: openPersistent,
+            persistentStoreURL: persistentStoreURL,
+            discardCorrupt: { storeURL in
+                do {
+                    try quarantineStore(at: storeURL)
+                    HLLog.healthKit.warning("HK-STATS store moved aside; opening a fresh persistent store")
+                } catch {
+                    HLLog.healthKit
+                        .warning(
+                            "HK-STATS move-aside failed: \(error.localizedDescription, privacy: .public)"
+                        )
+                }
+            },
+            makeInMemory: makeInMemory
+        )
     }
 
     /// Legt den bestehenden Store (inkl. `-wal` / `-shm`) beiseite statt ihn zu
     /// loeschen. Idempotent genug: der Zeitstempel im Namen macht jede Runde
     /// eindeutig.
-    static func quarantinePersistentStore(now: Date = .now) throws {
+    static func quarantineStore(at storeURL: URL, now: Date = .now) throws {
         let fm = FileManager.default
-        let storeURL = try persistentStoreURL()
         let stamp = String(Int(now.timeIntervalSince1970))
         for suffix in ["", "-wal", "-shm"] {
             let source = URL(fileURLWithPath: storeURL.path + suffix)

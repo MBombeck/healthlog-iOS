@@ -161,7 +161,7 @@ struct BenchmarkSourceSheet: View {
     // MARK: - Derived
 
     private var formattedBand: String {
-        "\(format(benchmark.bandLow)) – \(format(benchmark.bandHigh))"
+        HLNumberFormat.range(format(benchmark.bandLow), format(benchmark.bandHigh))
     }
 
     private func format(_ value: Double) -> String {

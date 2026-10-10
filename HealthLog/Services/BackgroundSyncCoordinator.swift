@@ -320,14 +320,14 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         return didRun
     }
 
-    /// The manual "Jetzt syncen" pass.
+    /// The manual "Jetzt syncen" pass; V1: `manual` on the wire (server v1.42+, else `foreground`).
     ///
     /// **Plan 07-09** replaced its three-call fan-out (workout → aggregates →
     /// ECG) with the one `.manual` pass, whose plan is every capability rather
     /// than the three someone remembered. That is the whole point of the phase:
     /// "sync everything" used to be whatever the call site listed.
     public func runManualHealthSyncPass() async {
-        await SyncTriggerContext.shared.withTrigger(.foreground) {
+        await SyncTriggerContext.shared.withTrigger(.manual) {
             _ = await runHealthSyncPass(HealthSyncTrigger.manual)
         }
     }

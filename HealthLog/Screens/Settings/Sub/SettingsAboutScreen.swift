@@ -53,7 +53,7 @@ struct SettingsAboutScreen: View {
             // Subtitle ist die Leseaufforderung zur Guideline-1.4.1-Karte, der
             // Footer der Notruf-Hinweis (Klasse 4, R16-geschützt). Sie tragen
             // verschiedene Aussagen und dürfen nicht zusammengelegt werden.
-            bothSlotsJustification: "Apple 1.4.1 Disclaimer-Karte — Leseaufforderung (D) und Notruf-Hinweis (Klasse 4) sind zwei geschützte Aussagen."
+            bothSlotsJustification: "Apple 1.4.1 Disclaimer-Karte: Leseaufforderung (D) und Notruf-Hinweis (Klasse 4) sind zwei geschützte Aussagen."
         ) {
             disclaimerRow(
                 icon: "stethoscope",

@@ -197,7 +197,7 @@ private struct MentalHealthInstrumentCard: View {
                         )
                         labelValueRow(
                             label: String(localized: "mentalHealth.lastScore"),
-                            value: "\(last.totalScore) · \(bandLabel(last))"
+                            value: "\(last.totalScore) (\(bandLabel(last)))"
                         )
                     }
                 } else {
@@ -245,7 +245,7 @@ private struct MentalHealthInstrumentCard: View {
             "mentalHealth.instrument.\(instrument.keySegment)",
             comment: "Mental-health instrument title"
         )
-        return "\(title) — \(String(localized: "mentalHealth.openDetail"))"
+        return "\(title), \(String(localized: "mentalHealth.openDetail"))"
     }
 
     private func localizedKey(_ key: String) -> LocalizedStringKey {
@@ -369,7 +369,7 @@ private struct MentalHealthInstrumentDetail: View {
             )
             detailValueRow(
                 label: String(localized: "mentalHealth.lastScore"),
-                value: "\(row.totalScore) · \(bandLabel(row))"
+                value: "\(row.totalScore) (\(bandLabel(row)))"
             )
         }
     }
@@ -429,7 +429,7 @@ private struct MentalHealthHistoryChart: View {
             xValueLabel: String(localized: "mentalHealth.lastResult"),
             yValueLabel: String(localized: "mentalHealth.history.totalLabel"),
             annotation: { point in
-                "\(Int(point.value)) · \(bandByID[point.id] ?? "")"
+                bandByID[point.id].map { "\(Int(point.value)) (\($0))" } ?? "\(Int(point.value))"
             },
             accessibilityDescription: { point in
                 "\(MentalHealthDateFormat.short(point.date)): \(Int(point.value)), \(bandByID[point.id] ?? "")"

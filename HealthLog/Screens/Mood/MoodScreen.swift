@@ -646,7 +646,7 @@ struct MoodEntryRow: View {
                     moodTagChipRow
                 }
                 if !displayedTags.isEmpty {
-                    Text(displayedTags.joined(separator: " · "))
+                    Text(displayedTags.joined(separator: ", "))
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
                         .lineLimit(1)

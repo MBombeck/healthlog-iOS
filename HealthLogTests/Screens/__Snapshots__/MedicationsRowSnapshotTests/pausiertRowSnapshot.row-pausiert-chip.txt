@@ -5,6 +5,7 @@
     - dose: "5 mg"
     - treatmentClass: nil
     - category: nil
+    - categoryLabel: nil
     - dosesPerUnit: nil
     - unitsPerDose: nil
     ▿ schedule: HealthLog.MedicationSchedule

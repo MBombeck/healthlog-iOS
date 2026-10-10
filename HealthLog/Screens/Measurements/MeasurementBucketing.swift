@@ -157,11 +157,11 @@ enum MeasurementBucketing {
     }
 
     /// Header shown above a weeklySummary section — short calendar-week
-    /// reference like "KW 19 · 13–19 Mai".
+    /// reference like "KW 19 (13 bis 19 Mai)".
     static func weekHeader(start: Date, calendar: Calendar = .current) -> String {
         let weekOfYear = calendar.component(.weekOfYear, from: start)
         let endDate = calendar.date(byAdding: .day, value: 6, to: start) ?? start
-        return "KW \(weekOfYear) · \(rangeLabel(start: start, end: endDate))"
+        return "KW \(weekOfYear) (\(rangeLabel(start: start, end: endDate)))"
     }
 
     /// Label inside the summary card — humane "Diese Woche" / explicit week.
@@ -195,17 +195,17 @@ enum MeasurementBucketing {
     }
 
     private static func rangeLabel(start: Date, end: Date) -> String {
-        // "13–19 Mai" — month appears only once when both ends share a month.
+        // "13 bis 19 Mai" — month appears only once when both ends share a month.
         let calendar = Calendar.current
         let startDay = calendar.component(.day, from: start)
         let endDay = calendar.component(.day, from: end)
         let sameMonth = calendar.component(.month, from: start) == calendar.component(.month, from: end)
         let monthLabel = end.formatted(.dateTime.month(.abbreviated))
         if sameMonth {
-            return "\(startDay)–\(endDay) \(monthLabel)"
+            return "\(HLNumberFormat.range("\(startDay)", "\(endDay)")) \(monthLabel)"
         }
         let startMonthLabel = start.formatted(.dateTime.month(.abbreviated))
-        return "\(startDay) \(startMonthLabel) – \(endDay) \(monthLabel)"
+        return HLNumberFormat.range("\(startDay) \(startMonthLabel)", "\(endDay) \(monthLabel)")
     }
 }
 

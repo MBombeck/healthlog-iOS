@@ -1,0 +1,58 @@
+{
+  "_doc": "Reviewed exceptions for scripts/check-visible-punctuation.py (U5, 1.1.1). Each entry exempts Swift literals in `path` that contain `contains` (the whole file when `contains` is absent). Every entry must still match something, otherwise the gate fails, so the list can only shrink. None of these strings is ever shown to a user.",
+  "entries": [
+    {
+      "path": "HealthLog/Services/AI/PrivacyFirstPromptBuilder.swift",
+      "reason": "Prompt text for the on-device language model (system prompt and the bulleted vitals context). Sent to the model, never rendered."
+    },
+    {
+      "path": "HealthLog/Services/AI/MiniCoachPrompt.swift",
+      "reason": "Mini-Coach system prompt for the on-device language model. Never rendered."
+    },
+    {
+      "path": "HealthLog/Services/AI/MoodTagExtractionService.swift",
+      "contains": "lexical-extraction tool",
+      "reason": "English instructions for the on-device tag-extraction model. Never rendered."
+    },
+    {
+      "path": "HealthLog/Services/AI/MoodTagExtractionService.swift",
+      "contains": "lexikalisches Extraktions-Werkzeug",
+      "reason": "German instructions for the on-device tag-extraction model. Never rendered."
+    },
+    {
+      "path": "HealthLog/Services/AI/SmartReminderPhraseService.swift",
+      "contains": "Kurzer Reminder-Titel",
+      "reason": "@Guide description that steers the on-device model's generated reminder title. Never rendered."
+    },
+    {
+      "path": "HealthLog/Models/CoachInsight.swift",
+      "contains": "2-3 sentences that describe",
+      "reason": "@Guide description for the on-device model (English half). Never rendered."
+    },
+    {
+      "path": "HealthLog/Models/CoachInsight.swift",
+      "contains": "2-3 Sätze, die den Wert",
+      "reason": "@Guide description for the on-device model (German half). Never rendered."
+    },
+    {
+      "path": "HealthLog/Models/CorrelationDiscoveryDTO.swift",
+      "contains": "→\\(outcome)",
+      "reason": "Fallback identity key of a correlation pair (behaviour→outcome@lag), used for diffing and dismissal, never displayed."
+    },
+    {
+      "path": "HealthLog/Services/Vision/LabReportParser.swift",
+      "contains": "0123456789/%^*.·µμ°‰",
+      "reason": "Character set the OCR parser accepts in a unit token (kg·min). Parser input, not output."
+    },
+    {
+      "path": "HealthLog/Screens/Labs/LabsChangesCard.swift",
+      "contains": "→",
+      "reason": "Trend glyph of the ↑ / ↓ / → set for an unchanged lab value. A direction symbol next to a number, not a separator in a sentence; VoiceOver reads the separate accessibility text."
+    },
+    {
+      "path": "HealthLog/Services/StatistikModeBriefingService.swift",
+      "contains": "→",
+      "reason": "Same ↑ / ↓ / → trend glyph set for a steady value in the statistics briefing row."
+    }
+  ]
+}

@@ -34,10 +34,14 @@ import SwiftUI
 /// .refreshable { await store.load() }
 /// ```
 ///
-/// **Self-suppression** is inherited from `SyncStatusCaption`: until the first
-/// sync handshake lands (`SyncStateStore.lastHandshakeAt == nil`) and nothing
-/// is in flight, the footer renders nothing — standalone installs and screens
-/// without server data therefore stay byte-identical.
+/// **Self-suppression** is inherited from `SyncStatusCaption`: until anything
+/// has synced (`SyncStateStore.lastSync == nil`) and nothing is in flight, the
+/// footer renders nothing — standalone installs and screens without server
+/// data therefore stay byte-identical.
+///
+/// **U1 (#16):** the footer is the secondary line now. The live feedback is at
+/// the top of the Dashboard (`HLSyncActivityGlyph`, attention glyph, status
+/// panel); both read the same `SyncStateStore`.
 ///
 /// **b178 W-SYNCVIS:** visibility is now driven by `SyncStateStore.phase`
 /// (`.syncing` held ≥ 600 ms, `.done` confirmation for 1.5 s — also on

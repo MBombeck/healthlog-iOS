@@ -10,13 +10,15 @@ import Foundation
 /// that content on **app launch** and on **scenePhase-foreground** so the
 /// per-metric screen (W2) and the Übersicht tab paint cache-first (≤100-200 ms
 /// budget) from the persistent `CachedSnapshot` rows the SWR layer manages.
+/// The advisor briefing is not warmed here (1.2 V5): ``DailyBriefingStore``
+/// loads it through its consent gate and its day-keyed cache.
 ///
 /// **Gating (no doomed fetch):** the whole warm is skipped unless the backend
 /// is paired + authenticated + online (`shouldWarm`). In standalone /
 /// backend-down there is no server to talk to, so firing would only churn the
-/// reachability probe and log noise. The LLM-backed legs (status + briefing)
-/// additionally pass through their repos' own AI-consent gate, so a closed
-/// consent never transmits health data here either.
+/// reachability probe and log noise. The LLM-backed status legs additionally
+/// pass through their repo's own AI-consent gate, so a closed consent never
+/// transmits health data here either.
 ///
 /// **Off the critical path:** every leg is fire-and-forget on a utility task —
 /// `warm()` returns immediately; bootstrap / foreground handling never blocks
@@ -118,8 +120,11 @@ public actor InsightsPrefetchService {
             group.addTask { _ = try? await targetsRepo.fetch() }
             // Comprehensive digest (overview empty-gate + per-metric summaries).
             group.addTask { _ = try? await insightsRepo.comprehensive() }
-            // Advisor briefing (Übersicht tab). Consent-gated inside the repo.
-            group.addTask { _ = try? await insightsRepo.generateBriefing(force: false) }
+            // 1.2 V5 — no advisor-briefing leg. It POSTed `/api/insights/generate`
+            // on every launch and foreground, past the AI-consent and briefing
+            // capability gates (the repo has none; ``DailyBriefingStore`` does),
+            // and threw the answer away (no SWR write). The store's own
+            // day-keyed SWR load is the one place the briefing is asked for.
             // Per-metric daily assessments for the metrics that have a status
             // endpoint. Each is consent-gated + Berlin-day-keyed inside the repo.
             for metric in metrics {

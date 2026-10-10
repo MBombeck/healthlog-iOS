@@ -122,7 +122,7 @@ struct MeasurementChronoModelTests {
         // Underlying samples are preserved — no data loss.
         #expect(entries[0].samples.count == 10)
         let label = MeasurementChronoModel.collapsedValueLabel(for: collapsed, unit: MetricKind.pulse.unit)
-        #expect(label == "46 bpm · 10×")
+        #expect(label == "46 bpm (10×)")
     }
 
     @Test("Mixed-value same-minute pulse run shows a range + count")
@@ -137,7 +137,7 @@ struct MeasurementChronoModelTests {
             return
         }
         let label = MeasurementChronoModel.collapsedValueLabel(for: collapsed, unit: MetricKind.pulse.unit)
-        #expect(label == "45–48 bpm · 3×")
+        #expect(label == "45 bis 48 bpm (3×)")
     }
 
     @Test("A single pulse sample stays an unchanged single row")

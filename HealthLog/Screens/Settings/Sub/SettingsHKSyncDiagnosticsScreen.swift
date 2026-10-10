@@ -50,6 +50,8 @@ struct SettingsHKSyncDiagnosticsScreen: View {
     @State var isResending = false
     /// #12 — the heart-rate bucket ledger of the signed-in account (`+HeartRateBuckets`).
     @State var hrBucketSnapshot: HRBucketDiagnosticsSnapshot?
+    /// V1 — the persistent `stats:` upload record of the signed-in account (`+StatsUploads`).
+    @State var statsUploadLog: HealthKitStatsUploadLog?
 
     var body: some View {
         HLSettingsPage(title: "settings.hkdiag.title") {
@@ -59,6 +61,9 @@ struct SettingsHKSyncDiagnosticsScreen: View {
             // Telefon selbstständig?", die einzige Hintergrund-Aussage, die
             // ohne Log-Wissen lesbar ist.
             serverHealthCard
+            // V1 — directly under the server view: the app's own half of the
+            // same question, per summed type, kept across launches.
+            statsUploadCard
             skippedCard
             heartRateBucketCard
             workoutDeliveryCard
@@ -73,6 +78,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         .task { await loadServerSyncHealth() }
         .task { await loadSkipped() }
         .task { loadHeartRateBuckets() }
+        .task { loadStatsUploads() }
     }
 
     // MARK: - Summary
@@ -341,7 +347,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         }
         let when = date.formatted(.relative(presentation: .named))
         guard let source = diagnostics.lastCollectionTriggerSource else { return when }
-        return "\(when) · \(HKSyncDiagnosticsVocabulary.collectionTrigger(source))"
+        return "\(when), \(HKSyncDiagnosticsVocabulary.collectionTrigger(source))"
     }
 
     /// The full set of `MetricKind`s HealthLog syncs through the iOS HK

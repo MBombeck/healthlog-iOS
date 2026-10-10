@@ -30,9 +30,16 @@ extension AuthStore {
     /// - `429` — 10 attempts / 15 min per IP on each leg.
     /// - An unknown credential or an expired challenge is a plain `throw` in
     ///   `verifyAuthentication` (`src/lib/auth/passkey.ts`) and reaches the
-    ///   client as a generic `500 "Interner Serverfehler"`. It is
-    ///   indistinguishable from a real server fault and keeps the server-error
-    ///   copy here; the server would have to answer 401/404 for it.
+    ///   client as a generic `500 "Interner Serverfehler"` on servers before
+    ///   v1.42.
+    ///
+    /// **Server v1.42** names each failure in
+    /// `meta.errorCode`: `401 passkey.challenge.expired`, `404 passkey.unknown`
+    /// (no passkey with this credential id on this server), `422
+    /// passkey.response.invalid`, `401 passkey.verification.failed`. Each gets
+    /// its own sentence; `passkey.unknown` sends the person to another way of
+    /// signing in. `login-verify` keeps its 401 body for this
+    /// (`APIClient.preserves401Body`).
     ///
     /// The server prose is English-only, so every mapped sentence comes from
     /// the string catalog. `meta.errorCode` is kept where the server sent one.
@@ -45,7 +52,10 @@ extension AuthStore {
     ///   12 s watchdog's ``HLError/Underlying/timeout``): the sign-in banner
     ///   renders those through ``HLError/signInFacingDescription``.
     nonisolated static func passkeyLoginFailure(_ error: HLError) -> HLError {
-        switch error {
+        if case let .server(status, code?, _) = error, let key = passkeyErrorKeys[code] {
+            return .server(status: status, code: code, message: String(localized: String.LocalizationValue(key)))
+        }
+        return switch error {
         case .unauthorized:
             passkeyRejected(code: nil)
         case let .server(401, code, _), let .server(404, code, _), let .server(422, code, _):
@@ -64,6 +74,14 @@ extension AuthStore {
             error
         }
     }
+
+    /// v1.42 — one catalogue sentence per named passkey failure.
+    private nonisolated static let passkeyErrorKeys: [String: String] = [
+        "passkey.challenge.expired": "auth.passkey.error.challengeExpired",
+        "passkey.unknown": "auth.passkey.error.unknownPasskey",
+        "passkey.response.invalid": "auth.passkey.error.responseInvalid",
+        "passkey.verification.failed": "auth.passkey.error.rejected"
+    ]
 
     private nonisolated static func passkeyRejected(code: String?) -> HLError {
         .server(

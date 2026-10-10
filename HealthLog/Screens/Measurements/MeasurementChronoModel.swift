@@ -230,8 +230,8 @@ enum MeasurementChronoModel {
     }
 
     /// The honest summary string for a collapsed run — value(s) + count.
-    /// - All samples share one rounded value → `"46 bpm · 10×"`.
-    /// - Values vary → range + count → `"45–48 bpm · 10×"`.
+    /// - All samples share one rounded value → `"46 bpm (10×)"`.
+    /// - Values vary → range + count → `"45 bis 48 bpm (10×)"`.
     /// BP never collapses (not a high-frequency vital), so this only ever
     /// formats scalar values. High-frequency vitals (pulse / respiratory / SpO₂)
     /// have no re-unitable family, so the displayed numbers are unit-independent;
@@ -248,7 +248,7 @@ enum MeasurementChronoModel {
         if loRounded == hiRounded {
             return "\(Int(loRounded))\(unitSuffix) \(countLabel)"
         }
-        return "\(Int(loRounded))–\(Int(hiRounded))\(unitSuffix) \(countLabel)"
+        return "\(HLNumberFormat.range("\(Int(loRounded))", "\(Int(hiRounded))"))\(unitSuffix) \(countLabel)"
     }
 
     /// The display value+unit string for a measurement — the SINGLE formatter

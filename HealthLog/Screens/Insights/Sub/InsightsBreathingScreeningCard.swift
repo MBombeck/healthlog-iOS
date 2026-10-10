@@ -70,7 +70,7 @@ struct InsightsBreathingScreeningCard: View {
             parts.append(String(format: String(localized: "clinicalSignals.breathing.events"), screening.eventCount))
         }
         if let trend = trendText { parts.append(trend) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     private var trendText: String? {

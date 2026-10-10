@@ -122,13 +122,13 @@ public extension CustomMetricDTO {
     }
 
     /// Human-readable target window for the definition subtitle, e.g.
-    /// "60 – 80 kg", "≥ 60 kg", "≤ 80 kg". `nil` when no bound is set.
+    /// "60 to 80 kg", "≥ 60 kg", "≤ 80 kg". `nil` when no bound is set.
     var targetBandDescription: String? {
         let low = targetLow.map { CustomMetricFormat.number($0, decimals: decimals) }
         let high = targetHigh.map { CustomMetricFormat.number($0, decimals: decimals) }
         let suffix = unit.isEmpty ? "" : " \(unit)"
         switch (low, high) {
-        case let (low?, high?): return "\(low) – \(high)\(suffix)"
+        case let (low?, high?): return HLNumberFormat.range(low, high) + suffix
         case let (low?, nil): return "≥ \(low)\(suffix)"
         case let (nil, high?): return "≤ \(high)\(suffix)"
         case (nil, nil): return nil

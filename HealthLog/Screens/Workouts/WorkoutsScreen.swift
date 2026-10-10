@@ -9,7 +9,11 @@ import SwiftUI
 ///
 /// **Daten:** `WorkoutsStore` (v0.5.2-A7) → `WorkoutsRepository` →
 /// `GET /api/workouts` mit SWR 60s. Load erst on `.task`, refresh via
-/// Pull-to-Refresh.
+/// Pull-to-Refresh (wieder ab Seite eins, Sportfilter bleibt).
+///
+/// **Paging (#19):** Der Server liefert 50 Zeilen pro Seite. Kopfzeile zeigt
+/// `meta.total` („50 von 730 Workouts“), die Fußzeile lädt die nächste Seite,
+/// sobald sie in der lazy `List` sichtbar wird, bis `meta.total` erreicht ist.
 ///
 /// **Empty-State:** Server-Seite liefert leere Liste sobald die HK-Workout-
 /// Batch-Ingest noch nichts hochgeladen hat. Empty-Copy verweist auf
@@ -48,6 +52,18 @@ struct WorkoutsScreen: View {
 
     private var list: some View {
         List {
+            if store.meta != nil, !store.workouts.isEmpty {
+                Section {
+                    Text(WorkoutsListSummary.headerText(for: store))
+                        .font(.hlSubhead.weight(.semibold))
+                        .foregroundStyle(HLText.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(WorkoutsListSummary.headerAccessibilityLabel(for: store))
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("workouts.count")
+                }
+                .listRowBackground(Color.clear)
+            }
             if let meta = store.meta, meta.droppedDuplicates > 0 {
                 Section {
                     Text(LocalizedStringKey(Layout.duplicatesFootnoteKey))
@@ -66,6 +82,15 @@ struct WorkoutsScreen: View {
                     .accessibilityIdentifier("workouts.row.\(workout.id)")
                 }
             }
+            // #19 — the footer is a lazy row: it only exists once the user
+            // scrolled to the end, so its task is the "next page" trigger.
+            // Keyed on the offset so a page that left the footer on screen
+            // asks for the following one; the store drops repeats.
+            Section {
+                WorkoutsPagingFooter()
+                    .task(id: store.currentOffset) { await store.loadNextPage() }
+            }
+            .listRowBackground(Color.clear)
             // v0.14.8 W2-SYNCUX — canonical sync-status footer (same primitive
             // as Dashboard/Insights, self-suppressing via empty-section footer).
             Section {} footer: {
@@ -275,7 +300,7 @@ public enum WorkoutFormatter {
         if let kcal = workout.activeEnergyKcal, kcal > 0 {
             parts.append("\(Int(kcal.rounded())) kcal")
         }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     /// `123` → `2:03`, `7322` → `2:02:02`. nil-safe.

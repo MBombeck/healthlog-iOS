@@ -1,4 +1,4 @@
-"NSHealthShareUsageDescription" = "HealthLog reads the health data you allow from Apple Health – including vital signs, activity, nutrition, sleep, mood, cycle data, ECGs, workout and heart-rate data, and medications – to display and sync it and calculate trends.";
+"NSHealthShareUsageDescription" = "HealthLog reads the health data you allow from Apple Health (including vital signs, activity, nutrition, sleep, mood, cycle data, ECGs, workout and heart-rate data, and medications) to display and sync it and calculate trends.";
 "NSHealthUpdateUsageDescription" = "HealthLog saves measurements, mood and cycle entries you create, and measurements from devices or imports you connect to Apple Health when you allow HealthLog to write.";
 "NSFaceIDUsageDescription" = "HealthLog uses Face ID to protect your data.";
 "NSUserNotificationsUsageDescription" = "HealthLog reminds you about medications and measurements.";
@@ -6,4 +6,4 @@
 "NSSpeechRecognitionUsageDescription" = "HealthLog uses speech recognition to turn your dictated Coach question into text, on device where available. You review the text before sending it.";
 "NSMicrophoneUsageDescription" = "HealthLog uses the microphone so you can dictate a Coach question. The recording is converted to text on device and is not stored.";
 "NSCameraUsageDescription" = "HealthLog uses the camera to read medication packages and lab reports on device, or to upload scans you select to your document vault on your configured HealthLog server.";
-"NSBluetoothAlwaysUsageDescription" = "HealthLog connects to blood-pressure monitors over Bluetooth — Omron cuffs are the profile it knows today — so your readings arrive automatically.";
+"NSBluetoothAlwaysUsageDescription" = "HealthLog connects to blood-pressure monitors over Bluetooth (today that means Omron cuffs), so your readings arrive automatically.";

@@ -271,7 +271,7 @@ struct InsightsPrefetchServiceTests {
         #expect(log.total == 0, "a gated warm must never fire a doomed fetch")
     }
 
-    @Test("shouldWarm == true → warms targets + comprehensive + briefing + status")
+    @Test("shouldWarm == true → warms targets + comprehensive + status, never the briefing generate")
     func openWarmFansOut() async throws {
         let log = RequestLog()
         MockURLProtocol.install { req in
@@ -282,7 +282,7 @@ struct InsightsPrefetchServiceTests {
             } else if path.contains("-status") {
                 #"{"data":{"hasProvider":true,"text":"X","cached":true,"updatedAt":null}}"#
             } else {
-                // comprehensive + generate (briefing) — minimal valid envelope.
+                // comprehensive — minimal valid envelope.
                 #"{"data":{}}"#
             }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
@@ -292,7 +292,10 @@ struct InsightsPrefetchServiceTests {
 
         #expect(log.count(matching: "/api/insights/targets") == 1)
         #expect(log.count(matching: "/api/insights/comprehensive") >= 1)
-        #expect(log.count(matching: "/api/insights/generate") >= 1)
+        // 1.2 V5 — the warm used to POST `/api/insights/generate` on every
+        // foreground, ungated and uncached (production: 429 bursts). The
+        // briefing is the DailyBriefingStore's to load.
+        #expect(log.count(matching: "/api/insights/generate") == 0)
         // The four deployed status endpoints (BP / weight / pulse / bmi) warm
         // — `.bmi` added in W22-audit so its assessment paints cache-first too.
         #expect(log.count(matching: "blood-pressure-status") == 1)

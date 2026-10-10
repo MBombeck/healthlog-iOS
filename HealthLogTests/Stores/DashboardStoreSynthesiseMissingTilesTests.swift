@@ -152,6 +152,29 @@ struct DashboardStoreSynthesiseMissingTilesTests {
         #expect(kinds.contains(.weight))
         #expect(!kinds.contains(.bloodPressure))
     }
+
+    @Test("#20 a visible pulse tile also synthesizes the resting series its slot may show")
+    @MainActor
+    func visiblePulseSynthesisesResting() {
+        let store = makeStore()
+        store.seedSummaryForTesting(summary(with: [metric(.pulse, latest: 80)]))
+        // The resting tile itself is hidden: the pulse slot still needs the
+        // resting series when the account has resting data (web `hasRestingHr`).
+        let layout = DashboardWidgetLayout(widgets: [
+            DashboardWidgetConfig(id: DashboardWidgetId.pulse, visible: true, tileVisible: true, order: 0),
+            DashboardWidgetConfig(id: DashboardWidgetId.restingHeartRate, visible: false, tileVisible: false, order: 1)
+        ])
+        store.synthesiseMissingTiles(layout: layout)
+        let kinds = store.summary?.metrics.map(\.kind) ?? []
+        #expect(kinds.filter { $0 == .restingHeartRate }.count == 1)
+        // Hidden pulse tile → no extra resting synthesis.
+        let other = makeStore()
+        other.seedSummaryForTesting(summary(with: []))
+        other.synthesiseMissingTiles(layout: DashboardWidgetLayout(widgets: [
+            DashboardWidgetConfig(id: DashboardWidgetId.pulse, visible: true, tileVisible: false, order: 0)
+        ]))
+        #expect(other.summary?.metrics.contains { $0.kind == .restingHeartRate } == false)
+    }
 }
 
 // swiftlint:enable force_unwrapping

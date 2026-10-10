@@ -13,6 +13,10 @@ import SwiftUI
 ///   Tap flips the parent's `showProfile` binding which drives the
 ///   `navigationDestination` push to `ProfileScreen` (see
 ///   `DashboardProfileToolbar.swift`).
+/// - U1 (#16): the sync slot sits left of the avatar (the transient sync
+///   glyph, or since INT-L a calm attention glyph instead of a badge on the
+///   avatar), and the sync status panel opens below the row
+///   (`DashboardSyncStatus.swift`).
 ///
 /// **Why a binding instead of a router?** Keeping the push declarative
 /// at the call site means SwiftUI's pop-the-navigation-stack affordances
@@ -37,36 +41,20 @@ struct DashboardHeader: View {
     /// `DashboardParallaxMath.greetingOpacity`).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// U1 (#16) — the inline sync status panel under the greeting. Opened from
+    /// the slot glyph or a long-press on the avatar or the greeting; never on
+    /// its own.
+    @State private var showsSyncStatus = false
+
     var body: some View {
-        HStack(alignment: .center, spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text(salutation)
-                    .font(.hlLargeTitle)
-                    .foregroundStyle(HLText.primary)
-                    .accessibilityIdentifier("dashboard.greeting")
-                Text(formattedDate)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+        VStack(alignment: .leading, spacing: HLSpace.md) {
+            greetingRow
+            if showsSyncStatus {
+                DashboardSyncStatusPanel { showsSyncStatus = false }
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
-            .opacity(greetingOpacity)
-            Spacer(minLength: HLSpace.sm)
-            // (avatar intentionally outside the fade — only the greeting
-            // dims while scrolling)
-            Button {
-                showProfile = true
-            } label: {
-                HLProfileAvatar(
-                    size: 44,
-                    email: avatarEmail,
-                    initials: avatarInitials,
-                    image: avatarStore.image
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(LocalizedStringKey("dashboard.toolbar.profile.accessibilityLabel")))
-            .accessibilityIdentifier("dashboard.profile.avatar")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(reduceMotion ? nil : HLMotion.spring, value: showsSyncStatus)
         // v0.8.0 W11 — keep the self-hosted avatar in sync with the profile's
         // `avatarUrl`. Loads through the authenticated, cert-pinned APIClient
         // (cache-first); a nil URL clears to the initials monogram.
@@ -81,6 +69,44 @@ struct DashboardHeader: View {
         .task(id: avatarReloadToken) {
             await avatarStore.load(avatarURLPath: settings.profile?.avatarUrl)
         }
+    }
+
+    private var greetingRow: some View {
+        HStack(alignment: .center, spacing: HLSpace.md) {
+            VStack(alignment: .leading, spacing: HLSpace.xs) {
+                Text(salutation)
+                    .font(.hlLargeTitle)
+                    .foregroundStyle(HLText.primary)
+                    .accessibilityIdentifier("dashboard.greeting")
+                Text(formattedDate)
+                    .font(.hlSubhead)
+                    .foregroundStyle(HLText.secondary)
+            }
+            .opacity(greetingOpacity)
+            // INT-L (1.1.1) — a long-press on the greeting opens the sync
+            // status too, like the one on the avatar. VoiceOver reaches it
+            // through the avatar's "Sync-Status anzeigen" action.
+            .contextMenu {
+                Button {
+                    showsSyncStatus.toggle()
+                } label: {
+                    Label("sync.activity.showStatus", systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
+            Spacer(minLength: HLSpace.sm)
+            // (avatar intentionally outside the fade — only the greeting
+            // dims while scrolling). U1 (#16) — the sync glyph and the
+            // attention glyph share one slot; see `DashboardSyncStatus.swift`.
+            DashboardSyncAvatar(showProfile: $showProfile, showsSyncStatus: $showsSyncStatus) {
+                HLProfileAvatar(
+                    size: 44,
+                    email: avatarEmail,
+                    initials: avatarInitials,
+                    image: avatarStore.image
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Composite reload key: `<userId>|<avatarUrl>`. Changes both when the

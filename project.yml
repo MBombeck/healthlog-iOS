@@ -17,7 +17,7 @@ settings:
     # 2026-08-21 three of them hardcoded "0.19.0" instead — the same split as
     # the build number below, and it would have shipped a stale marketing
     # version on the first release that changed one.
-    MARKETING_VERSION: "1.1.0"
+    MARKETING_VERSION: "1.2.0"
     # 11-03 THE SINGLE FROZEN BUILD-NUMBER ALLOCATION POINT.
     #
     # This is the ONLY `CURRENT_PROJECT_VERSION:` assignment in this file, and
@@ -48,7 +48,7 @@ settings:
     #
     # The procedure and the receipt it must produce live in
     # .planning/active/apple-review-reliability/CANDIDATE-FREEZE.md.
-    CURRENT_PROJECT_VERSION: "291"
+    CURRENT_PROJECT_VERSION: "293"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -397,7 +397,7 @@ targets:
           - CFBundleURLName: dev.healthlog.app.deeplink
             CFBundleURLSchemes:
               - healthlog
-        NSHealthShareUsageDescription: "HealthLog liest die von dir freigegebenen Gesundheitsdaten aus Apple Health – darunter Vitalwerte, Aktivität, Ernährung, Schlaf, Stimmung, Zyklusdaten, EKGs, Trainings- und Pulsdaten sowie Medikamente – um sie anzuzeigen, zu synchronisieren und Trends zu berechnen."
+        NSHealthShareUsageDescription: "HealthLog liest die von dir freigegebenen Gesundheitsdaten aus Apple Health (darunter Vitalwerte, Aktivität, Ernährung, Schlaf, Stimmung, Zyklusdaten, EKGs, Trainings- und Pulsdaten sowie Medikamente), um sie anzuzeigen, zu synchronisieren und Trends zu berechnen."
         NSHealthUpdateUsageDescription: "HealthLog speichert von dir erfasste Messungen, Stimmungs- und Zykluseinträge sowie Messungen aus von dir verbundenen Geräten oder Importen in Apple Health, wenn du HealthLog Schreibzugriff erlaubst."
         # v0.7.0 W-APPSTORE — NSHealthClinicalHealthRecordsShareUsageDescription
         # entfernt. Per R-HK-research liest kein Code-Pfad `HKClinicalType` aus
@@ -411,7 +411,7 @@ targets:
         # `AlarmManager.requestAuthorization()`; without it the request
         # denies/traps. The alarm is opt-in per medication (default OFF) for
         # genuinely time-critical doses and breaks through Silent/Focus.
-        NSAlarmKitUsageDescription: "HealthLog stellt laute Alarme für zeitkritische Medikamente, die du ausdrücklich aktivierst — sie durchbrechen Stummschaltung und Fokus, damit du keine wichtige Dosis verpasst."
+        NSAlarmKitUsageDescription: "HealthLog stellt laute Alarme für zeitkritische Medikamente, die du ausdrücklich aktivierst. Sie durchbrechen Stummschaltung und Fokus, damit du keine wichtige Dosis verpasst."
         # v0151 COACH-DICTATION (web-parity v1.18.7): the AskCoach composer now
         # has a real voice-dictation mic (`CoachDictationModel` →
         # `SFSpeechRecognizer` + `AVAudioEngine`), so the app genuinely uses both
@@ -420,7 +420,7 @@ targets:
         # the key was the transitive SpeziChat/Speech.framework link — that link
         # also still satisfies ITMS-90683). Transcription is on-device where
         # supported; the user reviews the text before sending.
-        NSSpeechRecognitionUsageDescription: "HealthLog nutzt Spracherkennung, um deine diktierte Frage an den Coach in Text umzuwandeln – wo möglich direkt auf dem Gerät. Du prüfst den Text vor dem Senden."
+        NSSpeechRecognitionUsageDescription: "HealthLog nutzt Spracherkennung, um deine diktierte Frage an den Coach in Text umzuwandeln, wo möglich direkt auf dem Gerät. Du prüfst den Text vor dem Senden."
         NSMicrophoneUsageDescription: "HealthLog nutzt das Mikrofon, um deine Frage an den Coach zu diktieren. Die Aufnahme wird auf dem Gerät in Text umgewandelt und nicht gespeichert."
         # Camera serves two explicit user-driven flows: local Vision OCR for
         # medication/lab entry, and the optional document vault whose selected
@@ -453,7 +453,7 @@ targets:
         # in `HealthLogSpeziDelegate.swift:309-313`. There is no scale and no
         # glucose profile, so neither could ever be paired — and
         # `SettingsDevicesScreen.swift:92-105` already says so in the UI.
-        NSBluetoothAlwaysUsageDescription: "HealthLog koppelt Blutdruckmessgeräte über Bluetooth – derzeit die Omron-Profile –, damit deine Messwerte automatisch in HealthLog landen."
+        NSBluetoothAlwaysUsageDescription: "HealthLog koppelt Blutdruckmessgeräte über Bluetooth (derzeit die Omron-Profile), damit deine Messwerte automatisch in HealthLog landen."
         CFBundleLocalizations:
           - de
           - en

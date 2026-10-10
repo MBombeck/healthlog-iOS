@@ -75,13 +75,13 @@ struct InsightsInTargetBar: View {
         .accessibilityLabel(accessibilityText)
     }
 
-    /// "In range · 90 T" — the header label with the window suffix appended when
-    /// a `windowLabel` is set. Keeps the "· <window>" convention the trend chips
-    /// and compliance bar already use so every windowed figure reads one way.
+    /// "In range (90 T)" — the header label with the window suffix appended
+    /// when a `windowLabel` is set. U5 (1.1.1): the window sits in parentheses,
+    /// no middle dot.
     private var inRangeLabel: String {
         let base = String(localized: "In range")
         guard let windowLabel else { return base }
-        return "\(base) · \(windowLabel)"
+        return "\(base) (\(windowLabel))"
     }
 
     /// Spoken a11y label — folds the window into the sentence so VoiceOver reads

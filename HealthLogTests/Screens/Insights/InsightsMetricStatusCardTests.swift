@@ -84,7 +84,7 @@ struct InsightsMetricStatusCardTests {
     func genericWithTargetFullCard() {
         let target = InsightsTargetsResponseDTO.TargetItem(
             type: "PULSE",
-            label: "Pulse",
+            label: "Resting pulse",
             current: 62,
             average30: 64,
             trend: .stable,
@@ -101,9 +101,9 @@ struct InsightsMetricStatusCardTests {
             insufficientData: false,
             consistency7d: [.inBand, .inBand, .inBand]
         )
-        let digest = ComprehensiveDigest(summaries: ["PULSE": MetricSummary(avg30: 64)])
+        let digest = ComprehensiveDigest(summaries: ["RESTING_HEART_RATE": MetricSummary(avg30: 64)])
         let descriptor = InsightsMetricStatusDescriptor.build(
-            kind: .pulse,
+            kind: .restingHeartRate,
             digest: digest,
             target: target,
             latestValue: 62
@@ -124,7 +124,7 @@ struct InsightsMetricStatusCardTests {
     func insufficientTargetSuppressesBar() {
         let target = InsightsTargetsResponseDTO.TargetItem(
             type: "PULSE",
-            label: "Pulse",
+            label: "Resting pulse",
             current: 62,
             average30: nil,
             trend: nil,
@@ -142,7 +142,7 @@ struct InsightsMetricStatusCardTests {
             consistency7d: []
         )
         let descriptor = InsightsMetricStatusDescriptor.build(
-            kind: .pulse,
+            kind: .restingHeartRate,
             digest: nil,
             target: target,
             latestValue: 62

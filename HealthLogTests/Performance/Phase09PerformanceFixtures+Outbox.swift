@@ -24,6 +24,7 @@
 
         private let lock = NSLock()
         private var storage: [Open] = []
+        private var waiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
         /// Records one open. Synchronous and lock-guarded on purpose: it is
         /// called from inside the production open closure, where an `await`
@@ -31,8 +32,35 @@
         func record() {
             let onMain = Thread.isMainThread
             lock.lock()
-            defer { lock.unlock() }
             storage.append(Open(wasMainThread: onMain))
+            let reached = storage.count
+            let ready = waiters.filter { $0.count <= reached }
+            waiters.removeAll { $0.count <= reached }
+            lock.unlock()
+            // Resumed outside the lock: a resume can run the waiter's code.
+            for waiter in ready {
+                waiter.continuation.resume()
+            }
+        }
+
+        /// 1.2 V5 — suspends until at least `count` opens were recorded. The
+        /// open runs on a detached executor, so a yield budget on the caller's
+        /// executor was a race under load (seen in T4). This waits for the
+        /// event itself; the suite's time limit is the only bound.
+        func waitForOpens(atLeast count: Int) async {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                guard registerOpenWaiter(count: count, continuation: continuation) else { return }
+                continuation.resume()
+            }
+        }
+
+        /// `true` when the count is already reached (the caller resumes).
+        private func registerOpenWaiter(count: Int, continuation: CheckedContinuation<Void, Never>) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if storage.count >= count { return true }
+            waiters.append((count, continuation))
+            return false
         }
 
         var opens: [Open] {
@@ -62,6 +90,7 @@
         private let lock = NSLock()
         private var continuation: AsyncStream<Bool>.Continuation?
         private var subscriptions = 0
+        private var subscriptionWaiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
         private var probes = 0
         private let confirms: Bool
 
@@ -104,8 +133,32 @@
             lock.lock()
             subscriptions += 1
             self.continuation = continuation
+            let reached = subscriptions
+            let ready = subscriptionWaiters.filter { $0.count <= reached }
+            subscriptionWaiters.removeAll { $0.count <= reached }
             lock.unlock()
+            for waiter in ready {
+                waiter.continuation.resume()
+            }
             return stream
+        }
+
+        /// 1.2 V5 — suspends until the bootstrap subscribed at least `count`
+        /// times. Event-driven for the same reason as
+        /// ``Phase09OutboxOpenLedger/waitForOpens(atLeast:)``.
+        func waitForSubscriptions(atLeast count: Int) async {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                guard registerSubscriptionWaiter(count: count, continuation: continuation) else { return }
+                continuation.resume()
+            }
+        }
+
+        private func registerSubscriptionWaiter(count: Int, continuation: CheckedContinuation<Void, Never>) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if subscriptions >= count { return true }
+            subscriptionWaiters.append((count, continuation))
+            return false
         }
 
         private func noteProbe() -> Bool {
@@ -139,6 +192,17 @@
     /// condition is already true, and when the condition never becomes true the
     /// caller's own expectation is what reports it. Returns whether the
     /// condition was observed.
+    /// 1.2 V5 — waits for `condition` with no budget at all: it yields until
+    /// the condition holds. For a positive condition whose producer runs on
+    /// another executor, where any budget is a race under load. A condition
+    /// that never comes true is reported by the suite's time limit. Negative
+    /// probes ("this does not happen") stay on ``phase09Settle(yields:until:)``.
+    func phase09AwaitCondition(_ condition: @Sendable () async -> Bool) async {
+        while await !condition() {
+            await Task.yield()
+        }
+    }
+
     @discardableResult
     func phase09Settle(
         yields: Int = 2000,

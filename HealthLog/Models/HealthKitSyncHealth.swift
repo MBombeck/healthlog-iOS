@@ -116,19 +116,39 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
     public let lastSeenAt: Date?
     /// Server-Urteil, ob dieser Typ zu lange still ist.
     public let stale: Bool
+    /// **V1 (Server v1.42, #123)** — wann ein Live-Batch diesen Typ zuletzt
+    /// trug (auch nur Duplikate). `lastSeenAt` ist, wann die neueste Messung
+    /// *entstand*; das hier ist, wann der Server den Typ *empfing*. Fehlt auf
+    /// älteren Servern und auf dem `WORKOUTS`-Eintrag.
+    public let lastReceivedAt: Date?
+    /// Der `syncTrigger` dieses Batches, als Text: ein künftiges Wort darf die
+    /// Liste nicht kippen.
+    public let lastTrigger: String?
+    /// Wann ein Batch zuletzt eine neue oder geänderte Messung brachte.
+    public let lastNewSampleAt: Date?
 
     public var id: String {
         type
     }
 
-    public init(type: String, lastSeenAt: Date? = nil, stale: Bool = false) {
+    public init(
+        type: String,
+        lastSeenAt: Date? = nil,
+        stale: Bool = false,
+        lastReceivedAt: Date? = nil,
+        lastTrigger: String? = nil,
+        lastNewSampleAt: Date? = nil
+    ) {
         self.type = type
         self.lastSeenAt = lastSeenAt
         self.stale = stale
+        self.lastReceivedAt = lastReceivedAt
+        self.lastTrigger = lastTrigger
+        self.lastNewSampleAt = lastNewSampleAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case type, lastSeenAt, stale
+        case type, lastSeenAt, stale, lastReceivedAt, lastTrigger, lastNewSampleAt
     }
 
     public init(from decoder: any Decoder) throws {
@@ -136,5 +156,10 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
         type = try c.decodeIfPresent(String.self, forKey: .type) ?? ""
         lastSeenAt = try c.decodeIfPresent(Date.self, forKey: .lastSeenAt)
         stale = try c.decodeIfPresent(Bool.self, forKey: .stale) ?? false
+        // Tolerant: a malformed value on a diagnostics field is absence, never
+        // a failed card.
+        lastReceivedAt = try? c.decodeIfPresent(Date.self, forKey: .lastReceivedAt)
+        lastTrigger = try? c.decodeIfPresent(String.self, forKey: .lastTrigger)
+        lastNewSampleAt = try? c.decodeIfPresent(Date.self, forKey: .lastNewSampleAt)
     }
 }

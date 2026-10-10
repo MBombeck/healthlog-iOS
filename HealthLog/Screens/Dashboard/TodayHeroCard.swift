@@ -9,10 +9,12 @@ import SwiftUI
 /// warms no AI on mount, and invents no colour: the ring is fully monochrome
 /// (Wave 2 dropped the band-derived cap dot), and each priority card's status
 /// wash is a restrained HL semantic tone. Composition, top → bottom:
-///   1. the **heading** — the lead sentence (`briefingLead ?? line`) FULL WIDTH,
+///   1. the **heading** — the lead sentence (`lead.text`, else
+///      `briefingLead ?? line`) FULL WIDTH,
 ///      never squeezed by a trailing sibling (operator b227: "Überschrift gehört
 ///      über den Wert, nicht daneben");
-///   2. one row pairing the muted top-signal text with the trailing health-score
+///   2. one row pairing the muted signal line (`signalLine` as delivered,
+///      `topSignal` only on an older server) with the trailing health-score
 ///      ring lockup — rendered ONLY when the digest carries a score
 ///      (25-02 / E-2026-08-29 #2: zero available inputs remove the ring
 ///      entirely; the former en-dash provisional face is gone); the ring is
@@ -230,10 +232,13 @@ struct TodayHeroCard: View {
             // something to carry: the signal text, the ring, or both. With
             // zero available inputs (no score) and no signal there is no
             // half-empty band reserving space.
-            if digest.visibleTopSignal?.headline.isEmpty == false || Self.availableScore(digest) != nil {
+            // 1.2 (#121) — the line is the server's `signalLine` as delivered;
+            // only an older server without the field still gets the line built
+            // from `topSignal` (``DailyDigest/signalText``).
+            if digest.signalText != nil || Self.availableScore(digest) != nil {
                 HStack(alignment: .center, spacing: HLSpace.lg) {
-                    if let signal = digest.visibleTopSignal, !signal.headline.isEmpty {
-                        Text(verbatim: topSignalText(signal))
+                    if let signalText = digest.signalText {
+                        Text(verbatim: signalText)
                             .font(.hlSubhead)
                             .foregroundStyle(HLText.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -379,12 +384,6 @@ struct TodayHeroCard: View {
         let base = "\(TodayHeroCopy.scoreLabel) \(Int(score.value.rounded())) of 100"
         guard score.runsOnChosenComposition else { return base }
         return "\(base). \(HealthScorePresentation.chosenCompositionA11y)"
-    }
-
-    /// `headline` + optional pre-formatted delta ("· <delta>"), verbatim.
-    private func topSignalText(_ signal: DailyDigest.TopSignal) -> String {
-        guard let delta = signal.delta, !delta.isEmpty else { return signal.headline }
-        return "\(signal.headline) · \(delta)"
     }
 }
 

@@ -51,6 +51,14 @@ public extension Medication {
     /// medication kept as a record on its STORED schedule
     /// (``displaySchedule``), so a save that touches the schedule edits what
     /// the person sees instead of a daily-08:00 default.
+    /// v1.40: a field-by-field copy keeps the custom-category label
+    /// (``categoryLabel`` is not part of the memberwise initialiser).
+    func carryingCategoryLabel(_ label: String?) -> Medication {
+        var copy = self
+        copy.categoryLabel = label
+        return copy
+    }
+
     func replacingSchedule(_ schedule: MedicationSchedule) -> Medication {
         Medication(
             id: id,
@@ -87,7 +95,7 @@ public extension Medication {
             runwayDays: runwayDays,
             courseStatus: courseStatus,
             intakeActionable: intakeActionable
-        )
+        ).carryingCategoryLabel(categoryLabel)
     }
 }
 

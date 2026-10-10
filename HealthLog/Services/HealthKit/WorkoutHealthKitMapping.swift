@@ -86,14 +86,45 @@ import Foundation
             .basketball: "basketball",
             .soccer: "soccer",
             .crossTraining: "crossTraining",
-            .mixedCardio: "mixedCardio"
+            .mixedCardio: "mixedCardio",
+            // 1.2 V5 — types that had a server bucket but folded to "other".
+            // `badminton` is a literal of the server enum since v1.32.8 (the
+            // list already titles it); the rest fold onto the bucket whose
+            // activity they are, never onto a guess.
+            .badminton: "badminton",
+            .coreTraining: "strength",
+            .cooldown: "mindAndBody",
+            .preparationAndRecovery: "mindAndBody",
+            .taiChi: "mindAndBody",
+            .handCycling: "cycling",
+            .wheelchairWalkPace: "walking",
+            .wheelchairRunPace: "running",
+            .jumpRope: "mixedCardio"
+        ]
+
+        /// Every sport-type string the server accepts (`workoutSportTypeEnum`
+        /// in `src/lib/validations/workout.ts`, `release/v1.42.0`). The fold
+        /// never emits anything outside this set: a table entry pointing at an
+        /// unknown token would 422 the whole batch, so it degrades to "other".
+        static let serverSportTypes: Set<String> = [
+            "walking", "running", "cycling", "hiking", "swimming", "rowing", "elliptical",
+            "stairClimber", "yoga", "mindAndBody", "strength", "hiit", "dance", "golf",
+            "badminton", "tennis", "basketball", "soccer", "crossTraining", "mixedCardio", "other"
         ]
 
         /// Fold an `HKWorkoutActivityType` to the server's sport-type string.
         /// Unknown / niche types land as `"other"` (the server's own long-tail
         /// bucket) so a workout always ingests rather than failing the Zod gate.
         static func sportType(for activityType: HKWorkoutActivityType) -> String {
-            sportTypeByActivity[activityType] ?? "other"
+            guard let mapped = sportTypeByActivity[activityType], serverSportTypes.contains(mapped) else {
+                return "other"
+            }
+            return mapped
+        }
+
+        /// The table itself, for the test that walks every entry.
+        static var mappedActivityTypes: [HKWorkoutActivityType: String] {
+            sportTypeByActivity
         }
 
         /// `true` when the workout is OUR own write echoing back — it carries

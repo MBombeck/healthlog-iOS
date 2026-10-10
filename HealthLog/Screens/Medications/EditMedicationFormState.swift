@@ -77,7 +77,7 @@ struct EditMedicationFormState: Equatable {
         // on "Other", the server default.
         if let raw = medication.category {
             category = MedicationCategoryOption(rawValue: raw)
-            unknownCategoryLabel = category == nil ? MedicationCard.localizedCategory(raw) : nil
+            unknownCategoryLabel = category == nil ? MedicationCard.localizedCategory(raw, label: medication.categoryLabel) : nil
         } else {
             category = .other
         }

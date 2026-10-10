@@ -124,12 +124,11 @@ struct ComplianceRingCard: View {
                         // status-bad tint to draw the attention the
                         // top-of-Home banner used to own.
                         HStack(spacing: HLSpace.xs) {
-                            Text(subtitle).font(.hlSubhead).foregroundStyle(HLText.secondary)
+                            // U5 (1.1.1): a trailing comma joins the overdue
+                            // suffix, no middle dot.
+                            Text(verbatim: overdueCount > 0 ? subtitle + "," : subtitle)
+                                .font(.hlSubhead).foregroundStyle(HLText.secondary)
                             if overdueCount > 0 {
-                                Text("·")
-                                    .font(.hlSubhead)
-                                    .foregroundStyle(HLText.tertiary)
-                                    .accessibilityHidden(true) // decorative separator
                                 Text(String(localized: "overdue"))
                                     .font(.hlSubhead.weight(.semibold))
                                     .foregroundStyle(HLColor.statusBad)

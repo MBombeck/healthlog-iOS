@@ -168,7 +168,7 @@ final class WalkthroughDashboardTest: XCTestCase {
                 "Check sparkline-derivation path: server summary → DashboardStore hydration → " +
                 "HLDashboardTile.sparklineValues → MetricSeriesProjection.systolicOnly."
         )
-        let pulseWithChart = scrollToTile(app: app, identifier: "tile.pulse.withChart")
+        let pulseWithChart = scrollToTile(app: app, identifiers: Self.pulseSlotWithChartIdentifiers)
         XCTAssertTrue(
             pulseWithChart.waitForExistence(timeout: 5),
             "Puls tile is rendering without a chart — sparkline regression. " +
@@ -187,9 +187,18 @@ final class WalkthroughDashboardTest: XCTestCase {
     /// exists or we hit the bottom; returning the (possibly still-absent)
     /// element lets the caller's `waitForExistence` produce the original
     /// diagnostic message on a genuine sparkline regression.
+    /// #20 — on an account with resting heart rate the pulse slot renders the
+    /// resting tile (web `hasRestingHr` parity), so either identifier is the
+    /// pulse slot with its chart.
+    private static let pulseSlotWithChartIdentifiers = ["tile.pulse.withChart", "tile.restingHeartRate.withChart"]
+
     private func scrollToTile(app: XCUIApplication, identifier: String) -> XCUIElement {
+        scrollToTile(app: app, identifiers: [identifier])
+    }
+
+    private func scrollToTile(app: XCUIApplication, identifiers: [String]) -> XCUIElement {
         let element = app.descendants(matching: .any)
-            .matching(identifier: identifier)
+            .matching(NSPredicate(format: "identifier IN %@", identifiers))
             .firstMatch
         var attempts = 0
         while !element.exists, attempts < 6 {

@@ -15,6 +15,11 @@ import SwiftUI
 /// for hide-on-scroll; the page wrapper pins it `.containerRelativeFrame(.horizontal)`
 /// ONLY (the W44 contract).
 ///
+/// **Paging (#19):** the sub-line shows the server's `meta.total` ("50 of 730
+/// workouts" while pages are outstanding), the rows sit in a lazy stack, and
+/// the next page is requested when the scroll position comes within one
+/// screen of the end, until `meta.total` is reached.
+///
 /// **Self-suppress:** rendered only when the operator has ≥1 workout (gated by
 /// `availableSpecials`); the defensive empty branch is a calm
 /// `ContentUnavailableView`, never a dead box.
@@ -48,6 +53,7 @@ struct InsightsWorkoutsPage: View {
                 InsightsPageHeader(
                     "Workouts",
                     subtitle: LocalizedStringKey(subtitle),
+                    subtitleAccessibilityLabel: WorkoutsListSummary.headerAccessibilityLabel(for: store),
                     accessibilityIdentifierSuffix: "workouts"
                 )
 
@@ -59,7 +65,7 @@ struct InsightsWorkoutsPage: View {
                 }
 
                 HLCard {
-                    VStack(spacing: 0) {
+                    LazyVStack(spacing: 0) {
                         ForEach(Array(store.workouts.enumerated()), id: \.element.id) { index, workout in
                             NavigationLink {
                                 WorkoutDetailView(workout: workout)
@@ -75,6 +81,8 @@ struct InsightsWorkoutsPage: View {
                     }
                 }
 
+                WorkoutsPagingFooter()
+
                 // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
                 // primitive as Dashboard/Insights, self-suppressing).
                 HLSyncStatusFooter(screenLoading: store.isLoading)
@@ -88,17 +96,43 @@ struct InsightsWorkoutsPage: View {
         } action: { _, newOffset in
             stripVisibility.report(offset: newOffset)
         }
+        // #19 — a ScrollView has no lazy end-of-list row to hang the trigger
+        // on, so the scroll geometry is the trigger: coming within one screen
+        // of the end asks for the next page. It fires on the false → true edge;
+        // the appended rows push the end away again, and the store ignores a
+        // request while one is in flight.
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            Self.isNearEnd(geometry)
+        } action: { _, nearEnd in
+            if nearEnd { Task { await store.loadNextPage() } }
+        }
         .hlScrollEdgeSoft()
         // W-B184 — WHOOP-style pull-to-refresh (custom glyph + checkmark + one
         // success haptic; the handshake driving the checkmark runs in the modifier).
         .hlPullToRefresh { await store.refresh() }
     }
 
-    /// Localized, plural-aware count line ("3 workouts" / "1 Workout"). Resolved
-    /// to a `String` here (then handed to the header as a verbatim key) so the
-    /// plural catalog entry `insights.workoutsCount` does the inflection.
+    /// Localized, plural-aware count line ("730 workouts" / "50 of 730
+    /// workouts"). Resolved to a `String` here (then handed to the header as a
+    /// verbatim key) so the plural catalog entry `insights.workoutsCount` does
+    /// the inflection. #19 — the number is the server's `meta.total`, not the
+    /// size of the loaded page.
     private var subtitle: String {
-        String(localized: "insights.workoutsCount \(store.workouts.count)")
+        WorkoutsListSummary.headerText(for: store)
+    }
+
+    /// #19 — within one container height of the end of the content.
+    static func isNearEnd(_ geometry: ScrollGeometry) -> Bool {
+        isNearEnd(
+            offsetY: geometry.contentOffset.y,
+            containerHeight: geometry.containerSize.height,
+            contentHeight: geometry.contentSize.height
+        )
+    }
+
+    static func isNearEnd(offsetY: CGFloat, containerHeight: CGFloat, contentHeight: CGFloat) -> Bool {
+        guard containerHeight > 0, contentHeight > 0 else { return false }
+        return offsetY + containerHeight * 2 >= contentHeight
     }
 
     /// W-B182 — calm empty-state with an explicit "sync from Apple Health"

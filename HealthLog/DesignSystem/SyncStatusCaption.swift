@@ -18,9 +18,15 @@ import SwiftUI
 ///    moment real data arrives (the call site stops passing `true`).
 /// 2. **In flight** — a refresh / handshake is running (`SyncStateStore.isLoading`
 ///    or the screen's own loading flag): "Wird synchronisiert…".
-/// 3. **Settled** — the last handshake timestamp formatted in the user's locale
-///    short time style: "Zuletzt synchronisiert HH:MM". Self-suppresses entirely
-///    until the first handshake lands (no timestamp → render nothing).
+/// 3. **Settled** — the last sync (`SyncStateStore.lastSync`: handshake, outbox
+///    drain or accepted Apple Health upload) in the user's locale short time
+///    style: "Zuletzt synchronisiert HH:MM". Self-suppresses entirely until
+///    something has synced (no timestamp → render nothing).
+///
+/// U1 (#16) — this line is now the *secondary* sync surface. The live
+/// feedback sits at the top of the Dashboard (`HLSyncActivityGlyph`, the
+/// attention glyph and `DashboardSyncStatusPanel`); all of them read the same
+/// store, so the footer and the header cannot disagree.
 struct SyncStatusCaption: View {
     @Environment(SyncStateStore.self) private var syncState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -42,7 +48,7 @@ struct SyncStatusCaption: View {
             activeSyncCount: syncState.pendingSyncCount,
             queuedWriteCount: syncState.pendingOutboxCount,
             showsDrainConfirmation: syncState.showsDrainConfirmation,
-            lastHandshakeAt: syncState.lastHandshakeAt
+            lastSyncAt: syncState.lastSync?.at
         )
         Group {
             switch resolved {
@@ -90,9 +96,13 @@ struct SyncStatusCaption: View {
     /// backlog, then the settled timestamp, else nothing.
     ///
     /// **Self-suppression contract is unchanged:** every new arm (transmitted /
-    /// queued) is additionally gated on `lastHandshakeAt != nil`, so standalone
-    /// installs and pre-first-handshake sessions render exactly what they did
+    /// queued) is additionally gated on `lastSyncAt != nil`, so standalone
+    /// installs and never-synced sessions render exactly what they did
     /// before b177 — nothing (or the unchanged preparing/syncing lines).
+    ///
+    /// U1 (#16) — `lastSyncAt` is `SyncStateStore.lastSync`, no longer the
+    /// handshake alone: an Apple Health upload the server accepted in the
+    /// background counts, so the line is no longer older than the data.
     enum CaptionState: Equatable {
         case preparing
         /// In flight. `pending` is the live aggregate (outbox backlog +
@@ -118,13 +128,13 @@ struct SyncStatusCaption: View {
         activeSyncCount: Int = 0,
         queuedWriteCount: Int = 0,
         showsDrainConfirmation: Bool = false,
-        lastHandshakeAt: Date?
+        lastSyncAt: Date?
     ) -> CaptionState {
         if firstLoginPreparing { return .preparing }
         if phase == .syncing || isInFlight { return .syncing(pending: activeSyncCount) }
-        if phase == .done || showsDrainConfirmation, lastHandshakeAt != nil { return .transmitted }
-        if queuedWriteCount > 0, lastHandshakeAt != nil { return .queued(queuedWriteCount) }
-        if let at = lastHandshakeAt { return .lastSynced(at) }
+        if phase == .done || showsDrainConfirmation, lastSyncAt != nil { return .transmitted }
+        if queuedWriteCount > 0, lastSyncAt != nil { return .queued(queuedWriteCount) }
+        if let at = lastSyncAt { return .lastSynced(at) }
         return .hidden
     }
 

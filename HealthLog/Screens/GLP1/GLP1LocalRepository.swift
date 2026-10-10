@@ -95,35 +95,17 @@ public actor GLP1LocalRepository {
     /// factories. `static` (hence nonisolated) so the detached open-task can
     /// call it off the actor.
     private static func makeStoreWithRecovery() -> GLP1LocalStore {
-        do {
-            let container = try GLP1LocalStore.makePersistent()
-            return GLP1LocalStore(modelContainer: container)
-        } catch {
-            HLLog.outbox.error(
-                "GLP1 store unreadable, attempting rebuild: \(LogSanitizer.redact(String(describing: error)))"
-            )
-            if let storeURL = try? GLP1LocalStore.persistentStoreURL() {
-                let dir = storeURL.deletingLastPathComponent()
-                try? FileManager.default.removeItem(at: dir)
-            }
-            do {
-                let container = try GLP1LocalStore.makePersistent()
-                return GLP1LocalStore(modelContainer: container)
-            } catch {
-                HLLog.outbox.error(
-                    "GLP1 rebuild also failed, falling back to in-memory: \(LogSanitizer.redact(String(describing: error)))"
-                )
-                // Non-trapping in-memory floor (audit M2): degrade to an inert
-                // empty-schema store instead of `try!`-trapping on the path that
-                // exists to avoid a hard launch failure.
-                let container = ModelContainerRecovery.recoveredInMemoryContainer(
-                    log: HLLog.outbox,
-                    subsystem: "GLP1",
-                    build: GLP1LocalStore.makeInMemory
-                )
-                return GLP1LocalStore(modelContainer: container)
-            }
-        }
+        // 1.2: a transient open failure (store sealed before first unlock)
+        // degrades to memory and keeps the local data; only a corrupt store
+        // is removed and rebuilt. The floor never traps (audit M2).
+        GLP1LocalStore(modelContainer: ModelContainerRecovery.openPersistentOrDegrade(
+            log: HLLog.outbox,
+            subsystem: "GLP1",
+            openPersistent: GLP1LocalStore.makePersistent,
+            persistentStoreURL: { try? GLP1LocalStore.persistentStoreURL() },
+            discardCorrupt: ModelContainerRecovery.removeStoreDirectory(of:),
+            makeInMemory: GLP1LocalStore.makeInMemory
+        ))
     }
 
     // MARK: - Titration

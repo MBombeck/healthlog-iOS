@@ -136,7 +136,7 @@ struct MedicationHeroSection: View {
         guard let raw = medication.category, !raw.isEmpty else {
             return String(localized: "med.card.category.fallback")
         }
-        return MedicationCard.localizedCategory(raw)
+        return MedicationCard.localizedCategory(raw, label: medication.categoryLabel)
     }
 
     private var lastValue: String {

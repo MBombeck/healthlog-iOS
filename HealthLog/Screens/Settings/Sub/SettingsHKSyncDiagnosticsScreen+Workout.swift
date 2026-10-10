@@ -22,8 +22,11 @@ extension SettingsHKSyncDiagnosticsScreen {
                     label: "settings.hkdiag.summary_last_activity",
                     value: relativeOrNever(diagnostics.workout.lastAttemptedAt)
                 )
+                // U1 (#18) — fed by `lastCompletedUsefulAt`: the last batch the
+                // server accepted in full, duplicates included. „Zuletzt
+                // geliefert" read as "last new workout uploaded".
                 statRow(
-                    label: "settings.hkdiag.workout_last_delivered",
+                    label: "settings.hkdiag.workout_last_accepted",
                     value: relativeOrNever(diagnostics.workout.lastCompletedUsefulAt)
                 )
                 statRow(
@@ -31,15 +34,22 @@ extension SettingsHKSyncDiagnosticsScreen {
                     value: HKSyncDiagnosticsVocabulary.workoutSource(diagnostics.workout.lastSource)
                 )
                 statRow(
-                    label: "settings.hkdiag.summary_samples_read",
-                    value: workoutCountSummary
+                    label: "settings.hkdiag.workout_counts_label",
+                    value: HKSyncDiagnosticsVocabulary.workoutCounts(diagnostics.workout)
                 )
                 statRow(
                     label: "settings.hkdiag.workout_outcome",
                     value: workoutOutcomeLabel
                 )
+                // #17 — the history-import row. Hidden while nothing reports.
+                if let historyImport = workoutHistoryImportText {
+                    statRow(label: "settings.hkdiag.workout_history_import", value: historyImport)
+                }
+                // U1 (#18) — this state is the heart-rate enrichment sweep
+                // (`WorkoutHRBackfillSweep`), not the workout import; the old
+                // „Verlaufsimport" label named the wrong thing.
                 statRow(
-                    label: "settings.hkdiag.workout_backfill",
+                    label: "settings.hkdiag.workout_hr_backfill",
                     value: HKSyncDiagnosticsVocabulary.workoutBackfill(diagnostics.workout.backfillState)
                 )
             }
@@ -57,12 +67,24 @@ extension SettingsHKSyncDiagnosticsScreen {
         }
     }
 
-    /// Compact field legend for the operator protocol:
-    /// Fetched / Mapped / Sent / Accepted / skipped (rejected).
-    private var workoutCountSummary: String {
-        let snapshot = diagnostics.workout
-        return "F \(snapshot.fetchedTotal) · M \(snapshot.mappedTotal) · "
-            + "S \(snapshot.sentTotal) · A \(snapshot.acceptedTotal) · X \(snapshot.skippedTotal)"
+    /// **#17 seam (U1 → U2).** The one input of the history-import row: its
+    /// value text, or `nil` to hide the row. U2's importer publishes
+    /// `HKSyncDiagnostics.workoutHistoryImport`; `nil` means the importer has
+    /// not seen a page since the update, so the row stays hidden.
+    var workoutHistoryImportText: String? {
+        diagnostics.workoutHistoryImport.map(Self.historyImportLabel)
+    }
+
+    /// Plain text for ``HKSyncDiagnostics/WorkoutHistoryImportStatus``.
+    /// Static so the reworked diagnostics surface can reuse it unchanged.
+    static func historyImportLabel(_ status: HKSyncDiagnostics.WorkoutHistoryImportStatus) -> String {
+        guard status.isImporting else {
+            return String(localized: "settings.hkdiag.workout_history_complete")
+        }
+        guard let remaining = status.remainingEstimate else {
+            return String(localized: "settings.hkdiag.workout_history_importing")
+        }
+        return String(localized: "settings.hkdiag.workout_history_importing_remaining \(remaining)")
     }
 
     private var workoutOutcomeLabel: String {

@@ -120,10 +120,10 @@ public enum MedicalSourceCatalog {
             2018,
             "https://www.who.int/europe/publications/i/item/9789289053563"
         ),
-        make(.appleEcg, "Apple Support — ECG app", 2024, "https://support.apple.com/en-us/HT208955"),
-        make(.appleIrregularRhythm, "Apple Support — Irregular rhythm notification", 2024, "https://support.apple.com/en-us/HT208931"),
-        make(.appleWalkingSteadiness, "Apple Support — Walking Steadiness", 2024, "https://support.apple.com/en-us/102504"),
-        make(.appleSleepApnea, "Apple Support — Sleep apnea notifications", 2024, "https://support.apple.com/en-us/120031"),
+        make(.appleEcg, "Apple Support: ECG app", 2024, "https://support.apple.com/en-us/HT208955"),
+        make(.appleIrregularRhythm, "Apple Support: Irregular rhythm notification", 2024, "https://support.apple.com/en-us/HT208931"),
+        make(.appleWalkingSteadiness, "Apple Support: Walking Steadiness", 2024, "https://support.apple.com/en-us/102504"),
+        make(.appleSleepApnea, "Apple Support: Sleep apnea notifications", 2024, "https://support.apple.com/en-us/120031"),
         make(.studenski2011GaitSpeed, "Studenski 2011 (Gait Speed)", 2011, "https://doi.org/10.1001/jama.2010.1923")
     ]
 

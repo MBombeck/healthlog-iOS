@@ -69,6 +69,21 @@ import Synchronization
             }
         }
 
+        /// #17 — backlog bookkeeping beside the anchor. An undecodable blob is
+        /// treated as "unknown", which only costs a recount.
+        func loadBacklog(forKey key: String) -> WorkoutImportBacklogState {
+            defaults.withLock { defaults in
+                defaults.data(forKey: key)
+                    .flatMap { try? JSONDecoder().decode(WorkoutImportBacklogState.self, from: $0) }
+                    ?? WorkoutImportBacklogState()
+            }
+        }
+
+        func saveBacklog(_ state: WorkoutImportBacklogState, forKey key: String) {
+            guard let data = try? JSONEncoder().encode(state) else { return }
+            defaults.withLock { $0.set(data, forKey: key) }
+        }
+
         func hasObject(forKey key: String) -> Bool {
             defaults.withLock { $0.object(forKey: key) != nil }
         }
@@ -125,17 +140,28 @@ import Synchronization
         let anchoredQuerySource: (any WorkoutAnchoredQueryFetching)?
         let directDTOProvider: (@Sendable () async -> [WorkoutIngestDTO])?
         let historySource: (any WorkoutHRBackfillSourcing)?
+        let recentWindowSource: (any WorkoutRecentWindowFetching)?
 
         init(
             lifecycleStore: (any WorkoutHealthKitStore)? = nil,
             anchoredQuerySource: (any WorkoutAnchoredQueryFetching)? = nil,
             directDTOProvider: (@Sendable () async -> [WorkoutIngestDTO])? = nil,
-            historySource: (any WorkoutHRBackfillSourcing)? = nil
+            historySource: (any WorkoutHRBackfillSourcing)? = nil,
+            recentWindowSource: (any WorkoutRecentWindowFetching)? = nil
         ) {
             self.lifecycleStore = lifecycleStore
             self.anchoredQuerySource = anchoredQuerySource
             self.directDTOProvider = directDTOProvider
             self.historySource = historySource
+            self.recentWindowSource = recentWindowSource
+        }
+
+        /// The live recent window joins only the live anchored query. An
+        /// injected (synthetic) anchored source never mixes with a real
+        /// HealthKit read, so service-level tests stay deterministic.
+        func resolvedRecentWindowSource(store: HKHealthStore) -> (any WorkoutRecentWindowFetching)? {
+            if let recentWindowSource { return recentWindowSource }
+            return anchoredQuerySource == nil ? LiveWorkoutRecentWindowSource(store: store) : nil
         }
     }
 

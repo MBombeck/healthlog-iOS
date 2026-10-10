@@ -123,6 +123,23 @@ extension OutboxReplayService {
         )
     }
 
+    /// Server v1.40 — how long the queue holds after `503 encryption.key_mismatch`.
+    static let serverKeyMismatchHold: TimeInterval = 15 * 60
+
+    /// `503 encryption.key_mismatch`: the server cannot read its own data until
+    /// the operator fixes the key. Like a 429 this is never the write's fault,
+    /// so nothing about the row changes (no attempt counted, it never ages into
+    /// the dead-letter lane) and the whole queue holds instead of sending every
+    /// row into the same refusal.
+    func onServerKeyMismatch(_ op: OutboxQueue.Operation) {
+        rateLimit.holdUntil = clock().addingTimeInterval(Self.serverKeyMismatchHold)
+        // Kind only — operator-grade.
+        // swiftlint:disable:next hllog_public_privacy_interpolation
+        HLLog.outbox.warning(
+            "Op \(op.kind.rawValue, privacy: .public) server key mismatch — replay holds, attempt not counted"
+        )
+    }
+
     /// The server's wait (at least a second, at most ``rateLimitHoldCeiling``),
     /// or a doubling fallback when it named none.
     func rateLimitWait(_ retryAfter: TimeInterval?) -> TimeInterval {

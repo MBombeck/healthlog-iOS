@@ -87,7 +87,7 @@
                 id: "s", device: "Safari", ipMasked: "203.0.113.x",
                 location: "Berlin, DE", createdAt: .now
             )
-            #expect(entry.locationLine == "Berlin, DE · 203.0.113.x")
+            #expect(entry.locationLine == "Berlin, DE, 203.0.113.x")
         }
 
         @Test("Only one of location / masked IP present yields that value alone, with no stray separator")

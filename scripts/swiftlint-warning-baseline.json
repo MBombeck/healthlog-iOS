@@ -117,10 +117,10 @@
     },
     {
       "file": "HealthLog/Models/Measurement.swift",
-      "line": 909,
+      "line": 913,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 909",
+      "reason": "File should contain 600 lines or less: currently contains 913",
       "severity": "warning"
     },
     {
@@ -165,10 +165,10 @@
     },
     {
       "file": "HealthLog/Models/Medication.swift",
-      "line": 990,
+      "line": 996,
       "character": 1,
       "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 990",
+      "reason": "File should contain 600 lines or less: currently contains 996",
       "severity": "warning"
     },
     {
@@ -189,7 +189,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService+DeadLetterSink.swift",
-      "line": 130,
+      "line": 134,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -1221,7 +1221,7 @@
     },
     {
       "file": "HealthLog/Services/HealthKit/AnchoredHealthSampleCollector.swift",
-      "line": 176,
+      "line": 184,
       "character": 17,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 74 lines",
@@ -1269,18 +1269,10 @@
     },
     {
       "file": "HealthLog/Services/HealthKit/WorkoutHealthKitImporter.swift",
-      "line": 235,
+      "line": 247,
       "character": 9,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 65 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Services/HealthKit/WorkoutHealthKitImporter.swift",
-      "line": 522,
-      "character": 17,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 94 lines",
       "severity": "warning"
     },
     {
@@ -1392,7 +1384,7 @@
       "line": 108,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 91 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 81 lines",
       "severity": "warning"
     },
     {

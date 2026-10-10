@@ -29,6 +29,23 @@ enum MetricChartMath {
         }
     }
 
+    /// #20 — the target row whose band may sit next to `kind`'s own values.
+    ///
+    /// The server `PULSE` target is the RESTING-pulse band (`label: "Resting
+    /// pulse"`; `current`, `average30` and the in-range days all come from the
+    /// resting series, HealthLog `src/lib/targets/vitals-builder.ts`). It is
+    /// therefore read for `.restingHeartRate` and never for raw `.pulse`
+    /// (HealthLog#584: the resting band is never applied to raw pulse). Every
+    /// other kind keeps ``targetType(for:)``. The Dashboard tile and the Insights
+    /// status card both go through here, so they cannot disagree.
+    static func bandTargetType(for kind: MetricKind) -> String? {
+        switch kind {
+        case .pulse: nil
+        case .restingHeartRate: "PULSE"
+        default: targetType(for: kind)
+        }
+    }
+
     /// Synthesize `SeriesStats` from raw chart points for the fallback
     /// accessibility descriptor on kinds whose server `series` endpoint isn't
     /// wired (walking speed / step length), where `store.displaySeries` is nil

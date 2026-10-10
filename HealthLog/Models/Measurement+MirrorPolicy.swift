@@ -41,7 +41,7 @@ public extension MeasurementSource {
         switch self {
         case .withings, .import_, .manual: true
         case .appleHealth, .whoop, .fitbit, .googleHealth, .computed,
-             .strava, .oura, .polar, .nightscout, .external, .telegram, .mcp,
+             .strava, .oura, .polar, .nightscout, .healthConnect, .external, .telegram, .mcp,
              // Audit B-4 — the closed allowlist doing its job: a source this
              // build cannot name never writes into Apple Health.
              .unknown: false

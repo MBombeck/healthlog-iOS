@@ -211,7 +211,7 @@ public actor StandaloneAdoptUploadService {
         for chunk in entries.chunks(of: Self.chunkSize) {
             // CU-21 (1) — Adopt-on-pair ist ein vom Nutzer ausgelöster Import
             // bei geöffneter App; der ambiente Kontext liefert hier `foreground`.
-            let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: SyncTriggerContext.shared.current)
+            let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: SyncTriggerContext.shared.wireValue)
             do {
                 let req: APIRequest<HealthKitBatchResponseDTO> = try .post(
                     "/api/measurements/batch",

@@ -14,12 +14,12 @@ extension OutboxReplayService {
         switch op.kind {
         case .createAllergy, .updateAllergy, .deleteAllergy:
             guard let allergiesRepo else {
-                throw HLError.unknown("Op-Kind \(op.kind.rawValue) — allergiesRepo unwired")
+                throw HLError.unknown("Op-Kind \(op.kind.rawValue): allergiesRepo unwired")
             }
             try await dispatchAllergy(op, repo: allergiesRepo, key: key)
         case .createFamilyHistory, .updateFamilyHistory, .deleteFamilyHistory:
             guard let familyHistoryRepo else {
-                throw HLError.unknown("Op-Kind \(op.kind.rawValue) — familyHistoryRepo unwired")
+                throw HLError.unknown("Op-Kind \(op.kind.rawValue): familyHistoryRepo unwired")
             }
             try await dispatchFamilyHistory(op, repo: familyHistoryRepo, key: key)
         default:

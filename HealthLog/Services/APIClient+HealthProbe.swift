@@ -100,7 +100,14 @@ public extension APIClient {
               let probe = try? JSONDecoder().decode(HealthProbeResponse.self, from: data),
               !probe.status.isEmpty else { return .unreachable }
         let degraded = statusCode == 503 || probe.status.lowercased() == "degraded"
-        return HealthProbeOutcome(reachable: true, degraded: degraded)
+        // Server v1.40 — `reason: "encryption_key_mismatch"` names a degraded
+        // server whose key does not match its data: an operator fix, which
+        // the outcome says apart from a plain outage.
+        return HealthProbeOutcome(
+            reachable: true,
+            degraded: degraded,
+            serverKeyMismatch: degraded && probe.reason == HealthProbeResponse.keyMismatchReason
+        )
     }
 }
 
@@ -114,6 +121,10 @@ public extension APIClient {
 /// response came from our API rather than a captive-portal HTML page.
 struct HealthProbeResponse: Decodable {
     let status: String
+    /// Server v1.40 — present only for a reason a person has to fix.
+    let reason: String?
+
+    static let keyMismatchReason = "encryption_key_mismatch"
 }
 
 /// audit-v0162 H1 (Opt 3) — the two signals a health probe yields.
@@ -124,10 +135,15 @@ public struct HealthProbeOutcome: Sendable, Equatable {
     /// The server reported `degraded` (or 503): confirmed reachable but its
     /// DB / worker is down and it is emitting server-side errors.
     public let degraded: Bool
+    /// Server v1.40 — degraded because the server's encryption key does not
+    /// match its data (`reason: "encryption_key_mismatch"`). Every other route
+    /// answers `503 encryption.key_mismatch` meanwhile.
+    public let serverKeyMismatch: Bool
 
-    public init(reachable: Bool, degraded: Bool) {
+    public init(reachable: Bool, degraded: Bool, serverKeyMismatch: Bool = false) {
         self.reachable = reachable
         self.degraded = degraded
+        self.serverKeyMismatch = serverKeyMismatch
     }
 
     /// No answer / captive portal / TLS-pin fail — neither reachable nor degraded.

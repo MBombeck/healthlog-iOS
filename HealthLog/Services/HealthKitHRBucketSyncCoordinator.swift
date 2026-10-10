@@ -18,6 +18,14 @@ public protocol HealthKitHRBucketSyncing: AnyObject, Sendable {
     /// foreground pass that is cancelled at its deadline cannot take the
     /// sweep down with it; concurrent requests coalesce into one sweep.
     func requestHRBucketSweep()
+
+    /// **V1 (1.2)** — returns once no sweep is running. A HealthKit delivery
+    /// waits on it before it hands back its completion handler.
+    func awaitHRBucketSweep() async
+}
+
+public extension HealthKitHRBucketSyncing {
+    func awaitHRBucketSweep() async {}
 }
 
 /// The HealthKit read the sweep depends on, behind a seam so the sweep's
@@ -244,6 +252,15 @@ public protocol HealthKitHRBucketReading: Sendable {
                     return
                 }
                 progress.accepted += changed.count
+                // V1 — the persistent per-type record Sync Diagnostics shows.
+                HealthKitStatsUploadLogStore.recordUpload(
+                    identifier: HealthKitHRBucketRow.hkIdentifier,
+                    count: changed.count,
+                    trigger: SyncTriggerContext.shared.current,
+                    at: now,
+                    ownerID: userID,
+                    defaults: defaults
+                )
             }
             let today = HRBucketSyncLedger.day(of: now)
             HRBucketSyncLedgerStore.update(userId: userID, defaults: defaults, now: now) { ledger in
@@ -370,6 +387,12 @@ public protocol HealthKitHRBucketReading: Sendable {
 
         public nonisolated func requestHRBucketSweep() {
             Task { await self.sync() }
+        }
+
+        public func awaitHRBucketSweep() async {
+            while let running {
+                _ = await running.value
+            }
         }
     }
 

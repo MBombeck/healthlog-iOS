@@ -80,7 +80,7 @@ struct DidITakeMedicationIntentTests {
 
     @Test("Not-yet copy names the medication")
     func notYetCopy() {
-        #expect(rendered(name: "Lisinopril", verdict: .notYet) == "No — you haven't taken Lisinopril yet today.")
+        #expect(rendered(name: "Lisinopril", verdict: .notYet) == "No, you haven't taken Lisinopril yet today.")
     }
 
     @Test("Nothing-scheduled copy names the medication")

@@ -30,29 +30,17 @@ public extension SWRCache {
                 return SWRCache(modelContainer: container)
             }
         #endif
-        do {
-            return try SWRCache(modelContainer: SWRCache.makePersistent())
-        } catch {
-            HLLog.cache.error("Cache store unreadable, attempting rebuild: \(LogSanitizer.redact(String(describing: error)))")
-            if let storeURL = try? SWRCache.persistentStoreURL() {
-                let dir = storeURL.deletingLastPathComponent()
-                try? FileManager.default.removeItem(at: dir)
-            }
-            do {
-                return try SWRCache(modelContainer: SWRCache.makePersistent())
-            } catch {
-                HLLog.cache.error("Cache rebuild also failed, falling back to in-memory: \(LogSanitizer.redact(String(describing: error)))")
-                // Non-trapping in-memory floor (audit M2): degrade to an inert
-                // empty-schema store instead of `try!`-trapping on the path that
-                // exists to avoid a hard launch failure.
-                let container = ModelContainerRecovery.recoveredInMemoryContainer(
-                    log: HLLog.cache,
-                    subsystem: "Cache",
-                    build: SWRCache.makeInMemory
-                )
-                return SWRCache(modelContainer: container)
-            }
-        }
+        // 1.2: a transient open failure (store sealed before first unlock)
+        // degrades to memory and keeps the files; only a corrupt store is
+        // removed and rebuilt. The floor never traps (audit M2).
+        return SWRCache(modelContainer: ModelContainerRecovery.openPersistentOrDegrade(
+            log: HLLog.cache,
+            subsystem: "Cache",
+            openPersistent: SWRCache.makePersistent,
+            persistentStoreURL: { try? SWRCache.persistentStoreURL() },
+            discardCorrupt: ModelContainerRecovery.removeStoreDirectory(of:),
+            makeInMemory: SWRCache.makeInMemory
+        ))
     }
 
     /// Detached-Task variant of `makeWithRecovery()`. Schedules the

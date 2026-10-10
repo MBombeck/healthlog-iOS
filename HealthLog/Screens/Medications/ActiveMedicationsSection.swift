@@ -180,7 +180,7 @@ struct ActiveMedicationsSection: View {
         schedule.times
             .sorted()
             .map { String(format: "%02d:%02d", $0.hour, $0.minute) }
-            .joined(separator: " · ")
+            .joined(separator: ", ")
     }
 }
 

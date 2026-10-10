@@ -14,6 +14,15 @@ import Foundation
         // MARK: - Default Type-Sets
 
         static var defaultReadTypes: Set<HKObjectType> {
+            defaultReadTypes(rmssd: HeartRateVariabilityRMSSD.sampleType)
+        }
+
+        /// The read set for a system that resolves RMSSD to `rmssd` (iOS 27
+        /// and later) or to `nil` (everything older). 1.2 / V4: the type is
+        /// read-only and joins the set only where it resolves, so an older
+        /// system asks for exactly what it asked for before. A function of its
+        /// input so a test can pin the iOS 27 shape on an older simulator.
+        static func defaultReadTypes(rmssd: HKQuantityType?) -> Set<HKObjectType> {
             var set = Set<HKObjectType>()
             // Vitals (point metrics, latest semantics)
             set.insert(HKQuantityType(.bodyMass))
@@ -30,6 +39,9 @@ import Foundation
             set.insert(HKQuantityType(.heartRate))
             set.insert(HKQuantityType(.restingHeartRate))
             set.insert(HKQuantityType(.heartRateVariabilitySDNN))
+            if let rmssd {
+                set.insert(rmssd)
+            }
             set.insert(HKQuantityType(.vo2Max))
             // Activity (cumulative, sum semantics)
             set.insert(HKQuantityType(.stepCount))

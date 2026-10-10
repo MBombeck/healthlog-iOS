@@ -199,7 +199,7 @@ struct ThresholdNudgeTests {
 
     @Test("Range formatting handles single-sided bounds without inventing the other")
     func rangeFormattingSingleSided() {
-        #expect(ThresholdNudgeContent.formatRange(low: 70, high: 180) == "70–180")
+        #expect(ThresholdNudgeContent.formatRange(low: 70, high: 180) == "70 bis 180")
         #expect(ThresholdNudgeContent.formatRange(low: nil, high: nil).isEmpty)
         let atLeast = ThresholdNudgeContent.formatRange(low: 5, high: nil)
         #expect(atLeast.contains("5"))

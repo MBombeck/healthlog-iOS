@@ -133,37 +133,19 @@ public final class CoachChatStore: @unchecked Sendable {
 // MARK: - ModelContainer factories
 
 public extension CoachChatStore {
-    /// Production entry point. Mirrors `OutboxQueue.makeWithRecovery`:
-    /// corrupt store
-    /// wipes + retries, falls back to in-memory so app launch never
-    /// crashes here.
+    /// Production entry point. A corrupt store is removed and rebuilt; a
+    /// transient failure (store sealed before first unlock, 1.2) degrades to
+    /// memory and keeps the transcript. Falls back to in-memory so app launch
+    /// never crashes here.
     static func makeWithRecovery() -> CoachChatStore {
-        do {
-            return try CoachChatStore(container: makePersistent())
-        } catch {
-            HLLog.storage
-                .error("Coach chat store unreadable, attempting rebuild: \(LogSanitizer.redact(String(describing: error)))")
-            if let storeURL = try? persistentStoreURL() {
-                let dir = storeURL.deletingLastPathComponent()
-                try? FileManager.default.removeItem(at: dir)
-            }
-            do {
-                return try CoachChatStore(container: makePersistent())
-            } catch {
-                HLLog.storage
-                    .error("Coach chat rebuild also failed, falling back to in-memory: \(LogSanitizer.redact(String(describing: error)))")
-                // Non-trapping in-memory floor (audit M2): degrade to an inert
-                // empty-schema store instead of `try!`-trapping on the path that
-                // exists to avoid a hard launch failure. The chat transcript is
-                // non-load-bearing, so an inert store is harmless.
-                let container = ModelContainerRecovery.recoveredInMemoryContainer(
-                    log: HLLog.storage,
-                    subsystem: "CoachChat",
-                    build: makeInMemory
-                )
-                return CoachChatStore(container: container)
-            }
-        }
+        CoachChatStore(container: ModelContainerRecovery.openPersistentOrDegrade(
+            log: HLLog.storage,
+            subsystem: "CoachChat",
+            openPersistent: makePersistent,
+            persistentStoreURL: { try? persistentStoreURL() },
+            discardCorrupt: ModelContainerRecovery.removeStoreDirectory(of:),
+            makeInMemory: makeInMemory
+        ))
     }
 
     /// Production initializer: persistent SQLite under `Application

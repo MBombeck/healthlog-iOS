@@ -174,7 +174,7 @@ struct BiomarkerRow: View {
 
     private var rangeLabel: String? {
         switch (marker.lowerBound, marker.upperBound) {
-        case let (low?, high?): "\(low.formatted())–\(high.formatted())"
+        case let (low?, high?): HLNumberFormat.range(low.formatted(), high.formatted())
         case let (low?, nil): "≥ \(low.formatted())"
         case let (nil, high?): "≤ \(high.formatted())"
         case (nil, nil): nil

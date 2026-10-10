@@ -275,20 +275,20 @@ private struct AssessmentBody: View {
             // Provenance line — one calm caption beneath the prose. The operator
             // did not recognise the old card as a server-generated AI assessment
             // ("wo kommt das her, keine Ahnung"); we keep the plain attribution
-            // inline: "KI-Einschätzung · vor X", mirroring the briefing hero's
-            // `generatedPrefix`. The relative-time + cached glyph self-suppress
-            // when absent.
+            // inline: "KI-Einschätzung, erstellt vor X", mirroring the briefing
+            // hero's `generatedPrefix`. The relative-time + cached glyph
+            // self-suppress when absent. U5 (1.1.1): a comma joins label and
+            // time (no middle dot); the cached glyph closes the line.
             HStack(spacing: HLSpace.xxs) {
-                Text(String(localized: "insights.metric.assessment.aiLabel"))
+                let label = String(localized: "insights.metric.assessment.aiLabel")
+                Text(verbatim: updatedAt == nil ? label : label + ",")
+                if let updatedAt {
+                    Text(verbatim: String(localized: "insights.briefingHero.generatedPrefix").localizedLowercase)
+                    Text(updatedAt, format: .relative(presentation: .named))
+                }
                 if cached {
-                    Text(verbatim: "·")
                     Image(systemName: "tray.and.arrow.down")
                         .accessibilityLabel(Text(String(localized: "Cached")))
-                }
-                if let updatedAt {
-                    Text(verbatim: "·")
-                    Text(String(localized: "insights.briefingHero.generatedPrefix"))
-                    Text(updatedAt, format: .relative(presentation: .named))
                 }
             }
             .font(.hlCaption)

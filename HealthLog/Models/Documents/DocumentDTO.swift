@@ -29,7 +29,7 @@ import Foundation
 // MARK: - DocumentKind
 
 /// `{ DOCTOR_REPORT | DISCHARGE_LETTER | LAB_RESULT | IMAGING | PRESCRIPTION |
-/// REFERRAL | INSURANCE | VACCINATION | OTHER }` — the document category.
+/// SICK_NOTE | REFERRAL | INSURANCE | VACCINATION | OTHER }` — the document category.
 /// Tolerant decode: an unknown wire string falls back to ``other`` (explicit
 /// contract note: "Treat an unknown `kind` value as OTHER when decoding").
 public enum DocumentKind: String, Codable, Sendable, CaseIterable, Equatable, Identifiable, Hashable {
@@ -38,6 +38,9 @@ public enum DocumentKind: String, Codable, Sendable, CaseIterable, Equatable, Id
     case labResult = "LAB_RESULT"
     case imaging = "IMAGING"
     case prescription = "PRESCRIPTION"
+    /// Server v1.40. Decoded onto ``other`` before,
+    /// so a sick note read as "Other" in the app.
+    case sickNote = "SICK_NOTE"
     case referral = "REFERRAL"
     case insurance = "INSURANCE"
     case vaccination = "VACCINATION"

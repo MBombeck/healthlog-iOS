@@ -40,9 +40,22 @@ public protocol HealthKitDailyStatsSyncing: AnyObject, Sendable {
     /// Impl ist ein No-op (Return `0`), damit Test-Stubs unveraendert bauen.
     @discardableResult
     func sweepCacheOlderThan(_ maxAge: TimeInterval, now: Date) async -> Int
+
+    /// **V1 (1.2)** — asks for a sweep of today and yesterday in the
+    /// coordinator's own task, labelled `trigger`. Returns once it is queued,
+    /// not once it ran. Requests while one runs fold into one trailing sweep.
+    func requestRecentDailyStatsSweep(trigger: SyncTrigger) async
+
+    /// **V1** — returns once no requested sweep is running. A HealthKit
+    /// delivery waits on it before it hands back its completion handler.
+    func awaitRequestedDailyStatsSweeps() async
 }
 
 public extension HealthKitDailyStatsSyncing {
+    func requestRecentDailyStatsSweep(trigger _: SyncTrigger) async {}
+
+    func awaitRequestedDailyStatsSweeps() async {}
+
     func liveTodayStepCount() async -> Double? {
         nil
     }
@@ -81,8 +94,16 @@ public extension HealthKitDailyStatsSyncing {
             case resolved(HealthKitDailyStatsCache)
         }
 
-        private let statisticsService: HealthKitStatisticsService
+        let statisticsService: any HealthKitDailyStatsReading
         private var cacheState: CacheState
+        /// V1 — the requested recent sweep and the trigger of the one request
+        /// that arrived while it ran (``requestRecentDailyStatsSweep(trigger:)``).
+        var recentSweep: Task<Void, Never>?
+        var recentRerun: SyncTrigger?
+        /// V1 — the tail of the serial lane every sweep runs in, so a requested
+        /// sweep and an orchestrated one never plan against the same cache at
+        /// once and post the same day twice.
+        var laneTail: Task<Void, Never>?
         /// **Phase 07 / Plan 07-04** — the shared measurement uploader, not a
         /// private `APIClient` call. The stats path used to hand-roll its own
         /// POST, which meant it had its own idempotency key minting, no throttle
@@ -96,7 +117,7 @@ public extension HealthKitDailyStatsSyncing {
         let retry: (any HealthSyncBatchRetryEnqueuing)?
         private let featureFlags: FeatureFlagsServicing
         private let calendar: Calendar
-        private let clock: @Sendable () -> Date
+        let clock: @Sendable () -> Date
         /// **Phase 07 / Plan 07-04** — the only place this coordinator learns
         /// which account it is working for.
         ///
@@ -112,7 +133,7 @@ public extension HealthKitDailyStatsSyncing {
         /// `HealthSyncAuthenticatedLease`, and Phase 07 keeps that type inside
         /// the module. The composition root and the tests are both in-module.
         init(
-            statisticsService: HealthKitStatisticsService,
+            statisticsService: any HealthKitDailyStatsReading,
             cache: HealthKitDailyStatsCache,
             uploader: MeasurementBatchUploader,
             featureFlags: FeatureFlagsServicing,
@@ -138,7 +159,7 @@ public extension HealthKitDailyStatsSyncing {
         /// detached task (`HealthKitDailyStatsCache.makeWithRecoveryTask()`) so
         /// the cold-launch tick never pays for the SwiftData open (audit P-1).
         init(
-            statisticsService: HealthKitStatisticsService,
+            statisticsService: any HealthKitDailyStatsReading,
             cacheTask: Task<HealthKitDailyStatsCache, Never>,
             uploader: MeasurementBatchUploader,
             featureFlags: FeatureFlagsServicing,
@@ -189,6 +210,10 @@ public extension HealthKitDailyStatsSyncing {
         /// `false` und der Cache behaelt die alten Werte.
         @discardableResult
         public func sync(lookbackDays: Int = 7) async -> HealthKitStatisticsSyncSummary {
+            await serialized { await self.sweep(lookbackDays: lookbackDays) }
+        }
+
+        private func sweep(lookbackDays: Int) async -> HealthKitStatisticsSyncSummary {
             guard featureFlags.isEnabled(.enableDailyStats) else {
                 HLLog.healthKit
                     .debug("HK-STATS sync skipped — enableDailyStats flag is OFF")
@@ -212,6 +237,15 @@ public extension HealthKitDailyStatsSyncing {
             )
             let read = await statisticsService.dailyRowsForAllDefaults(from: from, to: now)
             let summary = await finishSweep(read, requiring: lease, endingAt: now)
+            if read.failedTypes == 0 {
+                HealthKitStatsUploadLogStore.recordSweep(
+                    uploaded: summary.posted + summary.reposted,
+                    trigger: SyncTriggerContext.shared.current,
+                    at: now,
+                    ownerID: lease.ownerID,
+                    defaults: defaultsProvider()
+                )
+            }
             await reportQuarantinedLegacyRows()
             return summary
         }
@@ -283,6 +317,8 @@ public extension HealthKitDailyStatsSyncing {
                 return summary.tallyingHeld(chunk.count, retryQueued: queued)
             }
 
+            var uploadedByIdentifier: [String: Int] = [:]
+            defer { recordUploads(uploadedByIdentifier, ownerID: lease.ownerID) }
             for (action, row) in chunk {
                 do {
                     try lease.requireCurrent()
@@ -304,6 +340,7 @@ public extension HealthKitDailyStatsSyncing {
                     continue
                 }
                 summary = summary.tallying(action)
+                uploadedByIdentifier[row.hkIdentifier, default: 0] += 1
                 // BF-5 diagnostics: record the action by HK identifier so the
                 // operator sees cumulative kinds (Steps etc.) ticking through the
                 // stats path. The counter increments AFTER the cache write so the
@@ -549,38 +586,6 @@ public extension HealthKitDailyStatsSyncing {
                     "HK-STATS cache sweep failed: \(error.localizedDescription, privacy: .private)"
                 )
                 return 0
-            }
-        }
-
-        /// v0.6.2.x bug-c10-ios-direct — see protocol doc. Reads today's
-        /// step cumulative directly from HK so the dashboard tile + chart-
-        /// detail today-segment can paint live values instead of the
-        /// server's frozen day-row. Anchored on `Calendar.current`'s start-
-        /// of-day (user-TZ) up to `clock()` so the bucket math matches the
-        /// existing sync path. Returns `nil` (not `0`) on any HK error so
-        /// the caller's nil-coalescing fallback to the server snapshot
-        /// stays in place — `0` would override a non-empty server value.
-        public func liveTodayStepCount() async -> Double? {
-            let now = clock()
-            let stepConfig = HealthKitCumulativeTypeConfig(
-                identifier: "HKQuantityTypeIdentifierStepCount",
-                wireUnit: "steps"
-            )
-            do {
-                let rows = try await statisticsService.dailyRows(
-                    for: stepConfig,
-                    from: now,
-                    to: now
-                )
-                // `dailyRows` skips 0-value buckets and the from/to are both
-                // today, so a non-empty result is exactly today's cumulative.
-                return rows.first?.value
-            } catch {
-                HLLog.healthKit
-                    .debug(
-                        "liveTodayStepCount HK-read failed: \(error.localizedDescription, privacy: .public)"
-                    )
-                return nil
             }
         }
     }

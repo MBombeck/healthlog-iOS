@@ -18,8 +18,26 @@
     struct HealthLogSampleTypeRegistryTests {
         @Test("the registry holds exactly the declared number of server-bound types")
         func cardinalityMatchesTheDeclaredContract() {
-            #expect(HealthLogSampleTypeRegistry.expectedCount == 35)
+            #expect(HealthLogSampleTypeRegistry.baseExpectedCount == 35)
+            #expect(HealthLogSampleTypeRegistry.baseIdentifiers.count == HealthLogSampleTypeRegistry.baseExpectedCount)
             #expect(HealthLogSampleTypeRegistry.knownIdentifiers.count == HealthLogSampleTypeRegistry.expectedCount)
+        }
+
+        @Test("1.2 V4: the count is 35 without RMSSD and 36 with it, and SDNN is in both")
+        func cardinalityFollowsRMSSDAvailability() {
+            let base = HealthLogSampleTypeRegistry.baseIdentifiers
+            let older = base.union(HealthLogSampleTypeRegistry.osGatedIdentifiers(rmssdAvailable: false))
+            let ios27 = base.union(HealthLogSampleTypeRegistry.osGatedIdentifiers(rmssdAvailable: true))
+            #expect(older.count == 35)
+            #expect(ios27.count == 36)
+            #expect(!older.contains(HeartRateVariabilityRMSSD.identifier))
+            #expect(ios27.contains(HeartRateVariabilityRMSSD.identifier))
+            #expect(older.contains(HKQuantityTypeIdentifier.heartRateVariabilitySDNN.rawValue))
+            #expect(ios27.contains(HKQuantityTypeIdentifier.heartRateVariabilitySDNN.rawValue))
+            // The running system decides which of the two shapes is live.
+            let available = HeartRateVariabilityRMSSD.sampleType != nil
+            #expect(HealthLogSampleTypeRegistry.knownIdentifiers == (available ? ios27 : older))
+            #expect(HealthLogSampleTypeRegistry.expectedCount == (available ? 36 : 35))
         }
 
         @Test("every identifier is unique and non-blank")

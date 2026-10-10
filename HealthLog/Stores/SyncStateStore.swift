@@ -159,6 +159,65 @@ public final class SyncStateStore {
         healthSyncAdmissionRefusalCount += snapshot.capabilitiesRefusedForMissingAdmission.count
     }
 
+    // MARK: - U1 (#16) — one sync-activity source
+
+    /// The last real outbox drain (`>0 → 0` without a dead-letter drop): queued
+    /// writes the server accepted. In-memory, like `lastHandshakeAt`.
+    public private(set) var lastOutboxDrain: SyncActivity?
+    /// What `lastOutboxDrain` was before the newest drain armed — so a
+    /// dead-letter report that arrives after the count broadcast can take the
+    /// stamp back (a drop is not a drain, in whichever order the two land).
+    @ObservationIgnored private var outboxDrainBeforeConfirmation: SyncActivity?
+    /// When the outbox last went from empty to non-empty. Feeds the attention glyph's
+    /// "waiting" state, which only counts writes that have waited a while.
+    public private(set) var outboxPendingSince: Date?
+
+    /// Apple Health's record of server-accepted uploads (see
+    /// `HKSyncDiagnostics.lastServerAcceptance`). `nil` where nothing is wired
+    /// (tests, previews); the composition root passes `.shared`.
+    private let healthDiagnostics: HKSyncDiagnostics?
+
+    /// **When this device last synced, and how.** The newest of the handshake,
+    /// the last outbox drain and the last Apple Health upload the server
+    /// accepted — foreground or background. Every surface that shows a
+    /// last-sync time reads this, never `lastHandshakeAt` alone: the handshake
+    /// only runs on pull-to-refresh, so on its own it made background uploads
+    /// invisible and read "never" after every cold launch.
+    public var lastSync: SyncActivity? {
+        SyncActivity.latest([
+            lastHandshakeAt.map { SyncActivity(at: $0, channel: .foreground) },
+            lastOutboxDrain,
+            healthDiagnostics?.lastServerAcceptance
+        ])
+    }
+
+    /// The attention state for `now` (see ``SyncAttention``). A function rather
+    /// than a property because "stale" depends on the clock; callers re-read
+    /// it on a periodic timeline.
+    public func attention(now: Date = .now) -> SyncAttention? {
+        SyncAttention.resolve(
+            isInFlight: phase == .syncing || isLoading,
+            failedWriteCount: showsFailedDrop ? failedDropCount : 0,
+            handshakeFailed: error != nil,
+            queuedWriteCount: pendingOutboxCount,
+            queuedSince: outboxPendingSince,
+            lastSync: lastSync,
+            now: now
+        )
+    }
+
+    /// What the top-bar glyph shows right now (see ``SyncIndicatorGlyph``).
+    public var indicatorGlyph: SyncIndicatorGlyph? {
+        SyncIndicatorGlyph.resolve(phase: phase, isLoading: isLoading)
+    }
+
+    /// What the slot next to the Dashboard avatar shows at `now` (see
+    /// ``SyncSlotGlyph``): the sync glyph while one runs, otherwise the
+    /// attention state, otherwise nothing.
+    public func slotGlyph(now: Date = .now) -> SyncSlotGlyph? {
+        SyncSlotGlyph.resolve(indicator: indicatorGlyph, attention: attention(now: now))
+    }
+
     /// How long the drain confirmation stays up. Injectable for tests.
     private let drainConfirmationHold: Duration
 
@@ -185,9 +244,11 @@ public final class SyncStateStore {
         drainConfirmationHold: Duration = .seconds(2.5),
         clock: any Clock<Duration> = ContinuousClock(),
         minimumSyncingHold: Duration = .milliseconds(600),
-        doneHold: Duration = .seconds(1.5)
+        doneHold: Duration = .seconds(1.5),
+        healthDiagnostics: HKSyncDiagnostics? = nil
     ) {
         self.repo = repo
+        self.healthDiagnostics = healthDiagnostics
         self.drainConfirmationHold = drainConfirmationHold
         self.clock = clock
         self.minimumSyncingHold = minimumSyncingHold
@@ -237,6 +298,11 @@ public final class SyncStateStore {
     public func noteOutboxPending(_ count: Int) {
         let previous = pendingOutboxCount
         pendingOutboxCount = count
+        if count == 0 {
+            outboxPendingSince = nil
+        } else if previous == 0 || outboxPendingSince == nil {
+            outboxPendingSince = Date()
+        }
         if count == 0, previous > 0 {
             // audit-v0162 H1 (Opt 2) — a `>0 → 0` drop that was caused by a
             // dead-letter DROP (not a real drain) must NOT flash success. When a
@@ -247,6 +313,8 @@ public final class SyncStateStore {
                 showsDrainConfirmation = false
             } else {
                 armDrainConfirmation()
+                outboxDrainBeforeConfirmation = lastOutboxDrain
+                lastOutboxDrain = SyncActivity(at: Date(), channel: .current)
             }
         } else if count > 0 {
             drainConfirmationTask?.cancel()
@@ -263,8 +331,7 @@ public final class SyncStateStore {
         guard count > 0 else { return }
         failedDropCount += count
         showsFailedDrop = true
-        drainConfirmationTask?.cancel()
-        showsDrainConfirmation = false
+        revokeDrainConfirmation()
     }
 
     /// **Audit B-3 — surface a discarded write.** Sibling of
@@ -278,6 +345,15 @@ public final class SyncStateStore {
         discardedWrites.append(contentsOf: notices)
         failedDropCount += notices.count
         showsFailedDrop = true
+        revokeDrainConfirmation()
+    }
+
+    /// Disarms the drain beat. When it was still up, the drop that armed it was
+    /// this failure — so its last-sync stamp goes too (U1 #16).
+    private func revokeDrainConfirmation() {
+        if showsDrainConfirmation {
+            lastOutboxDrain = outboxDrainBeforeConfirmation
+        }
         drainConfirmationTask?.cancel()
         showsDrainConfirmation = false
     }
@@ -385,6 +461,10 @@ public final class SyncStateStore {
         state = nil
         error = nil
         lastHandshakeAt = nil
+        // U1 (#16) — the Apple Health half is cleared by
+        // `HKSyncDiagnostics.reset()` in the same logout.
+        lastOutboxDrain = nil
+        outboxDrainBeforeConfirmation = nil
         // b177 W-SYNCPROGRESS — a logout-driven outbox wipe must not flash
         // "Daten übermittelt ✓"; the live counts re-settle via the streams.
         drainConfirmationTask?.cancel()

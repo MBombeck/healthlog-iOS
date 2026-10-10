@@ -164,10 +164,20 @@ struct HealthSyncCapabilityRegistry: Sendable {
     /// Deterministic execution order. `outboxDrain` is deliberately last: a page
     /// that was held during this pass becomes an outbox row, and draining after
     /// the importers gives that row its first replay in the same wake.
+    ///
+    /// **V1 (1.2)** — the two `stats:` aggregates lead. Each is a handful of
+    /// HealthKit statistics queries and one request per day, while the sample
+    /// collection walks thirty-five types; behind it, a short wake expired
+    /// before the day totals and pulse buckets were ever reached (#66).
     func orderedPlan(_ planned: Set<HealthSyncCapability>) -> [HealthSyncCapability] {
-        HealthSyncCapability.allCases.filter { planned.contains($0) && $0 != .outboxDrain }
-            + (planned.contains(.outboxDrain) ? [.outboxDrain] : [])
+        let leading = Self.leadingAggregates.filter { planned.contains($0) }
+        let middle = HealthSyncCapability.allCases.filter {
+            planned.contains($0) && $0 != .outboxDrain && !Self.leadingAggregates.contains($0)
+        }
+        return leading + middle + (planned.contains(.outboxDrain) ? [.outboxDrain] : [])
     }
+
+    static let leadingAggregates: [HealthSyncCapability] = [.dailyStatistics, .heartRateBuckets]
 
     /// Exhaustive by design — a new capability must state whether it shares the
     /// batch uploader before it can compile.

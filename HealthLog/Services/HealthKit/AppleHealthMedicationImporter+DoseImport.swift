@@ -157,8 +157,10 @@ extension AppleHealthMedicationImporter {
     /// an index the response never mentions is **not** settled, because a
     /// response that says nothing about a row is not evidence the row was
     /// stored. Two outcomes settle a row — it landed
-    /// (`inserted`/`updated`/`duplicate`), or the server refused it for the one
-    /// deterministic reason a retry can never fix.
+    /// (`inserted`/`updated`/`duplicate`), or the server refused it for a
+    /// deterministic reason a retry can never fix: an unstable external id, or
+    /// (v1.42) `intake_not_tracked`, a dose against a medication kept as a
+    /// record only. Before, that one was re-sent on every sync.
     private static func settledIdentities(
         in response: MedicationsRepository.AppleHealthBulkIntakeResponse,
         of identities: [String]
@@ -168,9 +170,11 @@ extension AppleHealthMedicationImporter {
             guard identities.indices.contains(entry.index) else { continue }
             settled.insert(identities[entry.index])
         }
-        for skip in response.skipped
-            where skip.reason == AppleHealthConceptKey.unstableExternalIDReason
-        {
+        let finalReasons: Set<String> = [
+            AppleHealthConceptKey.unstableExternalIDReason,
+            HLError.medicationIntakeNotTrackedReason
+        ]
+        for skip in response.skipped where finalReasons.contains(skip.reason) {
             guard identities.indices.contains(skip.index) else { continue }
             settled.insert(identities[skip.index])
         }

@@ -2,6 +2,24 @@
 
 > This changelog resumes at v0.6.2; earlier detailed release notes are not included in this repository.
 
+## 1.2.0 (293) - 2026-10-10
+
+HealthLog Companion App 1.2.0 is available on the [App Store](https://apps.apple.com/app/id6769501341). This source release corresponds to the published build. It reads the HealthLog server v1.42 contract and also contains the changes prepared for 1.1.1, which was not released on its own.
+
+- Apple Health day totals (steps, active energy, flights, distance, daylight) and the 10-minute heart rate values for today and yesterday reach the server on every app open, from background delivery, background refresh and silent push, not only after "Sync now". Sync Diagnostics shows the last upload per type and what started it.
+- The last sync time counts Apple Health uploads the server accepted, from background observers, daily totals and workouts, and it survives a restart (#16).
+- A small symbol next to the avatar shows a running sync and stays in place while something needs attention, such as entries waiting for a connection or a failed sync. Tapping it opens a short overview with the last sync time and a link to Sync Diagnostics (#16).
+- Sync Diagnostics shows names instead of server identifiers and reads in plain sentences, for example "710 read, 710 sent, 710 accepted, 0 rejected" (#18).
+- Recent workouts arrive first. When the history is behind, a sync uploads the last 14 days with their heart rate before continuing with older workouts, and in the foreground the import keeps going long enough for several hundred workouts per app open (#17).
+- The workout list loads every workout the server has, page by page, and shows the real total. A page that fails to load offers "Try again" (#19).
+- The pulse tile on the dashboard shows one series: resting heart rate with its averages and band when that data exists, raw heart rate without a band otherwise (#20).
+- No crash when iOS starts the app in the background after a restart, before the iPhone was unlocked for the first time.
+- Server v1.42: Health Connect is its own read-only source, custom medication categories and sick notes show their own labels, a mismatched server encryption key is reported as a server configuration problem without losing queued entries, and the new sign-in messages are covered.
+- On iOS 27 heart rate variability is also read as RMSSD and sent to servers from v1.42 on. SDNN is unchanged (#14).
+- The line under the Today lead follows the server's daily digest and no longer repeats the lead. The daily briefing respects the server's rate limit.
+- More workout types map to their server sport type, among them badminton, core training, tai chi, hand cycling and jump rope.
+- Visible text in the app, the Watch app, widgets, notifications, Siri and the doctor report no longer uses middle dots, dashes or arrows as separators. A CI check keeps it that way.
+
 ## 1.1.0 (291) — 2026-10-05
 
 HealthLog Companion App 1.1.0 is available on the [App Store](https://apps.apple.com/app/id6769501341). This source release corresponds to the published build. It follows HealthLog server v1.39 and also contains the fixes prepared for 1.0.4, which was not released on its own.

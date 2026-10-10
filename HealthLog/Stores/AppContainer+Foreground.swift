@@ -54,6 +54,13 @@ public extension AppContainer {
     func refreshMedicationSlotGate() async {
         guard let info = try? await api.fetchServerVersion() else { return }
         medicationSlotGate.apply(info)
+        // 1.2 / V4 — the same answer decides which server-bound HealthKit
+        // types the server can store yet (RMSSD from v1.42). Once it can, an
+        // existing installation on iOS 27 is asked once for the new type.
+        // It is also the one record `SyncTriggerContext` reads for V1's
+        // `syncTrigger: manual` (v1.42+), so both follow the same answer.
+        HealthKitServerTypeGate.record(info)
+        await hkReadinessStore.requestRMSSDReadAuthorizationIfNeeded()
     }
 
     /// **AUD-8 H-1** — foreground / cold-launch SWR-cache maintenance sweep.

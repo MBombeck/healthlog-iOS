@@ -237,8 +237,9 @@ public actor MeasurementBatchUploader {
         // `SyncTriggerContext` trägt das Fenster, das der auslösende Pfad
         // (BGProcessing / BGAppRefresh / Silent-Push / HK-Background-
         // Delivery) um seine Arbeit gelegt hat; ohne offenes Fenster ist der
-        // Sweep per Restmenge ein Vordergrund-Pull.
-        let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: syncTrigger.current)
+        // Sweep per Restmenge ein Vordergrund-Pull. V1: `wireValue` sendet
+        // `manual` nur an einen Server, der den Wert kennt (v1.42+).
+        let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: syncTrigger.wireValue)
         let base: APIRequest<HealthKitBatchResponseDTO> = try .post(
             "/api/measurements/batch",
             body: payload,

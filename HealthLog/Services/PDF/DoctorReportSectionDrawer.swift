@@ -216,7 +216,7 @@ import Foundation
             for med in meds.active {
                 draw(text: med.name, at: CGPoint(x: PDFPage.margin, y: y), font: nameFont, color: .label)
                 y += 16
-                let metaLine = "\(med.dose) — \(med.schedule)" +
+                let metaLine = "\(med.dose), \(med.schedule)" +
                     (med.treatmentClass.map { " (\($0))" } ?? "")
                 draw(text: metaLine, at: CGPoint(x: PDFPage.margin, y: y), font: metaFont, color: .secondaryLabel)
                 y += 22
@@ -231,7 +231,7 @@ import Foundation
                 )
                 y += 18
                 for med in meds.archived {
-                    draw(text: "\(med.name) — \(med.dose)", at: CGPoint(x: PDFPage.margin, y: y), font: metaFont, color: .secondaryLabel)
+                    draw(text: "\(med.name), \(med.dose)", at: CGPoint(x: PDFPage.margin, y: y), font: metaFont, color: .secondaryLabel)
                     y += 16
                 }
             }
@@ -480,8 +480,8 @@ enum LocaleText {
 
     static func moodSummaryFormat(for locale: ReportLocale) -> String {
         switch locale {
-        case .de: "%d Eintraege · Durchschnitt %.1f / 5"
-        case .en: "%d entries · average %.1f / 5"
+        case .de: "%d Eintraege, Durchschnitt %.1f / 5"
+        case .en: "%d entries, average %.1f / 5"
         }
     }
 
@@ -579,7 +579,11 @@ enum DateRangeFormatter {
         formatter.locale = Locale(identifier: locale.foundationIdentifier)
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        return "\(formatter.string(from: start)) – \(formatter.string(from: end))"
+        let joiner = switch locale {
+        case .de: "bis"
+        case .en: "to"
+        }
+        return "\(formatter.string(from: start)) \(joiner) \(formatter.string(from: end))"
     }
 
     static func formatSingle(date: Date, locale: ReportLocale) -> String {

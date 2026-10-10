@@ -557,6 +557,7 @@ public final class HKReadinessStore {
         defaults.removeObject(forKey: bannerDismissedKey(for: userId))
         defaults.removeObject(forKey: workoutReadMigratedKey(for: userId))
         defaults.removeObject(forKey: workoutReadRearmPendingKey(for: userId))
+        defaults.removeObject(forKey: rmssdReadRequestedKey(for: userId))
     }
 
     // MARK: - Persistence
@@ -768,6 +769,96 @@ public final class HKReadinessStore {
         guard !sanitized.isEmpty else { return "_anonymous" }
         return String(sanitized.prefix(64))
     }
+}
+
+// MARK: - RMSSD read request for existing installations (1.2 / V4)
+
+/// In an extension so the store's own body stays inside its length budget;
+/// same file because it reads the store's private seams.
+public extension HKReadinessStore {
+    /// One-shot per-user flag: has the RMSSD read request run?
+    nonisolated static let rmssdReadRequestedKeyPrefix = "hl.healthkit.rmssdReadRequested."
+
+    nonisolated static func rmssdReadRequestedKey(for userId: String?) -> String {
+        rmssdReadRequestedKeyPrefix + partitionToken(for: userId)
+    }
+
+    /// One short authorization sheet for HRV as RMSSD on an installation that
+    /// went through the HealthKit sheet before the type existed.
+    ///
+    /// iOS 27 adds the type; an install onboarded earlier has `requestedAt` set
+    /// and is never asked again by the normal paths, and Apple never reports a
+    /// read grant, so the type would stay unasked forever. This asks for that
+    /// one type only, so the sheet lists RMSSD and nothing else, and every
+    /// earlier decision stays as it was. A denial affects RMSSD alone.
+    ///
+    /// It asks only when all of this holds: the system resolves the type (iOS
+    /// 27 or later; older systems see no change at all), the user has been
+    /// through the sheet before (a new user gets the type in the onboarding
+    /// sheet), the configured server stores it (asking for data nobody can
+    /// receive yet would be an empty promise; the call simply comes back on a
+    /// later foreground), and the system itself says the sheet for this type
+    /// is still unanswered (`.shouldRequest`). Grant and deny both turn that
+    /// into `.unnecessary`, and the per-user flag is set after the one attempt,
+    /// so the sheet never comes back on later launches.
+    ///
+    /// - Returns: `true` when the sheet was requested.
+    @discardableResult
+    func requestRMSSDReadAuthorizationIfNeeded() async -> Bool {
+        #if canImport(HealthKit)
+            await requestRMSSDReadAuthorizationIfNeeded(
+                type: HeartRateVariabilityRMSSD.sampleType,
+                serverAccepts: HealthKitServerTypeGate.serverAccepts(HeartRateVariabilityRMSSD.identifier, defaults: defaults)
+            )
+        #else
+            false
+        #endif
+    }
+
+    #if canImport(HealthKit)
+        /// The rule behind ``requestRMSSDReadAuthorizationIfNeeded()`` with its
+        /// two platform facts as parameters, so a test can pin the iOS 27 path
+        /// on an older simulator.
+        /// - Parameters:
+        ///   - type: the resolved RMSSD type; `nil` before iOS 27.
+        ///   - serverAccepts: whether the configured server stores the type.
+        internal func requestRMSSDReadAuthorizationIfNeeded(type: HKObjectType?, serverAccepts: Bool) async -> Bool {
+            guard let type else { return false }
+            let ownerUserID = currentUserID
+            let flag = Self.rmssdReadRequestedKey(for: ownerUserID)
+            guard !defaults.bool(forKey: flag) else { return false }
+            guard hasEverRequestedAuthorization else {
+                defaults.set(true, forKey: flag)
+                return false
+            }
+            guard serverAccepts,
+                  let service = healthKit as? any HealthKitServiceProtocol,
+                  let ownerUserID,
+                  !ownerUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !Task.isCancelled else { return false }
+            switch await service.authorizationRequestStatus(toShare: [], read: [type]) {
+            case .unnecessary:
+                defaults.set(true, forKey: flag)
+                return false
+            case .shouldRequest:
+                break
+            default:
+                return false
+            }
+            guard currentUserID == ownerUserID, !Task.isCancelled else { return false }
+            do {
+                try await service.requestAuthorization(read: [type], write: [])
+                defaults.set(true, forKey: flag)
+                HLLog.healthKit.info("RMSSD read request ran (returning user)")
+                return true
+            } catch {
+                HLLog.healthKit.error(
+                    "RMSSD read request failed: \(error.localizedDescription, privacy: .private)"
+                )
+                return false
+            }
+        }
+    #endif
 }
 
 // MARK: - BackgroundSyncCoordinator Protocol (test-seam)

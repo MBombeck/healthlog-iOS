@@ -523,11 +523,13 @@ extension AppReviewConfigurationTests {
             )
         }
         let speziScheduler = try text("HealthLog/Services/HealthKit/HealthLogSpeziDelegate.swift")
+            + text("HealthLog/Services/HealthKit/SpeziSchedulerStorage.swift")
         #expect(speziScheduler.contains("static let directoryName = \"SpeziScheduler\""))
         #expect(speziScheduler.contains("documentsDirectory.appendingPathComponent(directoryName"))
         #expect(speziScheduler.contains("SensitiveDataBackupExclusion.prepareDirectory"))
         #expect(speziScheduler.contains("Scheduler(persistence: .onDisk(directory: directory))"))
-        #expect(speziScheduler.contains("SpeziSchedulerStorage.makeDefaultSchedulerOrFailClosed()"))
+        #expect(speziScheduler.contains("SpeziSchedulerStorage.modules(for: schedulerLaunchPlan)"))
+        #expect(!speziScheduler.contains("Refusing to open SpeziScheduler"), "launch must not trap on a sealed store (292)")
         let standalonePayloads = [
             "HealthLog/WidgetShared/WidgetPendingConfirmStore.swift",
             "HealthLog/WidgetShared/WidgetSnapshot.swift",

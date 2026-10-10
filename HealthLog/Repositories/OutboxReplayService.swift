@@ -575,7 +575,7 @@ public actor OutboxReplayService {
     /// as non-retriable so it can't wedge the queue.
     private func dispatchThresholds(_ op: OutboxQueue.Operation) async throws {
         guard let userThresholdsRepo else {
-            throw HLError.unknown("updateThresholds replay skipped — repo not wired")
+            throw HLError.unknown("updateThresholds replay skipped: repo not wired")
         }
         let p = try decoder.decode(OutboxQueue.Payloads.UpdateThresholds.self, from: op.payload)
         _ = try await userThresholdsRepo.replayUpdate(p.patch, idempotencyKey: op.idempotencyKey)
@@ -588,7 +588,7 @@ public actor OutboxReplayService {
     /// as non-retriable so it can't wedge the queue.
     private func dispatchInsightsLayout(_ op: OutboxQueue.Operation) async throws {
         guard let insightsLayoutRepo else {
-            throw HLError.unknown("updateInsightsLayout replay skipped — repo not wired")
+            throw HLError.unknown("updateInsightsLayout replay skipped: repo not wired")
         }
         let p = try decoder.decode(OutboxQueue.Payloads.UpdateInsightsLayout.self, from: op.payload)
         _ = try await insightsLayoutRepo.replayUpdate(p.layout, idempotencyKey: op.idempotencyKey)

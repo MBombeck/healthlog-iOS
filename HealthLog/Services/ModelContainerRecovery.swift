@@ -68,6 +68,59 @@ enum ModelContainerRecovery {
         }
     }
 
+    /// Open a persistent store, or degrade for this process without
+    /// destroying it when the failure is transient.
+    ///
+    /// 1.2: the SWR cache, the standalone store, the GLP-1 store and the coach
+    /// chat store used to delete their whole directory on ANY open failure and
+    /// retry. A background launch before the first unlock cannot open a
+    /// `completeUntilFirstUserAuthentication` store, so that ladder could wipe
+    /// local-only data that would have opened fine on the next launch (the G-9
+    /// bug the Outbox already fixed). Now only a store classified `corrupt`
+    /// reaches `discardCorrupt` (each store keeps its previous corrupt-store
+    /// policy); a transient failure falls back to memory and leaves the files
+    /// alone.
+    static func openPersistentOrDegrade(
+        log: HLLogger,
+        subsystem: String,
+        openPersistent: () throws -> ModelContainer,
+        persistentStoreURL: () -> URL?,
+        discardCorrupt: (URL) -> Void,
+        makeInMemory: () throws -> ModelContainer
+    ) -> ModelContainer {
+        do {
+            return try openPersistent()
+        } catch {
+            let storeURL = persistentStoreURL()
+            switch classifyOpenFailure(error, storeURL: storeURL) {
+            case .transient:
+                log.error(
+                    "\(subsystem) store unavailable (transient, keeping it): \(LogSanitizer.redact(String(describing: error)))"
+                )
+                return recoveredInMemoryContainer(log: log, subsystem: subsystem, build: makeInMemory)
+            case .corrupt:
+                log.error(
+                    "\(subsystem) store unreadable, attempting rebuild: \(LogSanitizer.redact(String(describing: error)))"
+                )
+                if let storeURL { discardCorrupt(storeURL) }
+                do {
+                    return try openPersistent()
+                } catch {
+                    log.error(
+                        "\(subsystem) rebuild also failed, falling back to in-memory: \(LogSanitizer.redact(String(describing: error)))"
+                    )
+                    return recoveredInMemoryContainer(log: log, subsystem: subsystem, build: makeInMemory)
+                }
+            }
+        }
+    }
+
+    /// The corrupt-store policy the four directory stores had before 1.2:
+    /// remove the store's directory so the retry starts clean.
+    static func removeStoreDirectory(of storeURL: URL) {
+        try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent())
+    }
+
     // MARK: - W-INTEGRITY-WRITEPATH G-9 — corrupt-vs-unavailable classification
 
     /// Why a persistent store open failed, for the recovery ladder to decide

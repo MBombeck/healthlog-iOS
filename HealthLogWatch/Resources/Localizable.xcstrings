@@ -211,13 +211,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zuletzt: nicht gespeichert — erneut"
+            "value": "Zuletzt nicht gespeichert, nochmal senden"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Last: not saved — retry"
+            "value": "Last one not saved, tap to retry"
           }
         }
       }
@@ -432,13 +432,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gespeichert — wird mit dem iPhone synchronisiert"
+            "value": "Gespeichert, wird mit dem iPhone synchronisiert"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saved — will sync to iPhone"
+            "value": "Saved, will sync to iPhone"
           }
         }
       }
@@ -653,13 +653,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "· nicht gespeichert"
+            "value": "(nicht gespeichert)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "· not saved"
+            "value": "(not saved)"
           }
         }
       }
@@ -670,13 +670,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "· wird synchronisiert"
+            "value": "(wird synchronisiert)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "· will sync"
+            "value": "(will sync)"
           }
         }
       }

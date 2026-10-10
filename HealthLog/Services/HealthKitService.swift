@@ -599,6 +599,7 @@ import Foundation
                     defaultsBox: workoutDefaultsBox,
                     lifecycleStore: workoutSyncDependencies.lifecycleStore,
                     anchoredQuerySource: workoutSyncDependencies.anchoredQuerySource,
+                    recentWindowSource: workoutSyncDependencies.resolvedRecentWindowSource(store: store),
                     lease: lease,
                     directDTOProvider: workoutSyncDependencies.directDTOProvider,
                     beforeSeriesFreeAnchorAdvance: { [weak self] count in

@@ -234,7 +234,7 @@ struct MoodTagManagementScreen: View {
                     .font(.hlSubhead)
                     .foregroundStyle(tag.hidden ? HLText.tertiary : HLText.primary)
                 if tag.isRated {
-                    Text("\(tag.scaleMin)–\(tag.scaleMax)")
+                    Text(verbatim: HLNumberFormat.range("\(tag.scaleMin)", "\(tag.scaleMax)"))
                         .font(.hlCaption)
                         .foregroundStyle(HLText.tertiary)
                 }

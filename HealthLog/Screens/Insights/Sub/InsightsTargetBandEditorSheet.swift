@@ -173,7 +173,7 @@ struct InsightsTargetBandEditorSheet: View {
                     text: bindingFor(metric, keyPath: \.min),
                     accessibilityID: "target-editor.\(metric.rawValue).min"
                 )
-                Text("–")
+                Text(String(localized: "range.separator.to"))
                     .foregroundStyle(HLText.tertiary)
                     .accessibilityHidden(true)
                 fieldColumn(

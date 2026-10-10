@@ -493,6 +493,6 @@ struct SleepHypnogramScreen: View {
     private func napTimeRange(for nap: SleepSession) -> String {
         let start = nap.start.formatted(.dateTime.hour().minute())
         let end = nap.end.formatted(.dateTime.hour().minute())
-        return "\(start) – \(end)"
+        return HLNumberFormat.range(start, end)
     }
 }

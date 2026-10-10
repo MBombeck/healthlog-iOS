@@ -192,7 +192,7 @@
         private func headerLine(for attributes: MedicationActivityAttributes) -> String {
             attributes.doseText.isEmpty
                 ? attributes.medicationName
-                : "\(attributes.medicationName) · \(attributes.doseText)"
+                : "\(attributes.medicationName), \(attributes.doseText)"
         }
 
         /// Build the in-place ``MarkDoseFromLiveActivityIntent`` from the
@@ -444,7 +444,7 @@
                 return dose
             }
             let due = LAStrings.dueAt(context.attributes.scheduledFireDate, timeFormatRaw: context.state.timeFormatRaw)
-            return dose.isEmpty ? due : "\(dose) · \(due)"
+            return dose.isEmpty ? due : "\(dose), \(due)"
         }
 
         private var actionBand: some View {

@@ -750,7 +750,7 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     var isServerDerivedReadOnly: Bool {
         if isSyntheticServerRow { return true }
         return switch source {
-        case .computed, .strava, .oura, .polar, .nightscout, .telegram, .mcp: true
+        case .computed, .strava, .oura, .polar, .nightscout, .healthConnect, .telegram, .mcp: true
         case .manual, .appleHealth, .external, .withings, .whoop, .fitbit, .googleHealth, .import_: false
         // Audit B-4 — a source we cannot name is server-owned until proven
         // otherwise: `WRITABLE_MEASUREMENT_SOURCES` is `{MANUAL, APPLE_HEALTH}`
@@ -854,6 +854,10 @@ public enum MeasurementSource: String, Codable, Sendable {
     /// Integration (`nightscoutIntegrationStore`). Server-owned read-only ingest
     /// (CGM-Glukose) — kein Client-Write-Pfad.
     case nightscout
+    /// Server-Wire-Form: `HEALTH_CONNECT` (Server v1.42.0).
+    /// Rows from the web Health Connect import. Read-only, never written by
+    /// the app, never mirrored into Apple Health.
+    case healthConnect
     /// Server-Wire-Form: `TELEGRAM` (Server v1.19.2). Numerische Antwort auf
     /// eine Telegram-Erinnerung, aus dem chat-gebundenen Webhook geschrieben —
     /// kein Client-Write-Pfad.

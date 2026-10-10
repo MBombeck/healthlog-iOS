@@ -45,8 +45,13 @@ enum DashboardMetricOrdering {
     /// - Keep metrics whose widget id is unknown to the layout (defensive
     ///   against server adding a kind before the layout endpoint catches up).
     /// - Sort by the layout's `order`. Unmapped metrics float to the end.
+    /// - #20 — with resting heart rate in `digest`, the pulse slot shows the
+    ///   resting tile and the standalone resting tile is not repeated
+    ///   (``DashboardPulseTileSource``). The slot keeps the pulse row's order,
+    ///   visibility and pin; the empty-tile policy judges the tile it shows.
     static func orderedMetrics(
         _ metrics: [DashboardMetric],
+        digest: ComprehensiveDigest?,
         store: DashboardStore,
         layoutStore: DashboardLayoutStore,
         container: AppContainer?
@@ -64,11 +69,17 @@ enum DashboardMetricOrdering {
         // gate fails open (all-on) when the server map is absent / not loaded,
         // so this is a no-op until the #30 deploy goes live.
         let moduleDisabledKinds = moduleDisabledMetricKinds(container: container)
-        return metrics
-            .compactMap { metric -> (Int, DashboardMetric)? in
+        let pulseTileVisible = !moduleDisabledKinds.contains(.pulse)
+            && (DashboardWidgetId.id(forMetricKind: .pulse).map { visibilityById[$0] != false } ?? true)
+        return DashboardPulseTileSource
+            .slots(for: metrics, digest: digest, pulseTileVisible: pulseTileVisible)
+            .compactMap { slot -> (Int, DashboardMetric)? in
+                let metric = slot.metric
                 // #30 — module-gated kind hidden by a server-disabled module.
-                if moduleDisabledKinds.contains(metric.kind) { return nil }
-                guard let widgetId = DashboardWidgetId.id(forMetricKind: metric.kind) else {
+                if moduleDisabledKinds.contains(slot.layoutKind) || moduleDisabledKinds.contains(metric.kind) {
+                    return nil
+                }
+                guard let widgetId = DashboardWidgetId.id(forMetricKind: slot.layoutKind) else {
                     // Unknown to the layout — keep it (float to end).
                     return (.max, metric)
                 }

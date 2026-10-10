@@ -46,9 +46,19 @@ enum ForegroundPassPlan {
     ///   to refresh. The pair stays ONE leg rather than becoming two, so this
     ///   adds no concurrent child to a 250 ms budget: it is an ordering change,
     ///   not a budget change. `ForegroundCoordinator` is untouched.
+    ///
+    ///   **V1 (1.2) split the pair.** Behind the summary the HealthKit step was
+    ///   skipped on almost every foreground (the summary's request alone
+    ///   outlasts 250 ms), so the day totals and pulse buckets only reached the
+    ///   server on "Sync all" (#66, HealthLog#1173). The step no longer does the
+    ///   sweep: it hands one coalesced `.foreground` pass to
+    ///   ``DetachedHealthSyncRunner`` and returns, so it costs the budget
+    ///   nothing and runs as its own leg from the first tick. The pass then has
+    ///   its own budget and outlives the deadline's cancellation.
     static let shape: [[ForegroundMember]] = [
         [.medicationLoad, .badgeRefresh],
-        [.dashboardSummary, .healthKitStats],
+        [.dashboardSummary],
+        [.healthKitStats],
         [.webDeletionReconcile],
         [.focusFilter],
         [.networkRevalidate],
@@ -363,7 +373,8 @@ enum ForegroundPassPlan {
         /// The foreground HealthKit route — one `HealthSyncTrigger.foreground`
         /// pass per genuine foreground, self-throttled inside the container.
         /// Receiving is READING, so it gates on "has the auth sheet ever run",
-        /// never on the write-derived state (#66 follow-up).
+        /// never on the write-derived state (#66 follow-up). V1: this only
+        /// starts the detached pass; it does not wait for it.
         private var healthKitStats: ForegroundWork {
             { [container, hkReadiness] _ in
                 let everAsked = await MainActor.run { hkReadiness.hasEverRequestedAuthorization }

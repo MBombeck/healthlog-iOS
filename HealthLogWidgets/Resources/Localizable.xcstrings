@@ -129,13 +129,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nächste Dosis – Genommen"
+            "value": "Nächste Dosis: genommen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Next dose – Taken"
+            "value": "Next dose: taken"
           }
         }
       }
@@ -913,13 +913,13 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nicht aktuell – App öffnen"
+            "value": "Nicht aktuell, App öffnen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Out of date – open app"
+            "value": "Out of date, open app"
           }
         }
       }

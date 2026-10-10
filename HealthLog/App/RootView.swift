@@ -481,6 +481,9 @@ struct RootView: View {
     private func handle(scenePhase newPhase: ScenePhase) {
         switch newPhase {
         case .background, .inactive:
+            // V1 — work that carries no trigger of its own is labelled by the
+            // app state, so a late post after a wake is no longer `foreground`.
+            if newPhase == .background { SyncTriggerContext.shared.noteApplicationState(backgrounded: true) }
             // J1 / F3 — only `.background` starts the lock clock; `.inactive`
             // (a system dialog over the app, or the Face ID sheet itself) does
             // not. `lockBusy` keeps the lock's own sheet from re-arming it.
@@ -499,6 +502,7 @@ struct RootView: View {
             // marker is pending. Synchronous and router-bound, so it stays the
             // scene handler's own statement rather than a pass member.
             consumePendingCaptureRequestIfAuthenticated()
+            SyncTriggerContext.shared.noteApplicationState(backgrounded: false)
             // 09-06 — everything else this tick used to fan out into a dozen
             // free-standing `Task { … }` siblings now runs as one bounded,
             // ordered, fenced pass. The coordinator opens and closes

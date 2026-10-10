@@ -127,7 +127,7 @@ struct ThresholdNudgeContent: Equatable {
         return trimmedUnit.isEmpty ? numberText : "\(numberText) \(trimmedUnit)"
     }
 
-    /// Format the range "<low>–<high>" / "≥ <low>" / "≤ <high>" depending on
+    /// Format the range "<low> to <high>" / "≥ <low>" / "≤ <high>" depending on
     /// which bounds exist. Pure presentation of the user/server-defined bounds —
     /// no invented values.
     static func formatRange(low: Double?, high: Double?) -> String {
@@ -136,7 +136,7 @@ struct ThresholdNudgeContent: Equatable {
         }
         switch (low, high) {
         case let (low?, high?):
-            return "\(fmt(low))–\(fmt(high))"
+            return HLNumberFormat.range(fmt(low), fmt(high))
         case let (low?, nil):
             return String(localized: "threshold.nudge.range.atLeast \(fmt(low))")
         case let (nil, high?):

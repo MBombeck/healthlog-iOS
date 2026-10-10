@@ -103,6 +103,11 @@ jobs:
           # unreferenzierte Schluessel (gegen Server-, Dynamik- und
           # Test-Allowlist), fehlende DE/EN-Uebersetzungen und Mojibake.
           scripts/check-strings.sh
+          # U5 (1.1.1) — no "·", "—", "–", "→" or inline "•" in anything a
+          # user reads: every catalog value (all plural variants), the
+          # permission prompts and the Swift-composed strings. Self-test first.
+          python3 scripts/check-visible-punctuation.py --self-test
+          python3 scripts/check-visible-punctuation.py
 
       - name: Generate Xcode project
         run: xcodegen

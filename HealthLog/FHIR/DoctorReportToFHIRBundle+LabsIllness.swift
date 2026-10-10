@@ -440,7 +440,7 @@ extension DoctorReportToFHIRBundle {
            let quantity = makeQuantity(value: Double(impact), ucum: UCUMUnit(unit: "{score}"))
         {
             let code = CodeableConcept()
-            code.text = FHIRString("Functional impact (0–3)").asPrimitive()
+            code.text = FHIRString("Functional impact (0 to 3)").asPrimitive()
             let obs = Observation(code: code, status: ObservationStatus.final.asPrimitive())
             obs.id = FHIRString(UUID().uuidString.lowercased()).asPrimitive()
             obs.category = [makeCategoryConcept(.activity)]
