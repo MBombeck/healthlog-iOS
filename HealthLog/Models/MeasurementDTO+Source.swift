@@ -84,6 +84,11 @@ public enum ServerMeasurementSource: String, Codable, Sendable, CaseIterable {
     /// List-Decoder jede EXTERNAL-Zeile still (gleiche Failure-Mode wie
     /// COMPUTED #42 und STRAVA/OURA/POLAR/NIGHTSCOUT #46).
     case external = "EXTERNAL"
+    /// Health Connect (Android), Server v1.42.0. Rows
+    /// come only from the web Health Connect import; no client write path
+    /// names it (not in `WRITABLE_MEASUREMENT_SOURCES`). Read-only here like
+    /// every other external source.
+    case healthConnect = "HEALTH_CONNECT"
     case import_ = "IMPORT"
     /// Audit B-4 — a `MeasurementSource` this build does not know.
     ///
@@ -112,6 +117,7 @@ public extension ServerMeasurementSource {
         case .oura: .oura
         case .polar: .polar
         case .nightscout: .nightscout
+        case .healthConnect: .healthConnect
         case .telegram: .telegram
         case .mcp: .mcp
         case .external: .external
@@ -136,6 +142,7 @@ public extension MeasurementSource {
         case .oura: .oura
         case .polar: .polar
         case .nightscout: .nightscout
+        case .healthConnect: .healthConnect
         case .telegram: .telegram
         case .mcp: .mcp
         case .external: .external

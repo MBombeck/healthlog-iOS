@@ -94,8 +94,8 @@ struct Phase8PrivacyDeltaTests {
     func phase8AddsNoCollectionSurface() throws {
         #if canImport(HealthKit)
             #expect(
-                HealthLogSampleTypeRegistry.expectedCount == 35,
-                "the frozen sample-type registry may not grow here"
+                HealthLogSampleTypeRegistry.baseExpectedCount == 35,
+                "the frozen sample-type registry may not grow here (1.2 V4 adds RMSSD only as an OS-gated member)"
             )
         #endif
 

@@ -109,7 +109,7 @@
 
     /// Records the change subscription and lets a test fire the signal by hand.
     final class RecordingObserver: HealthSampleChangeObserving, Sendable {
-        private let handler = Mutex<(@Sendable (String) -> Void)?>(nil)
+        private let handler = Mutex<(@Sendable (String) async -> Void)?>(nil)
         private let started = Mutex<[String]>([])
         private let stopped = Mutex<Bool>(false)
 
@@ -123,7 +123,7 @@
 
         func startObserving(
             _ typeIdentifiers: [String],
-            onChange: @escaping @Sendable (String) -> Void
+            onChange: @escaping @Sendable (String) async -> Void
         ) async {
             started.withLock { $0 = typeIdentifiers }
             handler.withLock { $0 = onChange }
@@ -135,7 +135,14 @@
         }
 
         func signal(_ typeIdentifier: String) {
-            handler.withLock { $0 }?(typeIdentifier)
+            guard let handler = handler.withLock({ $0 }) else { return }
+            Task { await handler(typeIdentifier) }
+        }
+
+        /// V1 — the whole delivery, awaited, the way the HealthKit observer
+        /// awaits it before calling its completion handler.
+        func deliver(_ typeIdentifier: String) async {
+            await handler.withLock { $0 }?(typeIdentifier)
         }
     }
 

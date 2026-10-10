@@ -151,28 +151,7 @@ extension AppContainer {
             },
             dailyStatistics: { context in
                 await admitted(.dailyStatistics, admission) {
-                    guard let sync = handles.dailyStats else { return .unsupported(.dailyStatistics) }
-                    // A short wake stays on today. Every other pass carries the
-                    // v0.7.0 W-STEPS Layer-2 one-shot the removed anchor-sweep
-                    // hook used to own: the first non-incremental sweep after
-                    // onboarding honours the operator-chosen backfill window
-                    // (`.allTime` → ~10y) so "Schritte alle Daten" has historical
-                    // day-rows on day one; every later sweep is the cheap 7-day
-                    // catch-up.
-                    let lookback = context.budget.incrementalOnly
-                        ? 1
-                        : dailyStatsLookbackForNextSweep(keychain: keychain)
-                    let completed = await sync.triggerDailyStatsSync(lookbackDays: lookback)
-                    // v0.7.1 M-3 — burn the one-shot flag ONLY after the sync
-                    // returns; Build 273 (A8) — and only if it COMPLETED. A
-                    // held or killed sweep returned Void before, and the flag
-                    // was burnt anyway.
-                    if shouldBurnDailyStatsAllTimeBackfill(
-                        incrementalOnly: context.budget.incrementalOnly, completed: completed
-                    ) {
-                        markDailyStatsAllTimeBackfillCompleted(keychain: keychain)
-                    }
-                    return .ran(.dailyStatistics)
+                    await runDailyStatistics(handles.dailyStats, keychain: keychain, context: context)
                 }
             },
             heartRateBuckets: { context in
@@ -228,6 +207,37 @@ extension AppContainer {
                     : HealthSyncCapabilityResult(capability: .outboxDrain, disposition: .deferred)
             }
         )
+    }
+
+    /// The `dailyStatistics` capability for one pass.
+    ///
+    /// A short wake (AppRefresh, silent push) reads today and yesterday
+    /// (`lookbackDays: 1`). Every other pass carries the v0.7.0 W-STEPS Layer-2
+    /// one-shot the removed anchor-sweep hook used to own: the first
+    /// non-incremental sweep after onboarding honours the operator-chosen
+    /// backfill window (`.allTime` → ~10y) so "Schritte alle Daten" has
+    /// historical day-rows on day one; every later sweep is the cheap 7-day
+    /// catch-up. V1 moved it out of the registry so a test can run the
+    /// production adapter.
+    static func runDailyStatistics(
+        _ sync: (any HealthKitDailyStatsSyncing)?,
+        keychain: KeychainStoring,
+        context: HealthSyncRunContext
+    ) async -> HealthSyncCapabilityResult {
+        guard let sync else { return .unsupported(.dailyStatistics) }
+        let lookback = context.budget.incrementalOnly
+            ? 1
+            : dailyStatsLookbackForNextSweep(keychain: keychain)
+        let completed = await sync.triggerDailyStatsSync(lookbackDays: lookback)
+        // v0.7.1 M-3 — burn the one-shot flag ONLY after the sync returns;
+        // Build 273 (A8) — and only if it COMPLETED. A held or killed sweep
+        // returned Void before, and the flag was burnt anyway.
+        if shouldBurnDailyStatsAllTimeBackfill(
+            incrementalOnly: context.budget.incrementalOnly, completed: completed
+        ) {
+            markDailyStatsAllTimeBackfillCompleted(keychain: keychain)
+        }
+        return .ran(.dailyStatistics)
     }
 
     /// The diagnostics provenance a workout pass carries, per wake.

@@ -70,6 +70,12 @@ public extension HKSyncDiagnostics {
         }
         noteActivity(at: date)
         persistHealthSync()
+        // U1 (#16) — a pass that settled items reached the server. Most
+        // capabilities report `ran` without counts and are stamped by their own
+        // recorders instead; this catches the ones that do count.
+        if snapshot.capabilities.contains(where: { $0.itemsSettled > 0 }) {
+            noteServerAcceptance(at: date)
+        }
     }
 
     /// Record the two "this account is still owed N things" counts.

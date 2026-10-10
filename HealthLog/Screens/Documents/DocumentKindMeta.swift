@@ -8,7 +8,7 @@ enum DocumentKindMeta {
     /// The fixed display order (web `DOCUMENT_KIND_ORDER`).
     static let order: [DocumentKind] = [
         .doctorReport, .labResult, .imaging, .dischargeLetter,
-        .prescription, .referral, .vaccination, .insurance, .other
+        .prescription, .sickNote, .referral, .vaccination, .insurance, .other
     ]
 
     /// The localized label key for a kind (`documents.kind.<KIND>`, de + en).
@@ -19,6 +19,7 @@ enum DocumentKindMeta {
         case .labResult: "documents.kind.labResult"
         case .imaging: "documents.kind.imaging"
         case .prescription: "documents.kind.prescription"
+        case .sickNote: "documents.kind.sickNote"
         case .referral: "documents.kind.referral"
         case .insurance: "documents.kind.insurance"
         case .vaccination: "documents.kind.vaccination"
@@ -34,6 +35,7 @@ enum DocumentKindMeta {
         case .labResult: "testtube.2"
         case .imaging: "photo.on.rectangle"
         case .prescription: "pills"
+        case .sickNote: "thermometer.medium"
         case .referral: "arrow.left.arrow.right"
         case .insurance: "checkmark.shield"
         case .vaccination: "syringe"

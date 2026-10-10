@@ -57,6 +57,9 @@ public enum HealthKitBackgroundDeliveryPolicy {
     /// were never demoted and stay here — genuinely time-sensitive, low-volume.
     public static let vitalSignIdentifiers: Set<String> = [
         "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+        // 1.2 / V4 — RMSSD (iOS 27) is delivered like SDNN. It only arms where
+        // the registry holds it, i.e. where the system resolves the type.
+        "HKQuantityTypeIdentifierHeartRateVariabilityRMSSD",
         "HKQuantityTypeIdentifierRestingHeartRate",
         "HKQuantityTypeIdentifierOxygenSaturation",
         "HKQuantityTypeIdentifierBodyTemperature",

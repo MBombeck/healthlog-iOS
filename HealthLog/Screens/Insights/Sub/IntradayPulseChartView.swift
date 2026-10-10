@@ -197,8 +197,10 @@ struct IntradayPulseChartView: View {
             return String(localized: "insights.intraday.empty")
         }
         let readings = day.series.reduce(0) { $0 + $1.count }
-        let span = "\(IntradayPulseMath.minuteLabel(first.startMinute))–"
-            + IntradayPulseMath.minuteLabel(last.startMinute + day.bucketMinutes)
+        let span = HLNumberFormat.range(
+            IntradayPulseMath.minuteLabel(first.startMinute),
+            IntradayPulseMath.minuteLabel(last.startMinute + day.bucketMinutes)
+        )
         if let baseline = day.drawableBaseline {
             return String(
                 localized: "insights.intraday.a11y.withBaseline \(readings) \(span) \(Int(baseline.rounded()))"

@@ -140,6 +140,19 @@
             HealthLogSampleTypeRegistry.knownIdentifiers.sorted()
         }
 
+        /// 1.2 / V4 — the part of `identifiers` the configured server stores
+        /// yet (``HealthKitServerTypeGate``). A server before v1.42 would
+        /// answer RMSSD with `skipped(unmappable_identifier)`; instead the type
+        /// is neither queried nor observed, its cursor stays where it is, and
+        /// the first pass after the upgrade walks the backfill window like any
+        /// new type. Nothing is parked and Sync Diagnostics stays quiet.
+        static func serverCollectable(
+            _ identifiers: [String],
+            serverAccepts: (String) -> Bool = { HealthKitServerTypeGate.serverAccepts($0) }
+        ) -> [String] {
+            identifiers.filter(serverAccepts)
+        }
+
         private let collector: AnchoredHealthSampleCollector
         private let cursors: DurableHealthCursorStore
         private let admission: @Sendable () throws -> HealthSyncAuthenticatedLease
@@ -148,6 +161,8 @@
         /// only those this build has not offered). `nil` where no uploader is
         /// composed; the register then simply waits.
         private let reoffer: (@Sendable (HealthSyncAuthenticatedLease, Bool) async -> HealthKitSkippedRowReoffer.Summary)?
+        /// V1 — where ``HealthCollectionRotation`` keeps its offset.
+        private let defaultsProvider: @Sendable () -> UserDefaults
 
         /// Owners whose partitions have already been established in this process.
         /// The store refuses a repeated migration anyway; this only avoids walking
@@ -160,13 +175,15 @@
             cursors: DurableHealthCursorStore,
             admission: @escaping @Sendable () throws -> HealthSyncAuthenticatedLease,
             cutoff: @escaping @Sendable () -> Date,
-            reoffer: (@Sendable (HealthSyncAuthenticatedLease, Bool) async -> HealthKitSkippedRowReoffer.Summary)? = nil
+            reoffer: (@Sendable (HealthSyncAuthenticatedLease, Bool) async -> HealthKitSkippedRowReoffer.Summary)? = nil,
+            defaultsProvider: @escaping @Sendable () -> UserDefaults = { .standard }
         ) {
             self.collector = collector
             self.cursors = cursors
             self.admission = admission
             self.cutoff = cutoff
             self.reoffer = reoffer
+            self.defaultsProvider = defaultsProvider
         }
 
         /// One bounded pass for `trigger`, with a name for what it did.
@@ -207,17 +224,30 @@
             if !observing {
                 observing = true
                 await collector.startObserving(
-                    Self.observedTypeIdentifiers,
+                    Self.serverCollectable(Self.observedTypeIdentifiers),
                     notBefore: window,
                     admitting: admission
                 )
             }
 
-            await collector.collect(
-                typeIdentifiers: Self.collectedTypeIdentifiers,
+            // V1 (1.2) — a pass that runs out of time hands the start of the
+            // next one to the first type it did not finish (HealthLog#1173).
+            // V4: only the types this server can store take part.
+            let defaults = defaultsProvider()
+            let types = HealthCollectionRotation.ordered(
+                Self.serverCollectable(Self.collectedTypeIdentifiers),
+                defaults: defaults
+            )
+            let results = await collector.collect(
+                typeIdentifiers: types,
                 trigger: trigger,
                 notBefore: window,
                 requiring: lease
+            )
+            HealthCollectionRotation.advance(
+                finished: results.prefix { $0.disposition != .expired }.count,
+                of: types.count,
+                defaults: defaults
             )
             // #113 — rows the server refused under an older build get one new
             // offer per build. After that first pass this is one register read.

@@ -201,6 +201,7 @@ struct DashboardMetricsHost: View {
     private func orderedMetrics(_ metrics: [DashboardMetric]) -> [DashboardMetric] {
         DashboardMetricOrdering.orderedMetrics(
             metrics,
+            digest: insights.comprehensive?.digest,
             store: store,
             layoutStore: layoutStore,
             container: container

@@ -75,6 +75,7 @@ struct MeasurementRow: View {
         case .oura: "Oura"
         case .polar: "Polar"
         case .nightscout: "Nightscout"
+        case .healthConnect: "Health Connect"
         case .telegram: "Telegram"
         case .mcp: "MCP"
         case .external: String(localized: "measurement.source.external")
@@ -255,7 +256,7 @@ struct MeasurementSummaryRow: View {
         if let secMin = stats.secondaryMin, let secMax = stats.secondaryMax {
             let minPair = MetricValueFormatter.formatBloodPressure(systolic: min, diastolic: secMin, units: units)
             let maxPair = MetricValueFormatter.formatBloodPressure(systolic: max, diastolic: secMax, units: units)
-            return "Min \(minPair) · Max \(maxPair) \(unitSuffix)"
+            return "Min \(minPair), Max \(maxPair) \(unitSuffix)"
         }
         return "Min \(format(min)) / Max \(format(max)) \(unitSuffix)"
     }

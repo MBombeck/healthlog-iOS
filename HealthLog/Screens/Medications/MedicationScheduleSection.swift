@@ -77,7 +77,7 @@ struct ScheduleSection: View {
             .flatMap { $0 }
             .filter { seen.insert($0.timeOfDay).inserted }
             .map { window in
-                "\(window.timeOfDay) · " + String(
+                "\(window.timeOfDay): " + String(
                     format: String(localized: "med.schedule.dose_window"),
                     window.start,
                     window.end
@@ -120,7 +120,7 @@ struct ScheduleSection: View {
         schedule.times
             .sorted()
             .map { String(format: "%02d:%02d", $0.hour, $0.minute) }
-            .joined(separator: " · ")
+            .joined(separator: ", ")
     }
 
     /// v0.11 perf: hoist the weekday-symbol formatter to a single shared
@@ -143,6 +143,6 @@ struct ScheduleSection: View {
             // are also Sunday-first → indexing matches 1:1.
             symbols?[day.rawValue] ?? formatter.shortWeekdaySymbols[day.rawValue]
         }
-        return labels.joined(separator: " · ")
+        return labels.joined(separator: ", ")
     }
 }

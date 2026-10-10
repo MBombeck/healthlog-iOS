@@ -91,6 +91,13 @@
         /// exercise the hand-off).
         private var hrBucketKick: (@Sendable () -> Void)?
 
+        /// V1 (1.2, #66 / HealthLog#1173) — asks the daily-statistics
+        /// coordinator for a sweep of today and yesterday, labelled with the
+        /// page's trigger. Called after every page that handed cumulative rows
+        /// to the statistics path: a step delivery used to be dropped here and
+        /// replaced by nothing until the next full pass.
+        private var dailyStatsKick: (@Sendable (SyncTrigger) async -> Void)?
+
         /// Composition-root-injected durable-retry queue (Phase 07 Wave 2). nil
         /// until ``attachUploader`` runs and in unit tests that do not exercise
         /// the retry path.
@@ -143,13 +150,15 @@
             hrCutoverGate: (@Sendable (Date) -> Bool)? = nil,
             retryQueue: (any HealthSyncBatchRetryEnqueuing)? = nil,
             skipRegister: HealthKitSkippedRowRegister? = nil,
-            hrBucketKick: (@Sendable () -> Void)? = nil
+            hrBucketKick: (@Sendable () -> Void)? = nil,
+            dailyStatsKick: (@Sendable (SyncTrigger) async -> Void)? = nil
         ) {
             self.uploader = uploader
             self.featureFlags = featureFlags
             self.retryQueue = retryQueue
             self.skipRegister = skipRegister
             self.hrBucketKick = hrBucketKick
+            self.dailyStatsKick = dailyStatsKick
             if let uploader {
                 let waiters = uploaderWaiters
                 uploaderWaiters.removeAll()
@@ -224,8 +233,18 @@
         ) async -> HealthSyncPageOutcome {
             let gate = wireGate
             let mapping = gate.map(samples)
-            if mapping.heartRateHandedOff > 0 {
-                hrBucketKick?()
+            // CU-21 (1) — a delivery that arrives WHILE the app is backgrounded
+            // IS a background sweep: iOS woke the process for it. Read once,
+            // before anything posts or is kicked, so both carry it.
+            let backgrounded = await Self.isApplicationBackgrounded()
+            let trigger: SyncTrigger = backgrounded ? .background : SyncTriggerContext.shared.current
+            if mapping.heartRateHandedOff > 0 || mapping.cumulativeHandedOff > 0 {
+                // The kicked sweeps run in their own tasks; the binding travels
+                // into them, so they post under this page's trigger.
+                await SyncTriggerContext.shared.bind(trigger) {
+                    if mapping.heartRateHandedOff > 0 { hrBucketKick?() }
+                    if mapping.cumulativeHandedOff > 0 { await dailyStatsKick?(trigger) }
+                }
             }
 
             guard !mapping.entries.isEmpty else {
@@ -269,12 +288,10 @@
                 skipRegister: skipRegister
             )
 
-            // CU-21 (1) — a delivery that arrives WHILE the app is backgrounded IS
-            // a background sweep: iOS woke the process for it. The state is read
-            // before the upload so the wire field is set in time. In the
-            // foreground no window is opened, so an enclosing BGTask window is not
-            // overwritten.
-            let (outcome, tally) = if await Self.isApplicationBackgrounded() {
+            // CU-21 (1) — in the background the page posts under `.background`.
+            // In the foreground no window is opened, so an enclosing BGTask
+            // window or a pass binding is not overwritten.
+            let (outcome, tally) = if backgrounded {
                 await SyncTriggerContext.shared.withTrigger(.background) {
                     await consumption.transmitReporting(mapping, admitted: lease)
                 }

@@ -292,7 +292,7 @@ struct VorsorgeReminderDetailSheet: View {
             return MetricValueFormatter.formatScalar(point.value, kind: kind, units: units)
         case .screening:
             let band = bandByID[point.id] ?? ""
-            return band.isEmpty ? "\(Int(point.value))" : "\(Int(point.value)) · \(band)"
+            return band.isEmpty ? "\(Int(point.value))" : "\(Int(point.value)) (\(band))"
         case .freeText:
             return "\(Int(point.value))"
         }

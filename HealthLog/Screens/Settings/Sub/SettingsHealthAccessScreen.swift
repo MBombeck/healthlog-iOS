@@ -419,6 +419,8 @@ enum HealthAccessTypeNaming {
         "HKQuantityTypeIdentifierHeartRate": "health.permissions.type.heartRate",
         "HKQuantityTypeIdentifierRestingHeartRate": "health.permissions.type.restingHeartRate",
         "HKQuantityTypeIdentifierHeartRateVariabilitySDNN": "health.permissions.type.hrv",
+        // 1.2 / V4 — on the list from iOS 27 on, where the read set holds it.
+        "HKQuantityTypeIdentifierHeartRateVariabilityRMSSD": "health.permissions.type.hrvRmssd",
         "HKQuantityTypeIdentifierVO2Max": "health.permissions.type.vo2Max",
         "HKQuantityTypeIdentifierStepCount": "health.permissions.type.stepCount",
         "HKQuantityTypeIdentifierActiveEnergyBurned": "health.permissions.type.activeEnergy",

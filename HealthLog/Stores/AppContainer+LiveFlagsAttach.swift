@@ -21,7 +21,7 @@ extension AppContainer {
         deletionReconciler: (any MeasurementDeletionReconciler)?,
         retryQueue: OutboxQueue,
         authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry,
-        hrBucketSync: (any HealthKitHRBucketSyncing)? = nil
+        aggregates: (hrBuckets: (any HealthKitHRBucketSyncing)?, dailyStats: (any HealthKitDailyStatsSyncing)?) = (nil, nil)
     ) {
         // v0.5.5 W-A3: hand the live FeatureFlagsServicing to HealthKitService
         // so it can honour the `enableDailyStats` gate. (The former Spezi-cutover
@@ -68,8 +68,10 @@ extension AppContainer {
                 // server did not terminally accept.
                 retryQueue: retryQueue,
                 // #12 — the per-sample path requests a bucket sweep whenever
-                // it hands heart rate over.
-                hrBucketSync: hrBucketSync
+                // it hands heart rate over; V1 — and a recent statistics sweep
+                // whenever it hands a cumulative type over.
+                hrBucketSync: aggregates.hrBuckets,
+                dailyStatsSync: aggregates.dailyStats
             )
             // Phase 07 Wave 2 — install the app-owned sample collection. The
             // Spezi `CollectSamples` declarations it replaces were removed in the
@@ -79,10 +81,26 @@ extension AppContainer {
                 keychain: keychainForSpezi,
                 registry: authenticatedSessionRegistry,
                 retryQueue: retryQueue,
-                uploader: uploader
+                uploader: uploader,
+                deliveryFollowUp: Self.deliveryFollowUp(aggregates)
             )
         #else
-            _ = hrBucketSync
+            _ = aggregates
         #endif
+    }
+
+    /// **V1 (1.2)** — what a HealthKit delivery waits for before it hands back
+    /// its completion handler: the sweeps its pages requested. Without the
+    /// wait iOS may suspend the process the moment the handler returns, with
+    /// the day totals still unsent.
+    nonisolated static func deliveryFollowUp(
+        _ aggregates: (hrBuckets: (any HealthKitHRBucketSyncing)?, dailyStats: (any HealthKitDailyStatsSyncing)?)
+    ) -> @Sendable () async -> Void {
+        { [hrBuckets = aggregates.hrBuckets, dailyStats = aggregates.dailyStats] in
+            // Both run in their own tasks already; waiting one after the other
+            // costs the longer of the two.
+            await dailyStats?.awaitRequestedDailyStatsSweeps()
+            await hrBuckets?.awaitHRBucketSweep()
+        }
     }
 }

@@ -95,11 +95,11 @@ extension DashboardStore {
     public func synthesiseMissingTiles(layout: DashboardWidgetLayout) {
         guard let current = summary else { return }
         let existingKinds: Set<MetricKind> = Set(current.metrics.map(\.kind))
-        let synthesised: [DashboardMetric] = layout.widgets.compactMap { widget -> DashboardMetric? in
-            guard widget.effectiveTileVisible,
-                  let kind = DashboardWidgetId.metricKind(forId: widget.id),
-                  !existingKinds.contains(kind) else { return nil }
-            return Self.placeholder(for: kind, order: widget.order)
+        // #20 — the rows include the resting series a visible pulse tile may show
+        // (`DashboardPulseTileSource.tileRows`), even while its own tile is hidden.
+        let synthesised: [DashboardMetric] = DashboardPulseTileSource.tileRows(in: layout).compactMap { row in
+            guard !existingKinds.contains(row.kind) else { return nil }
+            return Self.placeholder(for: row.kind, order: row.order)
         }
         guard !synthesised.isEmpty else { return }
         let merged = current.metrics + synthesised

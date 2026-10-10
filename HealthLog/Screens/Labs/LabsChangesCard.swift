@@ -115,7 +115,7 @@ private struct ChangeRow: View {
         }
         let signed = (change.delta > 0 ? "+" : "") + Self.format(change.delta)
         let previous = Self.format(change.previous)
-        return "\(glyph) \(signed)  ·  \(String(localized: "clinicalSignals.labs.previous")) \(previous)"
+        return "\(glyph) \(signed), \(String(localized: "clinicalSignals.labs.previous")) \(previous)"
     }
 
     private var accessibilityText: String {

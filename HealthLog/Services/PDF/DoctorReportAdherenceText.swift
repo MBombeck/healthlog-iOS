@@ -26,8 +26,8 @@ extension LocaleText {
         }
         let percent = HLNumberFormat.percent(rate, locale: Locale(identifier: locale.foundationIdentifier))
         switch locale {
-        case .de: return "\(row.medicationName): \(taken) von \(expected) eingenommen (\(percent)) · \(windowDays) Tage"
-        case .en: return "\(row.medicationName): \(taken) of \(expected) taken (\(percent)) · \(windowDays) days"
+        case .de: return "\(row.medicationName): \(taken) von \(expected) eingenommen (\(percent)) in \(windowDays) Tagen"
+        case .en: return "\(row.medicationName): \(taken) of \(expected) taken (\(percent)) in \(windowDays) days"
         }
     }
 

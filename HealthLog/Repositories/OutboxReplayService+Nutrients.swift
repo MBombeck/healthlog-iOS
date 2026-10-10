@@ -15,7 +15,7 @@ extension OutboxReplayService {
     /// build never busy-loops.
     func dispatchNutrients(_ op: OutboxQueue.Operation) async throws {
         guard let nutrientReadRepo else {
-            throw HLError.unknown("Op-Kind \(op.kind.rawValue) — nutrientReadRepo unwired")
+            throw HLError.unknown("Op-Kind \(op.kind.rawValue): nutrientReadRepo unwired")
         }
         switch op.kind {
         case .logNutrientWater:

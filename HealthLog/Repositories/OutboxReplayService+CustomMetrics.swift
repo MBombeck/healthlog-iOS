@@ -18,7 +18,7 @@ extension OutboxReplayService {
     /// lands on the real metric instead of 404-ing into the dead-letter table.
     func dispatchCustomMetrics(_ op: OutboxQueue.Operation) async throws {
         guard let customMetricsRepo else {
-            throw HLError.unknown("Op-Kind \(op.kind.rawValue) — customMetricsRepo unwired")
+            throw HLError.unknown("Op-Kind \(op.kind.rawValue): customMetricsRepo unwired")
         }
         let key = op.idempotencyKey
         switch op.kind {

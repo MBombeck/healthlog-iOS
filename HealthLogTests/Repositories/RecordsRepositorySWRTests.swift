@@ -90,10 +90,16 @@ struct RecordsRepositorySWRTests {
                 Self.envelope(#"{"results":[]}"#)
             )
         }
-        let online = try LabsRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: makeSWR(cache: cache, online: true))
+        // 1.2 V5 — drain the coordinator that WROTE the row. A freshly made
+        // coordinator owns no pending persist, so draining one returned at once
+        // and the offline read below raced the detached cache write (red under
+        // load in INT-J and U1). The writer's drain awaits the write itself.
+        let writer = makeSWR(cache: cache, online: true)
+        let online = try LabsRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: writer)
         _ = try await online.labs(limit: 500)
-        await makeSWR(cache: cache, online: true).drainPendingWrites()
+        await writer.drainPendingWrites()
         #expect(calls == 1)
+        #expect(await cache.read(.labsResults, as: ListLabResultsResponse.self) != nil, "the row must be on disk before going offline")
         let offline = try LabsRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: makeSWR(cache: cache, online: false))
         _ = try await offline.labs(limit: 500)
         #expect(calls == 1, "offline serve must skip the network")

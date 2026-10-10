@@ -89,7 +89,7 @@ struct ActiveMedicationsSectionScheduleTests {
             TimeOfDay(hour: 8, minute: 0),
             TimeOfDay(hour: 20, minute: 0)
         ])
-        #expect(ActiveMedicationsSection.scheduleSummary(schedule) == "08:00 · 20:00")
+        #expect(ActiveMedicationsSection.scheduleSummary(schedule) == "08:00, 20:00")
     }
 
     @Test("Times are sorted ascending regardless of input order")
@@ -99,7 +99,7 @@ struct ActiveMedicationsSectionScheduleTests {
             TimeOfDay(hour: 8, minute: 0),
             TimeOfDay(hour: 13, minute: 15)
         ])
-        #expect(ActiveMedicationsSection.scheduleSummary(schedule) == "08:00 · 13:15 · 22:30")
+        #expect(ActiveMedicationsSection.scheduleSummary(schedule) == "08:00, 13:15, 22:30")
     }
 
     @Test("Empty schedule yields an empty string (no separator artefacts)")

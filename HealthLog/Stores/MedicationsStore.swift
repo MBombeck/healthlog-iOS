@@ -675,7 +675,7 @@ public final class MedicationsStore {
                 archivedAt: preserved,
                 trackIntake: row.trackIntake,
                 recordedSchedule: row.recordedSchedule
-            )
+            ).carryingCategoryLabel(row.categoryLabel)
         }
     }
 

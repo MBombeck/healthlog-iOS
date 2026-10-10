@@ -10,7 +10,7 @@ extension OutboxReplayService {
     /// replay-after-landed within 24h).
     func dispatchMentalHealth(_ op: OutboxQueue.Operation) async throws {
         guard let mentalHealthRepo else {
-            throw HLError.unknown("Op-Kind \(op.kind.rawValue) — mentalHealthRepo unwired")
+            throw HLError.unknown("Op-Kind \(op.kind.rawValue): mentalHealthRepo unwired")
         }
         switch op.kind {
         case .createMentalHealthAssessment:

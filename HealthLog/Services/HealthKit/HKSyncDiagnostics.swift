@@ -88,6 +88,12 @@ public final class HKSyncDiagnostics {
     /// structurally absent from this type.
     public private(set) var workout = WorkoutSnapshot()
 
+    /// **#17** — is an older workout history still being imported, and about
+    /// how much is left. `nil` until the importer has proven either way. Kept
+    /// outside ``WorkoutSnapshot`` so a stored snapshot from an older build
+    /// still decodes. See `HKSyncDiagnostics+WorkoutHistory.swift`.
+    public internal(set) var workoutHistoryImport: WorkoutHistoryImportStatus?
+
     /// **Phase 07 / plan 07-07** — what the last orchestrated pass did, plus the
     /// two withheld-item counts that had no operator surface before.
     ///
@@ -95,6 +101,19 @@ public final class HKSyncDiagnostics {
     /// "did anything refuse" and "how much is this account still owed" have
     /// cross-launch answers, and a cold-launch reset was exactly what hid them.
     public internal(set) var healthSync = HealthSyncSnapshot()
+
+    /// **U1 (#16)** — the last moment the server accepted Apple Health data
+    /// from this device, on any path that hears the server's answer (sample
+    /// observer, daily statistics, workouts, an orchestrated pass that settled
+    /// items), and whether the app was in the background then.
+    ///
+    /// This is what `SyncStateStore.lastSync` reads next to the handshake:
+    /// background uploads used to update nothing the user could see, so the
+    /// last-sync time looked older than the data on the server. Persisted
+    /// (a timestamp and a channel word, no values) so it survives a relaunch;
+    /// `reset()` clears it with the rest. Written only through
+    /// `noteServerAcceptance(at:channel:)` in `+ServerAcceptance`.
+    public internal(set) var lastServerAcceptance: SyncActivity?
 
     /// **#66 P0.1** — the wake channels the diagnostics surface distinguishes.
     /// `observer` is a background-context vital-sign delivery (the six
@@ -169,6 +188,8 @@ public final class HKSyncDiagnostics {
     private static let observerWakeKey = "hl.hksync.lastBackgroundObservationAt"
     private static let workoutKey = "hl.hksync.workout.delivery.v1"
     private static let healthSyncKey = "hl.hksync.pass.v1"
+    private static let workoutHistoryKey = "hl.hksync.workout.history.v1"
+    private static let serverAcceptanceKey = "hl.hksync.lastServerAcceptance.v1"
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -184,16 +205,10 @@ public final class HKSyncDiagnostics {
         lastAppRefreshWakeAt = Self.loadDate(defaults, Self.appRefreshWakeKey)
         lastPushWakeAt = Self.loadDate(defaults, Self.pushWakeKey)
         lastBackgroundObservationAt = Self.loadDate(defaults, Self.observerWakeKey)
-        if let data = defaults.data(forKey: Self.workoutKey),
-           let decoded = try? JSONDecoder().decode(WorkoutSnapshot.self, from: data)
-        {
-            workout = decoded
-        }
-        if let data = defaults.data(forKey: Self.healthSyncKey),
-           let decoded = try? JSONDecoder().decode(HealthSyncSnapshot.self, from: data)
-        {
-            healthSync = decoded
-        }
+        workout = Self.loadJSON(WorkoutSnapshot.self, defaults, Self.workoutKey) ?? WorkoutSnapshot()
+        workoutHistoryImport = Self.loadJSON(WorkoutHistoryImportStatus.self, defaults, Self.workoutHistoryKey)
+        healthSync = Self.loadJSON(HealthSyncSnapshot.self, defaults, Self.healthSyncKey) ?? HealthSyncSnapshot()
+        lastServerAcceptance = Self.loadJSON(SyncActivity.self, defaults, Self.serverAcceptanceKey)
     }
 
     /// Read a persisted `timeIntervalSince1970` back into a `Date?`, treating a
@@ -217,8 +232,12 @@ public final class HKSyncDiagnostics {
         lastPushWakeAt = nil
         lastBackgroundObservationAt = nil
         workout = WorkoutSnapshot()
+        workoutHistoryImport = nil
         healthSync = HealthSyncSnapshot()
+        defaults.removeObject(forKey: Self.workoutHistoryKey)
+        lastServerAcceptance = nil
         defaults.removeObject(forKey: Self.healthSyncKey)
+        defaults.removeObject(forKey: Self.serverAcceptanceKey)
         defaults.removeObject(forKey: Self.triggerAtKey)
         defaults.removeObject(forKey: Self.triggerSourceKey)
         defaults.removeObject(forKey: Self.lastObservationKey)
@@ -313,6 +332,9 @@ public final class HKSyncDiagnostics {
         let skipped = max(0, skipped)
         workout.acceptedTotal += accepted
         workout.skippedTotal += skipped
+        if accepted > 0 {
+            noteServerAcceptance(at: date)
+        }
         if completeAcceptance, accepted > 0 {
             workout.lastCompletedUsefulAt = date
             workout.lastFailure = nil
@@ -345,11 +367,30 @@ public final class HKSyncDiagnostics {
         lastActivityAt = date
     }
 
+    /// Internal so `HKSyncDiagnostics+WorkoutHistory.swift` can persist through
+    /// the same `UserDefaults` handle.
+    func persistWorkoutHistoryImport() {
+        guard let workoutHistoryImport,
+              let data = try? JSONEncoder().encode(workoutHistoryImport) else
+        {
+            defaults.removeObject(forKey: Self.workoutHistoryKey)
+            return
+        }
+        defaults.set(data, forKey: Self.workoutHistoryKey)
+    }
+
     /// Internal so the Phase-07 recorders in `HKSyncDiagnostics+HealthSync.swift`
     /// can persist through the same `UserDefaults` handle.
     func persistHealthSync() {
         guard let data = try? JSONEncoder().encode(healthSync) else { return }
         defaults.set(data, forKey: Self.healthSyncKey)
+    }
+
+    /// Internal so `HKSyncDiagnostics+ServerAcceptance.swift` can persist
+    /// through the same `UserDefaults` handle.
+    func persistServerAcceptance() {
+        guard let data = try? JSONEncoder().encode(lastServerAcceptance) else { return }
+        defaults.set(data, forKey: Self.serverAcceptanceKey)
     }
 
     #if DEBUG
@@ -402,6 +443,9 @@ public final class HKSyncDiagnostics {
         }
         byIdentifier[identifier] = stats
         lastActivityAt = date
+        if samplesUploaded > 0 {
+            noteServerAcceptance(at: date)
+        }
         // W-B182 — persist last-observation timestamp so the cross-launch
         // staleness call survives the cold-launch counter reset.
         persistLastObservation(identifier: identifier, at: date)
@@ -437,6 +481,11 @@ public final class HKSyncDiagnostics {
         stats.lastStatsActionAt = date
         byIdentifier[identifier] = stats
         lastActivityAt = date
+        // The stats path records only after the server answered and the
+        // cache write landed, so every recorded action is an accepted upload.
+        if posted + reposted > 0 {
+            noteServerAcceptance(at: date)
+        }
     }
 
     /// Convenience for the UI: snapshot keyed by `MetricKind` (vs raw HK
@@ -508,9 +557,24 @@ public final class HKSyncDiagnostics {
                 HKQuantityTypeIdentifier.headphoneAudioExposure.rawValue: .audioExposureHeadphone,
                 HKQuantityTypeIdentifier.bodyMassIndex.rawValue: .bmi
             ]
+            // 1.2 / V4 — RMSSD only where the system resolves it, in lockstep
+            // with the read set (`diagnosticsIdentifiersAreInReadSet`).
+            if HeartRateVariabilityRMSSD.sampleType != nil {
+                map[HeartRateVariabilityRMSSD.identifier] = .hrvRMSSD
+            }
             return map
         #else
             return [:]
         #endif
     }()
+}
+
+/// INT-L (1.1.1) — U1 and U2 each added a persisted value to the class; one
+/// decoding helper outside the class body keeps `init` short and the type
+/// under its `type_body_length` budget. A missing or undecodable entry is
+/// `nil`, exactly as the four inline `if let … try?` blocks behaved.
+private extension HKSyncDiagnostics {
+    static func loadJSON<T: Decodable>(_: T.Type, _ defaults: UserDefaults, _ key: String) -> T? {
+        defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(T.self, from: $0) }
+    }
 }

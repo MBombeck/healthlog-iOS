@@ -107,4 +107,18 @@ public enum HLNumberFormat {
         }
         return pattern.replacingCharacters(in: range, with: number)
     }
+
+    /// A closed range spelled out in words: "120 bis 129" / "120 to 129".
+    ///
+    /// U5 (1.1.1) — ranges no longer join their bounds with an en dash ("–"),
+    /// which read as machine-written. The bounds arrive already formatted
+    /// (number, date, time, with or without unit); this only joins them. The
+    /// catalog key is the English text itself, so a process without the app's
+    /// catalog (SPM core tests) still reads "120 to 129".
+    public static func range(_ lower: String, _ upper: String) -> String {
+        String(
+            localized: "\(lower) to \(upper)",
+            comment: "U5 — a closed range, e.g. 120 to 129. First %@ = lower bound, second %@ = upper bound, both already formatted."
+        )
+    }
 }

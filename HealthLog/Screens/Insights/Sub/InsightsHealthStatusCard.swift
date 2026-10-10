@@ -88,7 +88,7 @@ private struct DeviationRow: View {
         let direction = deviation.isAbove
             ? String(localized: "clinicalSignals.healthStatus.deviation.above")
             : String(localized: "clinicalSignals.healthStatus.deviation.below")
-        return "\(direction) · \(band)"
+        return "\(direction), \(band)"
     }
 
     static func format(_ value: Double) -> String {

@@ -12,7 +12,7 @@ extension OutboxReplayService {
     /// soft-delete is tombstone-idempotent; restore foreign-ids are no-ops).
     func dispatchLabs(_ op: OutboxQueue.Operation) async throws {
         guard let labsRepo else {
-            throw HLError.unknown("Op-Kind \(op.kind.rawValue) — labsRepo unwired")
+            throw HLError.unknown("Op-Kind \(op.kind.rawValue): labsRepo unwired")
         }
         let key = op.idempotencyKey
         switch op.kind {
@@ -48,7 +48,7 @@ extension OutboxReplayService {
     /// day-log UPSERT are idempotent).
     func dispatchIllness(_ op: OutboxQueue.Operation) async throws {
         guard let illnessRepo else {
-            throw HLError.unknown("Op-Kind \(op.kind.rawValue) — illnessRepo unwired")
+            throw HLError.unknown("Op-Kind \(op.kind.rawValue): illnessRepo unwired")
         }
         let key = op.idempotencyKey
         switch op.kind {

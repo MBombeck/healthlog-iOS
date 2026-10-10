@@ -80,12 +80,52 @@ enum HKSyncDiagnosticsVocabulary {
     /// „RESPIRATORY_RATE") as the metric's own name. A type this build has no
     /// metric for keeps its server word: the row is a list entry, and ten rows
     /// all titled „Unbekannt" would say less than the word itself.
+    ///
+    /// U1 (#18) — the lookup ignores case and separators, so `heart_rate`,
+    /// `heart-rate` and `HEART_RATE` are one key. `WORKOUTS` (the server's
+    /// pseudo-type from `Workout` rows, `metric-freshness.ts`) has its own word.
+    /// The fallback is no longer the raw identifier but a sentence-cased one
+    /// („HEART_RATE" → „Heart rate"), so no row shouts or shows underscores.
     static func freshnessType(_ raw: String) -> String {
-        if raw == "BLOOD_PRESSURE_DIA" { return MetricKind.bloodPressure.displayName }
-        guard let kind = MetricKind.allCases.first(where: { $0.availabilitySummaryKey == raw }) else {
-            return raw
+        let key = normalizedTypeKey(raw)
+        switch key {
+        case "WORKOUTS", "WORKOUT": return String(localized: "settings.hkdiag.freshness.workouts")
+        case "BLOOD_PRESSURE_DIA": return MetricKind.bloodPressure.displayName
+        default: break
+        }
+        guard let kind = MetricKind.allCases.first(where: { $0.availabilitySummaryKey == key }) else {
+            return prettifiedTypeKey(key)
         }
         return kind.displayName
+    }
+
+    /// Upper case, every run of non-alphanumerics one underscore.
+    static func normalizedTypeKey(_ raw: String) -> String {
+        raw.uppercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .joined(separator: "_")
+    }
+
+    /// „HEART_RATE" → „Heart rate". Empty input reads as „Unbekannt".
+    static func prettifiedTypeKey(_ key: String) -> String {
+        let words = key.split(separator: "_").map { $0.lowercased() }
+        guard let first = words.first else { return unknown }
+        return ([first.prefix(1).uppercased() + first.dropFirst()] + words.dropFirst()).joined(separator: " ")
+    }
+
+    /// U1 (#18) — the workout counters as a sentence: „710 gelesen,
+    /// 710 gesendet, 710 angenommen, 0 abgelehnt". Workouts HealthKit handed
+    /// over that could not be mapped are named only when there are any; the
+    /// old „F · M · S · A · X" line needed a code comment to be read.
+    static func workoutCounts(_ snapshot: HKSyncDiagnostics.WorkoutSnapshot) -> String {
+        let read = snapshot.fetchedTotal
+        let sent = snapshot.sentTotal
+        let accepted = snapshot.acceptedTotal
+        let rejected = snapshot.skippedTotal
+        let sentence = String(localized: "settings.hkdiag.workout_counts \(read) \(sent) \(accepted) \(rejected)")
+        let unmapped = snapshot.fetchedTotal - snapshot.mappedTotal
+        guard unmapped > 0 else { return sentence }
+        return sentence + String(localized: "settings.hkdiag.workout_counts_unmapped \(unmapped)")
     }
 
     /// #12 — the gate that decided the heart-rate bucket path's last outcome,

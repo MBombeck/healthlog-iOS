@@ -186,7 +186,7 @@ struct EnvironmentScreen: View {
     static func dateRange(_ start: String, _ end: String) -> String {
         let s = displayDate(start) ?? start
         let e = displayDate(end) ?? end
-        return "\(s) – \(e)"
+        return HLNumberFormat.range(s, e)
     }
 
     private static let dayKeyFormatter: DateFormatter = {

@@ -311,6 +311,7 @@ public struct SourcePriorityRow: Sendable, Equatable, Identifiable {
         "OURA": "Oura",
         "POLAR": "Polar",
         "NIGHTSCOUT": "Nightscout",
+        "HEALTH_CONNECT": "Health Connect",
         "TELEGRAM": "Telegram",
         "MCP": "MCP",
         "MANUAL": "Manual",
@@ -322,19 +323,23 @@ public struct SourcePriorityRow: Sendable, Equatable, Identifiable {
     /// display (`SettingsSourcesScreen`) and the reorder editor
     /// (`SourcePriorityEditorScreen`) so both render the same per-source glyph.
     public static func iconName(forSource raw: String) -> String {
-        switch raw.uppercased() {
-        case "APPLE_HEALTH": "heart.fill"
-        case "WITHINGS": "scalemass.fill"
-        case "WHOOP": "bolt.heart.fill"
-        case "FITBIT": "figure.run"
-        case "STRAVA": "figure.outdoor.cycle"
-        case "OURA": "circle.circle.fill"
-        case "POLAR": "heart.circle.fill"
-        case "NIGHTSCOUT": "drop.fill"
-        case "MANUAL": "hand.tap.fill"
-        case "IMPORT": "square.and.arrow.down.fill"
-        case "COMPUTED": "function"
-        default: "circle.dashed"
-        }
+        sourceIcons[raw.uppercased()] ?? "circle.dashed"
     }
+
+    /// One glyph per source token (a table, so a new source adds a row and not
+    /// a branch).
+    private static let sourceIcons: [String: String] = [
+        "APPLE_HEALTH": "heart.fill",
+        "WITHINGS": "scalemass.fill",
+        "WHOOP": "bolt.heart.fill",
+        "FITBIT": "figure.run",
+        "STRAVA": "figure.outdoor.cycle",
+        "OURA": "circle.circle.fill",
+        "POLAR": "heart.circle.fill",
+        "NIGHTSCOUT": "drop.fill",
+        "HEALTH_CONNECT": "link.circle.fill",
+        "MANUAL": "hand.tap.fill",
+        "IMPORT": "square.and.arrow.down.fill",
+        "COMPUTED": "function"
+    ]
 }

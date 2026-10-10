@@ -205,9 +205,18 @@ public actor DashboardRepository {
 }
 
 public actor InsightsRepository {
-    private let api: APIClientProtocol
-    public init(api: APIClientProtocol) {
+    let api: APIClientProtocol
+    /// 1.2 V5 — state of the `POST /api/insights/generate` discipline (hold
+    /// after a 429, one shared request); see `InsightsRepository+Generate.swift`.
+    let now: @Sendable () -> Date
+    var generateHeldUntil: Date?
+    var generateInFlight: Task<AIInsightResponse, Error>?
+    /// Callers that joined an in-flight request. Read by tests only.
+    var generateJoinCount = 0
+
+    public init(api: APIClientProtocol, now: @escaping @Sendable () -> Date = { Date() }) {
         self.api = api
+        self.now = now
     }
 
     /// iOS-Adapter-Endpunkt der `/api/insights/comprehensive` zu Insight-Cards mappt.
@@ -228,34 +237,6 @@ public actor InsightsRepository {
     public func correlations() async throws -> [CorrelationFinding] {
         let req: APIRequest<[CorrelationFinding]> = .get("/api/insights/correlations")
         return try await api.send(req)
-    }
-
-    /// Lazily generates (or returns the cached) Daily Briefing.
-    ///
-    /// **Endpoint:** `POST /api/insights/generate` (server-cached per-user-per-day).
-    /// **Body shape:** `{ force: Bool, scope?: String, locale?: String }`. `scope` and
-    /// `locale` default server-side; iOS only sets `force` to bypass the 24h cache
-    /// on user-initiated refresh.
-    /// **Response shape:** `{ insights: AIInsightResponse, cached: Bool, ... }` —
-    /// the `insights` slot carries the strict-schema payload with the
-    /// `dailyBriefing` block (see `src/lib/ai/schema.ts:299-313`).
-    ///
-    /// **Idempotency-Key:** required (server expects). `APIClient.send` already
-    /// supplies one for every POST.
-    public func generateBriefing(force: Bool = false) async throws -> AIInsightResponse {
-        struct Body: Encodable {
-            let force: Bool
-        }
-        struct Envelope: Decodable {
-            let insights: AIInsightResponse
-            let cached: Bool?
-        }
-        let req: APIRequest<Envelope> = try .post(
-            "/api/insights/generate",
-            body: Body(force: force)
-        )
-        let envelope = try await api.send(req)
-        return envelope.insights
     }
 
     /// Thumbs up/down + free text on a recommendation (`POST /api/insights/feedback`,

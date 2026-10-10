@@ -24,7 +24,7 @@ struct SyncStatusCaptionResolveTests {
             isInFlight: true,
             activeSyncCount: 7,
             showsDrainConfirmation: true,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .preparing)
     }
@@ -34,7 +34,7 @@ struct SyncStatusCaptionResolveTests {
         let state = SyncStatusCaption.resolve(
             firstLoginPreparing: false,
             isInFlight: true,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .syncing(pending: 0))
     }
@@ -46,7 +46,7 @@ struct SyncStatusCaptionResolveTests {
             isInFlight: true,
             activeSyncCount: 23,
             queuedWriteCount: 5,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .syncing(pending: 23))
     }
@@ -57,7 +57,7 @@ struct SyncStatusCaptionResolveTests {
             firstLoginPreparing: false,
             isInFlight: false,
             showsDrainConfirmation: true,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .transmitted)
     }
@@ -68,7 +68,7 @@ struct SyncStatusCaptionResolveTests {
             firstLoginPreparing: false,
             isInFlight: false,
             showsDrainConfirmation: true,
-            lastHandshakeAt: nil
+            lastSyncAt: nil
         )
         #expect(state == .hidden)
     }
@@ -79,7 +79,7 @@ struct SyncStatusCaptionResolveTests {
             firstLoginPreparing: false,
             isInFlight: false,
             queuedWriteCount: 4,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .queued(4))
     }
@@ -90,7 +90,7 @@ struct SyncStatusCaptionResolveTests {
             firstLoginPreparing: false,
             isInFlight: false,
             queuedWriteCount: 4,
-            lastHandshakeAt: nil
+            lastSyncAt: nil
         )
         #expect(state == .hidden)
     }
@@ -104,7 +104,7 @@ struct SyncStatusCaptionResolveTests {
             phase: .syncing,
             isInFlight: false,
             activeSyncCount: 3,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .syncing(pending: 3))
     }
@@ -116,7 +116,7 @@ struct SyncStatusCaptionResolveTests {
             phase: .done,
             isInFlight: false,
             showsDrainConfirmation: false,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .transmitted)
     }
@@ -128,7 +128,7 @@ struct SyncStatusCaptionResolveTests {
             phase: .syncing,
             isInFlight: false,
             showsDrainConfirmation: true,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .syncing(pending: 0))
     }
@@ -139,7 +139,7 @@ struct SyncStatusCaptionResolveTests {
             firstLoginPreparing: false,
             phase: .idle,
             isInFlight: false,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .lastSynced(stamp))
     }
@@ -149,7 +149,7 @@ struct SyncStatusCaptionResolveTests {
         let state = SyncStatusCaption.resolve(
             firstLoginPreparing: false,
             isInFlight: false,
-            lastHandshakeAt: stamp
+            lastSyncAt: stamp
         )
         #expect(state == .lastSynced(stamp))
     }
@@ -159,7 +159,7 @@ struct SyncStatusCaptionResolveTests {
         let state = SyncStatusCaption.resolve(
             firstLoginPreparing: false,
             isInFlight: false,
-            lastHandshakeAt: nil
+            lastSyncAt: nil
         )
         #expect(state == .hidden)
     }

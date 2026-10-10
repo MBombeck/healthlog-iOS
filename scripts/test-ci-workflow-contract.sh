@@ -43,12 +43,18 @@ check_workflow() {
         "bash scripts/lint-strict-baseline.sh --self-test",
         "bash scripts/lint-strict-baseline.sh",
         "python3 scripts/i18n-guard.py HealthLog",
-        "scripts/check-strings.sh"
+        "scripts/check-strings.sh",
+        "python3 scripts/check-visible-punctuation.py --self-test",
+        "python3 scripts/check-visible-punctuation.py"
       ]
       required_commands.each do |command|
         count = lint_lines.count(command)
         abort("expected exactly one #{command.inspect}, found #{count}") unless count == 1
       end
+
+      punct_self_test_index = lint_lines.index("python3 scripts/check-visible-punctuation.py --self-test")
+      punct_gate_index = lint_lines.index("python3 scripts/check-visible-punctuation.py")
+      abort("punctuation self-test must run before the live punctuation gate") unless punct_self_test_index < punct_gate_index
 
       self_test_index = lint_lines.index("bash scripts/lint-strict-baseline.sh --self-test")
       live_gate_index = lint_lines.index("bash scripts/lint-strict-baseline.sh")
@@ -124,6 +130,13 @@ awk '{ if ($0 !~ /bash scripts\/verify-spm-core-build\.sh --self-test$/) print }
     "$WORKFLOW_PATH" >"$fixture_dir/no-spm-self-test.yml"
 if check_workflow "$fixture_dir/no-spm-self-test.yml" >/dev/null 2>&1; then
     fail "contract accepted an SPM gate with no self-test in front of it"
+fi
+
+# U5 (1.1.1) — the visible-punctuation gate must stay in the Lint step.
+awk '{ if ($0 !~ /python3 scripts\/check-visible-punctuation\.py$/) print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/no-punctuation-gate.yml"
+if check_workflow "$fixture_dir/no-punctuation-gate.yml" >/dev/null 2>&1; then
+    fail "contract accepted a Lint step without the visible-punctuation gate"
 fi
 
 printf 'ci-workflow-contract: PASS\n'

@@ -34,14 +34,21 @@
             userIDProvider: @escaping @Sendable () -> String?,
             deletionReconciler: (any MeasurementDeletionReconciler)?,
             retryQueue: (any HealthSyncBatchRetryEnqueuing)? = nil,
-            hrBucketSync: (any HealthKitHRBucketSyncing)? = nil
+            hrBucketSync: (any HealthKitHRBucketSyncing)? = nil,
+            dailyStatsSync: (any HealthKitDailyStatsSyncing)? = nil
         ) {
             // #12 — every hand-off of heart rate requests the bucket sweep.
             var hrBucketKick: (@Sendable () -> Void)?
             if let hrBucketSync {
                 hrBucketKick = { @Sendable in hrBucketSync.requestHRBucketSweep() }
             }
-            Task { [hrBucketKick] in
+            // V1 — every hand-off of a cumulative type requests the recent
+            // statistics sweep, under the page's trigger.
+            var dailyStatsKick: (@Sendable (SyncTrigger) async -> Void)?
+            if let dailyStatsSync {
+                dailyStatsKick = { @Sendable trigger in await dailyStatsSync.requestRecentDailyStatsSweep(trigger: trigger) }
+            }
+            Task { [hrBucketKick, dailyStatsKick] in
                 guard let spezi = SpeziAppDelegate.spezi else {
                     HLLog.healthKit
                         .info("Spezi not booted — HealthLogStandard.attachUploader skipped")
@@ -71,7 +78,8 @@
                     userIDProvider: userIDProvider,
                     retryQueue: retryQueue,
                     skipRegister: .shared,
-                    hrBucketKick: hrBucketKick
+                    hrBucketKick: hrBucketKick,
+                    dailyStatsKick: dailyStatsKick
                 )
                 // A360-5 M-1 — hand the server-deletion reconciler to the
                 // Standard so `handleDeletedObjects` can mirror Apple-Health

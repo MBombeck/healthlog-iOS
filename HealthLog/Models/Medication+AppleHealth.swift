@@ -61,6 +61,6 @@ public extension Medication {
             externalId: externalId ?? self.externalId,
             courseStatus: courseStatus,
             intakeActionable: intakeActionable
-        )
+        ).carryingCategoryLabel(categoryLabel)
     }
 }

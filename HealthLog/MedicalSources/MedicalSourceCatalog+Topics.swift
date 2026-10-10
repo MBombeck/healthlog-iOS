@@ -79,7 +79,7 @@ public extension MedicalSourceCatalog {
         switch topic {
         case let .glp1Pharmacokinetics(drugID), let .titration(drugID):
             let record = GLP1DrugCatalog.drug(for: drugID)
-            var out = [DynamicSource(id: "ema-\(drugID.rawValue)", name: "EMA EPAR — \(record.inn)", url: record.sourceEMA)]
+            var out = [DynamicSource(id: "ema-\(drugID.rawValue)", name: "EMA EPAR: \(record.inn)", url: record.sourceEMA)]
             if let j = record.sourceJournal, let url = URL(string: "https://doi.org/\(j.doi)") {
                 out.append(DynamicSource(id: "doi-\(j.doi)", name: j.citation, url: url))
             }

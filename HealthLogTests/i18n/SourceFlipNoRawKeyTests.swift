@@ -113,7 +113,6 @@ struct SourceFlipNoRawKeyTests {
         // Interpolation: %@ (String)
         ("Earned on %@", "Erreicht am %@"),
         ("%@ trend", "%@ Verlauf"),
-        ("Personal record · %@", "Persönlicher Rekord · %@"),
         // Interpolation: mixed %@ + %lld, positional in de
         ("Calculated from %lld measurements over %lld days.", "Berechnet aus %1$lld Messungen über %2$lld Tage."),
         ("Mean %lld %@, min %lld, max %lld", "Mittel %1$lld %2$@, Min %3$lld, Max %4$lld")

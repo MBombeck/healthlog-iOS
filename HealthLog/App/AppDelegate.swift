@@ -49,6 +49,9 @@
             didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
         ) -> Bool {
             HLQuickActions.register(on: application)
+            // V1 — a launch for a HealthKit delivery or a background task starts
+            // in the background without a scene-phase change to report it.
+            SyncTriggerContext.shared.noteApplicationState(backgrounded: application.applicationState == .background)
             if let item = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
                 HLQuickActions.handle(item)
             }

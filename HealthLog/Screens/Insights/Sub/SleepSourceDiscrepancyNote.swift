@@ -54,7 +54,7 @@ struct SleepSourceDiscrepancyNote: View {
                 SourcePriorityRow.displayLabel(forSource: bucket.source)
             }
             return "\(name) \(SleepDurationFormat.hoursMinutes(bucket.asleepMinutes))"
-        }.joined(separator: " · ")
+        }.joined(separator: ", ")
         guard discrepancy.deltaMinutes > 0 else { return claims }
         let delta = SleepDurationFormat.hoursMinutes(discrepancy.deltaMinutes)
         return String(localized: "sleep.sourceDiscrepancy.detail \(claims) \(delta)")

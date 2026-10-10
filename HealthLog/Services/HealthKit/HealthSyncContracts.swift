@@ -110,6 +110,35 @@ enum HealthSyncTrigger: String, CaseIterable, Sendable {
     case accountTeardown
 }
 
+extension SyncTrigger {
+    /// **V1** — the wire word a `HealthSyncTrigger` stands for, or `nil` when the
+    /// pass does not know whether the app is in front (cold activation, a fresh
+    /// authorization, account teardown) and the context's own fallback decides.
+    init?(pass trigger: HealthSyncTrigger) {
+        switch trigger {
+        case .manual: self = .manual
+        case .foreground: self = .foreground
+        case .processing, .appRefresh, .observer: self = .background
+        case .silentPush: self = .push
+        case .coldActivation, .postAuthentication, .accountTeardown: return nil
+        }
+    }
+}
+
+extension SyncTriggerContext {
+    /// **V1** — runs one pass with the wire trigger it stands for bound to its
+    /// task tree (``SyncTrigger/init(pass:)``); a pass without one runs
+    /// unbound and the context's fallback decides.
+    func runningPass<T>(
+        _ trigger: HealthSyncTrigger,
+        isolation: isolated (any Actor)? = #isolation,
+        _ body: () async -> T
+    ) async -> T {
+        guard let wire = SyncTrigger(pass: trigger) else { return await body() }
+        return await bind(wire, body)
+    }
+}
+
 /// Bounded work allowance for one trigger. `incrementalOnly` forbids a first
 /// history walk inside a short wake.
 struct HealthSyncBudget: Sendable, Equatable {
@@ -413,9 +442,19 @@ enum HealthSyncCompositionPlan {
 
     /// Incremental, short-wake subset: no first history import, no aggregate
     /// backfill.
+    ///
+    /// **V1 (1.2, #66 / HealthLog#1173)** — the two `stats:` paths are in it now,
+    /// bounded to the recent days: the daily statistics read today and yesterday
+    /// (`lookbackDays: 1` under `incrementalOnly`), the heart-rate buckets their
+    /// open days. Without them an AppRefresh or silent-push wake carried every
+    /// single-sample type to the server and left the day totals (steps, energy,
+    /// flights, distance, daylight) and the pulse buckets at the last manual
+    /// sync.
     static let incrementalSet: Set<HealthSyncCapability> = [
         .speziSampleCollection,
         .workoutImport,
+        .dailyStatistics,
+        .heartRateBuckets,
         .heartHealthEvents,
         .moodStateOfMindImport,
         .outboxDrain

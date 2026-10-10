@@ -28,7 +28,8 @@
             registry: AuthenticatedSessionLeaseRegistry,
             retryQueue: OutboxQueue,
             uploader: MeasurementBatchUploader,
-            skipRegister: HealthKitSkippedRowRegister = .shared
+            skipRegister: HealthKitSkippedRowRegister = .shared,
+            deliveryFollowUp: (@Sendable () async -> Void)? = nil
         ) {
             let admission: @Sendable () throws -> HealthSyncAuthenticatedLease = {
                 let owner = keychain.getString(forKey: KeychainKey.userID) ?? ""
@@ -54,7 +55,8 @@
                     cursors: cursors,
                     query: HealthKitAnchoredPageSource(store: store),
                     consumer: SpeziStandardPageConsumer(),
-                    observer: HealthKitSampleChangeObserver(store: store)
+                    observer: HealthKitSampleChangeObserver(store: store),
+                    deliveryFollowUp: deliveryFollowUp
                 ),
                 cursors: cursors,
                 admission: admission,

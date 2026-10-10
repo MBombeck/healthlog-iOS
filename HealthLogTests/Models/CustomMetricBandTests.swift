@@ -172,7 +172,7 @@ struct CustomMetricBandTests {
 
     @Test("targetBandDescription reflects which bounds are present")
     func bandDescriptionShape() {
-        #expect(Self.metric(low: 40, high: 60, decimals: 0).targetBandDescription?.contains("–") == true)
+        #expect(Self.metric(low: 40, high: 60, decimals: 0).targetBandDescription == "40 bis 60 kg")
         #expect(Self.metric(low: 40, decimals: 0).targetBandDescription?.hasPrefix("≥") == true)
         #expect(Self.metric(high: 60, decimals: 0).targetBandDescription?.hasPrefix("≤") == true)
         #expect(Self.metric().targetBandDescription == nil)

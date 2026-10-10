@@ -155,8 +155,10 @@ import Foundation
                  HKQuantityTypeIdentifier.restingHeartRate.rawValue:
                 return WireUnit(hkUnit: HKUnit.count().unitDivided(by: .minute()), wireSymbol: "bpm", scale: 1)
 
-            // ms — HRV-SDNN
-            case HKQuantityTypeIdentifier.heartRateVariabilitySDNN.rawValue:
+            // ms — HRV-SDNN, and HRV-RMSSD (1.2 / V4: iOS 27, raw identifier
+            // because the iOS 26 SDK has no symbol; the server stores it as
+            // `HRV_RMSSD`, apart from SDNN's `HEART_RATE_VARIABILITY`).
+            case HKQuantityTypeIdentifier.heartRateVariabilitySDNN.rawValue, HeartRateVariabilityRMSSD.identifier:
                 return WireUnit(hkUnit: .secondUnit(with: .milli), wireSymbol: "ms", scale: 1)
 
             // br/min — Respiratory Rate (HK liefert count/min). Server-Enum

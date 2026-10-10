@@ -88,9 +88,12 @@
     /// The change-signal seam. One subscription per type, delivering the type
     /// identifier that changed and nothing else.
     protocol HealthSampleChangeObserving: Sendable {
+        /// V1 (1.2) — `onChange` is awaited: the observer hands back HealthKit's
+        /// completion handler only once the delivery it reports was collected
+        /// (or its deadline passed), so iOS keeps the process running for it.
         func startObserving(
             _ typeIdentifiers: [String],
-            onChange: @escaping @Sendable (String) -> Void
+            onChange: @escaping @Sendable (String) async -> Void
         ) async
         func stopObserving() async
     }
@@ -119,6 +122,9 @@
         private let consumer: any HealthSamplePageConsuming
         private let observer: (any HealthSampleChangeObserving)?
         private let pageLimit: Int
+        /// V1 — what a delivery waits for after its drain: the statistics and
+        /// pulse-bucket sweeps its pages requested.
+        private let deliveryFollowUp: (@Sendable () async -> Void)?
 
         /// Types signalled since the drain last looked. A set, so a burst of
         /// callbacks for one type is one unit of work.
@@ -135,13 +141,15 @@
             query: any AnchoredHealthSampleQuerying,
             consumer: any HealthSamplePageConsuming,
             observer: (any HealthSampleChangeObserving)? = nil,
-            pageLimit: Int = AnchoredHealthSampleCollector.defaultPageLimit
+            pageLimit: Int = AnchoredHealthSampleCollector.defaultPageLimit,
+            deliveryFollowUp: (@Sendable () async -> Void)? = nil
         ) {
             self.cursors = cursors
             self.query = query
             self.consumer = consumer
             self.observer = observer
             self.pageLimit = max(1, pageLimit)
+            self.deliveryFollowUp = deliveryFollowUp
         }
 
         // MARK: - Bounded collection
@@ -295,9 +303,17 @@
             observedCutoff = cutoff
             observedAdmission = admission
             await observer.startObserving(typeIdentifiers) { [weak self] typeIdentifier in
-                guard let self else { return }
-                Task { await self.handleObservedChange(typeIdentifier: typeIdentifier) }
+                await self?.deliver(typeIdentifier: typeIdentifier)
             }
+        }
+
+        /// V1 (1.2) — one HealthKit delivery, start to finish: the type joins the
+        /// drain, the drain runs, and the sweeps its pages requested finish. The
+        /// observer calls HealthKit's completion handler after this returns.
+        func deliver(typeIdentifier: String) async {
+            handleObservedChange(typeIdentifier: typeIdentifier)
+            if let drain = observedDrain { await drain.value }
+            await deliveryFollowUp?()
         }
 
         /// The observer entry point. Exactly-once per signalled type per drain: the
@@ -449,7 +465,7 @@
 
         func startObserving(
             _ typeIdentifiers: [String],
-            onChange: @escaping @Sendable (String) -> Void
+            onChange: @escaping @Sendable (String) async -> Void
         ) async {
             for identifier in typeIdentifiers {
                 guard let sampleType = HealthKitSampleTypeResolver.sampleType(for: identifier) else {
@@ -460,12 +476,23 @@
                     predicate: nil
                 ) { _, completionHandler, error in
                     // The completion handler is HealthKit's own delivery receipt.
-                    // It is called on every path, including the error path, so a
-                    // transient failure does not stop future deliveries.
-                    if error == nil {
-                        onChange(identifier)
+                    // It is called exactly once on every path, including the
+                    // error path, so a transient failure does not stop future
+                    // deliveries. V1 (1.2): after the delivery was collected and
+                    // its sweeps ran, not before: until 1.1.1 it was called at
+                    // once and iOS could suspend the process with the work
+                    // still in flight. The deadline keeps a slow network from
+                    // holding it past HealthKit's patience.
+                    let receipt = HealthKitDeliveryReceipt(completionHandler)
+                    guard error == nil else {
+                        receipt.fire()
+                        return
                     }
-                    completionHandler()
+                    receipt.arm(deadline: HealthKitDeliveryReceipt.deadline)
+                    Task {
+                        await onChange(identifier)
+                        receipt.fire()
+                    }
                 }
                 store.execute(query)
                 queries.append(query)

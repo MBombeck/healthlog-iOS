@@ -100,8 +100,11 @@ public extension AppContainer {
     /// naming the trigger is the whole point of the parameter.
     internal func activateHealthKitBackground(for trigger: HealthSyncTrigger) async {
         await backgroundSync.activateHealthKitBackgroundDeliveries()
-        Task.detached(priority: .utility) { [weak self] in
-            await self?.runHealthSyncPass(trigger)
+        // V1 — through the same coalescing runner as the foreground pass, so a
+        // cold launch does not run its first pass and the first foreground pass
+        // over the same cursors at once; the later one trails.
+        await DetachedHealthSyncRunner.shared.request(trigger) { [weak self] trigger, isExpired in
+            await self?.runHealthSyncPass(trigger, isExpired: isExpired)
         }
     }
 
@@ -148,16 +151,33 @@ public extension AppContainer {
     /// What stays is the one thing the pass does not do: the live HK-direct read
     /// that feeds the Schritte tile's today number. That is a local UI read, not
     /// a sync capability, and it has no server leg at all.
+    ///
+    /// **V1 (1.2)** — the pass runs in ``DetachedHealthSyncRunner``, not in the
+    /// caller's task. The foreground step returns as soon as it is queued, so
+    /// the 250 ms deadline can no longer cancel the day totals, the pulse
+    /// buckets or the sample collection (#66, HealthLog#1173). A forced call
+    /// (pull to refresh) still waits for it, because the person is watching.
     func refreshHealthKitDailyStatsForToday(force: Bool = false) async {
         // W8-A1 — coalesce the double foreground fan-out. A non-forced call
         // inside the throttle window is suppressed; a forced run (pull-to-
         // refresh) always runs and re-arms the window.
         guard dailyStatsForegroundThrottle.shouldRun(force: force) else { return }
+        let pass = await DetachedHealthSyncRunner.shared.request(.foreground) { [weak self] trigger, isExpired in
+            await self?.runForegroundHealthSync(trigger, isExpired: isExpired)
+        }
+        if force { await pass.value }
+    }
+
+    /// The detached body: the live step read and the orchestrated pass.
+    private func runForegroundHealthSync(
+        _ trigger: HealthSyncTrigger,
+        isExpired: @escaping @Sendable () -> Bool
+    ) async {
         // v0.6.2.x bug-c10-ios-direct — the HK-direct read is what actually feeds
         // the tile's today number; it runs concurrently with the pass, which
         // feeds the server rows every other consumer (insights, trends) reads.
         async let liveRefresh: Void = liveHealthKitTodayStore.refresh()
-        async let pass: [HealthSyncCapability] = runHealthSyncPass(.foreground)
+        async let pass: [HealthSyncCapability] = runHealthSyncPass(trigger, isExpired: isExpired)
         _ = await (liveRefresh, pass)
     }
 
@@ -186,6 +206,9 @@ public extension AppContainer {
         // so the next `/api/version` probe re-decides; until that answers, the
         // gate falls back to its unknown-state default (no synthesis).
         medicationSlotGate.forget()
+        // V4 and V1: the last-known server version (RMSSD collection and
+        // `syncTrigger: manual`) belonged to the previous host.
+        HealthKitServerTypeGate.forget()
         // APIClient is an actor; cross-actor hop required.
         if let apiClient = api as? APIClient {
             await apiClient.setEnvironment(resolved)

@@ -96,12 +96,13 @@ struct InsightsRhythmEventsCard: View {
                         .accessibilityIdentifier("insights.rhythmEvents.verdict")
                 }
                 HStack(spacing: HLSpace.xs) {
-                    Text(event.occurredAt, format: .dateTime.day().month().year().hour().minute())
+                    let when = event.occurredAt.formatted(.dateTime.day().month().year().hour().minute())
+                    // Honest device attribution — "…, Withings" / "…, Apple
+                    // Watch". Tertiary, caption-weight: it qualifies the
+                    // event without competing with the verdict. U5 (1.1.1):
+                    // a comma joins the two, no middle dot.
+                    Text(verbatim: sourceLabel == nil ? when : when + ",")
                     if let sourceLabel {
-                        // Honest device attribution — "· Withings" / "· Apple
-                        // Watch". Tertiary, caption-weight: it qualifies the
-                        // event without competing with the verdict.
-                        Text(verbatim: "·")
                         Text(sourceLabel)
                             .accessibilityIdentifier("insights.rhythmEvents.source")
                     }

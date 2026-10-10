@@ -307,7 +307,7 @@ struct MedicationCard: View {
         guard let raw = medication.category, !raw.isEmpty else {
             return String(localized: "med.card.category.fallback")
         }
-        return Self.localizedCategory(raw)
+        return Self.localizedCategory(raw, label: medication.categoryLabel)
     }
 
     // MARK: - Schedule block
@@ -667,6 +667,18 @@ struct MedicationCard: View {
         "MENTAL_HEALTH": "medications.categoryMentalHealth",
         "OTHER": "medications.categoryOther"
     ]
+
+    /// v1.40: a custom category (`custom:<uuid>`)
+    /// reads as its server label (`categoryLabel`), never as the raw key.
+    nonisolated static func localizedCategory(_ raw: String, label: String?) -> String {
+        if let label = label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+            return label
+        }
+        if raw.hasPrefix("custom:") {
+            return String(localized: "medications.categoryCustom")
+        }
+        return localizedCategory(raw)
+    }
 
     nonisolated static func localizedCategory(_ raw: String) -> String {
         if let key = categoryStringKeys[raw] {

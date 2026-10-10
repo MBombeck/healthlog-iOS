@@ -169,7 +169,7 @@ extension InsightsMetricScreen {
         InsightsMetricStatusDescriptor.build(
             kind: kind,
             digest: insightsStore.digest,
-            target: targetItem,
+            target: statusTargetItem,
             latestValue: store.latestPoint?.value,
             // v0.14.4 D1 — the same in-range chart values the detail chart draws
             // (`displaySeries` → `recentInRange` fallback), so the card's
@@ -552,6 +552,15 @@ extension InsightsMetricScreen {
 
     var targetItem: InsightsTargetsResponseDTO.TargetItem? {
         guard let type = MetricChartMath.targetType(for: kind) else { return nil }
+        return insightsTargetsStore.target(forType: type)
+    }
+
+    /// #20 — the target row whose band the 30-day card may show: the row that
+    /// describes THIS page's series (``MetricChartMath/bandTargetType(for:)``).
+    /// The resting-pulse band (server type `PULSE`) lands on the resting heart
+    /// rate page, never next to raw pulse.
+    var statusTargetItem: InsightsTargetsResponseDTO.TargetItem? {
+        guard let type = MetricChartMath.bandTargetType(for: kind) else { return nil }
         return insightsTargetsStore.target(forType: type)
     }
 

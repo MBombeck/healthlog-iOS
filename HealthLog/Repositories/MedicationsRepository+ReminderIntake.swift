@@ -235,9 +235,13 @@ public extension MedicationsRepository {
             // as a non-retriable validation error so the caller does
             // NOT re-enqueue. The action handler treats this as a soft
             // failure: notification is still dismissed, no toast.
+            // v1.42 — `intake_not_tracked` is the per-entry form of
+            // `medication.intake.notTracked`; carry the code so the surface
+            // and the outbox name it.
+            let notTracked = first.reason == HLError.medicationIntakeNotTrackedReason
             throw HLError.server(
                 status: 422,
-                code: nil,
+                code: notTracked ? HLError.medicationIntakeNotTrackedCode : nil,
                 message: first.reason ?? "intake_rejected"
             )
         }

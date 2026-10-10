@@ -689,7 +689,9 @@ public actor APIClient: APIClientProtocol {
                     throw HLError.rateLimited(retryAfter: retryAfter)
                 }
 
-                if (500 ... 599).contains(http.statusCode), attempt <= maxRetries {
+                // Server v1.40 — a key mismatch does not heal between two
+                // attempts; answer at once instead of spinning the backoff.
+                if (500 ... 599).contains(http.statusCode), attempt <= maxRetries, !isKeyMismatch(http, data) {
                     try await Task.sleep(nanoseconds: backoffDelay(attempt: attempt))
                     continue
                 }
@@ -710,6 +712,12 @@ public actor APIClient: APIClientProtocol {
                 throw err
             }
         }
+    }
+
+    /// Server v1.40 — `503` + `encryption.key_mismatch` (see
+    /// ``HLError/isServerKeyMismatch``).
+    private func isKeyMismatch(_ http: HTTPURLResponse, _ data: Data) -> Bool {
+        http.statusCode == 503 && sharingErrorCode(in: data) == HLError.encryptionKeyMismatchCode
     }
 
     private func sharingErrorCode(in data: Data) -> String? {
@@ -918,10 +926,16 @@ public actor APIClient: APIClientProtocol {
     ///   `POST /api/export/encrypted` and `GET /api/export?type=all` without
     ///   listing them here: a path entry would also keep a genuinely expired
     ///   token on those routes from refreshing.
+    /// - `/api/auth/passkey/login-verify` (server v1.42) —
+    ///   a refused passkey sign-in answers 401 with `passkey.challenge.expired`
+    ///   or `passkey.verification.failed`. No session exists on this leg, so
+    ///   there is nothing to refresh; the code tells the sign-in form which
+    ///   sentence to show.
     /// `internal` — the one-shot file-upload path in `APIClient+FileUpload.swift`
     /// consults the same allowlist, so the two 401 policies cannot drift.
     nonisolated static func preserves401Body(path: String) -> Bool {
         path.hasPrefix("/api/auth/mfa/verify")
+            || path == "/api/auth/passkey/login-verify"
             || path == "/api/settings/account"
             // Parity item 2.5 — `DELETE /api/settings/data` sits behind the same
             // `requireFreshMfaIfEnrolled` gate as the account delete above and

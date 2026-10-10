@@ -142,7 +142,11 @@ private extension DailyDigest {
             briefingLead: briefingLead,
             line: line,
             worthALook: items,
-            ai: ai
+            ai: ai,
+            lead: deliversLead ? .delivered(resolvedLead) : .absent,
+            signalLine: deliversSignalLine ? .delivered(signalLine) : .absent,
+            today: today,
+            restMode: restMode
         )
     }
 }

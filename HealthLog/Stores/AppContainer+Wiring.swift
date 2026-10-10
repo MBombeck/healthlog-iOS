@@ -328,7 +328,7 @@ extension AppContainer {
             // and the app-owned collector admits through the Phase-06 registry.
             retryQueue: outbox,
             authenticatedSessionRegistry: authenticatedSessionRegistry,
-            hrBucketSync: healthKitHRBucketSync
+            aggregates: (healthKitHRBucketSync, healthKitDailyStatsSync)
         )
         Self.wireAIRefusalMirror(apiClient: apiClient, gate: aiCapabilityGate, moduleGate: moduleGate) // #115 0.2
         Self.wireAICapabilityGates(gate: aiCapabilityGate, dailyBriefing: dailyBriefingStore, narrative: serverStatsStores.narrative)

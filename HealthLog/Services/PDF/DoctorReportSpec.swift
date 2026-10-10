@@ -454,8 +454,8 @@ public struct DoctorReportSectionSelection: Sendable, Equatable {
 /// here is a compliance-affecting copy edit — must go through the operator + the
 /// MDR-disclaimer test (`DoctorReportLocalSpecTests.footerDisclaimer*`).
 public enum DoctorReportDisclaimer {
-    public static let de = "Lokaler Export · kein Server beteiligt · auf-Geraet erzeugt · kein medizinisches Dokument"
-    public static let en = "Local export · no server involved · generated on-device · not a medical document"
+    public static let de = "Lokaler Export, kein Server beteiligt, auf-Geraet erzeugt, kein medizinisches Dokument"
+    public static let en = "Local export, no server involved, generated on-device, not a medical document"
 
     public static func text(for locale: ReportLocale) -> String {
         switch locale {

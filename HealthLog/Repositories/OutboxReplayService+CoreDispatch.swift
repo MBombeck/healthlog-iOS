@@ -109,6 +109,7 @@ extension OutboxReplayService {
         // #110 — a 429 is never the write's fault: nothing counted, nothing
         // stamped, the pass holds (see `OutboxReplayService+RateLimit`).
         if case let .rateLimited(retryAfter) = err { return onRateLimited(op, retryAfter: retryAfter) }
+        if err.isServerKeyMismatch { return onServerKeyMismatch(op) }
         let sanitized = Self.lastErrorKeepingUnconfirmed(op, LogSanitizer.redact(err.localizedDescription))
         if degraded, err.is5xxOrRateLimited {
             try? await outbox.touchAttempt(id: op.id, lastError: sanitized)
@@ -195,6 +196,7 @@ extension OutboxReplayService {
         switch hlError {
         case .decoding: return .responseUnreadable
         case .unknown: return .unroutable
+        case .server where hlError.isMedicationIntakeNotTracked: return .intakeNotTracked
         default: return .serverRejected
         }
     }
@@ -207,7 +209,7 @@ extension OutboxReplayService {
     /// busy-loops.
     func dispatchCycle(_ op: OutboxQueue.Operation) async throws {
         guard let cycleRepo else {
-            throw HLError.unknown("Op-Kind \(op.kind.rawValue) — cycleRepo unwired")
+            throw HLError.unknown("Op-Kind \(op.kind.rawValue): cycleRepo unwired")
         }
         switch op.kind {
         case .logCycleDayLog:
@@ -238,7 +240,7 @@ extension OutboxReplayService {
     /// queue.
     func dispatchWorkoutBatch(_ op: OutboxQueue.Operation) async throws {
         guard let workoutsRepo else {
-            throw HLError.unknown("uploadWorkoutBatch replay skipped — workoutsRepo not wired")
+            throw HLError.unknown("uploadWorkoutBatch replay skipped: workoutsRepo not wired")
         }
         let p = try decoder.decode(OutboxQueue.Payloads.UploadWorkoutBatch.self, from: op.payload)
         let response: WorkoutBatchResponseDTO
@@ -281,7 +283,7 @@ extension OutboxReplayService {
     /// (non-retriable) so an unwired build never busy-loops.
     func dispatchCoachAboutMe(_ op: OutboxQueue.Operation) async throws {
         guard let coachAboutMeRepo else {
-            throw HLError.unknown("Op-Kind \(op.kind.rawValue) — coachAboutMeRepo unwired")
+            throw HLError.unknown("Op-Kind \(op.kind.rawValue): coachAboutMeRepo unwired")
         }
         switch op.kind {
         case .coachAboutMeAdopt:
@@ -302,7 +304,7 @@ extension OutboxReplayService {
     /// is dropped as non-retriable so it can't wedge the queue.
     func dispatchTherapyLog(_ op: OutboxQueue.Operation) async throws {
         guard let therapyLogRepo else {
-            throw HLError.unknown("\(op.kind.rawValue) replay skipped — therapyLogRepo not wired")
+            throw HLError.unknown("\(op.kind.rawValue) replay skipped: therapyLogRepo not wired")
         }
         switch op.kind {
         case .createMedicationSideEffect:

@@ -114,9 +114,12 @@ import Foundation
     /// → next sweep re-fetches; the externalId upsert makes the replay safe.
     ///
     /// **Backfill window.** A fresh anchor starts at the oldest available
-    /// workout, but every query remains finite: processing/foreground work is
+    /// workout, but every query remains finite: processing/foreground pages are
     /// capped at the server's 100-workout batch limit and short wakes at the
-    /// 10-workout series-safe limit. Later passes continue from the saved anchor.
+    /// 10-workout series-safe limit. Since #17 a processing pass keeps paging
+    /// while pages come back full, within ``WorkoutCatchUpPolicy``, and a
+    /// history that is behind gets its newest workouts first through a
+    /// separate recent window that never moves the anchor.
     ///
     /// **Always-on (not toggle-gated).** Workouts are a core surface, so the
     /// owner (`HealthKitService`) starts this whenever HealthKit is authorised —
@@ -125,6 +128,9 @@ import Foundation
     actor WorkoutHealthKitImporter {
         private let lifecycleStore: any WorkoutHealthKitStore
         private let anchoredQuerySource: any WorkoutAnchoredQueryFetching
+        /// #17 — newest-first window; `nil` disables it (synthetic tests).
+        private let recentWindowSource: (any WorkoutRecentWindowFetching)?
+        private let clock: WorkoutCatchUpClock
         private let repo: any WorkoutBatchUploading
         /// Captured canonical owner + monotonic auth generation. Lifecycle
         /// generation alone cannot detect a keychain account change that occurs
@@ -135,6 +141,7 @@ import Foundation
         /// (see ``shouldAttachSeries(workoutCount:)``).
         let series: any WorkoutHeartRateSeriesSyncServicing
         private let anchorKey: String
+        private let backlogKey: String
         private let defaultsBox: WorkoutDefaultsBox
 
         private enum LifecycleState: Equatable {
@@ -189,14 +196,18 @@ import Foundation
             series: (any WorkoutHeartRateSeriesSyncServicing)? = nil,
             lifecycleStore: (any WorkoutHealthKitStore)? = nil,
             anchoredQuerySource: (any WorkoutAnchoredQueryFetching)? = nil,
+            recentWindowSource: (any WorkoutRecentWindowFetching)? = nil,
             lease: WorkoutImportLease? = nil,
             sweepOverride: (@Sendable () async -> Void)? = nil,
             directDTOProvider: (@Sendable () async -> [WorkoutIngestDTO])? = nil,
-            beforeSeriesFreeAnchorAdvance: @escaping @Sendable (Int) async -> Bool = { _ in true }
+            beforeSeriesFreeAnchorAdvance: @escaping @Sendable (Int) async -> Bool = { _ in true },
+            clock: WorkoutCatchUpClock = .live
         ) {
             let canonicalOwner = userID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             self.lifecycleStore = lifecycleStore ?? LiveWorkoutHealthKitStore(store: store)
             self.anchoredQuerySource = anchoredQuerySource ?? LiveWorkoutAnchoredQuerySource(store: store)
+            self.recentWindowSource = recentWindowSource
+            self.clock = clock
             self.repo = repo
             if let defaultsBox {
                 self.defaultsBox = defaultsBox
@@ -209,6 +220,7 @@ import Foundation
             self.beforeSeriesFreeAnchorAdvance = beforeSeriesFreeAnchorAdvance
             self.lease = lease ?? .unchecked(ownerUserID: canonicalOwner)
             anchorKey = "hl.workout.hk.anchor." + HealthKitService.partitionToken(for: userID)
+            backlogKey = "hl.workout.hk.backlog." + HealthKitService.partitionToken(for: userID)
         }
 
         /// Set the post-ingest revalidation hook (composition-root injection).
@@ -330,6 +342,8 @@ import Foundation
         private func stop(resetAnchor: Bool) async {
             if resetAnchor {
                 defaultsBox.removeObject(forKey: anchorKey)
+                // The backlog bookkeeping describes this anchor; it goes with it.
+                defaultsBox.removeObject(forKey: backlogKey)
             }
 
             lifecycleGeneration &+= 1
@@ -512,14 +526,37 @@ import Foundation
             // from joining (and thereby swallowing) the new initial sweep.
             return await pageCoordinator.run(partition: String(generation), mode: mode) { [weak self] requestedMode in
                 guard let self else { return .notRun }
-                return await performAnchoredSweep(generation: generation, mode: requestedMode)
+                return await performPass(generation: generation, mode: requestedMode)
             }
         }
 
-        // One anchored batch: fetch, upload, durably rearm, then advance anchor.
-        // The branches mirror the anchor transaction's ordered safety gates.
-        // swiftlint:disable:next cyclomatic_complexity
-        private func performAnchoredSweep(
+        private enum PageResult {
+            case notRun
+            case failed
+            case accepted(fetchedCount: Int, omitted: Int, ingested: Bool)
+
+            /// A failed page ends the pass but still reports it as run.
+            var isFailure: Bool {
+                if case .failed = self { return true }
+                return false
+            }
+        }
+
+        private struct PassProgress {
+            var recentAttempted = false
+            var recentDelivered = 0
+            var omitted = 0
+            var ingested = false
+        }
+
+        /// #17 — one pass: the recent window first when the history is behind,
+        /// then anchored pages. Short wakes (`.incrementalOnly`) keep one page
+        /// of 10 — or the recent window instead of it, never both. Processing
+        /// passes keep paging while pages come back full, within
+        /// ``WorkoutCatchUpPolicy/processingBudget`` and
+        /// ``WorkoutCatchUpPolicy/maxPagesPerPass``. Every page is its own
+        /// transaction: fetch, upload, durably rearm, then advance the anchor.
+        private func performPass(
             generation: UInt64,
             mode: WorkoutSyncPassMode
         ) async -> WorkoutBoundedSyncOutcome {
@@ -529,80 +566,162 @@ import Foundation
                 HKSyncDiagnostics.shared.recordWorkoutAttempt(source: source)
             }
             guard sweepMayProceed(generation) else { return .notRun }
+            let deadline = clock.uptime() + (mode == .processing ? WorkoutCatchUpPolicy.processingBudget : 0)
+            var progress = PassProgress()
+            if Self.pullsRecentFirst(backlog: loadBacklog(), hasAnchor: loadAnchor() != nil) {
+                guard await runRecentWindow(generation: generation, progress: &progress) else { return .notRun }
+                if mode == .incrementalOnly, progress.recentDelivered > 0 {
+                    return await finishPass(generation: generation, progress: progress)
+                }
+            }
+            guard await runAnchoredPages(
+                generation: generation,
+                mode: mode,
+                deadline: deadline,
+                progress: &progress
+            ) else { return .notRun }
+            return await finishPass(generation: generation, progress: progress)
+        }
+
+        /// Anchored pages until one comes back short, the budget or page
+        /// ceiling is spent, or the pass is no longer current. Returns `false`
+        /// when the pass must report `.notRun` (cancelled / superseded).
+        private func runAnchoredPages(
+            generation: UInt64,
+            mode: WorkoutSyncPassMode,
+            deadline: TimeInterval,
+            progress: inout PassProgress
+        ) async -> Bool {
+            let limit = Self.pageLimit(for: mode)
+            for page in 1 ... WorkoutCatchUpPolicy.maxPagesPerPass {
+                let result = await performAnchoredPage(generation: generation, limit: limit)
+                guard case let .accepted(fetched, omitted, ingested) = result else {
+                    return result.isFailure
+                }
+                progress.omitted += omitted
+                progress.ingested = progress.ingested || ingested
+                guard mode == .processing, fetched >= limit else { return true }
+                if !progress.recentAttempted {
+                    guard await runRecentWindow(generation: generation, progress: &progress) else { return false }
+                }
+                if loadBacklog().remainingEstimate == nil {
+                    await refreshRemainingEstimate(generation: generation)
+                }
+                guard page < WorkoutCatchUpPolicy.maxPagesPerPass,
+                      clock.uptime() < deadline,
+                      sweepMayProceed(generation) else { return true }
+            }
+            return true
+        }
+
+        /// A fresh anchor, or a history known to be behind, delivers the
+        /// recent window before the backlog. An install from before #17 with
+        /// an anchor learns its state from its first page instead, so a
+        /// caught-up account never re-posts its newest workouts.
+        static func pullsRecentFirst(backlog: WorkoutImportBacklogState, hasAnchor: Bool) -> Bool {
+            !hasAnchor || backlog.isBehind == true
+        }
+
+        private func finishPass(
+            generation: UInt64,
+            progress: PassProgress
+        ) async -> WorkoutBoundedSyncOutcome {
+            // Surface the freshly-ingested rows in the UI.
+            if progress.ingested, let onIngest, sweepMayProceed(generation) {
+                await onIngest()
+            }
+            return WorkoutBoundedSyncOutcome(
+                didRun: sweepMayProceed(generation),
+                completelyAcceptedSeriesOmittedCount: progress.omitted
+            )
+        }
+
+        /// The recent window: newest workouts of the last 14 days that the
+        /// anchor has not reached and that were not delivered ahead before.
+        /// Never touches the anchor. Returns `false` only when the pass must
+        /// stop (cancelled or no longer current); a failure falls through to
+        /// the backlog, which delivers the same workouts in time.
+        private func runRecentWindow(
+            generation: UInt64,
+            progress: inout PassProgress
+        ) async -> Bool {
+            progress.recentAttempted = true
+            guard let recentWindowSource else { return true }
+            let known = Set(loadBacklog().deliveredAhead)
+            do {
+                let page = try await recentWindowSource.fetchRecent(
+                    since: WorkoutCatchUpPolicy.recentWindowStart(now: clock.now()),
+                    limit: WorkoutCatchUpPolicy.recentWindowLimit + known.count
+                )
+                try requireCurrentSweep(generation)
+                let fresh = Array(
+                    page.workouts
+                        .filter { !known.contains($0.uuid.uuidString) }
+                        .prefix(WorkoutCatchUpPolicy.recentWindowLimit)
+                )
+                guard !fresh.isEmpty else { return true }
+                let upload = try await uploadWorkouts(
+                    fresh,
+                    countedAs: fresh.count,
+                    generation: generation
+                )
+                try requireCurrentSweep(generation)
+                var backlog = loadBacklog()
+                backlog.noteDeliveredAhead(fresh.map(\.uuid.uuidString))
+                saveBacklog(backlog)
+                progress.recentDelivered = fresh.count
+                progress.omitted += upload.omitted
+                // Today's workout shows up before the history behind it; the
+                // end of the pass revalidates again only for history pages.
+                if upload.ingested, let onIngest { await onIngest() }
+                return sweepMayProceed(generation)
+            } catch is CancellationError {
+                return false
+            } catch {
+                HLLog.healthKit.error(
+                    "workout HK recent window failed: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
+                )
+                return sweepMayProceed(generation)
+            }
+        }
+
+        /// One anchored page: fetch, skip what the recent window already
+        /// delivered, upload, durably rearm, then advance the anchor.
+        private func performAnchoredPage(generation: UInt64, limit: Int) async -> PageResult {
+            guard sweepMayProceed(generation) else { return .notRun }
             let anchor = loadAnchor()
             do {
                 try requireCurrentSweep(generation)
-                let result = try await anchoredQuerySource.fetch(
-                    anchor: anchor,
-                    limit: Self.pageLimit(for: mode)
-                )
+                let result = try await anchoredQuerySource.fetch(anchor: anchor, limit: limit)
                 try requireCurrentSweep(generation)
-                let mappingOutcome = if let directDTOProvider {
-                    await WorkoutDirectPageMappingOutcome.page(
-                        dtos: directDTOProvider(),
-                        successfulEmptySeriesCount: 0
-                    )
-                } else {
-                    await buildDTOs(
-                        from: result.workouts,
-                        leaseIsCurrent: { [lease] in lease.isCurrent }
-                    )
-                }
-                let dtos: [WorkoutIngestDTO]
-                let successfulEmptySeriesCount: Int
-                switch mappingOutcome {
-                case let .page(mapped, emptyCount):
-                    dtos = mapped
-                    successfulEmptySeriesCount = emptyCount
-                case .failed:
-                    throw WorkoutDirectSeriesMappingError.failed
-                case .cancelled:
-                    throw CancellationError()
-                }
+                let ahead = Set(loadBacklog().deliveredAhead)
+                let passedAhead = Set(result.workouts.map(\.uuid.uuidString)).intersection(ahead)
+                let pending = result.workouts.filter { !passedAhead.contains($0.uuid.uuidString) }
+                let upload = try await uploadWorkouts(
+                    pending,
+                    countedAs: result.fetchedCount - passedAhead.count,
+                    generation: generation
+                )
                 guard sweepMayProceed(generation) else { return .notRun }
-                await MainActor.run {
-                    HKSyncDiagnostics.shared.recordWorkoutFetch(
-                        fetched: result.fetchedCount,
-                        mapped: dtos.count
-                    )
-                }
-                guard sweepMayProceed(generation) else { return .notRun }
-                var omittedCount = 0
-                if !dtos.isEmpty {
-                    try await drain(dtos, generation: generation)
-                    guard sweepMayProceed(generation) else { return .notRun }
-                    if !Self.shouldAttachSeries(workoutCount: result.fetchedCount) {
-                        omittedCount = dtos.count
-                    } else {
-                        omittedCount = successfulEmptySeriesCount
-                    }
-                    if omittedCount > 0 {
-                        guard await beforeSeriesFreeAnchorAdvance(omittedCount),
-                              sweepMayProceed(generation) else { throw CancellationError() }
-                    }
-                    // Surface the freshly-ingested rows in the UI.
-                    if let onIngest { await onIngest() }
-                    guard sweepMayProceed(generation) else { return .notRun }
-                }
                 // HealthKit returns an empty page without an error when workout
                 // read access is denied. Retain the prior anchor for every empty
                 // page so a later regrant can replay from the last proven point.
-                let shouldRetainAnchor = Self.shouldSkipAnchorSave(
-                    hadPersistedAnchor: anchor != nil,
-                    fetchedCount: result.fetchedCount
-                )
-                if !shouldRetainAnchor {
-                    guard sweepMayProceed(generation) else { return .notRun }
+                if !Self.shouldSkipAnchorSave(hadPersistedAnchor: anchor != nil, fetchedCount: result.fetchedCount) {
                     saveAnchor(result.newAnchor)
                 } else {
                     HLLog.healthKit.debug(
                         "workout HK sweep empty — anchor retained (read grant cannot be distinguished)"
                     )
                 }
-                return WorkoutBoundedSyncOutcome(
-                    didRun: sweepMayProceed(generation),
-                    completelyAcceptedSeriesOmittedCount: omittedCount
+                var backlog = loadBacklog()
+                backlog.noteAcceptedPage(
+                    fetchedCount: result.fetchedCount,
+                    passedIdentifiers: passedAhead,
+                    wasFull: result.fetchedCount >= limit
                 )
+                saveBacklog(backlog)
+                await publishHistoryImport(backlog)
+                return .accepted(fetchedCount: result.fetchedCount, omitted: upload.omitted, ingested: upload.ingested)
             } catch is CancellationError {
                 await MainActor.run {
                     HKSyncDiagnostics.shared.recordWorkoutFailure(.cancelled)
@@ -619,11 +738,87 @@ import Foundation
                 await MainActor.run {
                     HKSyncDiagnostics.shared.recordWorkoutFailure(failure)
                 }
+                return .failed
             }
-            return WorkoutBoundedSyncOutcome(
-                didRun: sweepMayProceed(generation),
-                completelyAcceptedSeriesOmittedCount: 0
-            )
+        }
+
+        /// Map, upload and pass the pre-anchor durability barrier for one set
+        /// of workouts. `countedAs` is how many HealthKit workouts this set
+        /// stands for (the synthetic-page seam can differ from
+        /// `workouts.count`); it is the "read" diagnostics count and decides
+        /// whether HR series ride along (≤ 10) or the accepted rows are handed
+        /// to the HR backfill. Workouts delivered ahead are never counted twice.
+        private func uploadWorkouts(
+            _ workouts: [HKWorkout],
+            countedAs: Int,
+            generation: UInt64
+        ) async throws -> (omitted: Int, ingested: Bool) {
+            let mappingOutcome = if let directDTOProvider {
+                await WorkoutDirectPageMappingOutcome.page(
+                    dtos: directDTOProvider(),
+                    successfulEmptySeriesCount: 0
+                )
+            } else {
+                await buildDTOs(
+                    from: workouts,
+                    leaseIsCurrent: { [lease] in lease.isCurrent }
+                )
+            }
+            let dtos: [WorkoutIngestDTO]
+            let successfulEmptySeriesCount: Int
+            switch mappingOutcome {
+            case let .page(mapped, emptyCount):
+                dtos = mapped
+                successfulEmptySeriesCount = emptyCount
+            case .failed:
+                throw WorkoutDirectSeriesMappingError.failed
+            case .cancelled:
+                throw CancellationError()
+            }
+            try requireCurrentSweep(generation)
+            await MainActor.run {
+                HKSyncDiagnostics.shared.recordWorkoutFetch(fetched: countedAs, mapped: dtos.count)
+            }
+            try requireCurrentSweep(generation)
+            guard !dtos.isEmpty else { return (0, false) }
+            try await drain(dtos, generation: generation)
+            try requireCurrentSweep(generation)
+            let omittedCount = Self.shouldAttachSeries(workoutCount: countedAs)
+                ? successfulEmptySeriesCount
+                : dtos.count
+            if omittedCount > 0 {
+                guard await beforeSeriesFreeAnchorAdvance(omittedCount),
+                      sweepMayProceed(generation) else { throw CancellationError() }
+            }
+            return (omittedCount, true)
+        }
+
+        /// Counts what is still behind the anchor once per behind pass. Costs
+        /// one unlimited anchored read, which only happens while a long
+        /// history is still being imported; later pages decrement the count.
+        private func refreshRemainingEstimate(generation: UInt64) async {
+            guard let anchor = loadAnchor(), sweepMayProceed(generation) else { return }
+            guard let rest = try? await anchoredQuerySource.fetch(anchor: anchor, limit: HKObjectQueryNoLimit),
+                  sweepMayProceed(generation) else { return }
+            var backlog = loadBacklog()
+            guard backlog.isBehind == true else { return }
+            let ahead = Set(backlog.deliveredAhead)
+            let aheadInRest = rest.workouts.count(where: { ahead.contains($0.uuid.uuidString) })
+            backlog.remainingEstimate = max(0, rest.fetchedCount - aheadInRest)
+            saveBacklog(backlog)
+            await publishHistoryImport(backlog)
+        }
+
+        private func publishHistoryImport(_ backlog: WorkoutImportBacklogState) async {
+            guard let status = backlog.publicStatus else { return }
+            await MainActor.run {
+                HKSyncDiagnostics.shared.recordWorkoutHistoryImport(status)
+            }
+        }
+
+        /// Test and diagnostics read of the persisted backlog bookkeeping.
+        func historyBacklog() -> WorkoutImportBacklogState {
+            loadBacklog()
         }
 
         /// Drain a batch through `POST /api/workouts/batch`, chunked at the
@@ -695,6 +890,14 @@ import Foundation
 
         private func saveAnchor(_ anchor: HKQueryAnchor?) {
             defaultsBox.saveAnchor(anchor, forKey: anchorKey, label: "workout")
+        }
+
+        private func loadBacklog() -> WorkoutImportBacklogState {
+            defaultsBox.loadBacklog(forKey: backlogKey)
+        }
+
+        private func saveBacklog(_ state: WorkoutImportBacklogState) {
+            defaultsBox.saveBacklog(state, forKey: backlogKey)
         }
     }
     // swiftlint:enable type_body_length

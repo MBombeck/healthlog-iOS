@@ -159,9 +159,9 @@ public enum MeasurementRanges {
         let lo = formatter.string(from: NSNumber(value: range.lowerBound)) ?? "\(range.lowerBound)"
         let hi = formatter.string(from: NSNumber(value: range.upperBound)) ?? "\(range.upperBound)"
         if unit.isEmpty {
-            return "\(lo) – \(hi)"
+            return HLNumberFormat.range(lo, hi)
         }
-        return "\(lo) – \(hi) \(unit)"
+        return "\(HLNumberFormat.range(lo, hi)) \(unit)"
     }
 
     /// Localised error string for the outcome + kind, ready to render

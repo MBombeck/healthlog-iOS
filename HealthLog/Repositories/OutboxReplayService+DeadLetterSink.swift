@@ -42,6 +42,10 @@ public struct OutboxDiscardNotice: Sendable, Equatable {
         /// The server refused it permanently (400/404/409/422 …). C4: retained
         /// as a dead-letter, removed only when that loses nothing (a delete).
         case serverRejected
+        /// v1.42 — `422 medication.intake.notTracked`: the dose belongs to a
+        /// medication kept as a record only. Final, so never re-sent; retained
+        /// as a dead-letter like every other refusal of a create.
+        case intakeNotTracked
         /// Its response could not be read within the server's idempotency
         /// window. C4: retained as a dead-letter, never sent again blind.
         case responseUnreadable

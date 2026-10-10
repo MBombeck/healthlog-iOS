@@ -144,12 +144,14 @@ struct MeasureSheetRangeValidationTests {
     @Test("formatRange uses current locale for separators + appends the unit")
     func formatRangeRoundTrip() {
         let formatted = MeasurementRanges.formatRange(0.1 ... 600, unit: "kg")
-        // We don't assert the exact separator (locale-dependent in CI),
-        // but both endpoints + unit + dash must surface.
+        // We don't assert the exact decimal separator (locale-dependent in
+        // CI), but both endpoints + unit surface, joined by a word, never by
+        // an en dash (U5, 1.1.1).
         #expect(formatted.contains("0"))
         #expect(formatted.contains("600"))
         #expect(formatted.contains("kg"))
-        #expect(formatted.contains("–"))
+        #expect(formatted.contains(" bis ") || formatted.contains(" to "))
+        #expect(!formatted.contains("–"))
     }
 
     @Test("formatRange omits the unit when empty (e.g. steps)")
@@ -157,7 +159,7 @@ struct MeasureSheetRangeValidationTests {
         let formatted = MeasurementRanges.formatRange(1 ... 10, unit: "")
         #expect(formatted.contains("1"))
         #expect(formatted.contains("10"))
-        #expect(formatted.contains("–"))
+        #expect(formatted.contains(" bis ") || formatted.contains(" to "))
         // No trailing space when unit is empty.
         #expect(formatted.hasSuffix(" ") == false)
     }

@@ -48,10 +48,12 @@ extension AppContainer {
         // triggers pulls nothing. Arming is not a pass, which is exactly the
         // distinction that was missing while `runOneShotAnchorSweep` started one.
         await healthKit?.runBackgroundSyncPass()
-        return await SpeziCollectionTrigger.run(
-            trigger,
-            observedSource: observedSource,
-            isExpired: isExpired
-        )
+        // V1 — the pass names its own wire trigger, bound to its task tree, so
+        // every batch it causes (and every sweep it kicks) carries it, however
+        // long after the caller's window it posts. Triggers that cannot know
+        // whether the app is in front leave it to the context's fallback.
+        return await SyncTriggerContext.shared.runningPass(trigger) {
+            await SpeziCollectionTrigger.run(trigger, observedSource: observedSource, isExpired: isExpired)
+        }
     }
 }

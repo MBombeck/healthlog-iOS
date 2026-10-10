@@ -281,7 +281,7 @@ struct MoodScreenStateTests {
     @Test("TestPushVariant.standard — preserves the legacy copy")
     func standardVariantPreservesLegacyCopy() {
         let v = TestPushVariant.standard
-        #expect(v.title == "HealthLog — Test")
+        #expect(v.title == "HealthLog: Test")
         #expect(v.body == "Wenn du das siehst, funktionieren deine Benachrichtigungen.")
         #expect(v.categoryIdentifier == "TEST")
     }

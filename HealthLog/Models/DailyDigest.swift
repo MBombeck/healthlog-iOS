@@ -47,6 +47,98 @@ public struct DailyDigest: Codable, Sendable, Equatable {
     /// `nil` on an older server — then nothing is masked. Everything else in the
     /// digest is data and renders whatever this says.
     public let ai: DigestAI?
+    /// **v1.40 `lead`** — the Today lead the server resolved (reaction line,
+    /// briefing sentence or a deterministic signal sentence). `nil` when the
+    /// field is absent OR null; ``deliversLead`` tells the two apart.
+    public let resolvedLead: Lead?
+    /// `true` when the body carried the `lead` key at all (v1.40 and later).
+    public let deliversLead: Bool
+    /// **v1.40.3 `signalLine`** — the muted line under the lead, decided on the
+    /// server: the top signal minus what the lead already says. `nil` when the
+    /// field is absent OR null; ``deliversSignalLine`` tells the two apart.
+    public let signalLine: SignalLine?
+    /// `true` when the body carried the `signalLine` key at all (v1.40.3 and
+    /// later). A null value then means "no line", never "build one yourself".
+    public let deliversSignalLine: Bool
+    /// **v1.40 `today`** — up to five facts about the day. Decoded tolerantly
+    /// and carried for later surfaces; the hero does not render them (1.2).
+    public let today: [TodayFact]
+    /// **v1.40 `restMode`** — present while an illness episode is active.
+    /// Decoded tolerantly; no surface in 1.2.
+    public let restMode: RestMode?
+
+    /// v1.40 — the resolved Today lead. `source` is carried raw
+    /// (`reaction` / `briefing` / `signal`).
+    public struct Lead: Codable, Sendable, Equatable {
+        public let text: String
+        public let source: String
+
+        public init(text: String, source: String) {
+            self.text = text
+            self.source = source
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+            source = try c.decodeIfPresent(String.self, forKey: .source) ?? ""
+        }
+    }
+
+    /// v1.40.3 — the line under the lead. Both parts arrive pre-formatted and
+    /// are rendered verbatim; `headline` is null when the lead already talks
+    /// about the signal's metric, so only the delta stands.
+    public struct SignalLine: Codable, Sendable, Equatable {
+        public let headline: String?
+        public let delta: String?
+
+        public init(headline: String?, delta: String?) {
+            self.headline = headline
+            self.delta = delta
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            headline = try? c.decodeIfPresent(String.self, forKey: .headline)
+            delta = try? c.decodeIfPresent(String.self, forKey: .delta)
+        }
+    }
+
+    /// v1.40 — one statement about the day (`DailyTodayFact`). `kind` is raw,
+    /// so a kind iOS does not know yet still decodes.
+    public struct TodayFact: Codable, Sendable, Equatable {
+        public let kind: String
+        public let label: String
+        public let value: String
+        public let href: String?
+        public let moduleKey: String?
+
+        public init(kind: String, label: String, value: String, href: String?, moduleKey: String?) {
+            self.kind = kind
+            self.label = label
+            self.value = value
+            self.href = href
+            self.moduleKey = moduleKey
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? ""
+            label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+            value = try c.decodeIfPresent(String.self, forKey: .value) ?? ""
+            href = try? c.decodeIfPresent(String.self, forKey: .href)
+            moduleKey = try? c.decodeIfPresent(String.self, forKey: .moduleKey)
+        }
+    }
+
+    /// v1.40 — Rest Mode, the 1-based day of the illness episode.
+    public struct RestMode: Codable, Sendable, Equatable {
+        public let day: Int
+
+        public init(day: Int) {
+            self.day = day
+        }
+    }
 
     /// The digest's `ai` block. Each member is optional so a partial or
     /// malformed block masks only what it can prove unavailable.
@@ -89,12 +181,27 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         /// cached digest simply never said, and an untold flag must not be
         /// painted as a claim about the account.
         public let configured: Bool?
+        /// **v1.40.2** — whole weeks the score has held where it is; `nil`
+        /// when it has not held for two weeks (or on an older server).
+        /// Decoded tolerantly; not rendered in 1.2.
+        public let steadyWeeks: Int?
+        /// **v1.40.2** — `true` when ``steadyWeeks`` is a lower bound.
+        public let steadyAtLeast: Bool?
 
-        public init(value: Double, band: String, delta: Double?, configured: Bool? = nil) {
+        public init(
+            value: Double,
+            band: String,
+            delta: Double?,
+            configured: Bool? = nil,
+            steadyWeeks: Int? = nil,
+            steadyAtLeast: Bool? = nil
+        ) {
             self.value = value
             self.band = band
             self.delta = delta
             self.configured = configured
+            self.steadyWeeks = steadyWeeks
+            self.steadyAtLeast = steadyAtLeast
         }
 
         public init(from decoder: Decoder) throws {
@@ -103,6 +210,8 @@ public struct DailyDigest: Codable, Sendable, Equatable {
             band = try c.decodeIfPresent(String.self, forKey: .band) ?? ""
             delta = try c.decodeIfPresent(Double.self, forKey: .delta)
             configured = try? c.decodeIfPresent(Bool.self, forKey: .configured)
+            steadyWeeks = try? c.decodeIfPresent(Int.self, forKey: .steadyWeeks)
+            steadyAtLeast = try? c.decodeIfPresent(Bool.self, forKey: .steadyAtLeast)
         }
 
         /// See ``HealthScore/runsOnChosenComposition`` — same gate, same reason.
@@ -147,7 +256,11 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         briefingLead: String?,
         line: String,
         worthALook: [DailyPriorityItem],
-        ai: DigestAI? = nil
+        ai: DigestAI? = nil,
+        lead: Delivered<Lead> = .absent,
+        signalLine: Delivered<SignalLine> = .absent,
+        today: [TodayFact] = [],
+        restMode: RestMode? = nil
     ) {
         self.generatedAt = generatedAt
         self.phase = phase
@@ -158,6 +271,34 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         self.line = line
         self.worthALook = worthALook
         self.ai = ai
+        resolvedLead = lead.value
+        deliversLead = lead.isDelivered
+        self.signalLine = signalLine.value
+        deliversSignalLine = signalLine.isDelivered
+        self.today = today
+        self.restMode = restMode
+    }
+
+    /// A field a newer server always sends (possibly as null) and an older one
+    /// never does. Only the init uses it; the digest stores value + flag.
+    public enum Delivered<Value: Sendable & Equatable>: Sendable, Equatable {
+        case absent
+        case delivered(Value?)
+
+        var isDelivered: Bool {
+            if case .delivered = self { return true }
+            return false
+        }
+
+        var value: Value? {
+            if case let .delivered(value) = self { return value }
+            return nil
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case generatedAt, phase, sleepPending, score, topSignal, briefingLead, line, worthALook, ai
+        case lead, signalLine, today, restMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -171,6 +312,37 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         line = try c.decodeIfPresent(String.self, forKey: .line) ?? ""
         worthALook = try c.decodeLossyArray(DailyPriorityItem.self, forKey: .worthALook)
         ai = try? c.decodeIfPresent(DigestAI.self, forKey: .ai)
+        // v1.40 / v1.40.3 — additive fields, all tolerant: a malformed value
+        // reads as absent and never fails the hero.
+        deliversLead = c.contains(.lead)
+        resolvedLead = try? c.decodeIfPresent(Lead.self, forKey: .lead)
+        deliversSignalLine = c.contains(.signalLine)
+        signalLine = try? c.decodeIfPresent(SignalLine.self, forKey: .signalLine)
+        today = (try? c.decodeLossyArray(TodayFact.self, forKey: .today)) ?? []
+        restMode = try? c.decodeIfPresent(RestMode.self, forKey: .restMode)
+    }
+
+    /// Written by hand so a delivered null survives a round trip as null
+    /// (a synthesized encoder would drop the key and turn it into "absent").
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(generatedAt, forKey: .generatedAt)
+        try c.encode(phase, forKey: .phase)
+        try c.encode(sleepPending, forKey: .sleepPending)
+        try c.encodeIfPresent(score, forKey: .score)
+        try c.encodeIfPresent(topSignal, forKey: .topSignal)
+        try c.encodeIfPresent(briefingLead, forKey: .briefingLead)
+        try c.encode(line, forKey: .line)
+        try c.encode(worthALook, forKey: .worthALook)
+        try c.encodeIfPresent(ai, forKey: .ai)
+        if deliversLead {
+            try c.encode(resolvedLead, forKey: .lead)
+        }
+        if deliversSignalLine {
+            try c.encode(signalLine, forKey: .signalLine)
+        }
+        try c.encode(today, forKey: .today)
+        try c.encodeIfPresent(restMode, forKey: .restMode)
     }
 }
 
@@ -191,9 +363,51 @@ public extension DailyDigest {
 
     /// The briefing lead is the warmest read; the deterministic `line` is the
     /// floor a keyless self-hoster still gets. Prefer the lead for the hero.
+    ///
+    /// **1.2 (v1.40)** — a server that resolves the lead itself (`lead.text`)
+    /// is rendered as delivered. An older server without the field, or a null
+    /// lead, keeps the previous chain.
     var lead: String {
+        if let resolved = admittedResolvedLead { return resolved.text }
         if showsBriefingText, let briefingLead, !briefingLead.isEmpty { return briefingLead }
         return line
+    }
+
+    /// The server-resolved lead, unless it is empty or model text whose
+    /// capability the same body says is unavailable (the server nulls it
+    /// then; this covers a body that says otherwise).
+    private var admittedResolvedLead: Lead? {
+        guard let resolvedLead, !resolvedLead.text.isEmpty else { return nil }
+        switch resolvedLead.source {
+        case "briefing": return showsBriefingText ? resolvedLead : nil
+        case "reaction": return (ai?.reactionLines?.isAvailable ?? true) ? resolvedLead : nil
+        default: return resolvedLead
+        }
+    }
+
+    /// **1.2 (#121, v1.40.3)** — the muted line under the lead. A server that
+    /// sends `signalLine` decided it: rendered as delivered, null means no
+    /// line. Only a body without the field (an older server) falls back to
+    /// building the line from ``visibleTopSignal`` (headline + delta). `nil`
+    /// means the hero shows no line.
+    var signalText: String? {
+        guard showsBriefingText else { return nil }
+        if deliversSignalLine {
+            guard let signalLine else { return nil }
+            return Self.joinSignal(headline: signalLine.headline, delta: signalLine.delta)
+        }
+        guard let signal = visibleTopSignal, !signal.headline.isEmpty else { return nil }
+        return Self.joinSignal(headline: signal.headline, delta: signal.delta)
+    }
+
+    /// `headline` and `delta`, either one alone, verbatim; joined with a comma
+    /// (the visible punctuation gate rules out the web's middle dot).
+    private static func joinSignal(headline: String?, delta: String?) -> String? {
+        let parts = [headline, delta].compactMap { part -> String? in
+            guard let part, !part.isEmpty else { return nil }
+            return part
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
     /// True when a cached briefing actually backs the lead (drives the

@@ -43,6 +43,45 @@ import Testing
             #expect(WorkoutHealthKitMapping.sportType(for: .pilates) == "mindAndBody")
         }
 
+        /// 1.2 V5 — the types that used to fold to "other" although the server
+        /// has a bucket for them (production: generic workouts piling up as
+        /// `other`). One case per mapped type.
+        @Test(
+            "1.2 V5 — newly mapped activity types land in their server bucket",
+            arguments: [
+                (HKWorkoutActivityType.badminton, "badminton"),
+                (.coreTraining, "strength"),
+                (.cooldown, "mindAndBody"),
+                (.preparationAndRecovery, "mindAndBody"),
+                (.taiChi, "mindAndBody"),
+                (.handCycling, "cycling"),
+                (.wheelchairWalkPace, "walking"),
+                (.wheelchairRunPace, "running"),
+                (.jumpRope, "mixedCardio")
+            ]
+        )
+        func newlyMappedTypes(activity: HKWorkoutActivityType, expected: String) {
+            #expect(WorkoutHealthKitMapping.sportType(for: activity) == expected)
+        }
+
+        @Test("every table entry names a sport type the server accepts")
+        func tableStaysInsideTheServerEnum() {
+            for (activity, token) in WorkoutHealthKitMapping.mappedActivityTypes {
+                #expect(
+                    WorkoutHealthKitMapping.serverSportTypes.contains(token),
+                    "activity \(activity.rawValue) maps to \(token), which the server rejects"
+                )
+                #expect(WorkoutHealthKitMapping.sportType(for: activity) == token)
+            }
+        }
+
+        @Test("a generic workout (.other) and an unknown raw value stay 'other'")
+        func genericAndUnknownStayOther() throws {
+            #expect(WorkoutHealthKitMapping.sportType(for: .other) == "other")
+            let future = try #require(HKWorkoutActivityType(rawValue: 9999))
+            #expect(WorkoutHealthKitMapping.sportType(for: future) == "other")
+        }
+
         @Test("niche / unmapped activity types fall back to 'other'")
         func sportTypeFallback() {
             // Archery has no first-class server enum member → must fold to the

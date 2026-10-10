@@ -37,48 +37,6 @@
         import SpeziScheduler
     #endif
 
-    #if canImport(SpeziScheduler)
-        /// Owns the at-rest policy for SpeziScheduler's medication `Task` and
-        /// `Outcome` database. The directory must be excluded before creating
-        /// `Scheduler`, because its initializer opens SwiftData immediately.
-        enum SpeziSchedulerStorage {
-            static let directoryName = "SpeziScheduler"
-            static let databaseFilename = "edu.stanford.spezi.scheduler.storage.sqlite"
-
-            nonisolated static func prepareDirectory(
-                documentsDirectory: URL = .documentsDirectory,
-                fileManager: FileManager = .default
-            ) throws -> URL {
-                let directory = documentsDirectory.appendingPathComponent(directoryName, isDirectory: true)
-                try SensitiveDataBackupExclusion.prepareDirectory(at: directory, fileManager: fileManager)
-                return directory
-            }
-
-            nonisolated static func makeScheduler(
-                documentsDirectory: URL = .documentsDirectory,
-                fileManager: FileManager = .default
-            ) throws -> Scheduler {
-                let directory = try prepareDirectory(
-                    documentsDirectory: documentsDirectory,
-                    fileManager: fileManager
-                )
-                return Scheduler(persistence: .onDisk(directory: directory))
-            }
-
-            /// The Spezi configuration builder cannot throw. Refuse to create
-            /// the PHI database if its enclosing directory cannot be excluded
-            /// and verified, matching SpeziScheduler's own fail-fast handling
-            /// for persistent-directory creation and migration failures.
-            nonisolated static func makeDefaultSchedulerOrFailClosed() -> Scheduler {
-                do {
-                    return try makeScheduler()
-                } catch {
-                    preconditionFailure("Refusing to open SpeziScheduler without verified backup exclusion: \(error)")
-                }
-            }
-        }
-    #endif
-
     /// **v0.15.5 AUD-1 F5 — shared local-notification budget accounting.**
     ///
     /// iOS pends at most 64 *local* notification requests per app, and every
@@ -146,6 +104,14 @@
         /// The actual APNs bridge is on `AppDelegate.bridge` (static), which
         /// `AppContainer.init` populates at composition time.
         private let apnsDelegate = AppDelegate()
+
+        #if canImport(SpeziScheduler)
+            /// Decided on first use, inside `willFinishLaunching`, before Spezi
+            /// builds its module graph. See ``SpeziSchedulerStorage/launchPlan(protectedDataAvailable:documentsDirectory:fileManager:)``.
+            private lazy var schedulerLaunchPlan = SpeziSchedulerStorage.launchPlan(
+                protectedDataAvailable: UIApplication.shared.isProtectedDataAvailable
+            )
+        #endif
 
         /// Spezi configuration: `HealthLogStandard` plus the Spezi modules the app
         /// genuinely uses — authorization and the HealthKit module itself,
@@ -260,7 +226,6 @@
                     // Center(_:willPresent:)` returns for foreground
                     // deliveries, so the foreground-presentation contract
                     // stays consistent.
-                    SpeziSchedulerStorage.makeDefaultSchedulerOrFailClosed()
                     // v0.6.1.3 Y4.1 — drop `.badge` from the presentation
                     // set so a foreground-arriving Spezi-scheduled banner
                     // doesn't trigger the system's auto-badge bump. The
@@ -269,12 +234,6 @@
                     // `NotificationService.refreshBadge(from:)` so it
                     // stays a single authoritative number rather than
                     // incrementing per delivered notification.
-                    SchedulerNotifications(
-                        notificationLimit: LocalNotificationBudget.speziNotificationLimit,
-                        schedulingInterval: .seconds(8 * 7 * 24 * 60 * 60),
-                        notificationPresentation: [.banner, .list, .sound],
-                        automaticallyRequestProvisionalAuthorization: false
-                    )
                     // `MedicationsSchedulerModule` reads
                     // `MedicationsStore.medications` after every load and
                     // reconciles the active set onto Spezi `Task` records.
@@ -282,7 +241,14 @@
                     // `AppContainer+MedicationsScheduler.swift` once
                     // `MedicationsStore` exists; until then the module
                     // sits idle (no `Task`s are created).
-                    MedicationsSchedulerModule()
+                    //
+                    // 1.2 (crash in 1.1.1 (292)): the three modules come from
+                    // `SpeziSchedulerStorage.modules(for:)`, which returns none
+                    // when this launch cannot open the store with verified
+                    // backup exclusion (background launch before first unlock).
+                    for module in SpeziSchedulerStorage.modules(for: schedulerLaunchPlan) {
+                        module
+                    }
                 #endif
                 #if canImport(SpeziBluetooth) && canImport(SpeziDevices)
                     // v0.6.0.5 F.2 — declare the discovery profile for the
@@ -392,6 +358,12 @@
         ) -> Bool {
             // Super initializes Spezi + loads modules.
             let result = super.application(application, willFinishLaunchingWithOptions: launchOptions)
+            #if canImport(SpeziScheduler)
+                if case let .unavailable(reason) = schedulerLaunchPlan {
+                    SpeziSchedulerStorage.logUnavailable(reason)
+                    SpeziSchedulerStorage.registerUnavailableRefreshHandler()
+                }
+            #endif
             // Spezi's `setupNotificationDelegate()` (inside `super`) installs a
             // `SpeziNotificationCenterDelegate` because `SchedulerNotifications`
             // conforms to `NotificationHandler`. That delegate fans actions out to

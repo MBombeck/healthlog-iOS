@@ -169,7 +169,7 @@ struct IntakeSiteCaptureSheet: View {
                 .accessibilityHidden(true)
             Text(medication.dose.isEmpty
                 ? medication.name
-                : "\(medication.name) · \(medication.dose)")
+                : "\(medication.name), \(medication.dose)")
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
             Spacer(minLength: 0)

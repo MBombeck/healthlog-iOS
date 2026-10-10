@@ -49,7 +49,10 @@ enum InsightsMetricStatusDescriptor {
             buildGeneric(
                 kind: kind,
                 digest: digest,
-                target: target,
+                // #20 — only the row whose band describes THIS kind's series. The
+                // server `PULSE` row is the resting-pulse band: it may sit on the
+                // resting card, never on the raw pulse card (HealthLog#584).
+                target: target.flatMap { $0.type == MetricChartMath.bandTargetType(for: kind) ? $0 : nil },
                 latestValue: latestValue,
                 sparklineValues: sparklineValues,
                 units: units

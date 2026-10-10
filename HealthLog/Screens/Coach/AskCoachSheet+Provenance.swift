@@ -182,19 +182,22 @@ import SwiftUI
         var body: some View {
             HStack(spacing: HLSpace.xxs) {
                 // M1 — a window-only chip carries no metric token; it renders as
-                // the window alone rather than as a stray "· " separator.
+                // the window alone rather than with a stray leading separator.
+                // U5 (1.1.1) — the parts are joined by a trailing comma on the
+                // preceding part, never by a middle dot.
                 if !model.metricToken.isEmpty {
-                    Text(CoachProvenanceLabels.metric(model.metricToken))
-                        .foregroundStyle(HLText.secondary)
+                    Text(Self.joined(
+                        CoachProvenanceLabels.metric(model.metricToken),
+                        followed: model.windowToken != nil || model.count != nil
+                    ))
+                    .foregroundStyle(HLText.secondary)
                 }
                 if let windowToken = model.windowToken {
-                    Text(model.metricToken.isEmpty
-                        ? CoachProvenanceLabels.window(windowToken)
-                        : "· " + CoachProvenanceLabels.window(windowToken))
+                    Text(Self.joined(CoachProvenanceLabels.window(windowToken), followed: model.count != nil))
                         .foregroundStyle(HLText.tertiary)
                 }
                 if let count = model.count {
-                    Text("· n=\(count)")
+                    Text(verbatim: "n=\(count)")
                         .foregroundStyle(HLText.tertiary)
                         .monospacedDigit()
                 }
@@ -204,6 +207,10 @@ import SwiftUI
             .padding(.vertical, HLSpace.xxs)
             .background(HLSurface.secondary, in: Capsule())
             .accessibilityElement(children: .combine)
+        }
+
+        private static func joined(_ part: String, followed: Bool) -> String {
+            followed ? part + "," : part
         }
     }
 

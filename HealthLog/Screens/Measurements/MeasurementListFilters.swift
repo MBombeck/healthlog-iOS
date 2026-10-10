@@ -130,7 +130,7 @@ enum MeasurementListFilter {
         // same reason: the operator did not hand-enter it on this device.
         let canonical: [MeasurementSource] = [
             .appleHealth, .withings, .whoop, .fitbit, .googleHealth,
-            .strava, .oura, .polar, .nightscout, .computed, .telegram, .mcp,
+            .strava, .oura, .polar, .nightscout, .healthConnect, .computed, .telegram, .mcp,
             // Audit B-4 — last, next to the derived rows: it is the only chip
             // whose members can change meaning between releases.
             .external, .manual, .import_, .unknown
@@ -160,6 +160,7 @@ enum MeasurementListFilter {
         case .oura: "oura"
         case .polar: "polar"
         case .nightscout: "nightscout"
+        case .healthConnect: "health connect"
         case .telegram: "telegram"
         case .mcp: "mcp"
         case .external: "external extern"
@@ -223,6 +224,7 @@ struct SourceFilterChips: View {
         case .oura: String(localized: "Oura")
         case .polar: String(localized: "Polar")
         case .nightscout: String(localized: "Nightscout")
+        case .healthConnect: String(localized: "Health Connect")
         case .telegram: String(localized: "Telegram")
         case .mcp: String(localized: "MCP")
         case .external: String(localized: "measurement.source.external")
@@ -324,7 +326,7 @@ struct ValueRangeFilterControl: View {
                     field(prompt: String(localized: "Min"), text: $minText)
                         .focused($focusedField, equals: .min)
                         .accessibilityIdentifier("measurements.list.valueRange.min")
-                    Text("–").foregroundStyle(HLText.secondary)
+                    Text(String(localized: "range.separator.to")).foregroundStyle(HLText.secondary)
                     field(prompt: String(localized: "Max"), text: $maxText)
                         .focused($focusedField, equals: .max)
                         .accessibilityIdentifier("measurements.list.valueRange.max")

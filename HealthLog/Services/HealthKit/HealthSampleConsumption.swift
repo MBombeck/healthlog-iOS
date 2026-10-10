@@ -41,6 +41,10 @@
         /// caller requests a bucket sweep whenever this is non-zero, so the
         /// hand-off and the sweep that completes it travel together.
         var heartRateHandedOff = 0
+        /// V1 (1.2) — cumulative rows (steps, energy, flights, distance,
+        /// daylight) the daily-statistics gate took off this page. The caller
+        /// requests a recent statistics sweep whenever this is non-zero.
+        var cumulativeHandedOff = 0
     }
 
     /// What the server did with one page's rows, for Sync Diagnostics (#113).
@@ -97,7 +101,8 @@
                 readCount: foreign.count,
                 entries: entries,
                 handedToAggregatePath: entries.isEmpty && !rawEntries.isEmpty,
-                heartRateHandedOff: heartRateBefore - heartRateAfter
+                heartRateHandedOff: heartRateBefore - heartRateAfter,
+                cumulativeHandedOff: rawEntries.count - afterStatsGate.count
             )
         }
     }

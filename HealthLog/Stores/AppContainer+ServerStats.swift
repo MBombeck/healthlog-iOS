@@ -326,7 +326,7 @@ public extension AppContainer {
             measurementsRepo: measurementsRepo
         )
         return ServerStatsStores(
-            syncState: SyncStateStore(repo: repos.syncState),
+            syncState: SyncStateStore(repo: repos.syncState, healthDiagnostics: .shared),
             // v0.5.4-SP5 — HR-time-series for workout-detail is read
             // from HealthKit directly (server only exposes avg/max/min).
             // `HealthKitWorkoutDetailService` is iOS-only; the

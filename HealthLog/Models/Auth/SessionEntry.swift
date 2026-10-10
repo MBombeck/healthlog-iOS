@@ -87,7 +87,7 @@ public extension SessionEntry {
             guard let value, !value.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
             return value
         }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
     /// The timestamp the row should date-stamp with: last activity when the

@@ -19,6 +19,8 @@ public struct MedicationWireDTO: Codable, Sendable, Identifiable, Hashable {
     /// units by this factor. `nil` against ≤v1.16.9 payloads → treated as 1.0.
     public let unitsPerDose: Double?
     public let category: String?
+    /// v1.40: the label of a custom category (`category` = `custom:<uuid>`).
+    public var categoryLabel: String?
     public let active: Bool?
     public let notificationsEnabled: Bool?
     public let schedules: [MedicationScheduleDTO]?
@@ -477,6 +479,8 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
     public let dose: String
     public let treatmentClass: String?
     public let category: String?
+    /// v1.40: server label of a custom category; `nil` for a built-in one.
+    public var categoryLabel: String?
     public let dosesPerUnit: Int?
     /// **v1.16.10/.12 `unitsPerDose`.** Inventory units one dose consumes
     /// (whole 1–100 or a curated split-pill fraction). `nil` → 1.0. See
@@ -784,7 +788,7 @@ public extension MedicationWireDTO {
             ? nil
             : MedicationSchedule(entries: recordedEntries)
 
-        return Medication(
+        var medication = Medication(
             id: id,
             name: name,
             dose: dose,
@@ -822,6 +826,8 @@ public extension MedicationWireDTO {
             courseStatus: courseStatus,
             intakeActionable: intakeActionable
         )
+        medication.categoryLabel = categoryLabel
+        return medication
     }
 
     /// Parse the wire `nextDueAt` ISO8601 timestamp (a full instant, not a

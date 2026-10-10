@@ -89,6 +89,7 @@ private struct SourceRow: View {
         case .oura: "circle.circle.fill"
         case .polar: "heart.circle.fill"
         case .nightscout: "drop.fill"
+        case .healthConnect: "link.circle.fill"
         case .telegram: "paperplane.fill"
         case .mcp: "terminal.fill"
         case .external: "antenna.radiowaves.left.and.right"
@@ -119,6 +120,7 @@ private struct SourceRow: View {
         case .oura: String(localized: "Oura")
         case .polar: String(localized: "Polar")
         case .nightscout: String(localized: "Nightscout")
+        case .healthConnect: String(localized: "Health Connect")
         case .telegram: String(localized: "Telegram")
         case .mcp: String(localized: "MCP")
         case .external: String(localized: "measurement.source.external")

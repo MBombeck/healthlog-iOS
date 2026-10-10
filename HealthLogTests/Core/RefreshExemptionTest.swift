@@ -115,7 +115,15 @@ struct RefreshExemptionTest {
             _ = try await api.send(req)
             Issue.record("expected throw for path \(path)")
         } catch let err as HLError {
-            #expect(err == .unauthorized)
+            // A route that keeps its 401 body (`preserves401Body`, the passkey
+            // `login-verify` leg since server v1.42) surfaces it as
+            // `.server(401, ...)`; every other exempt route collapses to
+            // `.unauthorized`. Neither may reach the refresh bridge.
+            if APIClient.preserves401Body(path: path) {
+                #expect(err == .server(status: 401, code: nil, message: "Invalid credentials"))
+            } else {
+                #expect(err == .unauthorized)
+            }
         } catch {
             Issue.record("unexpected error for path \(path): \(error)")
         }

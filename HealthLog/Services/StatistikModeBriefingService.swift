@@ -201,7 +201,7 @@ public enum StatistikModeBriefingService {
         let label = bucket.kind.displayName
         let latestValue = bucket.latest.flatMap { formatValue(measurement: $0, kind: bucket.kind, units: units) }
         let directionArrow = arrow(for: bucket)
-        let headline = "\(label) · \(bucket.samples)×"
+        let headline = "\(label) (\(bucket.samples)×)"
         let detail: String = if let latestValue {
             directionArrow.map { "\($0) \(latestValue)" } ?? latestValue
         } else {

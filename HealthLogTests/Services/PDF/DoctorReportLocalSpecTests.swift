@@ -80,7 +80,7 @@ struct DoctorReportLocalSpecTests {
             periodEnd: Self.periodEnd,
             locale: .de
         )
-        #expect(spec.footer.disclaimer == "Lokaler Export · kein Server beteiligt · auf-Geraet erzeugt · kein medizinisches Dokument")
+        #expect(spec.footer.disclaimer == "Lokaler Export, kein Server beteiligt, auf-Geraet erzeugt, kein medizinisches Dokument")
     }
 
     @Test("footer disclaimer (EN) is verbatim and locked")
@@ -91,7 +91,7 @@ struct DoctorReportLocalSpecTests {
             periodEnd: Self.periodEnd,
             locale: .en
         )
-        #expect(spec.footer.disclaimer == "Local export · no server involved · generated on-device · not a medical document")
+        #expect(spec.footer.disclaimer == "Local export, no server involved, generated on-device, not a medical document")
     }
 
     @Test("disclaimer matches DoctorReportDisclaimer.text(for:) for both locales")

@@ -349,7 +349,7 @@ public extension MedicationsStore {
             // v1.39.1 — an archived record stays a record until the server says otherwise.
             trackIntake: medication.trackIntake,
             recordedSchedule: medication.recordedSchedule
-        )
+        ).carryingCategoryLabel(medication.categoryLabel)
     }
 
     /// Void-returning mark entry point for the Today-section swipe-actions.

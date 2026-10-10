@@ -70,7 +70,8 @@ struct HKServerSyncHealthSummary: Equatable {
         }
         switch kind {
         case .background, .push: return .confirmed
-        case .foreground: return .foregroundOnly
+        // V1 — "Sync all" is a person at the phone, not a phone that delivers alone.
+        case .foreground, .manual: return .foregroundOnly
         }
     }
 
@@ -133,6 +134,7 @@ struct HKServerSyncHealthSummary: Equatable {
         case .foreground: return String(localized: "settings.hkdiag.trigger_foreground")
         case .background: return String(localized: "settings.hkdiag.trigger_background")
         case .push: return String(localized: "settings.hkdiag.trigger_push")
+        case .manual: return HKSyncDiagnosticsVocabulary.collectionTrigger("manual")
         case nil: return HKSyncDiagnosticsVocabulary.unknown
         }
     }
@@ -224,19 +226,41 @@ extension SettingsHKSyncDiagnosticsScreen {
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach(freshness) { row in
-                    HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-                        Text(HKSyncDiagnosticsVocabulary.freshnessType(row.type))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.primary)
-                        Spacer(minLength: HLSpace.sm)
-                        Text(relativeOrNever(row.lastSeenAt))
-                            .font(.hlCaption.monospacedDigit())
-                            .foregroundStyle(row.stale ? HLColor.statusWarn : HLText.tertiary)
-                            .lineLimit(1)
+                    VStack(alignment: .leading, spacing: HLSpace.xs) {
+                        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
+                            Text(HKSyncDiagnosticsVocabulary.freshnessType(row.type))
+                                .font(.hlCaption)
+                                .foregroundStyle(HLText.primary)
+                            Spacer(minLength: HLSpace.sm)
+                            Text(relativeOrNever(row.lastSeenAt))
+                                .font(.hlCaption.monospacedDigit())
+                                .foregroundStyle(row.stale ? HLColor.statusWarn : HLText.tertiary)
+                                .lineLimit(1)
+                        }
+                        // V1 — server v1.42 says when the type last ARRIVED and
+                        // which trigger carried it. Absent on older servers.
+                        if let received = Self.receivedLabel(row) {
+                            Text(received)
+                                .font(.hlCaption2)
+                                .foregroundStyle(HLText.tertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// "Received 5 minutes ago (Background)", or `nil` when the server did
+    /// not say (before v1.42, the workouts entry, a failed ledger read).
+    static func receivedLabel(_ row: MetricFreshness) -> String? {
+        guard let received = row.lastReceivedAt else { return nil }
+        let when = received.formatted(.relative(presentation: .named))
+        guard let trigger = row.lastTrigger else {
+            return String(localized: "settings.hkdiag.freshness_received \(when)")
+        }
+        let word = HKSyncDiagnosticsVocabulary.collectionTrigger(trigger)
+        return String(localized: "settings.hkdiag.freshness_received_by \(when) \(word)")
     }
 
     private func serverStatRow(label: LocalizedStringKey, value: String, tint: Color) -> some View {
