@@ -14,10 +14,10 @@
 </p>
 
 <p align="center">
-  <a href="https://apps.apple.com/app/id6769501341"><strong>Download on the App Store</strong></a> &middot;
-  <a href="https://healthlog.dev/">healthlog.dev</a> &middot;
-  <a href="https://docs.healthlog.dev/ios/ios-app/">iOS docs</a> &middot;
-  <a href="https://github.com/MBombeck/HealthLog">Server project</a> &middot;
+  <a href="https://apps.apple.com/app/id6769501341"><strong>Download on the App Store</strong></a>&ensp;|&ensp;
+  <a href="https://healthlog.dev/">healthlog.dev</a>&ensp;|&ensp;
+  <a href="https://docs.healthlog.dev/ios/ios-app/">iOS docs</a>&ensp;|&ensp;
+  <a href="https://github.com/MBombeck/HealthLog">Server project</a>&ensp;|&ensp;
   <a href="https://healthlog.dev/support">Support</a>
 </p>
 
@@ -63,15 +63,15 @@ The app is available in English and German.
 
 ## What syncs with Apple Health
 
-| Data | Direction | Notes |
+| Data | Direction (Apple Health) | Notes |
 | --- | --- | --- |
-| Steps, active energy, walking distance, flights climbed | Apple Health → server | Today's value is read live from HealthKit, earlier days come from the server. |
-| Weight, body fat, BMI, body temperature, VO₂ max | Apple Health ↔ server | Writes from the app carry `HKMetadataKeyExternalUUID` so re-reads are recognised and not duplicated. |
-| Blood pressure, heart rate, resting heart rate, HRV, blood oxygen, blood glucose | Apple Health ↔ server | Same duplicate protection. The server is the reference for values you typed in, Apple Health for values a device measured. |
-| Mood (State of Mind) | Apple Health ↔ HealthLog | Can be turned off in the app's settings. |
-| Sleep stages, walking metrics, respiratory rate and other measured values | Apple Health → server | |
-| ECG recordings | Apple Health → server | |
-| Workouts with heart rate detail | Apple Health → server | Sent as workout bundles. |
+| Steps, active energy, walking distance, flights climbed | To the server | Today's value is read live from HealthKit, earlier days come from the server. |
+| Weight, body fat, BMI, body temperature, VO₂ max | Both ways | Writes from the app carry `HKMetadataKeyExternalUUID` so re-reads are recognised and not duplicated. |
+| Blood pressure, heart rate, resting heart rate, HRV, blood oxygen, blood glucose | Both ways | Same duplicate protection. The server is the reference for values you typed in, Apple Health for values a device measured. |
+| Mood (State of Mind) | Both ways | Can be turned off in the app's settings. |
+| Sleep stages, walking metrics, respiratory rate and other measured values | To the server | |
+| ECG recordings | To the server | |
+| Workouts with heart rate detail | To the server | Sent as workout bundles. |
 | Medication intakes, notes | Server only | HealthKit has no standard type for these, so the app and the web UI write them to the server directly. |
 
 You decide per data type in the iOS permission sheet what the app may read and write. Types you don't allow stay on the phone.
@@ -190,7 +190,7 @@ Beyond the Spezi ecosystem, HealthLog iOS uses Apple's [FHIRModels](https://gith
 The most useful things you can do:
 
 - **Run the app** against your own server (or the demo) and tell me where it breaks.
-- **Open an [issue](https://github.com/MBombeck/healthlog-iOS/issues)** with the build number from **More → About**, one line on what you tried, one line on what happened compared with what you expected, a screenshot if it's visual, and whether it happens again.
+- **Open an [issue](https://github.com/MBombeck/healthlog-iOS/issues)** with the build number from **More > About**, one line on what you tried, one line on what happened compared with what you expected, a screenshot if it's visual, and whether it happens again.
 - **Tell me what's missing.** The roadmap follows what people who self-host actually reach for.
 - **Pull requests** are welcome for small fixes and tests. For larger work please open an issue first so we don't duplicate effort. Working with AI tooling is fine; [CONTRIBUTING-AI.md](CONTRIBUTING-AI.md) has the ground rules.
 
@@ -203,10 +203,10 @@ HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICEN
 ---
 
 <p align="center">
-  <a href="https://apps.apple.com/app/id6769501341">App Store</a> &middot;
-  <a href="https://healthlog.dev/">Website</a> &middot;
-  <a href="https://docs.healthlog.dev/ios/ios-app/">Documentation</a> &middot;
-  <a href="https://github.com/MBombeck/HealthLog">Server project</a> &middot;
-  <a href="https://testflight.apple.com/join/bucuTBpa">TestFlight</a> &middot;
+  <a href="https://apps.apple.com/app/id6769501341">App Store</a>&ensp;|&ensp;
+  <a href="https://healthlog.dev/">Website</a>&ensp;|&ensp;
+  <a href="https://docs.healthlog.dev/ios/ios-app/">Documentation</a>&ensp;|&ensp;
+  <a href="https://github.com/MBombeck/HealthLog">Server project</a>&ensp;|&ensp;
+  <a href="https://testflight.apple.com/join/bucuTBpa">TestFlight</a>&ensp;|&ensp;
   <a href="https://github.com/MBombeck/healthlog-iOS/issues">Issues</a>
 </p>
