@@ -23,7 +23,11 @@ concurrency:
 
 jobs:
   build-test:
-    runs-on: [self-hosted, macOS, healthlog-mini]
+    # Pull requests from forks never run on the Mac mini: they get a
+    # GitHub-hosted macOS runner (free for public repos). The self-hosted
+    # runner additionally rejects fork jobs in its job-started hook, because a
+    # fork could edit this file.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'macos-26' || fromJSON('["self-hosted", "macOS", "healthlog-mini"]') }}
     env:
       # Two runners (dev + public mirror) share one machine lock; a run may
       # legitimately wait for the other's test step or for a release freeze.
