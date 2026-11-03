@@ -43,13 +43,14 @@ jobs:
       # — SpeziScheduler 1.2.20 (exact-pinned direct dep) ships a
       # `swift-tools-version:6.2` manifest, which SwiftPM 6.1 (Xcode 16.4)
       # hard-errors on, so package resolution was structurally impossible.
-      # 26.6 matches the exact release/archive `xcodeVersion` pin in project.yml.
+      # 27.2 is the Xcode of the CI machine since 2026-11. Builds up to 1.4.0
+      # were archived with 26.6 (`xcodeVersion` in project.yml).
       - name: Verify Xcode
-        # The runner uses the selected Xcode of the machine; project.yml pins
-        # the same version for the release producer. A different Xcode here
+        # The runner uses the selected Xcode of the machine; the release
+        # producer runs on the same machine. A different Xcode here
         # means the machine moved on without the project — fail before building.
         run: |
-          expected="Xcode 26.6"
+          expected="Xcode 27.2"
           actual="$(xcodebuild -version | head -1)"
           [[ "$actual" == "$expected" ]] || { echo "expected $expected, found $actual" >&2; exit 1; }
 
