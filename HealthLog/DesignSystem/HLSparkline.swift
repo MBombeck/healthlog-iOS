@@ -191,14 +191,14 @@ public struct HLSparkline: View {
     VStack(spacing: HLSpace.lg) {
         // Default `.line` mode — Theme-2.0 single accent via HLChartTints.series.
         HLSparkline(values: [70, 71.2, 70.8, 70.1, 69.5, 69.8, 69.2])
-            .frame(height: 60)
+            .frame(height: HLChartStyle.heightCompact)
         HLSparkline(values: [120, 122, 118, 130, 126, 124, 122])
-            .frame(height: 60)
+            .frame(height: HLChartStyle.heightCompact)
         HLSparkline(values: [4500, 7200, 8100, 5400, 9300, 11200, 6800], mode: .bar)
-            .frame(height: 60)
+            .frame(height: HLChartStyle.heightCompact)
         // Edge: single value → hairline
         HLSparkline(values: [3])
-            .frame(height: 60)
+            .frame(height: HLChartStyle.heightCompact)
     }
     .padding()
     .background(HLSurface.primary)

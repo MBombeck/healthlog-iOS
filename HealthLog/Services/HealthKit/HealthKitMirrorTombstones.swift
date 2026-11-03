@@ -1,58 +1,51 @@
 import Foundation
-#if canImport(HealthKit)
-    import HealthKit
-#endif
 
-#if canImport(HealthKit)
+/// **S1 / public #11, A6 (1.4)** — server ids whose HealthLog copy the person
+/// deleted in Apple Health, so the server→Health mirror does not write them
+/// back.
+///
+/// Deleting a copy in Apple Health keeps the server row: the delete route only
+/// touches `APPLE_HEALTH` rows, and a copy is never uploaded. Without this list
+/// the next fresh page would mirror the reading straight back. The deletion
+/// path records the id it reads from the copy's sync identifier
+/// (``HealthKitCopySyncIdentity``); the mirror reads the list. Until 1.4 the
+/// only writer looked for metadata a deletion never keeps, so the list stayed
+/// empty and the global 1.3 key (`…tombstones.v1`) was never written.
+///
+/// Per owner, keyed by the same partition token as the other per-account
+/// HealthKit state, so one account's list never limits another's mirror. Not
+/// cleared at sign-out: after the next sign-in the anchors start over and do
+/// not report an old deletion again, so an emptied list would let the mirror
+/// write back every copy the person ever deleted. The ids are server row ids
+/// and carry no health data. Each list keeps the newest ``capacity`` ids.
+struct HealthKitMirrorTombstones: @unchecked Sendable {
+    static let keyPrefix = "hl.healthkit.serverMirror.tombstones.v2."
+    static let capacity = 2000
 
-    /// **S1 / public #11** — server ids whose Apple-Health sample the user
-    /// deleted, so the server→Health mirror does not write them back.
-    ///
-    /// Deleting a HealthLog-written sample in Apple Health does not delete the
-    /// server row unless that row came from Apple Health
-    /// (`DELETE /api/measurements/by-external-ids` is scoped to
-    /// `APPLE_HEALTH`). A WITHINGS, IMPORT or MANUAL row therefore survives,
-    /// and without this list the next refresh would mirror it straight back.
-    /// Recorded from the deletion path, read by the mirror.
-    ///
-    /// Server ids are globally unique, so the list needs no per-user partition.
-    /// It keeps the newest ``capacity`` ids. Ids carry no health data.
-    struct HealthKitMirrorTombstones: @unchecked Sendable {
-        static let defaultsKey = "hl.healthkit.serverMirror.tombstones.v1"
-        static let capacity = 2000
+    let key: String
+    /// `UserDefaults` is thread-safe; the box is only `@unchecked` because
+    /// the type itself is not declared `Sendable`.
+    private let defaults: UserDefaults
 
-        /// `UserDefaults` is thread-safe; the box is only `@unchecked` because
-        /// the type itself is not declared `Sendable`.
-        private let defaults: UserDefaults
-
-        init(defaults: UserDefaults = .standard) {
-            self.defaults = defaults
-        }
-
-        var ids: Set<String> {
-            Set(defaults.stringArray(forKey: Self.defaultsKey) ?? [])
-        }
-
-        func record(_ newIDs: [String]) {
-            let additions = newIDs.filter { !$0.isEmpty }
-            guard !additions.isEmpty else { return }
-            var stored = defaults.stringArray(forKey: Self.defaultsKey) ?? []
-            stored.removeAll { additions.contains($0) }
-            stored.append(contentsOf: additions)
-            if stored.count > Self.capacity {
-                stored.removeFirst(stored.count - Self.capacity)
-            }
-            defaults.set(stored, forKey: Self.defaultsKey)
-        }
-
-        /// The server ids of the deletions this app can prove it minted (the
-        /// same two-signal check the delete-propagation path uses).
-        static func mintedIDs(fromDeletedMetadata metadata: [[String: Any]?]) -> [String] {
-            metadata.compactMap { entry in
-                guard HealthKitSampleOwnership.isAppMintedDeletion(metadata: entry) else { return nil }
-                return entry?[HKMetadataKeyExternalUUID] as? String
-            }
-        }
+    init(ownerID: String?, defaults: UserDefaults = .standard) {
+        key = Self.keyPrefix + HealthKitBackfillWindowStore.partitionToken(for: ownerID)
+        self.defaults = defaults
     }
 
-#endif
+    var ids: Set<String> {
+        Set(defaults.stringArray(forKey: key) ?? [])
+    }
+
+    func record(_ newIDs: [String]) {
+        var seen = Set<String>()
+        let additions = newIDs.filter { !$0.isEmpty && seen.insert($0).inserted }
+        guard !additions.isEmpty else { return }
+        var stored = defaults.stringArray(forKey: key) ?? []
+        stored.removeAll { seen.contains($0) }
+        stored.append(contentsOf: additions)
+        if stored.count > Self.capacity {
+            stored.removeFirst(stored.count - Self.capacity)
+        }
+        defaults.set(stored, forKey: key)
+    }
+}

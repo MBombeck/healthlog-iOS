@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Renders the injection-site picker section: body-map grid that
-/// surfaces last-used + suggested-next via subtle highlights, a
-/// rotation-hint card, and a recent-history list.
+/// surfaces last-used + suggested-next via subtle highlights, the
+/// rotation suggestion as the map card's first line, and a recent-history
+/// list.
 ///
 /// **MDR boundary:** rotation is hygiene guidance (avoid local
 /// lipohypertrophy from repeated same-site injections), not a clinical
@@ -20,7 +21,6 @@ public struct InjectionSitePicker: View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             // T2-4: section label Withings rhythm.
             HLSectionLabel("Injektionsstelle")
-            rotationHintCard
             bodyMapCard
             historyCard
         }
@@ -28,30 +28,28 @@ public struct InjectionSitePicker: View {
 
     // MARK: - Sections
 
+    /// 1.4 B2 — the rotation suggestion is the body map's own first line, with
+    /// its citation beside it, instead of a ghost card above the map. Nothing
+    /// renders there before the first site is logged.
     @ViewBuilder
-    private var rotationHintCard: some View {
-        // v0.6.1.19 Y10.5 (c): empty-state copy at the bottom is the
-        // canonical empty state — the top "Wähle eine Stelle, um die
-        // Rotation zu starten" is redundant. Render the hint card
-        // only when a rotation suggestion exists.
+    private var rotationLine: some View {
         if let suggested = store.suggestedNextSite {
-            HLCard(style: .ghost) {
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    HStack(spacing: HLSpace.xs) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundStyle(HLText.secondary)
-                        Text(String(
-                            format: String(localized: "Vorschlag laut Rotationsplan: %@"),
-                            suggested.localizedLabel
-                        ))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                    }
-                    Text(String(localized: "Rotate the site to protect your skin."))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                    // 1.0.3 (App Review 1.4.1) — the rotation hygiene claim is
-                    // Frid et al. 2016 (FITTER injection technique).
+            let text = Text(String(
+                format: String(localized: "Vorschlag laut Rotationsplan: %@"),
+                suggested.localizedLabel
+            ))
+            .font(.hlSubhead)
+            .foregroundStyle(HLText.primary)
+            // 1.0.3 (App Review 1.4.1) — the rotation hygiene claim is Frid et
+            // al. 2016 (FITTER injection technique).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+                    text
+                    Spacer(minLength: HLSpace.sm)
+                    HLSourcesLink(topic: .injectionRotation)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    text
                     HLSourcesLink(topic: .injectionRotation)
                 }
             }
@@ -61,6 +59,7 @@ public struct InjectionSitePicker: View {
     private var bodyMapCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
+                rotationLine
                 InjectionBodyMap(
                     lastUsed: store.lastUsedSite,
                     suggested: store.suggestedNextSite,
@@ -102,15 +101,11 @@ public struct InjectionSitePicker: View {
         }
     }
 
+    /// The logged sites, when there are any. 1.4 B2: no card saying there are
+    /// none; the body map above is where the first one is logged.
     @ViewBuilder
     private var historyCard: some View {
-        if store.mergedHistory.isEmpty {
-            HLCard(style: .ghost) {
-                Text(String(localized: "No sites logged yet."))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-            }
-        } else {
+        if !store.mergedHistory.isEmpty {
             HLCard {
                 VStack(spacing: 0) {
                     let history = store.mergedHistory
@@ -148,9 +143,9 @@ private struct HistoryRow: View {
                     .monospacedDigit()
             }
             Spacer()
-            if record.source == .server {
-                HLBadge(String(localized: "Server"), tone: .neutral)
-            } else {
+            // 1.4 B2 — a synced row simply has no delete menu; it no longer
+            // wears a "Server" mark (no technical words in user copy).
+            if record.source == .local {
                 Menu {
                     Button(role: .destructive, action: onDelete) {
                         Label(String(localized: "Delete"), systemImage: "trash")

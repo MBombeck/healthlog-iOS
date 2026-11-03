@@ -137,6 +137,9 @@ struct F1PercentLocaleTests {
 
 // MARK: - 3. Settings card subtitle
 
+/// 1.4 B2-c — every settings-card subtitle wraps now, at every text size; the
+/// F1 opt-in (`subtitleWraps`) and the one-line default it opted out of are
+/// gone (HIG: wrap, never truncate).
 @MainActor
 @Suite("F1 · Erklärtext in Einstellungs-Karten wird nicht abgeschnitten")
 struct F1SettingsCardSubtitleTests {
@@ -144,41 +147,22 @@ struct F1SettingsCardSubtitleTests {
     private static let long: LocalizedStringKey =
         "Die Liste kommt von deinem Server. Angehakt heißt: Diese Daten sind enthalten."
 
-    @Test("Mit subtitleWraps bricht der Untertitel bei Standardgröße um")
-    func optInWrapsAtStandardSize() throws {
-        let shortHeight = try Self.height(of: Self.card(subtitle: Self.short, wraps: true))
-        let longHeight = try Self.height(of: Self.card(subtitle: Self.long, wraps: true))
+    @Test("Der Untertitel bricht bei Standardgröße um")
+    func wrapsAtStandardSize() throws {
+        let shortHeight = try Self.height(of: Self.card(subtitle: Self.short))
+        let longHeight = try Self.height(of: Self.card(subtitle: Self.long))
         #expect(longHeight > shortHeight + 1, "the long subtitle was cut to one line (\(longHeight)pt vs \(shortHeight)pt)")
     }
 
-    @Test("Ohne subtitleWraps bleibt die Karte einzeilig (bewusste Dichte)")
-    func defaultStaysOneLine() throws {
-        let shortHeight = try Self.height(of: Self.card(subtitle: Self.short, wraps: false))
-        let longHeight = try Self.height(of: Self.card(subtitle: Self.long, wraps: false))
-        #expect(abs(longHeight - shortHeight) < 1)
+    @Test("Kein Untertitel kappt sich selbst auf eine Zeile")
+    func noOneLineCapLeft() throws {
+        let source = try F1Source.read("HealthLog/DesignSystem/HLSettingsCard.swift")
+        #expect(!source.contains("subtitleWraps"))
+        #expect(!source.contains(".lineLimit(wraps"))
     }
 
-    @Test("Die Teilen-Karte „Was“ und die anderen Erklär-Karten setzen subtitleWraps")
-    func explanatoryCardsOptIn() throws {
-        let sites: [(file: String, key: String)] = [
-            ("HealthLog/Screens/Sharing/UnifiedSharingScreen.swift", "sharing.unified.what.subtitle"),
-            ("HealthLog/Screens/Settings/Sub/SettingsHKSyncDiagnosticsScreen+Skipped.swift", "settings.hkdiag.skipped_subtitle"),
-            ("HealthLog/Screens/Settings/Sub/SettingsSupportDiagnosticsScreen.swift", "settings.support.gate_body"),
-            ("HealthLog/Screens/Settings/Sub/ImportDataScreen.swift", "import.action.subtitle"),
-            ("HealthLog/Screens/Settings/OAuthIntegrationScreen.swift", "integration.byo.subtitle"),
-            ("HealthLog/Screens/Settings/Sub/SettingsDashboardScreen.swift", "Pick up to three scores and their order.")
-        ]
-        for site in sites {
-            let source = try F1Source.read(site.file)
-            let subtitle = try #require(source.range(of: "subtitle: \"\(site.key)"), "\(site.key) not found in \(site.file)")
-            let tail = source[subtitle.upperBound...]
-            let nextLines = tail.prefix(200)
-            #expect(nextLines.contains("subtitleWraps: true"), "\(site.file) must let \(site.key) wrap")
-        }
-    }
-
-    private static func card(subtitle: LocalizedStringKey, wraps: Bool) -> some View {
-        HLSettingsCard(icon: "checklist", title: "Was", subtitle: subtitle, subtitleWraps: wraps) {
+    private static func card(subtitle: LocalizedStringKey) -> some View {
+        HLSettingsCard(icon: "checklist", title: "Was", subtitle: subtitle) {
             Text("Body").font(.hlBody)
         }
     }
@@ -206,8 +190,7 @@ struct F1InsightsEmptyStateTests {
         cardsEmpty: Bool = true,
         loading: Bool = false,
         error: Bool = false,
-        data: Bool,
-        briefing: AICapabilityState
+        data: Bool
     ) -> InsightsEmptyState? {
         InsightsEmptyState.resolve(
             hasServer: true,
@@ -215,75 +198,32 @@ struct F1InsightsEmptyStateTests {
             cardsEmpty: cardsEmpty,
             isLoading: loading,
             hasError: error,
-            hasRecordedData: data,
-            briefing: briefing
+            hasRecordedData: data
         )
     }
 
-    @Test("Daten da, KI aus: kein „erfasse mehr Messungen“, sondern der Grund des Servers")
-    func dataButNoAI() {
-        #expect(Self.resolve(data: true, briefing: AICaps.operatorDisabled) == .aiUnavailable(.operatorDisabled))
-        #expect(Self.resolve(data: true, briefing: AICaps.noProvider) == .aiUnavailable(.noProvider))
-        #expect(Self.resolve(data: true, briefing: AICaps.consentRequired) == .aiUnavailable(.consentRequired))
-        #expect(Self.resolve(data: true, briefing: AICaps.moduleDisabled) == .aiUnavailable(.moduleDisabled))
-    }
-
-    @Test("Daten da, KI verfügbar (oder Server ohne ai-Block): keine Leerkarte")
-    func dataAndAI() {
-        #expect(Self.resolve(data: true, briefing: AICaps.available) == nil)
-        #expect(Self.resolve(data: true, briefing: .legacy) == nil)
+    /// 1.4 B2 — with data there is no empty card at all, whatever the AI
+    /// layer's state: the "no AI summary right now" card is gone.
+    @Test("Daten da: keine Leerkarte, auch ohne KI")
+    func dataMeansNoCard() {
+        #expect(Self.resolve(data: true) == nil)
     }
 
     @Test("Keine Daten: „erfasse mehr Messungen“ ist dann wahr")
     func noData() {
-        #expect(Self.resolve(data: false, briefing: AICaps.available) == .needsData)
-        #expect(Self.resolve(data: false, briefing: AICaps.operatorDisabled) == .needsData)
+        #expect(Self.resolve(data: false) == .needsData)
     }
 
     @Test("Nur wenn der Server wirklich keine Karten geliefert hat")
     func onlyOnADeliveredEmptyList() {
-        #expect(Self.resolve(delivered: false, data: false, briefing: AICaps.available) == nil, "never loaded ≠ empty")
-        #expect(Self.resolve(cardsEmpty: false, data: false, briefing: AICaps.available) == nil)
-        #expect(Self.resolve(loading: true, data: false, briefing: AICaps.available) == nil)
-        #expect(Self.resolve(error: true, data: false, briefing: AICaps.available) == nil)
+        #expect(Self.resolve(delivered: false, data: false) == nil, "never loaded ≠ empty")
+        #expect(Self.resolve(cardsEmpty: false, data: false) == nil)
+        #expect(Self.resolve(loading: true, data: false) == nil)
+        #expect(Self.resolve(error: true, data: false) == nil)
         #expect(InsightsEmptyState.resolve(
             hasServer: false, hasDeliveredCards: true, cardsEmpty: true, isLoading: false,
-            hasError: false, hasRecordedData: false, briefing: AICaps.available
+            hasError: false, hasRecordedData: false
         ) == nil)
-    }
-
-    @Test("Jeder Grund hat eigenen Text, keiner bittet um mehr Messungen")
-    func reasonCopy() {
-        let reasons: [AIUnavailableReason] = [
-            .operatorDisabled, .moduleDisabled, .userDisabled, .noProvider, .consentRequired,
-            .notPermittedForRecord, .checkFailed, .unknown
-        ]
-        let needsData = String(localized: "Insights appear once enough data is logged — capture more measurements.")
-        for reason in reasons {
-            let message = InsightsEmptyState.message(for: reason)
-            #expect(!message.contains("insights.empty"), "unresolved catalog key for \(reason): \(message)")
-            #expect(message != needsData)
-            #expect(!message.localizedCaseInsensitiveContains("capture more"))
-        }
-        #expect(InsightsEmptyState.message(for: .operatorDisabled) != InsightsEmptyState.message(for: .noProvider))
-    }
-
-    @Test("Deutsch und Englisch sind im Katalog")
-    func catalogHasBothLanguages() throws {
-        let keys = [
-            "insights.empty.ai.title", "insights.empty.ai.dataNote",
-            "insights.empty.ai.reason.operator", "insights.empty.ai.reason.switchedOff",
-            "insights.empty.ai.reason.noProvider", "insights.empty.ai.reason.consent",
-            "insights.empty.ai.reason.record", "insights.empty.ai.reason.unknown"
-        ]
-        for language in ["de", "en"] {
-            let path = try #require(Bundle.main.path(forResource: language, ofType: "lproj"), "no \(language).lproj")
-            let bundle = try #require(Bundle(path: path))
-            for key in keys {
-                let value = bundle.localizedString(forKey: key, value: "<missing>", table: nil)
-                #expect(value != "<missing>" && value != key, "\(language): \(key) is missing")
-            }
-        }
     }
 
     @Test("Store: leere Kartenliste zählt erst, wenn insights/cards geantwortet hat")

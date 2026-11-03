@@ -165,7 +165,7 @@
             }
 
             let load = Task { await store.load(force: true) }
-            let raised = await phase09Settle { await MainActor.run { store.isLoading } }
+            let raised = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             #expect(raised, "the cold-cache `.empty` emission must raise the skeleton first")
 
             load.cancel()
@@ -203,7 +203,7 @@
             }
 
             let load = Task { await store.load(force: true) }
-            let raised = await phase09Settle { await MainActor.run { store.isLoading } }
+            let raised = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             #expect(raised, "the cold-cache `.empty` emission must raise the skeleton first")
 
             load.cancel()
@@ -289,7 +289,7 @@
                 return Self.medicationsPayload(request)
             }
             let load = Task { await store.load() }
-            let raised = await phase09Settle { await MainActor.run { store.isLoading } }
+            let raised = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             #expect(raised, "loadDirect must raise the skeleton first")
             load.cancel()
             _ = await load.value
@@ -339,7 +339,7 @@
             }
 
             let load = Task { await store.load() }
-            let raised = await phase09Settle { await MainActor.run { store.isLoading } }
+            let raised = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             #expect(raised, "the cold-cache emission must raise the skeleton first")
             load.cancel()
             _ = await load.value
@@ -375,7 +375,7 @@
             }
             let load = Task { await store.load() }
 
-            let raised = await phase09Settle { await MainActor.run { store.isLoading } }
+            let raised = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             #expect(raised, "the cold-cache emission must raise the skeleton first")
 
             store.clearOnLogout()
@@ -420,7 +420,7 @@
                 return Self.medicationsPayload(request)
             }
             let pass = Task { await store.load(force: true) }
-            _ = await phase09Settle { await MainActor.run { store.isLoading } }
+            _ = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             pass.cancel()
             _ = await pass.value
 
@@ -497,7 +497,7 @@
             }
 
             let pass = Task { await store.load(force: true) }
-            _ = await phase09Settle { await MainActor.run { store.isLoading } }
+            _ = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             pass.cancel()
             _ = await pass.value
 

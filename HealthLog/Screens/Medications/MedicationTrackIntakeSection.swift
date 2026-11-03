@@ -13,9 +13,11 @@ struct MedicationTrackIntakeSection: View {
 
     var body: some View {
         Section {
+            // 1.4 B2 — the line speaks only when the switch is off: tracked
+            // intake is the expected case, a record is the one to explain.
             HLSettingsToggleRow(
                 title: "med.edit.trackIntake.label",
-                description: isOn ? "med.edit.trackIntake.helperOn" : "med.edit.trackIntake.helperOff",
+                description: isOn ? nil : "med.edit.trackIntake.helperOff",
                 isOn: $isOn,
                 accessibilityID: "med.edit.trackIntake"
             )

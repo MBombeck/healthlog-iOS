@@ -125,10 +125,10 @@ struct EditProfileScreen: View {
             } header: {
                 Text("Identity")
             } footer: {
+                // 1.4 B2-c — only the validation error; "how you appear in the
+                // app" said what the label already does.
                 if hasUserEditedDisplayName, let length = displayNameValidationError {
                     HLFormErrorText(length)
-                } else {
-                    Text("How you appear in the app and in the Doctor report.")
                 }
             }
 
@@ -176,10 +176,10 @@ struct EditProfileScreen: View {
             } header: {
                 Text("Height")
             } footer: {
+                // 1.4 B2-c — the range shows up as the validation error when
+                // it matters; no standing hint.
                 if let err = heightValidationError {
                     HLFormErrorText(err)
-                } else {
-                    Text("50 – 300 cm. Leave empty to clear the value.")
                 }
             }
 

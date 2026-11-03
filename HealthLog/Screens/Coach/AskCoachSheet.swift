@@ -87,6 +87,8 @@ struct AskCoachSheet: View {
                 .hlScreenBackground()
                 .navigationTitle(String(localized: "Ask the coach"))
                 .navigationBarTitleDisplayMode(.inline)
+                // 1.4 B2 — the assistant's citation pushes inside this sheet.
+                .hlSheetStack()
                 // v0.6.1 Y2 — Home-Compliance pattern: drop the
                 // 'Schließen' cancellationAction (drag-down dismisses).
                 // The `arrow.counterclockwise` reset stays — it's a
@@ -292,43 +294,26 @@ struct AskCoachSheet: View {
     /// welcome each release".
     private func emptyStateHeader(store: CoachConversationStore) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xl) {
-            welcomeLockup
             // v0151 ON-DEVICE-REACH — when the on-device arm is answering (the
             // private path: no server fallback, no BYO), name the privacy
             // guarantee plainly in the empty state so the first-time user — and
             // especially the privacy-first `aiMode == .none` user who can now
             // reach the coach on a capable device — knows the answer never leaves
-            // the iPhone. This is the calmer, fuller framing shown only before the
-            // first turn (the per-turn arm pills were removed in CO1 — provenance
-            // is now on-demand only).
-            if !store.usingServerFallback, !store.usingBYO {
-                privateProvenanceNote
-            }
+            // the iPhone. 1.4 B2-c: it is the welcome's one subtitle now; the
+            // generic "ask me about your data" line it stood under is gone.
+            welcomeLockup(privateNote: !store.usingServerFallback && !store.usingBYO)
             suggestionChipsSection(store: store)
         }
     }
 
-    /// v0151 ON-DEVICE-REACH — the honest on-device privacy note for the empty
-    /// state. Monochrome, calm, footnote-weight; reuses the `iphone` glyph the
-    /// transcript pill uses so the provenance reads consistently.
-    private var privateProvenanceNote: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            Image(systemName: "iphone")
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(HLText.secondary)
-            Text(
-                String(
-                    localized: "Answered privately on your iPhone. Your data never leaves the device."
-                )
-            )
-            .font(.hlFootnote)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
+    /// The welcome. Its one subtitle is the on-device privacy note (v0151
+    /// ON-DEVICE-REACH), shown only when that arm answers; the chips and the
+    /// composer say the rest.
+    var welcomeLockup: some View {
+        welcomeLockup(privateNote: false)
     }
 
-    var welcomeLockup: some View {
+    func welcomeLockup(privateNote: Bool) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             HStack(spacing: HLSpace.sm) {
                 Image(systemName: "sparkles")
@@ -340,14 +325,12 @@ struct AskCoachSheet: View {
                     .foregroundStyle(HLText.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text(
-                String(
-                    localized: "Ask me a question about your data — I know your history and can explain what the numbers mean."
-                )
-            )
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            if privateNote {
+                Text(String(localized: "Answered privately on your iPhone. Your data never leaves the device."))
+                    .font(.hlSubhead)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -400,15 +383,6 @@ struct AskCoachSheet: View {
                 Text(String(localized: "Coach requires Apple Intelligence"))
                     .font(.hlHeadline)
                     .foregroundStyle(HLText.primary)
-                Text(
-                    String(
-                        localized: "This build configuration is missing the chat module. Please reinstall the app."
-                    )
-                )
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, HLSpace.xl)
                 Spacer()
             }
         #endif
@@ -490,9 +464,6 @@ struct AskCoachSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.xl) {
                 welcomeLockup
-                Text(String(localized: "Preview without Coach backend."))
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
                 Spacer(minLength: HLSpace.xxxl)
             }
             .padding(.horizontal, HLSpace.lg)

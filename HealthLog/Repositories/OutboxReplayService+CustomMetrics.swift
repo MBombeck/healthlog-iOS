@@ -12,11 +12,11 @@ extension OutboxReplayService {
     ///
     /// **The H-4 remap matters more here than anywhere else.** A user can define
     /// a metric AND log its first value in one offline session; the value's
-    /// payload then carries the optimistic metric id. The create arm publishes
-    /// the server-assigned id via `lastCreatedServerId`, and every entry arm
+    /// payload then carries the optimistic metric id. The create arm returns
+    /// the server-assigned id to the pass (1.4, S5), and every entry arm
     /// funnels its `metricID` through `resolveEntityId` — so the queued value
     /// lands on the real metric instead of 404-ing into the dead-letter table.
-    func dispatchCustomMetrics(_ op: OutboxQueue.Operation) async throws {
+    func dispatchCustomMetrics(_ op: OutboxQueue.Operation) async throws -> String? {
         guard let customMetricsRepo else {
             throw HLError.unknown("Op-Kind \(op.kind.rawValue): customMetricsRepo unwired")
         }
@@ -24,7 +24,7 @@ extension OutboxReplayService {
         switch op.kind {
         case .createCustomMetric:
             let p = try decoder.decode(OutboxQueue.Payloads.CreateCustomMetric.self, from: op.payload)
-            lastCreatedServerId = try await customMetricsRepo.replayCreateMetricReturningServerId(
+            return try await customMetricsRepo.replayCreateMetricReturningServerId(
                 p.body, idempotencyKey: key
             )
         case .updateCustomMetric:
@@ -57,5 +57,6 @@ extension OutboxReplayService {
         default:
             break
         }
+        return nil
     }
 }

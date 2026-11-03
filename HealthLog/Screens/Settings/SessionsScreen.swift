@@ -16,10 +16,9 @@ import SwiftUI
 ///
 /// **Honest empty state.** A native sign-in creates no `Session` row (see
 /// `SessionEntry`), so an account that has only ever used the iOS app sees an
-/// empty list. Rather than paint a bare "nothing here" — which reads as a bug —
-/// the empty state explains that this list covers browser sign-ins, and the
-/// sign-out-everywhere action stays available because that is the lever which
-/// actually reaches native devices.
+/// empty list. The section header names what the list covers (browser
+/// sign-ins), and the sign-out-everywhere action stays available because that
+/// is the lever which actually reaches native devices.
 struct SessionsScreen: View {
     @Environment(SessionsStore.self) private var store
     @State private var pendingRevokeID: String?
@@ -30,11 +29,6 @@ struct SessionsScreen: View {
         List {
             sessionsSection
             signOutEverywhereSection
-            // v0.14.8 W2-SYNCUX — canonical sync-status footer (same primitive
-            // as every other server-backed settings surface).
-            Section {} footer: {
-                HLSyncStatusFooter(screenLoading: store.isLoading)
-            }
         }
         // W3b B3 — iOS 26+ soft scroll-edge (no-op on iOS 18-25).
         .hlScrollEdgeSoft()
@@ -116,22 +110,19 @@ struct SessionsScreen: View {
                 }
             }
         } header: {
-            Text("sessions.section.active")
+            // 1.4 B2-c — the header says what the list holds (browser
+            // sign-ins), so an empty list on an app-only account reads as an
+            // answer, not a defect. It replaces the header that repeated the
+            // navigation title and the empty state's second sentence.
+            Text("sessions.section.browser")
         }
     }
 
-    /// The list only ever contains browser sign-ins — say so, so an empty list
-    /// on an app-only account reads as an explanation instead of a defect.
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("sessions.empty.title")
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-            Text("sessions.empty.body")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-        }
-        .accessibilityIdentifier("sessions.emptyState")
+        Text("sessions.empty.title")
+            .font(.hlBody)
+            .foregroundStyle(HLText.secondary)
+            .accessibilityIdentifier("sessions.emptyState")
     }
 
     private func sessionRow(_ session: SessionEntry) -> some View {

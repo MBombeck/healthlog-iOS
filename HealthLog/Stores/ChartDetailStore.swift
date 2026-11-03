@@ -43,7 +43,8 @@ public final class ChartDetailStore {
         /// Short Apple-Health-style label for segmented control rendering.
         public var label: String {
             switch self {
-            case .day: "T"
+            // 1.4 B4 — "T" was German in English too; Apple Health says "D".
+            case .day: String(localized: "range.label.day", defaultValue: "T")
             case .week: "W"
             case .month: "M"
             case .sixMonths: "6M"
@@ -202,7 +203,38 @@ public final class ChartDetailStore {
     /// the prior (empty) behaviour rather than mis-charting.
     let heightCmProvider: (@MainActor () -> Double?)?
     var loadTask: Task<Void, Never>?
+    /// 1.4 B1 — bumped by every `load()`. Only the load holding the current
+    /// value may clear `isLoading`: a load cancelled by a newer one unwinds
+    /// after the newer one has set the flag, and clearing it there ended the
+    /// spinner while the newer request was still on the wire, so the chart
+    /// card fell through to „Noch keine Daten" on a merely slow network.
+    @ObservationIgnored var loadGeneration: Int = 0
     private var _queryKeyVersion: Int = 0
+
+    /// 1.4 B1 — cancels the running load and opens the generation the new
+    /// load owns (see ``loadGeneration``).
+    func supersedeLoad() -> Int {
+        loadTask?.cancel()
+        loadGeneration &+= 1
+        return loadGeneration
+    }
+
+    /// 1.4 B1 — a read that failed without any evidence of emptiness is a
+    /// failed load, surfaced like the series failure, so the chart card shows
+    /// the error face instead of an empty history. A cancelled load reports
+    /// nothing; its successor owns the outcome.
+    func recordLoadFailure(_ failure: Error) {
+        guard !Task.isCancelled else { return }
+        error = (failure as? HLError) ?? .unknown(String(describing: failure))
+    }
+
+    /// 1.4 B1 — the empty settle after a failed measurements page with no
+    /// usable series. An empty series is evidence of „no rows"; a kind without
+    /// a series has none, so there the failed page is a failed load.
+    func settleEmptyAfterFailedPage(_ failure: Error) {
+        dataState = .empty(reason: .noData)
+        if series == nil { recordLoadFailure(failure) }
+    }
 
     public init(
         kind: MetricKind,

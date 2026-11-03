@@ -45,9 +45,9 @@ struct BiomarkerCatalogScreen: View {
                                 markerRow(marker)
                             }
                         } header: {
+                            // 1.4 B2-c — header only: what "hidden" means is
+                            // the editor's toggle line, one tap away.
                             Text("biomarker.catalog.hidden.section")
-                        } footer: {
-                            Text("biomarker.catalog.hidden.footer")
                         }
                     }
                     Section {} footer: {
@@ -120,16 +120,16 @@ struct BiomarkerCatalogScreen: View {
     }
 
     private var emptyState: some View {
+        // 1.4 B4 — the one empty-state form: on the page, no ghost card, the
+        // one action `.secondary`.
         ScrollView {
-            HLCard(style: .ghost) {
-                HLEmptyState(
-                    icon: "list.bullet.rectangle",
-                    title: "biomarker.empty.title",
-                    message: "biomarker.empty.subtitle"
-                ) {
-                    HLButton("biomarker.add.title", icon: "plus", variant: .primary) {
-                        showAddSheet = true
-                    }
+            HLEmptyState(
+                icon: "list.bullet.rectangle",
+                title: "biomarker.empty.title",
+                message: "biomarker.empty.subtitle"
+            ) {
+                HLButton("biomarker.add.title", icon: "plus", variant: .secondary) {
+                    showAddSheet = true
                 }
             }
             .padding(HLSpace.lg)

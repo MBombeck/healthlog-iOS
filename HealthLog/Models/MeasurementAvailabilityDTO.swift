@@ -29,14 +29,19 @@ public struct MeasurementAvailabilityDTO: Codable, Sendable {
         self.summaries = summaries
     }
 
-    /// One per-kind summary — only `count` is read (tolerant of the slice's
-    /// many other fields, which Decodable ignores). `Codable` so the SWR
-    /// coordinator can round-trip it through the on-disk cache.
+    /// One per-kind summary — `count` for availability and, since 1.4 B4, the
+    /// server's `avg30` (mean of the last 30 days, `null` without a reading in
+    /// that window) for the metric page's "30 Tage Durchschnitt" card. The
+    /// slice's many other fields are ignored. `Codable` so the SWR coordinator
+    /// can round-trip it through the on-disk cache; a row cached before 1.4
+    /// simply decodes without an average until it revalidates.
     public struct CountSummary: Codable, Sendable {
         public let count: Int?
+        public let avg30: Double?
 
-        public init(count: Int?) {
+        public init(count: Int?, avg30: Double? = nil) {
             self.count = count
+            self.avg30 = avg30
         }
     }
 }

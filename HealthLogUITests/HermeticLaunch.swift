@@ -210,3 +210,15 @@ extension XCTestCase {
         add(shot)
     }
 }
+
+/// **1.4 B4-z — the light review set.** The app lands on its dark appearance
+/// and re-asserts it once per install (`SettingsStore`, "dark-first"), so the
+/// simulator's own appearance does not reach it. These launch arguments set
+/// the app's choice the way Settings → Aussehen does, in the argument domain:
+/// light, with the one-time re-assert already done.
+enum HermeticAppearance {
+    static let lightArguments = [
+        "-hl.settings.appearance", "light",
+        "-hl.settings.darkDefault.reasserted.v1", "YES"
+    ]
+}

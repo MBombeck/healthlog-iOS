@@ -6,7 +6,7 @@ import Foundation
 
 /// Result of an on-device briefing attempt.
 ///
-/// `nil` payload is the contract callers (DailyBriefingHero etc.) inspect
+/// `nil` payload is the contract callers inspect
 /// for fallback routing: any of {device-ineligible, safety-refused,
 /// capability-not-allowed, framework-not-importable} maps to `nil` so the
 /// server-AI path takes over.

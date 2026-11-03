@@ -108,7 +108,6 @@ struct AIUsageLevelContractTests {
     func usageLevelSentence() {
         let sentence = String(localized: "ai.reason.usageLevel")
         #expect(!sentence.isEmpty)
-        #expect(InsightsEmptyState.message(for: .usageLevel).hasPrefix(sentence))
         let refusal = AIRefusal(errorCode: "ai.usage.levelTooLow", capability: .coach, reason: .usageLevel)
         #expect(AskCoachSheet.coachRefusalCopy(refusal) == sentence)
     }

@@ -47,6 +47,25 @@ struct CycleAnalyticsTests {
         #expect(model.points.map(\.day) == ["2026-06-16", "2026-06-17", "2026-07-20"])
     }
 
+    @Test("1.4 B4: the BBT axis spans the readings, not 0 to 40 °C")
+    func bbtDomainFollowsTheReadings() throws {
+        let days = try decodeDays([
+            day("2026-07-01", 36.45, phase: "MENSTRUAL"),
+            day("2026-07-10", 36.40, phase: "FOLLICULAR"),
+            day("2026-07-12", 36.75, phase: "LUTEAL")
+        ])
+        let cycles = try decodeCycles(Self.currentCycleJSON)
+        let domain = CycleBBTChartModel.build(days: days, cycles: cycles, prediction: nil, today: "2026-07-20").yDomain
+        #expect(domain.lowerBound > 35, "the axis must not start near zero")
+        #expect(domain.lowerBound <= 36.4 && domain.upperBound >= 36.75, "every reading stays on the chart")
+        #expect(domain.upperBound - domain.lowerBound < 1.5, "a half-degree swing must fill the chart")
+
+        // One flat reading pair still gets a readable band around it.
+        let flat = try decodeDays([day("2026-07-10", 36.5, phase: nil), day("2026-07-11", 36.5, phase: nil)])
+        let flatDomain = CycleBBTChartModel.build(days: flat, cycles: [], prediction: nil, today: "2026-07-20").yDomain
+        #expect(flatDomain.lowerBound < 36.5 && flatDomain.upperBound > 36.5)
+    }
+
     @Test("History keeps at most 12 observed cycles oldest first")
     func historyOrderingAndPredictionFilter() throws {
         let rows = (1 ... 14).map { index in

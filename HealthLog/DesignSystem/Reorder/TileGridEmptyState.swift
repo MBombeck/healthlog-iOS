@@ -9,30 +9,26 @@ import SwiftUI
 /// they can no longer enter. This card breaks the trap with an explicit
 /// "Add tiles" CTA that opens the add/customise path directly.
 ///
-/// Hosted inside `HLCard` (via the canonical ``HLEmptyState`` lockup) so it
-/// sits in the same scroll rhythm as the surrounding dashboard / insights
-/// cards. Monochrome chrome — the glyph + CTA read as a calm waiting state,
-/// not an alarm.
+/// 1.4 B4 — the canonical ``HLEmptyState`` lockup on the page, no longer in
+/// an `HLCard`: title and the one `.secondary` action. The sentence that said
+/// "you've hidden every tile, add some back" repeated both. Monochrome
+/// chrome — the glyph + CTA read as a calm waiting state, not an alarm.
 struct TileGridEmptyState: View {
     /// Opens the add/customise path (edit mode + add-tile sheet).
     let onAddTiles: () -> Void
 
     var body: some View {
-        HLCard {
-            HLEmptyState(
-                icon: "square.grid.2x2",
-                title: "No tiles shown",
-                message: "You've hidden every tile. Add some back to see your metrics at a glance."
-            ) {
-                HLButton(
-                    String(localized: "Add tiles"),
-                    icon: "plus",
-                    variant: .primary,
-                    size: .regular,
-                    action: onAddTiles
-                )
-            }
-            .accessibilityIdentifier("tileGrid.emptyState")
+        HLEmptyState(
+            icon: "square.grid.2x2",
+            title: "No tiles shown"
+        ) {
+            HLButton(
+                String(localized: "Add tiles"),
+                icon: "plus",
+                variant: .secondary,
+                action: onAddTiles
+            )
         }
+        .accessibilityIdentifier("tileGrid.emptyState")
     }
 }

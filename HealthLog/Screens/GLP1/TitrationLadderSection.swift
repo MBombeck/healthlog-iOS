@@ -13,15 +13,26 @@ public struct TitrationLadderSection: View {
     @State private var store: TitrationLadderStore
     @State private var editorEntry: TitrationLadderEntry?
     @State private var showingAdd: Bool = false
+    /// 1.4 B2 — with nothing recorded the section is one row in the GLP-1
+    /// stack's shared "add" card (``GLP1DetailStack``) instead of a label over
+    /// an empty card.
+    private let showsAddRowOnly: Bool
 
-    public init(store: TitrationLadderStore) {
+    public init(store: TitrationLadderStore, showsAddRowOnly: Bool = false) {
         _store = State(initialValue: store)
+        self.showsAddRowOnly = showsAddRowOnly
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            header
-            content
+        Group {
+            if showsAddRowOnly {
+                GLP1AddRow(title: "Add titration step", systemImage: "stairs") { showingAdd = true }
+            } else {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    header
+                    content
+                }
+            }
         }
         .sheet(isPresented: $showingAdd) {
             TitrationStepEditSheet(
@@ -67,42 +78,18 @@ public struct TitrationLadderSection: View {
         }
     }
 
-    @ViewBuilder
+    /// Without a recorded dose change there is nothing to anchor the label's
+    /// schedule to, and the stack shows the add row instead of this content —
+    /// no ladder is drawn from a dose guessed out of the medication's name.
     private var content: some View {
-        // Without a recorded dose change there is nothing to anchor the
-        // label's schedule to, so the section is the empty state alone — no
-        // ladder is drawn from a dose guessed out of the medication's name.
-        if store.mergedTimeline.isEmpty {
-            emptyState
-        } else {
-            let catalogSteps = store.catalogTimelineSteps
-            HLCard {
-                VStack(alignment: .leading, spacing: HLSpace.md) {
-                    if let drugID = store.catalogDrug?.id, !catalogSteps.isEmpty {
-                        TitrationCatalogTimelineView(steps: catalogSteps, drugID: drugID)
-                        Divider().background(HLColor.separator)
-                    }
-                    timeline
+        let catalogSteps = store.catalogTimelineSteps
+        return HLCard {
+            VStack(alignment: .leading, spacing: HLSpace.md) {
+                if let drugID = store.catalogDrug?.id, !catalogSteps.isEmpty {
+                    TitrationCatalogTimelineView(steps: catalogSteps, drugID: drugID)
+                    Divider().background(HLColor.separator)
                 }
-            }
-        }
-    }
-
-    private var emptyState: some View {
-        HLCard(style: .ghost) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Label(
-                    String(localized: "No titration history yet"),
-                    systemImage: "stairs"
-                )
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                Text(String(
-                    localized: "Log dose changes to keep a record of the course."
-                ))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                timeline
             }
         }
     }

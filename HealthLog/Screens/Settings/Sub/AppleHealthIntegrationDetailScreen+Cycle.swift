@@ -111,7 +111,9 @@ extension AppleHealthIntegrationDetailScreen {
             .accessibilityIdentifier("HealthAccess.cycleTrackingOffer")
 
             if showCycleOfferExplainer {
-                Text("settings.cycle.optin.offer.body")
+                // 1.4 B2-c — what turning it on does, the toggle's own line;
+                // "optional, switch it off anytime" is gone.
+                Text("settings.cycle.optin.footer")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

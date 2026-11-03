@@ -325,8 +325,6 @@ struct CycleCaptureSheet: View {
             }
         } header: {
             Text("cycle.capture.cervix.header")
-        } footer: {
-            Text("cycle.capture.cervix.footer")
         }
     }
 

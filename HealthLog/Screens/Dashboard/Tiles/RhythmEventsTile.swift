@@ -33,12 +33,12 @@ struct RhythmEventsTile: View {
         HLCard(style: .elevated) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 header
-                Text("dashboard.rhythmEvents.tile.title")
+                // 1.4 B2 — eyebrow plus one sentence; the separate title
+                // ("Hinweise deiner Uhr") said the same thing a third time.
+                Text(summary.subtitle)
                     .font(.hlTitle3)
                     .foregroundStyle(HLText.primary)
-                Text(summary.subtitle)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -50,16 +50,9 @@ struct RhythmEventsTile: View {
         .accessibilityElement(children: .contain)
     }
 
+    /// 1.4 B4 — Today's one card heading: the metric tiles' glyph and title.
     private var header: some View {
-        HStack(spacing: HLSpace.xs) {
-            Image(systemName: "waveform.path.ecg")
-                .foregroundStyle(HLText.secondary)
-                .accessibilityHidden(true)
-            Text("dashboard.rhythmEvents.tile.eyebrow")
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-            Spacer(minLength: 0)
-        }
+        HLTileHeaderRow(icon: "waveform.path.ecg", title: Text("dashboard.rhythmEvents.tile.eyebrow")) { EmptyView() }
     }
 }
 

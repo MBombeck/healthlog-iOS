@@ -122,9 +122,7 @@ extension WorkoutDetailView {
         if let ctx = resolved.sportContext, ctx.avgDurationSec > 0 {
             HLCard(style: .elevated) {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("workout.sportContext.title \(ctx.count)")
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.secondary)
+                    HLSectionLabel("workout.sportContext.title \(ctx.count)")
                     HStack(spacing: HLSpace.lg) {
                         if let dur = WorkoutFormatter.duration(ctx.avgDurationSec) {
                             sportContextStat(labelKey: "Duration", value: dur)

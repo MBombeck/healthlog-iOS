@@ -81,11 +81,11 @@
                     hrBucketKick: hrBucketKick,
                     dailyStatsKick: dailyStatsKick
                 )
-                // A360-5 M-1 — hand the server-deletion reconciler to the
-                // Standard so `handleDeletedObjects` can mirror Apple-Health
-                // deletions to a server delete-by-external-id (was a one-way
-                // mirror → orphaned server rows). nil-safe (the Standard keeps
-                // its no-op when unwired).
+                // A360-5 M-1, A5 (1.4) — hand the server-deletion reconciler
+                // to the Standard so the collector's page deletions reach the
+                // server delete-by-external-id (was a one-way mirror, so
+                // orphaned server rows). nil-safe: unwired, a deletion waits
+                // in the retry queue for the replay.
                 await standard.attachDeletionReconciler(deletionReconciler)
                 HLLog.healthKit.info("HealthLogStandard uploader attached")
             }

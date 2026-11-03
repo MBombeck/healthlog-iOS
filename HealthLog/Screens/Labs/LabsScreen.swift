@@ -212,19 +212,11 @@ struct LabsScreen: View {
                     title: "labs.empty.title",
                     message: "labs.empty.subtitle"
                 ) {
-                    VStack(spacing: HLSpace.sm) {
-                        HLButton("labs.add.title", icon: "plus", variant: .primary) {
-                            showAddSheet = true
-                        }
-                        // Item 3.4 — the scan is the faster path out of an empty
-                        // Labs screen: one photo of a panel beats 15 manual rows.
-                        HLButton("labs.scan.title", icon: "doc.viewfinder", variant: .secondary) {
-                            showScanSheet = true
-                        }
-                        Text("labs.scan.entry.footer")
-                            .font(.hlFootnote)
-                            .foregroundStyle(HLText.secondary)
-                            .multilineTextAlignment(.center)
+                    // 1.4 B4 — one empty-state form, one action. The scan
+                    // (item 3.4) stays one tap away in the toolbar's add menu
+                    // right above, next to this same entry.
+                    HLButton("labs.add.title", icon: "plus", variant: .secondary) {
+                        showAddSheet = true
                     }
                 }
                 .listRowSeparator(.hidden)
@@ -410,7 +402,8 @@ struct LabsOptInView: View {
             title: "labs.optIn.title",
             message: "labs.optIn.description"
         ) {
-            HLButton("labs.optIn.action", icon: "checkmark.circle", variant: .primary, isLoading: isEnabling) {
+            // 1.4 B4 — the one empty-state form: its one action is `.secondary`.
+            HLButton("labs.optIn.action", icon: "checkmark.circle", variant: .secondary, isLoading: isEnabling) {
                 Task {
                     isEnabling = true
                     await onEnable()
@@ -457,9 +450,9 @@ struct BiomarkerIndexRow: View {
         .accessibilityLabel(accessibilityText)
     }
 
+    /// 1.4 B2-c — the shared plural key; the format template read "1 Werte".
     private var countCaption: String {
-        let template = String(localized: "labs.byType.count")
-        return String(format: template, count)
+        String(localized: "\(count) values")
     }
 
     private func valueLabel(_ row: LabResultDTO) -> String {
@@ -540,38 +533,35 @@ struct LabResultRow: View {
 /// subrequest failed, the rest of the surface is current, and the retry re-runs
 /// only the half that failed.
 ///
-/// The button variant is `.secondary`, not the `.restrained` its dashboard
-/// sibling still carries: R9 is retiring `.ghost`/`.restrained`, the UI-standard
-/// baseline is a debt display rather than an allow-list, and a full-width action
-/// inside a card is exactly the "→ .secondary" case. The dashboard's own
-/// occurrence is baselined debt and belongs to whoever sweeps it.
+/// The button variant is `.secondary`, the one action of every empty or failed
+/// state (1.4 B4, `HLEmptyState`), and like the dashboard's it no longer sits
+/// in a card.
 private struct LabsBiomarkerCatalogErrorState: View {
     let onRetry: () async -> Void
 
     @State private var isRetrying = false
 
     var body: some View {
-        HLCard {
-            HLEmptyState(
-                icon: "exclamationmark.arrow.circlepath",
-                title: "labs.biomarkerCatalog.error.title",
-                message: "labs.biomarkerCatalog.error.message"
+        // 1.4 B4 — the lockup on the list, no card around it.
+        HLEmptyState(
+            icon: "exclamationmark.arrow.circlepath",
+            title: "labs.biomarkerCatalog.error.title",
+            message: "labs.biomarkerCatalog.error.message"
+        ) {
+            HLButton(
+                String(localized: "Try again"),
+                icon: "arrow.clockwise",
+                variant: .secondary,
+                isLoading: isRetrying
             ) {
-                HLButton(
-                    String(localized: "Try again"),
-                    icon: "arrow.clockwise",
-                    variant: .secondary,
-                    isLoading: isRetrying
-                ) {
-                    Task {
-                        isRetrying = true
-                        await onRetry()
-                        isRetrying = false
-                    }
+                Task {
+                    isRetrying = true
+                    await onRetry()
+                    isRetrying = false
                 }
             }
-            .accessibilityIdentifier("labs.biomarkerCatalogErrorState")
         }
+        .accessibilityIdentifier("labs.biomarkerCatalogErrorState")
     }
 }
 

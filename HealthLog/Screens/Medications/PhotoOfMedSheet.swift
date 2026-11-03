@@ -194,10 +194,7 @@ public struct PhotoOfMedSheet: View {
                     LabeledContent { Text(manufacturer) } label: { Text("Manufacturer") }
                 }
                 Divider()
-                Text("Please review the fields before saving. You can edit them in the next step.")
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // 1.4 B2 — the next step is the form itself; no line announces it.
                 HStack(spacing: HLSpace.md) {
                     Button(action: retake, label: {
                         Label(

@@ -17,8 +17,8 @@ import Testing
 ///
 /// **v0.11 #6 Insights rebuild (post-layout):** the screen was decomposed
 /// into ordered zones under `HealthLog/Screens/Insights/`. The hero wrapper
-/// (`InsightsBriefingHero` → `OnDeviceBriefingHero(`) moved to
-/// `Sub/InsightsBriefingHero.swift`; the `AlertsList(` Hinweise surface moved
+/// moved to its own file (1.4 B4 deleted it with the on-device hero); the
+/// `AlertsList(` Hinweise surface moved
 /// into `Zones/InsightsDynamicsZone.swift`. The *gates* (`assistant.briefing`
 /// flag + the `briefingObservationsEnabled` kill-switch) still live at the
 /// call site in `InsightsScreen.swift`. These tests now scan the whole
@@ -100,48 +100,29 @@ struct InsightsScreenCompositionTests {
             .joined(separator: "\n")
     }
 
-    @Test("InsightsScreen renders exactly one Heute-Block (no duplicate)")
-    func insightsScreenHasOneHeuteBlock() throws {
-        // v0.9.0 W2 — the on-device briefing hero is RE-INTRODUCED on
-        // Insights (the "Today at a glance" slot). The earlier v0.5.4.x
-        // regression had TWO stacked cards — `OnDeviceBriefingHero` (with
-        // on-device content) followed by a redundant empty
-        // `DailyBriefingCard()` placeholder. The on-device hero already
-        // handles every arm (on-device → floor → server → empty) via its
-        // own resolution ladder, so `DailyBriefingCard()` must NOT appear
-        // as a second construction site.
-        //
-        // This test asserts the Insights surface references
-        // `OnDeviceBriefingHero(` exactly once and `DailyBriefingCard()` not
-        // at all. Reading the types in a comment / docstring is fine — only
-        // constructor call sites count.
-        //
-        // **v0.11 #6:** `OnDeviceBriefingHero(` is now constructed inside the
-        // extracted `InsightsBriefingHero` wrapper at
-        // `Sub/InsightsBriefingHero.swift` (no longer inline in
-        // `InsightsScreen.swift`). We scan the whole Insights module so the
-        // "exactly one hero construction site" invariant holds regardless of
-        // which file owns it.
+    @Test("1.4 B4 — the on-device briefing hero stays deleted (no second Heute block)")
+    func onDeviceBriefingHeroStaysDeleted() throws {
+        // v0.9.0 W2 re-introduced an on-device "Today at a glance" hero on
+        // Insights; v0.14.1 §4 took it off the overview and nothing mounted it
+        // again, so 1.4 B4 deleted the hero, its wrapper and the signals card.
+        // The duplicate-Heute regression this test was written for (the hero
+        // stacked on an empty `DailyBriefingCard()` placeholder) cannot come
+        // back through any of them. The daily briefing prose lives in
+        // `InsightsDailyBriefingSlot`. Comments may name the types; only
+        // construction sites count.
         let moduleBody = try codeBody(of: loadInsightsModuleSource())
-        let dailyBriefingCardCalls = moduleBody
-            .components(separatedBy: "DailyBriefingCard(").count - 1
-        #expect(
-            dailyBriefingCardCalls == 0,
-            """
-            The Insights surface should not reference DailyBriefingCard() — \
-            the on-device hero handles both paths via serverFallback:
-            """
-        )
-        let heroCalls = moduleBody
-            .components(separatedBy: "OnDeviceBriefingHero(").count - 1
-        #expect(
-            heroCalls == 1,
-            """
-            The Insights surface must construct OnDeviceBriefingHero exactly \
-            once (the single Today-at-a-glance slot), got \(heroCalls). \
-            Post-#6 it lives in Sub/InsightsBriefingHero.swift.
-            """
-        )
+        for removed in [
+            "DailyBriefingCard(",
+            "OnDeviceBriefingHero(",
+            "InsightsBriefingHero(",
+            "DailyBriefingHero(",
+            "InsightsSignalsCard("
+        ] {
+            #expect(
+                !moduleBody.contains(removed),
+                "1.4 B4: the Insights surface must not construct \(removed) again."
+            )
+        }
     }
 
     @Test("v0.14.1 §4 — overview drops the briefing hero / prompts / dynamics / long-tail")
@@ -230,7 +211,8 @@ struct InsightsScreenCompositionTests {
             moduleBody.contains("InsightsServerDerivedOverview("),
             "Wellness scores (InsightsServerDerivedOverview) must exist."
         )
-        #expect(moduleBody.contains("InsightsTrendsRow("), "Trends (InsightsTrendsRow) must exist.")
+        // 1.4 B4 — the "Trends" row repeated Vitalwerte and the Heute tiles; its section id renders nothing on iOS.
+        #expect(!moduleBody.contains("InsightsTrendsRow(") && !moduleBody.contains("InsightsTrendsSlot("), "1.4 B4: Trends is gone.")
         // v0.14.9 §1 — the "Rückblick" retrospective card was removed from the
         // overview (operator: "doesn't fit, too much"). It must NOT be mounted.
         #expect(
@@ -327,67 +309,6 @@ struct InsightsScreenCompositionTests {
             """
             InsightsVitalsDashboard tiles must carry `.pinToHomeContextMenu` so \
             the overview's at-a-glance vitals are long-press-pinnable to Home.
-            """
-        )
-    }
-}
-
-/// v0.5.3 F-2 (operator walkthrough, 2026-05-17) lock-in: the Stimmung-
-/// summary card used to prefix each Ø-value with a literal emoji
-/// (😞 🙁 😐 🙂 😄). Operator flagged the mismatch against the rest of
-/// the Insights surface (tonal-mono charts, monospaced numbers). The
-/// card was rewritten to drop emoji literals + render a 1–5 scale rail
-/// with `HLChartTints.series` marker.
-@Suite("MoodSummaryCard tonal-mono composition")
-struct MoodSummaryCardCompositionTests {
-    private func loadMoodSummarySource() throws -> String {
-        let testFilePath = URL(fileURLWithPath: #filePath)
-        let repoRoot = testFilePath
-            .deletingLastPathComponent() // Screens/
-            .deletingLastPathComponent() // HealthLogTests/
-            .deletingLastPathComponent() // repo root
-        let target = repoRoot
-            .appendingPathComponent("HealthLog")
-            .appendingPathComponent("Screens")
-            .appendingPathComponent("Insights")
-            .appendingPathComponent("InsightsDigestComponents.swift")
-        return try String(contentsOf: target, encoding: .utf8)
-    }
-
-    @Test("MoodSummaryCard renders no emoji literals in the value columns")
-    func moodSummaryDropsEmojiPrefix() throws {
-        let source = try loadMoodSummarySource()
-        // The historic prefix glyphs — none of them may appear inside
-        // the rendered body. We allow them in comments (doc-rationale
-        // references the dropped behaviour) but not in code.
-        let codeLines = source.components(separatedBy: "\n").filter { line in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("///")
-        }
-        let codeBody = codeLines.joined(separator: "\n")
-        for glyph in ["😞", "🙁", "😐", "🙂", "😄"] {
-            #expect(
-                !codeBody.contains(glyph),
-                """
-                MoodSummaryCard code body must not contain the \(glyph) glyph — \
-                emoji prefixes were removed in v0.5.3 F-2.
-                """
-            )
-        }
-    }
-
-    @Test("MoodSummaryCard wires its scale marker to HLChartTints.series")
-    func moodSummaryUsesChartTintsForMarker() throws {
-        // The marker must read its colour from the shared chart-tint
-        // palette so the Stimmung card sits visually next to the BMI /
-        // BP cards (which sample HLColor.statusOK etc.) and the dashboard
-        // sparklines (`HLChartTints.series`).
-        let source = try loadMoodSummarySource()
-        #expect(
-            source.contains("HLChartTints.series"),
-            """
-            MoodSummaryCard must reference HLChartTints.series — the \
-            scale-rail marker has to track the global chart tint.
             """
         )
     }

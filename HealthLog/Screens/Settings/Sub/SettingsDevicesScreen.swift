@@ -49,7 +49,6 @@ struct SettingsDevicesScreen: View {
     var body: some View {
         HLSettingsPage(title: "Devices") {
             pairedCard
-            dualWriteFootnote
         }
         .navigationTitle("Devices")
         .navigationBarTitleDisplayMode(.inline)
@@ -100,9 +99,13 @@ struct SettingsDevicesScreen: View {
     /// Ort) gewinnt sie; der falsche Untertitel fällt ersatzlos — R7 verlangt
     /// die Klärung vor der Kürzung, und die Klärung ergibt: nur Omron-BP.
     private var pairedCard: some View {
+        // 1.4 B2-c — where the readings go is the card's footer (it stood
+        // loose under the card), and the empty state is one line in the card
+        // instead of a lockup inside it.
         HLSettingsCard(
             icon: "dot.radiowaves.left.and.right",
-            title: "Paired devices"
+            title: "Paired devices",
+            footer: "devices.dualwrite.footnote"
         ) {
             if manager.pairedDevices.isEmpty {
                 emptyState
@@ -114,34 +117,11 @@ struct SettingsDevicesScreen: View {
         .accessibilityIdentifier("settings.devices.card")
     }
 
-    /// Dual-write disclosure (v0.6.0.7 P4 — Wave-B B1-M4).
-    ///
-    /// Sits outside the paired-card so the operator reads the disclosure
-    /// next to (not buried under) the device list. `HLText.secondary` per
-    /// brief — the message is informational, not a footer hint, so it
-    /// lands a notch above the tertiary "Pairing-Modus aktivieren"
-    /// helper line. Wired to `devices.dualwrite.footnote` xcstring so the
-    /// EN copy stays in sync with the DE primary.
-    private var dualWriteFootnote: some View {
-        Text("devices.dualwrite.footnote")
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, HLSpace.sm)
-            .padding(.top, HLSpace.xs)
-            .accessibilityIdentifier("settings.devices.dualWriteFootnote")
-    }
-
-    /// Canonical `HLEmptyState` lockup. The SF Symbol matches the chip on the
-    /// hub row so the operator sees visual continuity from hub → screen.
     private var emptyState: some View {
-        HLEmptyState(
-            icon: "dot.radiowaves.left.and.right",
-            title: "No devices paired yet",
-            message: "Once a Bluetooth device is paired, measurements land on your dashboard automatically."
-        )
-        .accessibilityIdentifier("settings.devices.emptyState")
+        Text("No devices paired yet")
+            .font(.hlSubhead)
+            .foregroundStyle(HLText.secondary)
+            .accessibilityIdentifier("settings.devices.emptyState")
     }
 
     /// Compact list rendering the snapshot the manager holds. Uses the

@@ -156,12 +156,13 @@ enum MeasurementBucketing {
         )
     }
 
-    /// Header shown above a weeklySummary section — short calendar-week
-    /// reference like "KW 19 (13 bis 19 Mai)".
+    /// Header shown above a weeklySummary section: the calendar week, "KW 41"
+    /// or "Week 41". 1.4 B4 — it used to add "(5 bis 11 Okt)": a hand-built
+    /// German range (no day points, and "KW" in English too) that repeated
+    /// the dates the card below already names.
     static func weekHeader(start: Date, calendar: Calendar = .current) -> String {
         let weekOfYear = calendar.component(.weekOfYear, from: start)
-        let endDate = calendar.date(byAdding: .day, value: 6, to: start) ?? start
-        return "KW \(weekOfYear) (\(rangeLabel(start: start, end: endDate)))"
+        return String(localized: "measurements.weekHeader \(weekOfYear)")
     }
 
     /// Label inside the summary card — humane "Diese Woche" / explicit week.
@@ -194,18 +195,12 @@ enum MeasurementBucketing {
         return start.formatted(.dateTime.month(.wide).year())
     }
 
-    private static func rangeLabel(start: Date, end: Date) -> String {
-        // "13 bis 19 Mai" — month appears only once when both ends share a month.
-        let calendar = Calendar.current
-        let startDay = calendar.component(.day, from: start)
-        let endDay = calendar.component(.day, from: end)
-        let sameMonth = calendar.component(.month, from: start) == calendar.component(.month, from: end)
-        let monthLabel = end.formatted(.dateTime.month(.abbreviated))
-        if sameMonth {
-            return "\(HLNumberFormat.range("\(startDay)", "\(endDay)")) \(monthLabel)"
-        }
-        let startMonthLabel = start.formatted(.dateTime.month(.abbreviated))
-        return HLNumberFormat.range("\(startDay) \(startMonthLabel)", "\(endDay) \(monthLabel)")
+    /// "5. Okt. bis 11. Okt." / "Oct 5 to Oct 11": both ends in the locale's
+    /// own day-and-month form (the hand-built "5 bis 11 Okt" dropped the
+    /// German day points).
+    static func rangeLabel(start: Date, end: Date) -> String {
+        let style = Date.FormatStyle.dateTime.day().month(.abbreviated)
+        return HLNumberFormat.range(start.formatted(style), end.formatted(style))
     }
 }
 

@@ -57,8 +57,8 @@
             let pass = coordinator.begin(plan)
 
             // The sweep is parked. Let the deadline fire on it.
-            #expect(await phase09Settle { spy.hasStarted(.healthKitStats) })
-            #expect(await phase09Settle {
+            #expect(await phase09AwaitCondition { spy.hasStarted(.healthKitStats) })
+            #expect(await phase09AwaitCondition {
                 clock.requested.contains(ForegroundCoordinator.Budget.standard.deadline)
             })
             clock.fire(ForegroundCoordinator.Budget.standard.deadline)
@@ -103,7 +103,7 @@
                     await session.publish { published.increment() }
                 }
             ])]))
-            #expect(await phase09Settle { parked.arrivalCount == 1 })
+            #expect(await phase09AwaitCondition { parked.arrivalCount == 1 })
 
             // A newer pass supersedes the parked one before it can publish.
             let second = coordinator.begin(ForegroundPlan(legs: [ForegroundLeg([

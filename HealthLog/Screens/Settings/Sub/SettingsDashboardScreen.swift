@@ -81,12 +81,12 @@ struct SettingsDashboardScreen: View {
     /// eine Voreinstellungs-Ansage plus eine Bedien-Nacherzählung, beide auf
     /// der R2-Verbotsliste. Die Zielseite zeigt „Angeheftet"/„Ausgeblendet"
     /// als eigene Abschnitte und trägt die Aussage damit zustandsabhängig (R3).
+    ///
+    /// 1.4 B4 — one row, one heading, on all four cards of this page: the
+    /// row names its screen or sheet and carries the subtitle where there is one.
     private var layoutCard: some View {
-        HLSettingsCard(
-            icon: "square.grid.2x2",
-            title: "Customize tiles"
-        ) {
-            HLSettingsActionRow(title: "Open tile layout", presents: .push) {
+        HLSettingsCard {
+            HLSettingsActionRow(title: "Customize tiles", presents: .push) {
                 DashboardCustomizationScreen()
             }
             .accessibilityIdentifier("settings.dashboard.customizeRow")
@@ -107,17 +107,20 @@ struct SettingsDashboardScreen: View {
     ///
     /// **UI-Standard R2 — dieser Subtitle bleibt bewusst stehen.** Er trägt
     /// eine harte Grenze („bis zu drei") und eine nicht sichtbare Folge (die
-    /// Auswahl wirkt auf Startseite *und* Insights). Beides sind
-    /// R2-Kategorien, keine Umformulierung des Titels.
+    /// Auswahl wirkt auf die Insights). Beides sind R2-Kategorien, keine
+    /// Umformulierung des Titels.
+    ///
+    /// **1.4 B1:** Die Startseite ist aus dem Satz gefallen. Dort stehen die
+    /// Ringe seit `acb44cb70` nicht mehr, und der Reihenfolge-Editor im Sheet
+    /// ist mit ihnen gegangen.
     private var heroRingsCard: some View {
-        HLSettingsCard(
-            icon: "circle.hexagongrid",
-            title: "Score rings",
-            subtitle: "Pick up to three scores and their order. They appear on your dashboard and in Insights.",
-            subtitleWraps: true
-        ) {
+        HLSettingsCard {
             // R10 — die Zeile öffnet ein Sheet, also `pencil` statt Chevron.
-            HLSettingsActionRow(title: "Choose score rings", presents: .sheet) {
+            HLSettingsActionRow(
+                title: "Score rings",
+                subtitle: "Pick up to three scores for Insights. They appear in the order you pick them.",
+                presents: .sheet
+            ) {
                 showHeroRings = true
             }
             .accessibilityIdentifier("settings.dashboard.heroRingsRow")
@@ -134,14 +137,14 @@ struct SettingsDashboardScreen: View {
     /// user actually sees there ("Worth a look"), so the setting is findable
     /// from the surface it changes.
     private var heroItemsCard: some View {
-        HLSettingsCard(
-            icon: "list.star",
-            title: "Today highlights",
-            subtitle: "Choose which item types can appear under Worth a look on Today."
-        ) {
+        HLSettingsCard {
             // R10 — Sheet, also `pencil`. R3: derselbe Satz stand bis U5 auch
             // im Sheet selbst; er lebt jetzt nur noch hier, vor der Entscheidung.
-            HLSettingsActionRow(title: "Choose item types", presents: .sheet) {
+            HLSettingsActionRow(
+                title: "Today highlights",
+                subtitle: "Choose which item types can appear under Worth a look on Today.",
+                presents: .sheet
+            ) {
                 showHeroItems = true
             }
             .accessibilityIdentifier("settings.dashboard.heroItemsRow")
@@ -160,11 +163,8 @@ struct SettingsDashboardScreen: View {
     /// erscheinen und in welcher Reihenfolge.") formulierte den Kartentitel um
     /// und ist ersatzlos gefallen.
     private var insightsCustomizationCard: some View {
-        HLSettingsCard(
-            icon: "rectangle.stack.fill",
-            title: "Customize Insights tiles"
-        ) {
-            HLSettingsActionRow(title: "Open Insights layout", presents: .push) {
+        HLSettingsCard {
+            HLSettingsActionRow(title: "Customize Insights tiles", presents: .push) {
                 SettingsInsightsCustomizationScreen()
             }
             .accessibilityIdentifier("settings.dashboard.insightsCustomizeRow")

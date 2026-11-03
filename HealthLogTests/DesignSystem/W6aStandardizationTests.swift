@@ -57,14 +57,12 @@ struct W6aStandardizationTests {
     @MainActor
     @Test("The static range segments are the single-letter T/W/M/6M set")
     func staticRangeSegmentsAreSingleLetter() {
-        // The non-localized segments are literal single letters in both stores.
+        // The non-localized segments are literal single letters. (1.4 B4 — the
+        // second store with this vocabulary, `TrendsOverlayStore`, is deleted.)
         #expect(ChartDetailStore.Range.day.label == "T")
         #expect(ChartDetailStore.Range.week.label == "W")
         #expect(ChartDetailStore.Range.month.label == "M")
         #expect(ChartDetailStore.Range.sixMonths.label == "6M")
-        #expect(TrendsOverlayStore.Range.week.label == "W")
-        #expect(TrendsOverlayStore.Range.month.label == "M")
-        #expect(TrendsOverlayStore.Range.sixMonths.label == "6M")
     }
 
     // MARK: - Mood documented deviation (§8 allows it)

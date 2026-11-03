@@ -121,22 +121,21 @@ struct AppBuildMetadataTests {
 
     /// Deleting the view code does not retire a claim: the catalogue outlives
     /// the screen, so a re-added `Text(...)` would resolve a still-present key
-    /// straight back into "Aktuelle Version installiert". The replacement and
-    /// the unknown fallback are checked for DE **and** EN in the same pass,
-    /// because a fallback that renders its key is not a localized fallback.
-    @Test("no currency claim survives in the catalogue, and both replacements are translated")
+    /// straight back into "Aktuelle Version installiert". The unknown fallback
+    /// is checked for DE **and** EN in the same pass, because a fallback that
+    /// renders its key is not a localized fallback.
+    ///
+    /// 1.4 B2-c — the Updates card is gone as a whole (it held no function,
+    /// only "updates come from the App Store, this app does not check"), and
+    /// its replacement line went with it; the currency claim stays out.
+    @Test("no currency claim survives in the catalogue, and the unknown fallback is translated")
     func noCurrencyClaimSurvivesInTheCatalogue() throws {
         let catalog = try ParityCatalog.load()
         #expect(
             catalog.strings["Current version installed."] == nil,
             "the currency claim must leave the catalogue with the row that stated it"
         )
-
-        let replacement = try #require(catalog.strings["settings.about.updates.no_version_check"])
-        let de = try #require(ParityCatalog.value(replacement, language: "de"))
-        let en = try #require(ParityCatalog.value(replacement, language: "en"))
-        #expect(de.contains("nicht"), "the DE row must state that no check happens")
-        #expect(en.localizedCaseInsensitiveContains("does not check"))
+        #expect(catalog.strings["settings.about.updates.no_version_check"] == nil)
 
         let unknown = try #require(catalog.strings["Unknown"], "the About rows need a localized unknown fallback")
         #expect(ParityCatalog.value(unknown, language: "de") != nil)

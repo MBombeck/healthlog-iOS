@@ -167,9 +167,6 @@ struct MedicationFreeIntakeSheet: View {
             )
         } header: {
             Text("med.freelog.when.header")
-        } footer: {
-            Text("med.freelog.when.footer")
-                .font(.hlCaption)
         }
     }
 
@@ -179,10 +176,9 @@ struct MedicationFreeIntakeSheet: View {
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
         } header: {
+            // 1.4 B2 — "Optional" lives in the placeholder; the header already
+            // says the field is for a dose that differs.
             Text("med.freelog.dose.header")
-        } footer: {
-            Text("med.freelog.dose.footer")
-                .font(.hlCaption)
         }
     }
 

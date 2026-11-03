@@ -31,6 +31,12 @@ struct DidITakeMedicationIntent: AppIntent {
 
     static let openAppWhenRun: Bool = false
 
+    /// **1.4** — it answers with a medication name and the time it was taken,
+    /// so Siri asks for Face ID or the passcode first. Before, a locked iPhone
+    /// said both aloud, next to a switch that hides medication names on the
+    /// lock screen. The write intents stay usable while locked.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
     /// Read-only — surface it as a query in Spotlight / Siri.
     static let isDiscoverable: Bool = true
 

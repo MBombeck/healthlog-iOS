@@ -52,26 +52,9 @@ struct WorkoutsScreen: View {
 
     private var list: some View {
         List {
-            if store.meta != nil, !store.workouts.isEmpty {
-                Section {
-                    Text(WorkoutsListSummary.headerText(for: store))
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityLabel(WorkoutsListSummary.headerAccessibilityLabel(for: store))
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityIdentifier("workouts.count")
-                }
-                .listRowBackground(Color.clear)
-            }
-            if let meta = store.meta, meta.droppedDuplicates > 0 {
-                Section {
-                    Text(LocalizedStringKey(Layout.duplicatesFootnoteKey))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
-                .listRowBackground(Color.clear)
-            }
+            // 1.4 B2 — "50 von 128 Workouts" is the list's own section header,
+            // not a row of its own; the note that duplicates were merged is
+            // gone (an implementation detail with nothing to act on).
             Section {
                 ForEach(store.workouts) { workout in
                     NavigationLink {
@@ -80,6 +63,13 @@ struct WorkoutsScreen: View {
                         WorkoutRow(workout: workout)
                     }
                     .accessibilityIdentifier("workouts.row.\(workout.id)")
+                }
+            } header: {
+                if store.meta != nil, !store.workouts.isEmpty {
+                    Text(WorkoutsListSummary.headerText(for: store))
+                        .textCase(nil)
+                        .accessibilityLabel(WorkoutsListSummary.headerAccessibilityLabel(for: store))
+                        .accessibilityIdentifier("workouts.count")
                 }
             }
             // #19 — the footer is a lazy row: it only exists once the user
@@ -118,13 +108,11 @@ struct WorkoutsScreen: View {
 
 extension WorkoutsScreen {
     /// Declarative layout descriptor — pinned by contract tests so a future
-    /// wave can't silently drop the navigation title or the duplicates
-    /// footnote.
+    /// wave can't silently drop the navigation title or the empty copy.
     enum Layout {
         static let navigationTitle = "Workouts"
         static let emptyTitle = "No workouts yet"
         static let emptySubtitle = "Workouts appear here as soon as Apple Watch or Withings reports one."
-        static let duplicatesFootnoteKey = "Duplicate workouts (Watch + scale) were merged."
     }
 }
 

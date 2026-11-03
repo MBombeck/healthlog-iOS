@@ -34,26 +34,24 @@ import SwiftUI
 // the tile's "straight to DOING it" routing (prefilled measure / check-in), with
 // the manage list as the free-text fallback.
 
-// MARK: - Sync footer host (DashboardStore + SettingsStore.profile)
+// MARK: - Sync footer host (DashboardStore)
 
-/// Owns the discreet last-synced caption. Reads `DashboardStore.isLoading` /
-/// `.summary` + `SettingsStore.profile` HERE so a loading-flag flip on refresh
-/// invalidates ONLY this footer — not the metrics grid above it.
+/// Owns the discreet last-synced caption. Reads `DashboardStore.isLoading`
+/// HERE so a loading-flag flip on refresh invalidates ONLY this footer, not
+/// the metrics grid above it.
 struct DashboardSyncFooterHost: View {
     @Environment(DashboardStore.self) private var store
-    @Environment(SettingsStore.self) private var settings
 
     var body: some View {
         // v0.14.1 — discreet last-synced caption (operator: "nett, nicht
-        // überfrachtet"). First-login hint while a fresh session has nothing
-        // loaded yet; "Wird synchronisiert…" during a refresh; otherwise "Zuletzt
-        // synchronisiert HH:MM". v0.14.8 W2-SYNCUX — routed through the shared
-        // `HLSyncStatusFooter` so every refreshable screen mounts the identical
-        // primitive (placement can't drift).
-        HLSyncStatusFooter(
-            screenLoading: store.isLoading,
-            firstLoginPreparing: settings.profile == nil && store.summary == nil
-        )
+        // überfrachtet"): "Wird synchronisiert…" during a refresh, otherwise
+        // "Zuletzt synchronisiert HH:MM". v0.14.8 W2-SYNCUX — routed through the
+        // shared `HLSyncStatusFooter` so placement can't drift.
+        // 1.4 decision 3 — Today is the one screen that keeps the settled
+        // "Zuletzt synchronisiert" line; every other footer shows real states only.
+        // 1.4 B2 — no first-login "Deine Daten werden vorbereitet…" here: the
+        // `FirstLoginSyncBanner` above the tab bar says it at the same moment.
+        HLSyncStatusFooter(screenLoading: store.isLoading, scope: .today)
     }
 }
 
@@ -112,6 +110,19 @@ struct DashboardMetricsHost: View {
     @Environment(\.appContainer) private var container
 
     var body: some View {
+        metrics
+            // The summary is re-read after the person marks a dose. Attached
+            // to the host, not the compliance card: the card renders nothing
+            // while there is nothing to count, and the first dose must still
+            // bring it in (1.4 B2).
+            .onChange(of: DashboardIntakeSignature(medicationsStore)) { old, new in
+                guard DashboardIntakeSignature.shouldRefreshSummary(from: old, to: new) else { return }
+                Task { await store.refresh(force: true) }
+            }
+    }
+
+    @ViewBuilder
+    private var metrics: some View {
         if let summary = store.summary {
             HighlightInsightCard(insight: summary.highlightInsight)
             // #115 · 1.3 — the ring renders the server's `compliance`
@@ -123,10 +134,6 @@ struct DashboardMetricsHost: View {
             if medicationsTileVisible {
                 ComplianceRingCard(snapshot: summary.compliance) {
                     onShowIntakes()
-                }
-                .onChange(of: DashboardIntakeSignature(medicationsStore)) { old, new in
-                    guard DashboardIntakeSignature.shouldRefreshSummary(from: old, to: new) else { return }
-                    Task { await store.refresh(force: true) }
                 }
             }
             let visibleMetrics = orderedMetrics(summary.metrics)
@@ -176,7 +183,7 @@ struct DashboardMetricsHost: View {
     ///
     /// - **The user actually hid every metric tile** → the v0.8.2
     ///   `TileGridEmptyState` escape hatch into the customize screen stays correct
-    ///   ("You've hidden every tile. Add some back…").
+    ///   (title "No tiles shown" and its "Add tiles" button).
     /// - **A fresh account with zero data** → every synth tile auto-hid via
     ///   `DashboardEmptyTilePolicy`, the user hid *nothing*, and the old copy plus
     ///   its CTA was a lying dead-end. Render the calm "No data yet" guidance

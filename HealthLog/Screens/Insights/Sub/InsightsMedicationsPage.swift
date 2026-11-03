@@ -109,20 +109,19 @@ struct InsightsMedicationsPage: View {
                 // v0.13.1 UX-D8/D2 — canonical per-page header (large title +
                 // sub-line + equal-circle trailing slot), IDENTICAL anatomy to
                 // the metric pages so the header doesn't jump across the pager.
-                // Compliance has no per-page gear/coach target, so the trailing
-                // slot is empty (no dead affordance) — only the shape unifies.
+                // 1.4 B2 — the trailing slot carries the page's one (i): the
+                // explainer that stood under the title, the adherence method.
                 InsightsPageHeader(
                     "Medications",
                     subtitle: LocalizedStringKey(subtitle),
                     accessibilityIdentifierSuffix: "medications"
-                )
-
-                // I-0 Item 3 — the server-mirrored intro paragraph, IDENTICAL to
-                // the `InsightsMetricScreen.descriptionSlot`. The Medications page
-                // previously carried NO intro and read broken next to the metric
-                // pages; it now opens with the same explainer body (`medications`
-                // slug = the web "Medication adherence" copy).
-                InsightsExplainerIntro(slug: "medications")
+                ) {
+                    HLInfoButton(
+                        content: InsightsSpecialPageInfo.medications(showsCorrelation: medicationCorrelationPanel != nil),
+                        style: .circle,
+                        accessibilityIdentifier: "insights.medications.info"
+                    )
+                }
 
                 ForEach(store.activeMedications) { medication in
                     medicationCard(medication)
@@ -177,9 +176,15 @@ struct InsightsMedicationsPage: View {
                         Text("\(medication.name) \(medication.dose)")
                             .font(.hlHeadline)
                             .foregroundStyle(HLText.primary)
-                        Text(categoryLabel(medication))
-                            .font(.hlCaption.weight(.semibold))
-                            .foregroundStyle(HLText.secondary)
+                        // 1.4 B2 — an as-needed medication says so in this line
+                        // instead of a sentence where the bars would be.
+                        if let line = Self.categoryLine(medication, isAsNeeded: snapshot.map {
+                            !$0.serverUnavailable && $0.displayRows.isEmpty
+                        } ?? false) {
+                            Text(line)
+                                .font(.hlCaption.weight(.semibold))
+                                .foregroundStyle(HLText.secondary)
+                        }
                     }
 
                     // v0.14.1 #127 — render the server's cadence-scaled
@@ -202,11 +207,6 @@ struct InsightsMedicationsPage: View {
                             // #115 B7 — the server gave no answer; say so
                             // instead of computing a rate on the device.
                             Text("med.compliance.unavailable")
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.tertiary)
-                        } else if snapshot.displayRows.isEmpty {
-                            // PRN / schedule-less medication — no rate to show.
-                            Text("insights.compliance.prn")
                                 .font(.hlCaption)
                                 .foregroundStyle(HLText.tertiary)
                         }
@@ -237,34 +237,45 @@ struct InsightsMedicationsPage: View {
     /// render contract as `InsightsMetricScreen.correlationBlock`.
     @ViewBuilder
     private var correlationBlock: some View {
-        if backend.canShowCloudInsights, let digest = insightsStore.digest {
-            // A360 H2 — the bp×med card carries an "Ask the coach about this"
-            // link, pre-scoped to blood pressure + compliance.
-            let panel = CorrelationsPanel(
-                digest: digest,
-                pairs: [.bpMedication],
-                onAskCoach: { pair in
-                    coachSeedOverride = pair.coachSeed
-                    coachScopeOverride = pair.coachLaunchScope
-                    presentCoach = true
-                }
-            )
-            if panel.hasAnyCard {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    InsightsSectionHeader("Relationships", flush: true)
-                    panel
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .contain)
+        if let panel = medicationCorrelationPanel {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                InsightsSectionHeader("Relationships", flush: true)
+                panel
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
         }
     }
 
-    private func categoryLabel(_ medication: Medication) -> String {
-        guard let raw = medication.category, !raw.isEmpty else {
-            return String(localized: "med.card.category.fallback")
-        }
-        return MedicationCard.localizedCategory(raw, label: medication.categoryLabel)
+    /// The bp x medication panel, `nil` when it has no card; the (i) explains
+    /// the correlation only when the card is on the page.
+    private var medicationCorrelationPanel: CorrelationsPanel? {
+        guard backend.canShowCloudInsights, let digest = insightsStore.digest else { return nil }
+        // A360 H2 — the bp×med card carries an "Ask the coach about this"
+        // link, pre-scoped to blood pressure + compliance.
+        let panel = CorrelationsPanel(
+            digest: digest,
+            pairs: [.bpMedication],
+            onAskCoach: { pair in
+                coachSeedOverride = pair.coachSeed
+                coachScopeOverride = pair.coachLaunchScope
+                presentCoach = true
+            }
+        )
+        return panel.hasAnyCard ? panel : nil
+    }
+
+    /// "Blutdrucksenker", or "Blutdrucksenker, bei Bedarf" for a medication
+    /// without a fixed plan (no adherence to show).
+    /// 1.4 B4 — the medication list's rule (`MedicationCard.categoryPillLabel`):
+    /// a kind only when there is a real one. "Medikament" under every name in
+    /// a page of medications said nothing, and neither did "Sonstige".
+    static func categoryLine(_ medication: Medication, isAsNeeded: Bool) -> String? {
+        let category = MedicationCard.categoryPillLabel(category: medication.category, label: medication.categoryLabel)
+        guard isAsNeeded else { return category }
+        let asNeeded = String(localized: "insights.compliance.asNeeded")
+        guard let category else { return asNeeded.prefix(1).uppercased() + asNeeded.dropFirst() }
+        return category + ", " + asNeeded
     }
 
     /// Localized, plural-aware count line ("3 medications" / "1 Medikament").
@@ -273,23 +284,20 @@ struct InsightsMedicationsPage: View {
     }
 
     private var emptyState: some View {
-        HLEmptyState(
-            icon: "pills",
-            title: "No medications yet",
-            message: "Add your first medication. Reminders, compliance heatmap and history follow automatically."
-        ) {
+        // 1.4 B4 — title and action; the sentence repeated the button.
+        HLEmptyState(icon: "pills", title: "No medications yet") {
             // QoL-4 — a next-step CTA so the empty page isn't a dead-end: land
             // the user on the Medications tab where "+" adds the first med.
             HLButton(
                 String(localized: "Add medication"),
                 icon: "plus",
-                variant: .restrained
+                variant: .secondary
             ) {
                 router.selectedTab = .meds
             }
             .accessibilityIdentifier("insights.medications.empty.add")
         }
         .accessibilityIdentifier("insights.medications.empty")
-        .containerCentered()
+        .insightsEmptyStatePlacement()
     }
 }

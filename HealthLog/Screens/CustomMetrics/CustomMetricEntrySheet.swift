@@ -100,9 +100,8 @@ struct CustomMetricEntrySheet: View {
                 }
 
                 // Backdating. Bounded to "not in the future", matching the
-                // measurement sheet; the footer is the same hint copy pattern,
-                // which exists because users kept missing that the field is
-                // adjustable at all.
+                // measurement sheet. 1.4 B2-c: the picker shows it can be
+                // changed and refuses the future itself; no hint footer.
                 Section {
                     DatePicker(
                         "customMetric.entry.measuredAt.label",
@@ -113,8 +112,6 @@ struct CustomMetricEntrySheet: View {
                     .accessibilityIdentifier("customMetric.entry.measuredAt.picker")
                 } header: {
                     Text("customMetric.entry.measuredAt.section")
-                } footer: {
-                    Text("customMetric.entry.backdateHint")
                 }
 
                 Section("customMetric.entry.note.section") {

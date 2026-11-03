@@ -36,8 +36,11 @@ struct MeasurementRemindersScreen: View {
     var body: some View {
         HLSettingsPage(title: "reminders.manage.title") {
             content(store: store)
-            // 1.0.3 (1.4.1) — where the screening cadences come from.
-            HLSourcesLink(topic: .vorsorge)
+            // 1.0.3 (1.4.1) — where the screening cadences come from. 1.4 B4:
+            // only under reminders; the empty state states nothing to cite.
+            if VorsorgeCard.showsSources(reminders: store.reminders) {
+                HLSourcesLink(topic: .vorsorge)
+            }
             HLSyncStatusFooter(screenLoading: store.isLoading)
         }
         .navigationTitle("reminders.manage.title")
@@ -152,30 +155,24 @@ struct MeasurementRemindersScreen: View {
         }
     }
 
+    /// 1.4 B4 — the app's one empty-state lockup, on the page rather than in
+    /// a card titled "Erinnerungen" over a line saying there are none. The one
+    /// action stays the tile-action shape this page uses (no `HLButton` here,
+    /// `VorsorgeMedicationTileParityTests`).
+    @ViewBuilder
     private func emptyCard(loading: Bool) -> some View {
-        HLSettingsCard(icon: "stethoscope", title: "reminders.list.title") {
-            if loading {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
+        if loading {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, HLSpace.lg)
+        } else {
+            HLEmptyState(icon: "calendar.badge.clock", title: "reminders.empty.title") {
+                HLTileActionButton("reminders.create.action", icon: "plus") {
+                    showingCreate = true
                 }
-            } else {
-                Label {
-                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        Text("reminders.empty.title")
-                            .font(.hlHeadline)
-                        Text("reminders.empty.subtitle")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "calendar.badge.clock")
-                        .foregroundStyle(HLText.tertiary)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("MeasurementRemindersScreen.empty")
+                .accessibilityIdentifier("MeasurementRemindersScreen.emptyCreate")
             }
+            .accessibilityIdentifier("MeasurementRemindersScreen.empty")
         }
     }
 }
@@ -291,12 +288,13 @@ struct VorsorgeReminderCardView: View {
             // b244 — the title is also a tap target for the detail sheet (like
             // the mental-health card's header text button).
             Button(action: onOpenDetail) {
+                // 1.4 B4 — a long title wraps instead of shrinking to 70 %.
                 Text(headerTitle)
                     .font(.hlTitle3)
                     .foregroundStyle(row.enabled ? HLText.primary : HLText.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .lineLimit(2)
                     .truncationMode(.tail)
+                    .multilineTextAlignment(.leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

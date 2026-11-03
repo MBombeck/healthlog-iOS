@@ -27,7 +27,18 @@ public protocol AnyHealthKitWriter: Sendable {
     /// anti-dup (externalUUID) + idempotency live in the implementation; the
     /// caller passes the authoritative server page. Skips silently without
     /// share-auth; non-HK builds + test doubles no-op via the default below.
-    func mirrorServerMeasurements(_ measurements: [Measurement]) async
+    ///
+    /// B5 (1.4) — returns `false` when the person's direction setting was not
+    /// known and the pass wrote nothing for that reason, so a one-shot caller
+    /// tries again later.
+    @discardableResult
+    func mirrorServerMeasurements(_ measurements: [Measurement]) async -> Bool
+
+    /// **B5 (1.4)** — setter-injection for the person's per-type direction
+    /// (`GET /api/integrations/healthkit`), read by the server mirror and the
+    /// create-time write. `nil` from the provider means "not known now".
+    /// Idempotent; implementations that write nothing no-op via the default.
+    func attachWriteBackPolicy(_ provider: (@Sendable () async -> HealthKitWriteBackPolicy?)?) async
 
     /// S4 / QA6 #2: mirror a MoodEntry into HKStateOfMindSample. iOS 18+
     /// only; pre-18 implementations no-op.
@@ -244,7 +255,14 @@ public protocol AnyHealthKitWriter: Sendable {
 
 public extension AnyHealthKitWriter {
     /// Default no-op so non-HK test doubles need not implement the server mirror.
-    func mirrorServerMeasurements(_: [Measurement]) async {}
+    @discardableResult
+    func mirrorServerMeasurements(_: [Measurement]) async -> Bool {
+        true
+    }
+
+    /// Default no-op: an implementation that writes nothing has no direction
+    /// to follow. The live HealthKit service overrides it.
+    func attachWriteBackPolicy(_: (@Sendable () async -> HealthKitWriteBackPolicy?)?) async {}
 
     /// Default no-op: an implementation that owns no opt-in importer has no
     /// account to admit. The live HealthKit service overrides it.

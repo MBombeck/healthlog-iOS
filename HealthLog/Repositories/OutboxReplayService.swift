@@ -157,13 +157,11 @@ public actor OutboxReplayService {
     /// `update`/`delete` on the same optimistic id (same pass) is retargeted
     /// through it. Cleared at the start of every pass; cross-pass persistence is
     /// carried by the on-disk `clientEntityId` column (see `applyEntityRemap`).
+    /// Written only by the pass that owns the queue (1.4, S5).
     var idRemap: [String: String] = [:]
 
-    /// Server id returned by the most recent `create` dispatch (or `nil`). The
-    /// records/labs create arms (in the `+Records` / `+LabsIllness` extensions)
-    /// write it; `runOnce` reads it to drive the H-4 remap. Reset before each
-    /// `dispatch`. `internal` so the cross-file dispatch extensions can set it.
-    var lastCreatedServerId: String?
+    // 1.4 (S5) — no shared "last created server id" any more: `dispatch(_:)`
+    // returns it to the pass that sent the request (see `+Pass`).
 
     /// W1 (1.3.0) — the pass guard, its watchdog state and the one-time 1.2.0
     /// update path; all explained in `+Watchdog`.
@@ -255,7 +253,9 @@ public actor OutboxReplayService {
         return payloadId
     }
 
-    func dispatch(_ op: OutboxQueue.Operation) async throws {
+    /// The server id a replayed `create` received (records, labs, custom
+    /// metrics: the arms a dependent write can be remapped from), else `nil`.
+    func dispatch(_ op: OutboxQueue.Operation) async throws -> String? {
         switch op.kind {
         case .createMeasurement,
              .logMood,
@@ -263,7 +263,7 @@ public actor OutboxReplayService {
             try await dispatchCreatePath(op)
         case .updateMeasurement,
              .deleteMeasurement,
-             .bulkDeleteMeasurements,
+             .bulkDeleteMeasurements, .deleteHealthKitSamples,
              .updateMood,
              .deleteMood:
             try await dispatchMeasurementsAndMood(op)
@@ -274,8 +274,7 @@ public actor OutboxReplayService {
              .deleteIntake,
              .logMedicationIntake:
             try await dispatchMedications(op)
-        case .updateThresholds,
-             .updateInsightsLayout:
+        case .updateThresholds, .updateInsightsLayout:
             try await dispatchUserPreferences(op)
         case .createMedicationSideEffect,
              .deleteMedicationSideEffect,
@@ -300,7 +299,7 @@ public actor OutboxReplayService {
              .createBiomarker,
              .updateBiomarker,
              .deleteBiomarker:
-            try await dispatchLabs(op)
+            return try await dispatchLabs(op)
         case .createIllnessEpisode,
              .updateIllnessEpisode,
              .deleteIllnessEpisode,
@@ -314,7 +313,7 @@ public actor OutboxReplayService {
              .createFamilyHistory,
              .updateFamilyHistory,
              .deleteFamilyHistory:
-            try await dispatchRecords(op)
+            return try await dispatchRecords(op)
         case .createMentalHealthAssessment:
             try await dispatchMentalHealth(op)
         case .createCustomMetric,
@@ -323,7 +322,7 @@ public actor OutboxReplayService {
              .createCustomMetricEntry,
              .updateCustomMetricEntry,
              .deleteCustomMetricEntry:
-            try await dispatchCustomMetrics(op)
+            return try await dispatchCustomMetrics(op)
         case .logNutrientWater:
             try await dispatchNutrients(op)
         case .syncHealthKitSample:
@@ -338,6 +337,7 @@ public actor OutboxReplayService {
             // refactor cannot route an unnameable row onto a wire path.
             throw HLError.unknown("Op-Kind \(op.kind.rawValue) is quarantined and is not replayed")
         }
+        return nil
     }
 
     /// Pre-v0.5.x create paths (measurement / mood / take-medication).
@@ -406,6 +406,13 @@ public actor OutboxReplayService {
             // actually landed is a silent no-op.
             let p = try decoder.decode(OutboxQueue.Payloads.BulkDeleteMeasurements.self, from: op.payload)
             _ = try await measurementsRepo.replayBulkDelete(ids: p.ids, idempotencyKey: op.idempotencyKey)
+        case .deleteHealthKitSamples:
+            // A5 (1.4, R3 S4) — Apple Health deletions kept while the server was
+            // out of reach. The route takes no idempotency key (a DELETE carries
+            // none) and needs none: it touches a row once, so a replay after the
+            // original landed is a no-op.
+            let p = try decoder.decode(OutboxQueue.Payloads.DeleteHealthKitSamples.self, from: op.payload)
+            try await measurementsRepo.deleteByExternalIDs(p.externalIds)
         case .updateMood:
             let p = try decoder.decode(OutboxQueue.Payloads.UpdateMood.self, from: op.payload)
             let saved = try await moodRepo.replayUpdate(id: p.id, patch: p.patch, idempotencyKey: op.idempotencyKey)

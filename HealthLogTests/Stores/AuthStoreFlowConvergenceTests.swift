@@ -45,7 +45,7 @@
                 let gate = Phase09Gate()
                 harness.rescriptAcceptance(gate: gate)
                 let running = Task { @MainActor in await harness.complete() }
-                parkedAtAcceptance[flow] = await phase09Settle { gate.waitingCount == 1 }
+                parkedAtAcceptance[flow] = await phase09AwaitCondition { gate.waitingCount == 1 }
                 // Sampled while the flow is parked at its acceptance hop: this is
                 // what the user is looking at mid-attempt.
                 workingWhileParked[flow] = harness.store.isWorking

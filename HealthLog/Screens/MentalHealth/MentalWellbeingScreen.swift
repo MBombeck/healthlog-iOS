@@ -15,9 +15,6 @@ struct MentalWellbeingScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.xl) {
                 if let store {
-                    if store.phase == .choose {
-                        header
-                    }
                     switch store.phase {
                     case .choose:
                         chooseSection(store: store)
@@ -93,17 +90,8 @@ struct MentalWellbeingScreen: View {
 
     /// G3 — the header used to open with `mentalHealth.pageTitle`, which is the
     /// same words as the navigation title („Seelisches Wohlbefinden") one line
-    /// above it. The navigation title is the one that stays: it survives
-    /// scrolling and it is how every other screen in the app titles itself.
-    private var header: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("mentalHealth.pageDescription")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
+    /// above it. 1.4 B2: the description paragraph under it is gone too; the
+    /// four cards say what the screen offers, the detail sheet shows the trend.
     private func chooseSection(store: MentalHealthStore) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
             Text("mentalHealth.choosePrompt")
@@ -200,11 +188,9 @@ private struct MentalHealthInstrumentCard: View {
                             value: "\(last.totalScore) (\(bandLabel(last)))"
                         )
                     }
-                } else {
-                    Text("mentalHealth.noResultYet")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
                 }
+                // 1.4 B2 — without a result the card shows title and Start; four
+                // identical "no check-in yet" lines said what Start implies.
 
                 // G4/G6 — the card's Starten is a KACHEL-Aktion, not a flow CTA.
                 // `HLButton(.primary)` fills with `AnyShapeStyle(.tint)`, and the
@@ -316,19 +302,9 @@ private struct MentalHealthInstrumentDetail: View {
         } else if store.detailError != nil, rows.isEmpty {
             errorState
         } else if rows.isEmpty {
-            VStack(spacing: HLSpace.sm) {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.hlTitle2)
-                    .foregroundStyle(HLText.tertiary)
-                Text("mentalHealth.history.title")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                Text("mentalHealth.history.empty")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity, minHeight: 180)
+            // 1.4 B4 — no check-in yet: the start button above is the way on,
+            // and no empty "Dein Verlauf" block stands under it.
+            EmptyView()
         } else {
             if store.isDetailLoading {
                 ProgressView()

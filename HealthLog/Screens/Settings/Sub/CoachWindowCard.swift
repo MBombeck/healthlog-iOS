@@ -6,10 +6,14 @@ struct CoachWindowCard: View {
     let store: AICoachSettingsStore
 
     var body: some View {
-        HLSettingsCard(icon: "calendar", title: "settings.coach.window.title") {
+        // 1.4 B2-c — the one line under the picker stays for what the label
+        // cannot say (B5, #126): older readings are kept, only out of the
+        // Coach's reach. 1.4 B4 — one row, one heading: the picker is labelled
+        // "Reichweite des Coachs" and the card has no title over it.
+        HLSettingsCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HStack(spacing: HLSpace.md) {
-                    Text("settings.coach.window.pickerLabel")
+                    Text("settings.coach.window.title")
                         .font(.hlSubhead.weight(.semibold))
                         .foregroundStyle(HLText.primary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -20,7 +24,7 @@ struct CoachWindowCard: View {
                             .accessibilityHidden(true)
                     }
                     Picker(
-                        String(localized: "settings.coach.window.pickerLabel"),
+                        String(localized: "settings.coach.window.title"),
                         selection: Binding(
                             get: { store.coachDefaultWindow ?? .allTime },
                             set: { newValue in Task { await store.setCoachDefaultWindow(newValue) } }

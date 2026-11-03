@@ -159,19 +159,14 @@ struct HKServerSyncHealthSummary: Equatable {
 extension SettingsHKSyncDiagnosticsScreen {
     /// Server-Sicht: Urteil, Auslöser, Hintergrund-Beleg, Frische pro Typ.
     var serverHealthCard: some View {
+        // 1.4 B2-c — the reading guide ("a missing type never delivered, it
+        // is not zero") and the legend of the times are in the (i).
         HLSettingsCard(
             icon: "antenna.radiowaves.left.and.right",
-            title: "settings.hkdiag.server_title",
-            // R5 — die Karte belegte beide Beitext-Slots. Der Untertitel („Was
-            // der Server über diese Verbindung weiß.") formulierte nur den
-            // Kartentitel um (Klasse A); der Footer trägt die Leseanleitung
-            // („ein fehlender Typ hat noch nie geliefert, er steht nicht auf
-            // null") und bleibt.
-            footer: "settings.hkdiag.server_footer"
+            title: "settings.hkdiag.server_title"
         ) {
             if let summary = serverSummary {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    HKSyncDiagnosticsSourceTag(source: .server)
                     if summary.hasServerData {
                         serverStatRow(
                             label: "settings.hkdiag.server_autonomy",
@@ -243,11 +238,6 @@ extension SettingsHKSyncDiagnosticsScreen {
             Text("settings.hkdiag.freshness_title")
                 .font(.hlSubhead.weight(.semibold))
                 .foregroundStyle(HLText.primary)
-            // W5 — what the time on the right is, once for the whole list.
-            Text("settings.hkdiag.freshness_legend")
-                .font(.hlCaption2)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
             if freshness.isEmpty {
                 Text("settings.hkdiag.freshness_empty")
                     .font(.hlCaption)
@@ -280,18 +270,10 @@ extension SettingsHKSyncDiagnosticsScreen {
         }
     }
 
+    /// 1.4 B4 — the screen's one stat row: wraps in full, stacks at the
+    /// accessibility sizes (it was cut after two lines).
     private func serverStatRow(label: LocalizedStringKey, value: String, tint: Color) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer(minLength: HLSpace.md)
-            Text(value)
-                .font(.hlBody.monospacedDigit())
-                .foregroundStyle(tint)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
-        }
+        HLSettingsStatRow(label: Text(label), value: value, tint: tint)
     }
 
     /// Holt `GET /api/integrations/healthkit` frisch (nicht aus dem SWR-Cache

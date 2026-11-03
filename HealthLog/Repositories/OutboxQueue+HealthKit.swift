@@ -91,17 +91,22 @@ public extension OutboxQueue {
     /// The enqueue is refused outright when `ownerUserID` no longer owns the
     /// live session, so a long-running import that resumes after an account
     /// switch cannot persist account A's samples as account B's.
+    ///
+    /// A2 (1.4) — `syncTrigger` is the word the page was posted under. The
+    /// row keeps it and its replay sends it again; `nil` writes the row as
+    /// 1.3.0 did, without the key.
     func enqueueHealthKitBatch(
         _ entries: [HealthKitBatchEntryDTO],
         encoder: JSONEncoder,
         idempotencyKey: String,
+        syncTrigger: SyncTrigger? = nil,
         requiringCurrentOwner ownerUserID: String
     ) async throws {
         guard !entries.isEmpty else { return }
         try await enqueue(
             .init(
                 kind: .syncHealthKitSample,
-                payload: Self.encodeBatch(entries, encoder: encoder),
+                payload: Self.encodeBatch(entries, syncTrigger: syncTrigger, encoder: encoder),
                 idempotencyKey: idempotencyKey,
                 ownerUserID: ownerUserID
             ),
@@ -109,13 +114,18 @@ public extension OutboxQueue {
         )
     }
 
-    /// The exact body `MeasurementBatchUploader.upload` would have POSTed. The
-    /// `syncTrigger` is deliberately omitted: it describes the wake that
-    /// produced the samples, and a replay happens in a different wake.
+    /// The exact body `MeasurementBatchUploader.upload` would have POSTed.
+    ///
+    /// A2 (1.4) — with the `syncTrigger` it was posted under, where the caller
+    /// knows it. Up to 1.3.0 the word was left out because a replay happens
+    /// in another wake; but the server reads it as a statement about the rows
+    /// (a `backfill` page moves no live arrival stamp), and 6 to 10 full pages
+    /// a day reached it without one, diagnosed as "unknown".
     private static func encodeBatch(
         _ entries: [HealthKitBatchEntryDTO],
+        syncTrigger: SyncTrigger? = nil,
         encoder: JSONEncoder
     ) throws -> Data {
-        try encoder.encode(HealthKitBatchPayload(entries: entries))
+        try encoder.encode(HealthKitBatchPayload(entries: entries, syncTrigger: syncTrigger))
     }
 }

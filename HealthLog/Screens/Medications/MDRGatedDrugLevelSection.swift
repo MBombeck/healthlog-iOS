@@ -20,8 +20,8 @@ import SwiftUI
 /// acknowledgment dialog, `/api/auth/me/research-mode` and the three user
 /// columns went with it, so this section renders on its own inputs alone:
 ///
-/// - doses available → `Chart` + the MDR caption,
-/// - no doses → `EmptyDosesPlaceholder`.
+/// - doses available → `Chart` + the MDR caption in the chart card,
+/// - no doses → no section (1.4 B2).
 ///
 /// There is no failure branch: with nothing to fetch there is nothing whose
 /// failure could paint over the chart. The type name is kept — the section is
@@ -46,18 +46,19 @@ struct MDRGatedDrugLevelSection: View {
     let drug: GLP1DrugCatalog.DrugRecord
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            // T2-4: section label Withings rhythm.
-            HLSectionLabel("Estimated drug level")
-
-            switch store.drugLevelSection {
-            case .loading:
-                DrugLevelLoadingPlaceholder()
-            case .empty:
-                EmptyDosesPlaceholder()
-            case let .curve(curve):
-                DrugLevelChartView(drug: drug, curve: curve)
-                DisclaimerCaption(drugID: drug.id)
+        // 1.4 B2 — without a logged dose there is no curve and nothing to do
+        // here (logging happens on the card), so the section is absent rather
+        // than a card saying so. The label carries "(relative)", the unit-less
+        // framing the caption above the chart used to state on its own line.
+        if store.drugLevelSection != .empty {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                HLSectionLabel("Estimated drug level")
+                switch store.drugLevelSection {
+                case .loading, .empty:
+                    DrugLevelLoadingPlaceholder()
+                case let .curve(curve):
+                    DrugLevelChartView(drug: drug, curve: curve)
+                }
             }
         }
     }
@@ -66,40 +67,18 @@ struct MDRGatedDrugLevelSection: View {
 // MARK: - Loading (14-02)
 
 /// The reserved frame the curve will fill. Same caption line and same ghost
-/// card as the chart, and the height comes from `HLChartStyle.heightDetail` —
+/// card as the chart, and the height comes from `HLChartStyle.heightRegular` —
 /// the chart's own height rule — so nothing moves when the curve arrives and
 /// Phase 17's consistency sweep has no hardcoded point value to chase.
 private struct DrugLevelLoadingPlaceholder: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text(String(localized: "Estimated level (relative)"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-            HLCard(style: .ghost) {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: HLChartStyle.heightDetail)
-            }
+        HLCard(style: .ghost) {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .frame(height: HLChartStyle.heightRegular)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(String(localized: "Loading")))
-    }
-}
-
-// MARK: - Empty doses
-
-private struct EmptyDosesPlaceholder: View {
-    var body: some View {
-        HLCard(style: .ghost) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(String(localized: "No intakes logged yet."))
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                Text(String(localized: "Log your first intake to see the curve."))
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-            }
-        }
     }
 }
 
@@ -107,7 +86,8 @@ private struct EmptyDosesPlaceholder: View {
 
 /// 1.0.3 (App Review 1.4.1) — the disclaimer names EMA population PK, so the
 /// citation belongs directly beneath it: the sheet resolves the drug's own EMA
-/// EPAR (and, for tirzepatide, the Schneck & Urva DOI) from `drugID`.
+/// EPAR (and, for tirzepatide, the Schneck & Urva DOI) from `drugID`. 1.4 B2:
+/// both sit at the chart card's foot instead of under the card.
 private struct DisclaimerCaption: View {
     let drugID: GLP1DrugCatalog.DrugID
 
@@ -115,12 +95,10 @@ private struct DisclaimerCaption: View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(String(localized: "Educational estimate from EMA-published population pharmacokinetics. Not a measurement."))
                 .font(.hlCaption)
-                .italic()
                 .foregroundStyle(HLText.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
             HLSourcesLink(topic: .glp1Pharmacokinetics(drugID))
         }
-        .padding(.top, HLSpace.xs)
     }
 }
 
@@ -156,11 +134,8 @@ private struct DrugLevelChartView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text(String(localized: "Estimated level (relative)"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-            HLCard(style: .ghost) {
+        HLCard(style: .ghost) {
+            VStack(alignment: .leading, spacing: HLSpace.md) {
                 Chart {
                     ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
                         AreaMark(
@@ -217,17 +192,13 @@ private struct DrugLevelChartView: View {
                 // SwiftLint custom rule in `Pharmacokinetics/.swiftlint.yml`
                 // tries to catch obvious regressions; trust the boundary.
                 .chartYAxis(.hidden)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 3)) { _ in
-                        AxisGridLine().foregroundStyle(HLColor.separator)
-                        AxisValueLabel(format: .dateTime.day().month(.abbreviated), centered: true)
-                            .font(.hlCaption)
-                    }
-                }
-                .frame(height: HLChartStyle.heightDetail)
+                // 1.4 B4 — the app's one date-axis rule.
+                .chartXAxis { ChartDateAxis.marks(for: samples.map { date(for: $0.tHours) } + [asOf]) }
+                .frame(height: HLChartStyle.heightRegular)
                 .accessibilityChartDescriptor(
                     HLChartDescriptor(Self.buildDescriptor(drug: drug, curve: curve))
                 )
+                DisclaimerCaption(drugID: drug.id)
             }
         }
     }

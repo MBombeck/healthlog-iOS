@@ -72,7 +72,9 @@ struct WorkoutsPagingFooter: View {
 
     var body: some View {
         switch WorkoutsPagingFooterState.resolve(store) {
-        case .hidden:
+        // 1.4 B2 — the end of the list needs no "Alle Workouts geladen"
+        // line; the last row is the end.
+        case .hidden, .end:
             EmptyView()
         case .loading:
             HStack(spacing: HLSpace.sm) {
@@ -98,14 +100,6 @@ struct WorkoutsPagingFooter: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, HLSpace.md)
-        case .end:
-            Text("workouts.paging.end")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, HLSpace.md)
-                .accessibilityIdentifier("workouts.paging.end")
         }
     }
 }

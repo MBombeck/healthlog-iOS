@@ -62,16 +62,10 @@ struct InsightsEcgPage: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
-                InsightsPageHeader(
-                    "insights.ecg.title",
-                    subtitle: "insights.ecg.subtitle",
-                    accessibilityIdentifierSuffix: "ecg"
-                )
-
-                Text("insights.ecg.intro")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // 1.4 B2 — title and list. The sub-line and the intro paragraph
+                // said three times what the attribution at the foot of the list
+                // says once.
+                InsightsPageHeader("insights.ecg.title", accessibilityIdentifierSuffix: "ecg")
 
                 recordingsList
 
@@ -81,8 +75,6 @@ struct InsightsEcgPage: View {
                         .foregroundStyle(HLText.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                EcgDisclaimerBlock()
 
                 HLSyncStatusFooter(screenLoading: store.isLoading)
             }
@@ -101,13 +93,17 @@ struct InsightsEcgPage: View {
 
     private var recordingsList: some View {
         HLCard {
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(store.recordings.enumerated()), id: \.element.id) { index, recording in
                     row(for: recording)
                     if index < store.recordings.count - 1 {
                         Divider().overlay(HLColor.separator)
                     }
                 }
+                // 1.4 B2 — who produced these results, at the foot of the
+                // list it attributes, with its references.
+                EcgAttributionFooter()
+                    .padding(.top, HLSpace.sm)
             }
         }
         .accessibilityIdentifier("insights.ecg.list")
@@ -173,13 +169,6 @@ struct InsightsEcgPage: View {
                 uploadOffNote
 
                 importPathCard
-
-                Text("insights.ecg.empty.hardwareNote")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("insights.ecg.empty.hardwareNote")
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, HLSpace.lg)
@@ -239,17 +228,26 @@ struct InsightsEcgPage: View {
     /// server endpoint, so naming a step that cannot run would recreate exactly
     /// the dishonesty this empty state exists to remove. The steps themselves
     /// stay — they are still true of where recordings come from.
+    ///
+    /// 1.4 B2 — the three steps open on request; the card shows its title and
+    /// the one action.
     private var importPathCard: some View {
         HLCard(style: .ghost) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                Text("insights.ecg.empty.pathTitle")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                    .accessibilityAddTraits(.isHeader)
-
-                pathStep(number: 1, text: "insights.ecg.empty.pathStep1")
-                pathStep(number: 2, text: "insights.ecg.empty.pathStep2")
-                pathStep(number: 3, text: "insights.ecg.empty.pathStep3")
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: HLSpace.md) {
+                        pathStep(number: 1, text: "insights.ecg.empty.pathStep1")
+                        pathStep(number: 2, text: "insights.ecg.empty.pathStep2")
+                        pathStep(number: 3, text: "insights.ecg.empty.pathStep3")
+                    }
+                    .padding(.top, HLSpace.sm)
+                } label: {
+                    Text("insights.ecg.empty.pathTitle")
+                        .font(.hlHeadline)
+                        .foregroundStyle(HLText.primary)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                .tint(HLText.secondary)
 
                 if backend?.hasServer != false {
                     HLButton(
@@ -318,45 +316,40 @@ struct EcgRecordingRow: View {
     }
 }
 
-// MARK: - Disclaimer
+// MARK: - Attribution
 
-/// The permanent, non-dismissible ECG attribution block.
+/// The permanent, non-dismissible ECG attribution, at the foot of the card
+/// whose results it attributes (the list on the page, the result on the
+/// detail), with the device makers' references beside it.
 ///
 /// **Do NOT soften or make this dismissible.** It is the copy contract that
 /// keeps the surface an awareness view of the DEVICE's own certified result
 /// rather than a HealthLog reading of an ECG.
 ///
 /// **UI-Standard R17 (U1) — was hier gekürzt wurde und was nicht.** Der Satz
-/// trägt zwei Dinge: die ZUSCHREIBUNG („das Ergebnis stammt von deinem
-/// Aufzeichnungsgerät; HealthLog liest oder interpretiert EKG-Aufzeichnungen
-/// nicht") und, angehängt, den Pauschalteil „und stellt keine Diagnose". Die
-/// Zuschreibung ist der Vertrag und bleibt wortgleich. Der Pauschalteil ist
-/// gefallen — er lebt am Ack-Sheet und in Einstellungen → Über diese App, und
-/// „HealthLog interpretiert nicht" ist ohnehin die konkretere und stärkere
-/// Aussage. Der Block bleibt permanent und nicht abweisbar.
+/// trägt die ZUSCHREIBUNG („das Ergebnis stammt von deinem Aufzeichnungsgerät;
+/// HealthLog liest oder interpretiert EKG-Aufzeichnungen nicht"); der
+/// Pauschalteil „und stellt keine Diagnose" lebt am Ack-Sheet und in
+/// Einstellungen → Über diese App.
+///
+/// **1.4 B2.** Was a ghost card of its own with an `info.circle` that opened
+/// nothing; now one footnote and one "Quellen" inside the card it belongs to.
 ///
 /// **Achtung, Repo-Grenze:** der Wortlaut war bis hierher wortgleich mit dem
 /// Web-Katalog (`insights.ecg.disclaimer`). Bis das Web-Repo nachzieht, driften
 /// die beiden Fassungen um genau diesen Nachsatz auseinander.
-struct EcgDisclaimerBlock: View {
+struct EcgAttributionFooter: View {
     var body: some View {
-        HLCard(style: .ghost) {
-            HStack(alignment: .top, spacing: HLSpace.sm) {
-                Image(systemName: "info.circle")
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    Text("insights.ecg.disclaimer")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    // 1.0.3 (App Review 1.4.1) — the device maker's own ECG /
-                    // irregular-rhythm documentation, beside the attribution.
-                    HLSourcesLink(topic: .ecgRhythm)
-                }
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            Text("insights.ecg.disclaimer")
+                .font(.hlCaption)
+                .foregroundStyle(HLText.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("insights.ecg.disclaimer")
+            // 1.0.3 (App Review 1.4.1) — the device maker's own ECG /
+            // irregular-rhythm documentation, beside the attribution.
+            HLSourcesLink(topic: .ecgRhythm)
         }
-        .accessibilityIdentifier("insights.ecg.disclaimer")
     }
 }

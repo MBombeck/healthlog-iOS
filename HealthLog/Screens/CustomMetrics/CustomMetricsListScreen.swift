@@ -19,7 +19,8 @@ struct CustomMetricsListScreen: View {
     var body: some View {
         List {
             if store.metrics.isEmpty, !store.isLoading {
-                Section { emptyState }
+                // 1.4 B4 — the lockup stands on the list, not on a row card.
+                Section { emptyState.listRowBackground(Color.clear) }
             } else {
                 Section {
                     ForEach(store.metrics) { metric in
@@ -99,7 +100,7 @@ struct CustomMetricsListScreen: View {
             title: "customMetric.empty.title",
             message: "customMetric.empty.message"
         ) {
-            HLButton("customMetric.action.add", icon: "plus", variant: .primary) {
+            HLButton("customMetric.action.add", icon: "plus", variant: .secondary) {
                 showEditor = true
             }
         }

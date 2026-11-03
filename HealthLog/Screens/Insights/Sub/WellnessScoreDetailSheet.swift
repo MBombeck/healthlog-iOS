@@ -1,20 +1,11 @@
 import SwiftUI
 
-/// **I-2 — the wellness-score tap-through detail sheet.**
-///
-/// Extends the `HealthScoreDetailSheet` skeleton + reuses the
-/// `AnstehendeEinnahmenSheet` presentation pattern (`.medium → .large` detents,
-/// drag-indicator dismiss, `HLColor.surface` background). Layout, top→bottom:
-///
-/// 1. **Hero** — a centred ~140 pt `HLScoreRing` on a Liquid-Glass platter (the
-///    ONLY place glass / depth is used, iOS-26-gated `hlGlassBackground`,
-///    graceful `HLColor.surface` below).
-/// 2. **Contributor rows** — the ranked breakdown (compact `◔` ring + label +
-///    value + effective-weight caption + chevron). Tapping a row deep-navigates
-///    to that contributor's metric Insights page (resting HR, HRV, sleep,
-///    respiratory). STRAIN has no sub-breakdown → provenance/reason instead.
-/// 3. **"Grundlage / Was ist das?"** — an `HLCard(.ghost)` explainer LAST, so
-///    the user sees the data first, the methodology second.
+/// **I-2 — the wellness-score tap-through detail**, a sheet from the overview's
+/// score rings and (1.4 B3) a pushed page from the recovery page's trend card.
+/// Top to bottom: the server's assessment, the ranked contributor rows (a tap
+/// deep-navigates to that contributor's metric page; STRAIN has no breakdown
+/// and shows provenance instead), then the "Was ist das?" explainer LAST, so
+/// the data comes first and the methodology second.
 ///
 /// HONEST-ONLY: every row is server-returned; the "insufficient" arm shows the
 /// calm gate, not a fabricated score.
@@ -27,6 +18,9 @@ struct WellnessScoreDetailSheet: View {
     /// Insights page (mood is not a chartable `MetricKind`, so it needs its own
     /// seam). The sheet dismisses first, then the parent routes to the Mood page.
     var onSelectMood: (() -> Void)?
+    /// 1.4 B3 — `false` when pushed onto a stack (the recovery page) instead of
+    /// presented as a sheet: the page then uses that stack's bar and back button.
+    var embedsNavigationStack = true
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -55,33 +49,42 @@ struct WellnessScoreDetailSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    assessmentSection
-                    contributorsSection
-                    provenanceSection
-                    grundlageCard
-                }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.vertical, HLSpace.lg)
+        // The sheet dismisses by drag (AP-007), the pushed page by its back button.
+        Group {
+            if embedsNavigationStack {
+                NavigationStack { page }
+            } else {
+                page
             }
-            .hlScreenBackground()
-            .hlScrollEdgeSoft()
-            .navigationTitle(Text(InsightsDerivedBlock.title(for: dto.metric)))
-            .navigationBarTitleDisplayMode(.inline)
-            // Drag-indicator + swipe-down is the dismiss (AP-007) — no toolbar
-            // confirmation item.
         }
-        // Issue-2 — re-read the per-id derived route on open so the deterministic
-        // per-score Einschätzung populates (the batch DTO the sheet was handed
-        // carries `assessment: null`). Best-effort; cancels with the sheet.
+        // Issue-2 — re-read the per-id route on open so the deterministic per-score
+        // Einschätzung populates (the batch DTO carries `assessment: null`).
         .task(id: dto.metric) {
             guard WellnessScorePresentation.Archetype.isAssessable(dto.metric),
                   let fresh = await derivedStore.fetchSingle(metric: dto.metric),
                   let assessment = fresh.assessment else { return }
             loadedAssessment = assessment
         }
+    }
+
+    private var page: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: HLSpace.lg) {
+                assessmentSection
+                contributorsSection
+                provenanceSection
+                grundlageCard
+            }
+            .padding(.horizontal, HLSpace.lg)
+            .padding(.vertical, HLSpace.lg)
+        }
+        .hlScreenBackground()
+        .hlScrollEdgeSoft()
+        .navigationTitle(Text(InsightsDerivedCopy.title(for: dto.metric)))
+        .navigationBarTitleDisplayMode(.inline)
+        // 1.4 B2: the score's citation pushes inside the surrounding stack,
+        // whether that is the sheet's own or the page it was pushed onto.
+        .hlSheetStack()
     }
 
     // MARK: - Assessment (D1 — the per-score "Einschätzung", FIRST)
@@ -154,20 +157,16 @@ struct WellnessScoreDetailSheet: View {
         if archetype == .scoreProvenanceOnly {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    InsightsSectionHeader("How this is measured")
-                    Text(InsightsDerivedBlock.provenanceLine(for: dto.provenance))
+                    InsightsSectionHeader("How this is measured", flush: true)
+                    // 1.4 B2 — one origin line: the window, and for recovery
+                    // which source backs the number (W-B187 #29: the server
+                    // resolves WHOOP-native vs the computed proxy, so the read
+                    // is never misattributed).
+                    Text(provenanceText)
                         .font(.hlSubhead)
                         .foregroundStyle(HLText.secondary)
-                    // W-B187 #29 — honest recovery-source line: the server
-                    // resolves WHOOP-native vs the computed proxy; surface which
-                    // one backs this headline so the read is never misattributed.
-                    if let sourceLine = recoverySourceLine {
-                        Text(sourceLine)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("insights.scoreSheet.recoverySource")
-                    }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("insights.scoreSheet.recoverySource")
                     if let reason = dto.reason, !reason.isEmpty {
                         Text(reason)
                             .font(.hlCaption)
@@ -179,15 +178,17 @@ struct WellnessScoreDetailSheet: View {
         }
     }
 
-    /// W-B187 #29 — the honest recovery-source caption for the provenance card.
-    /// Only RECOVERY_SCORE carries a WHOOP-vs-computed authority decision; every
-    /// other provenance-only score (STRAIN / STRESS) returns `nil` so no source
-    /// line shows. Reads the server-resolved source — never fabricated.
-    private var recoverySourceLine: String? {
-        guard dto.metric == "RECOVERY_SCORE" else { return nil }
-        return WellnessScorePresentation.isWhoopNativeRecovery(dto)
-            ? String(localized: "Source: your WHOOP recovery.")
-            : String(localized: "Source: estimated from your heart-rate variability.")
+    /// The provenance line, with the recovery source joined to it. Only
+    /// RECOVERY_SCORE carries a WHOOP-vs-computed authority decision; every other
+    /// provenance-only score (STRAIN / STRESS) keeps the window alone. Reads the
+    /// server-resolved source — never fabricated.
+    private var provenanceText: String {
+        let window = InsightsDerivedCopy.provenanceLine(for: dto.provenance)
+        guard dto.metric == "RECOVERY_SCORE" else { return window }
+        let source = WellnessScorePresentation.isWhoopNativeRecovery(dto)
+            ? String(localized: "insights.provenance.recovery.whoop")
+            : String(localized: "insights.provenance.recovery.hrv")
+        return window + ", " + source
     }
 
     // MARK: - "Was ist [Metrik]?" (explainer, LAST)
@@ -199,17 +200,17 @@ struct WellnessScoreDetailSheet: View {
     private var grundlageCard: some View {
         HLCard(style: .ghost) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(InsightsDerivedBlock.whatIsTitle(for: dto.metric))
+                Text(InsightsDerivedCopy.whatIsTitle(for: dto.metric))
                     .font(.hlHeadline)
                     .foregroundStyle(HLText.primary)
                     .accessibilityAddTraits(.isHeader)
-                if let whatIs = InsightsDerivedBlock.whatIs(for: dto) {
+                if let whatIs = InsightsDerivedCopy.whatIs(for: dto) {
                     Text(whatIs)
                         .font(.hlSubhead)
                         .foregroundStyle(HLText.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let caveat = InsightsDerivedBlock.caveat(for: dto) {
+                if let caveat = InsightsDerivedCopy.caveat(for: dto) {
                     Text(caveat)
                         .font(.hlCaption)
                         .foregroundStyle(HLText.tertiary)
@@ -250,11 +251,11 @@ private struct ContributorRow: View {
                     Text(contributor.label)
                         .font(.hlSubhead.weight(.medium))
                         .foregroundStyle(HLText.primary)
-                    Text(weightCaption)
+                    Text(contributor.gapReason ?? weightCaption)
                         .font(.hlCaption)
                         .monospacedDigit()
                         .foregroundStyle(HLText.tertiary)
-                    weightMicroBar
+                    if contributor.gapReason == nil { weightMicroBar }
                 }
                 Spacer(minLength: HLSpace.sm)
                 Text(contributor.valueText)
@@ -310,6 +311,8 @@ private struct ContributorRow: View {
     }
 
     private var accessibilityLabel: String {
-        "\(contributor.label), \(contributor.valueText), \(weightCaption)"
+        // #145 — a withheld sub-score reads its reason, not an empty value.
+        if let reason = contributor.gapReason { return "\(contributor.label), \(reason)" }
+        return "\(contributor.label), \(contributor.valueText), \(weightCaption)"
     }
 }

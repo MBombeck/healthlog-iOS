@@ -141,20 +141,15 @@ struct CoachConversationsScreen: View {
             title: "No conversations yet",
             message: "When you chat with the coach, your conversations are kept so you can pick them back up here — on any device."
         )
+        // 1.4 B2-c — the page margin; the sentence ran edge to edge.
+        .padding(.horizontal, HLSpace.xl)
         .containerCentered()
     }
 
     private func conversationsList(store: CoachConversationHistoryStore) -> some View {
+        // 1.4 B2-c — no lead section: where conversations are kept is said
+        // once, in the Coach settings' (i).
         List {
-            Section {
-                Text(
-                    "These conversations are kept on your server. Open one to read it back — the coach remembers them across your devices."
-                )
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .listRowSeparator(.hidden)
-            }
-
             Section {
                 ForEach(store.conversations) { conversation in
                     NavigationLink {
@@ -226,12 +221,19 @@ private struct CoachConversationDetailView: View {
             } else if let detail = store.selected, detail.id == conversation.id {
                 transcript(detail)
             } else {
-                // No detail yet (e.g. load failed) — calm fallback, never a blank.
+                // No detail yet (e.g. load failed) — calm fallback, never a
+                // blank. 1.4 B2-c: a real retry instead of "please try again"
+                // with nothing to tap.
                 HLEmptyState(
                     icon: "exclamationmark.bubble",
-                    title: "Couldn't load this conversation",
-                    message: "Please try again."
-                )
+                    title: "Couldn't load this conversation"
+                ) {
+                    HLButton(String(localized: "async.list.error.retry"), variant: .secondary) {
+                        Task { await store.openConversation(id: conversation.id) }
+                    }
+                    .accessibilityIdentifier("coachConversations.detail.retry")
+                }
+                .padding(.horizontal, HLSpace.xl)
                 .containerCentered()
             }
         }

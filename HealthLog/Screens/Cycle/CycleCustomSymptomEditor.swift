@@ -36,9 +36,9 @@ struct CycleCustomSymptomEditor: View {
                         .onChange(of: label) { _, value in
                             if value.count > 40 { label = String(value.prefix(40)) }
                         }
-                } footer: {
-                    Text("cycle.custom.label.footer")
                 }
+                // 1.4 B2 — the field stops at 40 characters by itself; no
+                // footer states the rule.
                 if let error { Section { HLFormErrorText(error) } }
             }
             .disabled(isSaving)

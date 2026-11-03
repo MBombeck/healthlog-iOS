@@ -6,13 +6,6 @@ extension HealthKitBatchRejection {
     /// same bound the nutrient sweep applies to a transient skip).
     static let maxHeldSweeps = 5
 
-    /// INT-A — the skip-register reason of rows released after
-    /// ``maxHeldSweeps``: the HTTP status the server kept answering without a
-    /// code (`unclassified_4xx:422`).
-    static func unclassifiedReason(status: Int) -> String {
-        "unclassified_4xx:\(status)"
-    }
-
     /// #115 / 0.3 — the page a rejected whole batch leaves for the cursor.
     ///
     /// Queued like a transport failure, a whole-batch 4xx committed the anchor

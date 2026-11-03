@@ -42,7 +42,8 @@ struct CycleCalendarGrid: View {
 
     private var weekdayHeader: some View {
         HStack(spacing: HLSpace.xs) {
-            ForEach(Self.weekdaySymbols, id: \.self) { symbol in
+            // 1.4 B4 — by position: in German two days share "D" and two "S".
+            ForEach(Array(Self.weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
                 Text(symbol)
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
@@ -176,13 +177,20 @@ struct CycleCalendarGrid: View {
         dayFormatter.string(from: date)
     }
 
-    static let weekdaySymbols: [String] = {
+    /// 1.4 B4 — in the reader's language. A bare Gregorian calendar has no
+    /// locale and answered "M T W T F S S" on a German phone.
+    static var weekdaySymbols: [String] {
+        weekdaySymbols(locale: .autoupdatingCurrent)
+    }
+
+    static func weekdaySymbols(locale: Locale) -> [String] {
         var cal = Calendar(identifier: .gregorian)
+        cal.locale = locale
         cal.firstWeekday = 2
         let symbols = cal.veryShortStandaloneWeekdaySymbols
         // Rotate so Monday leads.
         return Array(symbols[1...] + symbols[...0])
-    }()
+    }
 
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -227,7 +235,7 @@ private struct CycleDayCell: View {
         // The day's background marker is drawn by the SHARED `CycleMarkerSwatch`
         // primitive so the legend swatch and the calendar cell are pixel-identical.
         // Period = clay fill (logged) or dashed clay ring (predicted); ovulation =
-        // solid honey ring; fertile = soft honey wash.
+        // solid honey ring; fertile = soft honey wash (with a deeper edge in light).
         if dto?.isPeriodLogged == true {
             CycleMarkerSwatch.shape(.periodLogged, scheme: scheme)
         } else if dto?.isPredictedPeriod == true {
@@ -310,7 +318,16 @@ struct CycleMarkerSwatch: View {
         case .predictedPeriod:
             Circle().stroke(menstrual(scheme).opacity(0.85), style: StrokeStyle(lineWidth: 1.5, dash: [2.5, 2.5]))
         case .fertile:
-            Circle().fill(fertile(scheme).opacity(scheme == .dark ? 0.24 : 0.20))
+            if scheme == .dark {
+                Circle().fill(fertile(scheme).opacity(0.24))
+            } else {
+                // Light: a fuller wash with a deeper honey edge, so the window
+                // stands on the cream card (3:1 at the edge) like the period days.
+                ZStack {
+                    Circle().fill(fertile(scheme).opacity(0.36))
+                    Circle().stroke(CyclePhasePalette.fertileEdgeLight, lineWidth: 1.2)
+                }
+            }
         case .ovulation:
             Circle().stroke(fertile(scheme).opacity(0.95), lineWidth: 1.8)
         case .symptoms:

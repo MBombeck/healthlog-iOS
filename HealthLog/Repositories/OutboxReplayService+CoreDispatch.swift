@@ -48,11 +48,16 @@ extension OutboxReplayService {
     /// **Audit B-2 (delivered before remove).** Only then is the row marked
     /// delivered and removed — in that order, so a `remove` that fails cannot
     /// put an operation the server already has back on the wire.
-    func onReplaySuccess(_ op: OutboxQueue.Operation) async throws {
-        if let serverId = lastCreatedServerId,
-           let optimisticId = op.clientEntityId,
-           optimisticId.hasPrefix("optimistic-")
-        {
+    ///
+    /// **1.4 (S5).** `createdServerId` is what this pass's own dispatch
+    /// returned, never shared actor state, and a pass the watchdog superseded
+    /// while its request hung only finishes the delivery (see
+    /// ``onSupersededDelivery(_:createdServerId:)``).
+    func onReplaySuccess(_ op: OutboxQueue.Operation, createdServerId: String?, generation: UInt64) async throws {
+        guard isCurrentRun(generation) else {
+            return await onSupersededDelivery(op, createdServerId: createdServerId)
+        }
+        if let serverId = createdServerId, let optimisticId = Self.remapKey(of: op) {
             idRemap[optimisticId] = serverId
             do {
                 _ = try await outbox.applyEntityRemap(from: optimisticId, to: serverId)
@@ -83,6 +88,41 @@ extension OutboxReplayService {
         await completeDelivery(op)
     }
 
+    /// The optimistic id a successful `create` of this row is remapped from,
+    /// or `nil` when the row carries none.
+    static func remapKey(of op: OutboxQueue.Operation) -> String? {
+        guard let optimisticId = op.clientEntityId, optimisticId.hasPrefix("optimistic-") else { return nil }
+        return optimisticId
+    }
+
+    /// **1.4 (S5) — a success that reached a superseded pass.** The pass that
+    /// replaced it owns the queue and the in-pass remap, so this one never
+    /// remaps. It marks the row delivered and removes it, unless the answer
+    /// is a server id that dependents still wait to be remapped onto: then
+    /// the row stays as it is, and the owning pass re-sends it under the same
+    /// idempotency key and remaps from its own answer. Delivered without the
+    /// remap, those dependents would go out against the optimistic id.
+    func onSupersededDelivery(_ op: OutboxQueue.Operation, createdServerId: String?) async {
+        guard createdServerId == nil || Self.remapKey(of: op) == nil else {
+            return onSuperseded(op)
+        }
+        deliveredIDs.insert(op.id)
+        try? await outbox.markDelivered(id: op.id)
+        // Kind is a finite operator-grade enum; no id, no payload.
+        // swiftlint:disable:next hllog_public_privacy_interpolation
+        HLLog.outbox.notice("Op \(op.kind.rawValue, privacy: .public) delivered to a superseded pass: removed, no remap")
+        await completeDelivery(op)
+    }
+
+    /// **1.4 (S5) — any other answer that reached a superseded pass.** The row
+    /// is left exactly as it is, like an interruption; the pass that owns the
+    /// queue meets the same answer and handles it.
+    func onSuperseded(_ op: OutboxQueue.Operation) {
+        // Kind is a finite operator-grade enum; no id, no payload.
+        // swiftlint:disable:next hllog_public_privacy_interpolation
+        HLLog.outbox.notice("Op \(op.kind.rawValue, privacy: .public) answered a superseded pass: row left to the current one")
+    }
+
     /// **Audit B-2 — finish a write the server already took.** Removes the row;
     /// a failure leaves it in place, still stamped delivered, so the next drain
     /// lands here again instead of on the wire. Never counts an attempt and
@@ -105,7 +145,7 @@ extension OutboxReplayService {
     /// server is KNOWN-degraded and the failure is a 5xx/429, stamp the attempt
     /// time (back-off) but do NOT burn the retry budget toward dead-lettering —
     /// the write did not fail on its own merits (audit-v0162 H1 Opt 3).
-    func onRetriableFailure(_ op: OutboxQueue.Operation, err: HLError, degraded: Bool) async {
+    func onRetriableFailure(_ op: OutboxQueue.Operation, err: HLError, degraded: Bool, now: Date) async {
         // #110 — a 429 is never the write's fault: nothing counted, nothing
         // stamped, the pass holds (see `OutboxReplayService+RateLimit`).
         if case let .rateLimited(retryAfter) = err { return onRateLimited(op, retryAfter: retryAfter) }
@@ -117,10 +157,15 @@ extension OutboxReplayService {
         // seven days before the dead-letter sweep. Stamped only, it goes out
         // again after its back-off, on every pass until it lands.
         if err.isTransientConnectivity {
-            try? await outbox.touchAttempt(id: op.id, lastError: sanitized)
+            // 1.4 (S3) — and when the request went out, the server may have
+            // stored it before the answer was lost: "sent, unconfirmed", like
+            // an unreadable 2xx, so the 23-hour window holds.
+            let unconfirmed = Self.mayHaveLanded(err, kind: op.kind)
+            let note = unconfirmed ? Self.unconfirmedMarker(op, now: now) : sanitized
+            try? await outbox.touchAttempt(id: op.id, lastError: note)
             // swiftlint:disable:next hllog_public_privacy_interpolation
             HLLog.outbox.warning(
-                "Op \(op.kind.rawValue, privacy: .public) retriable (connectivity, attempt not counted): \(sanitized, privacy: .private)"
+                "Op \(op.kind.rawValue, privacy: .public) retriable (connectivity, unconfirmed \(unconfirmed, privacy: .public), attempt not counted): \(sanitized, privacy: .private)"
             )
         } else if degraded, err.is5xxOrRateLimited {
             try? await outbox.touchAttempt(id: op.id, lastError: sanitized)

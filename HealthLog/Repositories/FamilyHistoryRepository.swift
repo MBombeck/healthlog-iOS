@@ -42,8 +42,12 @@ public actor FamilyHistoryRepository {
         let api = api
         let query: [(String, String)] = [("limit", String(limit))]
         @Sendable func networkFetch() async throws -> [FamilyHistoryEntryDTO] {
-            let req: APIRequest<[FamilyHistoryEntryDTO]> = .get("/api/family-history", query: query)
-            return try await api.send(req)
+            // #147 (v1.43.7) — no `offset` here: a cut answer is asked
+            // once more at the route's ceiling (`CappedListReader`).
+            try await CappedListReader.readUpToCeiling(
+                api: api, path: "/api/family-history", query: query,
+                limit: limit, ceiling: CappedListReader.familyHistoryCeiling
+            )
         }
         if let swr {
             return try await swr.fetchCachingFirst(

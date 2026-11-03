@@ -9,16 +9,18 @@ import SwiftUI
 /// PUT with the preserve-when-absent contract). The server RESOLVES today's
 /// value per ring; this sheet only records the choice.
 ///
-/// **Parity Build 4 · 4.8 — the order section.** Web has always let the user
-/// drag the hero rings, INCLUDING the always-present health-score anchor
-/// (`dashboard-layout-section.tsx:626-663`); iOS could only imply an order from
-/// the tap sequence and could not express the anchor's position at all. The
-/// second section below is that missing capability: a move-up/move-down list
-/// over ``HeroRingID`` with the anchor as an ordinary, movable row.
+/// **1.4 B1 — the order section is gone.** Parity Build 4 · 4.8 added a
+/// move-up/move-down list over ``HeroRingID`` for the hero row on the
+/// dashboard. That row no longer exists anywhere: iOS moved the rings to
+/// Insights (`acb44cb70`), and the web hero dropped its ring cluster in
+/// v1.29.1. Insights orders its cards by the pick sequence, so the editor
+/// changed nothing the user could see, and its copy („Reihenfolge auf der
+/// Startseite") described a place the rings had left. The stored
+/// `heroRingOrder` is still reconciled against the selection on every toggle
+/// and saved with it, so the server value stays consistent.
 ///
 /// The server has preserved `heroRingOrder` when a payload omits it since
-/// v1.27.27 (`api/dashboard/widgets/route.ts:286-310`), so every earlier iOS
-/// save was safe — this adds a capability, it does not repair a data loss.
+/// v1.27.27 (`api/dashboard/widgets/route.ts:286-310`).
 struct ScoreRingSelectionSheet: View {
     /// The current selection to pre-check the rows (selection-ordered).
     let initialSelection: [ScoreRingID]
@@ -29,11 +31,11 @@ struct ScoreRingSelectionSheet: View {
     let onSave: ([ScoreRingID], [HeroRingID]) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    /// Working selection — ORDERED (append-on-select) so a user who never
-    /// touches the order section still gets their pick sequence honoured.
+    /// Working selection — ORDERED (append-on-select): the pick sequence is the
+    /// order the Insights cards render in.
     @State private var selection: [ScoreRingID]
-    /// Working hero order. Kept reconciled against `selection` on every toggle
-    /// so a deselected ring can never linger as a ghost row.
+    /// Stored hero order, no longer editable here. Kept reconciled against
+    /// `selection` on every toggle so a deselected ring never lingers in it.
     @State private var order: [HeroRingID]
 
     init(
@@ -60,7 +62,7 @@ struct ScoreRingSelectionSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     Text(String(
-                        localized: "Pick up to \(ScoreRingID.maxSelected) scores to feature on your dashboard and in Insights.",
+                        localized: "Pick up to \(ScoreRingID.maxSelected) scores to feature in Insights.",
                         comment: "Score-ring picker subtitle"
                     ))
                     .font(.hlSubhead)
@@ -72,8 +74,6 @@ struct ScoreRingSelectionSheet: View {
                             row(for: id)
                         }
                     }
-
-                    orderSection
                 }
                 .padding(.horizontal, HLSpace.lg)
                 .padding(.vertical, HLSpace.lg)
@@ -137,81 +137,6 @@ struct ScoreRingSelectionSheet: View {
         .accessibilityHint(Text(isDisabled
                 ? String(localized: "Deselect a score first")
                 : String(localized: "Double-tap to toggle")))
-    }
-
-    // MARK: - Parity Build 4 · 4.8 — hero ring order (incl. the anchor)
-
-    /// The order editor. The health-score ring is an ordinary row here — it has
-    /// no on/off toggle (it is always on the hero) but it IS positionable,
-    /// which is exactly the capability iOS lacked. Uses arrow buttons rather
-    /// than a `List`'s `.onMove`: this sheet is a `ScrollView`, and a nested
-    /// `List` inside it would fight the outer scroll. Buttons are also the
-    /// VoiceOver-correct path web already offers alongside its drag handles.
-    @ViewBuilder
-    private var orderSection: some View {
-        if order.count > 1 {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(String(
-                    localized: "Order on the dashboard",
-                    comment: "Hero ring order section title"
-                ))
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-
-                Text(String(
-                    localized: "The health score ring is always shown. Move it anywhere in the row.",
-                    comment: "Hero ring order section hint"
-                ))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: HLSpace.sm) {
-                    ForEach(Array(order.enumerated()), id: \.element) { index, id in
-                        orderRow(for: id, at: index)
-                    }
-                }
-            }
-            .padding(.top, HLSpace.md)
-        }
-    }
-
-    private func orderRow(for id: HeroRingID, at index: Int) -> some View {
-        HLCard {
-            HStack(spacing: HLSpace.md) {
-                Text(id.label)
-                    .font(.hlSubhead.weight(.medium))
-                    .foregroundStyle(HLText.primary)
-                Spacer(minLength: HLSpace.sm)
-                moveButton(systemImage: "chevron.up", disabled: index == 0) {
-                    order.swapAt(index, index - 1)
-                }
-                moveButton(systemImage: "chevron.down", disabled: index == order.count - 1) {
-                    order.swapAt(index, index + 1)
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("dashboard.heroRingOrder.\(id.rawValue)")
-    }
-
-    private func moveButton(
-        systemImage: String,
-        disabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.hlIcon(HLIconSize.sm, weight: .semibold))
-                .foregroundStyle(disabled ? HLText.tertiary : HLText.primary)
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .accessibilityLabel(Text(systemImage == "chevron.up"
-                ? String(localized: "Move up")
-                : String(localized: "Move down")))
     }
 
     private func toggle(_ id: ScoreRingID) {

@@ -13,7 +13,7 @@ import Testing
 /// source-tree contract below asserts the new location.
 ///
 /// Mirrors the source-tree + render-counter pattern from
-/// `AskCoachHeroCardTests` — full snapshots would stand up eight
+/// `AskCoachEntryPointTests` — full snapshots would stand up eight
 /// `@Environment` stores for an invariant that lives in a dozen lines
 /// of view-body composition.
 @Suite("AskCoachCollapsedCoin + coachHeroDismissed (COACH-COIN)")

@@ -280,9 +280,9 @@ public extension AppContainer {
             // cache (`.moodInsights`, ~60s) so the tag-influence + better-days
             // cards paint cache-first on the Mood page + revalidate.
             moodRelations: MoodRelationsRepository(api: apiClient, swr: swr),
-            // W-B189 (#23) — recovery routes through the shared daily SWR cache
+            // W-B189 (#23) — recovery routes through the shared SWR cache
             // (Berlin-day-anchored `.insightsRecovery`) so the recovery sub-page
-            // paints cache-first on launch + revalidates once per day.
+            // paints cache-first on launch and revalidates (1.4 B3: five minutes).
             recovery: RecoveryInsightsRepository(api: apiClient, swr: swr),
             // v1.25 (GH iOS #38) — the three clinical-signal reads route through
             // the shared daily SWR cache (Berlin-day-anchored) so each card paints
@@ -357,7 +357,11 @@ public extension AppContainer {
             ),
             narrative: NarrativeStore(repo: repos.narrative),
             moodRelations: MoodRelationsStore(repo: repos.moodRelations),
-            recovery: RecoveryInsightsStore(repo: repos.recovery),
+            // 1.4 B3 — the trend lines read exactly what the metric screen
+            // behind each card reads, so both show the same readings.
+            recovery: RecoveryInsightsStore(repo: repos.recovery) { [measurementsRepo] kind in
+                try await measurementsRepo.recent(kind: kind, limit: 400)
+            },
             clinicalSignals: ClinicalSignalsStore(repo: repos.clinicalSignals),
             dailyDigest: DailyDigestStore(repo: repos.dailyDigest)
         )

@@ -52,10 +52,13 @@ enum MedicationLoggingEmptyState: String, Equatable, CaseIterable {
 
     /// Render contract for one empty state. Snapshot-locked (CU-24) so a copy or
     /// action regression on either dead end surfaces as a diff.
+    ///
+    /// 1.4 B4 — icon and title only. The sentence under each title said the
+    /// title again ("Du hast noch kein aktives Medikament.", "Für heute ist
+    /// gerade keine Einnahme fällig.").
     struct Descriptor: Equatable {
         let icon: String
         let titleKey: String
-        let messageKey: String
         let primaryAction: PrimaryAction?
         /// Whether "manuell nachtragen" is a sensible secondary action here. It
         /// is only sensible when an active medication exists to log against.
@@ -72,7 +75,6 @@ enum MedicationLoggingEmptyState: String, Equatable, CaseIterable {
             Descriptor(
                 icon: "pills",
                 titleKey: "No medications yet",
-                messageKey: "meds.empty.noMeds.logging.message",
                 primaryAction: .addMedication,
                 offersManualLog: false
             )
@@ -80,7 +82,6 @@ enum MedicationLoggingEmptyState: String, Equatable, CaseIterable {
             Descriptor(
                 icon: "checkmark.seal",
                 titleKey: "meds.quick.empty.title",
-                messageKey: "meds.quick.empty.subtitle",
                 primaryAction: nil,
                 offersManualLog: true
             )
@@ -93,14 +94,14 @@ enum MedicationLoggingEmptyState: String, Equatable, CaseIterable {
 /// Owns the create-flow presentation so the "Medikament anlegen" CTA lands in
 /// the same `AddMedicationSheet` the Medikamente tab uses — no second create
 /// path, and no dead end that only offers a close button.
+///
+/// 1.4 B4 — one action, the app's secondary button. The quick sheet's
+/// "Schließen" under it is gone: the sheet closes by pulling it down like the
+/// chooser it replaces, and two stacked buttons were one too many.
 struct MedicationLoggingEmptyStateView: View {
     let state: MedicationLoggingEmptyState
     /// Rendered only when the state offers it (`nothingDue`). `nil` hides it.
     var onLogManually: (() -> Void)?
-    /// Rendered when the host has no other way out (the quick sheet's root).
-    /// `nil` on pushed screens, where the navigation back-affordance already is
-    /// the way out.
-    var onClose: (() -> Void)?
 
     @Environment(MedicationsStore.self) private var store
     @State private var isPresentingAdd = false
@@ -110,11 +111,13 @@ struct MedicationLoggingEmptyStateView: View {
             if let descriptor = state.presentationDescriptor() {
                 HLEmptyState(
                     icon: descriptor.icon,
-                    title: LocalizedStringKey(descriptor.titleKey),
-                    message: LocalizedStringKey(descriptor.messageKey)
+                    title: LocalizedStringKey(descriptor.titleKey)
                 ) {
                     actions(for: descriptor)
                 }
+                // 1.4 B2-b: the buttons ran edge to edge of the sheet; the
+                // state keeps the screen's side margin like every card.
+                .padding(.horizontal, HLSpace.lg)
             } else {
                 ProgressView()
             }
@@ -142,39 +145,28 @@ struct MedicationLoggingEmptyStateView: View {
         }
     }
 
+    @ViewBuilder
     private func actions(for descriptor: MedicationLoggingEmptyState.Descriptor) -> some View {
-        VStack(spacing: HLSpace.sm) {
-            if descriptor.primaryAction == .addMedication {
-                HLButton(
-                    String(localized: "Add medication"),
-                    icon: "plus",
-                    variant: .restrained,
-                    size: .regular
-                ) {
-                    isPresentingAdd = true
-                }
-                .accessibilityIdentifier("meds.empty.addMedication")
+        if descriptor.primaryAction == .addMedication {
+            HLButton(
+                String(localized: "Add medication"),
+                icon: "plus",
+                variant: .secondary,
+                size: .regular
+            ) {
+                isPresentingAdd = true
             }
-            if descriptor.offersManualLog, let onLogManually {
-                HLButton(
-                    String(localized: "med.freelog.open"),
-                    icon: "square.and.pencil",
-                    variant: .restrained,
-                    size: .regular
-                ) {
-                    onLogManually()
-                }
-                .accessibilityIdentifier("meds.quick.freelog")
+            .accessibilityIdentifier("meds.empty.addMedication")
+        } else if descriptor.offersManualLog, let onLogManually {
+            HLButton(
+                String(localized: "med.freelog.open"),
+                icon: "square.and.pencil",
+                variant: .secondary,
+                size: .regular
+            ) {
+                onLogManually()
             }
-            if let onClose {
-                HLButton(
-                    String(localized: "meds.quick.empty.close"),
-                    variant: .secondary,
-                    size: .regular
-                ) {
-                    onClose()
-                }
-            }
+            .accessibilityIdentifier("meds.quick.freelog")
         }
     }
 }

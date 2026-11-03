@@ -41,8 +41,9 @@ struct WithingsIntegrationScreen: View {
     /// auf `HLSettingsPage` + `HLSettingsCard`.
     private var liveBody: some View {
         HLSettingsPage(title: "Withings") {
+            // 1.4 B2-c — no app sync footer; the card says when this
+            // provider last synced.
             connectionCard
-            HLSyncStatusFooter(screenLoading: store.isWorking)
         }
         .navigationTitle("Withings")
         // SET-V2-C (C-4) — integrations detail canon is `.inline` (uniform with AppleHealthIntegrationDetailScreen).
@@ -81,7 +82,11 @@ struct WithingsIntegrationScreen: View {
         case .some(false):
             HLStatusPill(.disconnected(label: String(localized: "Not connected")))
         case .none:
-            HLStatusPill(.unknown(label: String(localized: "Checking")))
+            // 1.4 B4 — "Checking" only while it is: after a failed read the
+            // sentence below says what happened, and the pill stays away.
+            if store.error == nil {
+                HLStatusPill(.unknown(label: String(localized: "Checking")))
+            }
         }
     }
 
@@ -122,8 +127,16 @@ struct WithingsIntegrationScreen: View {
                 }
             }
 
+            // 1.4 B4 — a sentence for people, never the decoder's text
+            // (`localizedDescription` carried "DecodingError.keyNotFound…").
+            // The failed route and its error id are in "Support-Info
+            // kopieren" (RecentFailureLog).
             if let error = store.error {
-                Text(error.localizedDescription).foregroundStyle(HLColor.statusBad)
+                Text(error.userFacingDescription)
+                    .font(.hlCaption)
+                    .foregroundStyle(HLColor.statusBad)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings.withings.error")
             }
         }
     }

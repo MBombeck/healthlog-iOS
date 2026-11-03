@@ -229,6 +229,18 @@ final class MedicationRequestRecorder: @unchecked Sendable {
             }
     }
 
+    /// A2 (1.4) — the top-level `syncTrigger` of every bulk POST, in order.
+    var bulkSyncTriggers: [String?] {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests
+            .filter { $0.path == "/api/medications/intake/bulk" }
+            .map { request in
+                let object = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any]
+                return object?["syncTrigger"] as? String
+            }
+    }
+
     var lastBulkFirstEntry: [String: Any]? {
         lock.lock()
         defer { lock.unlock() }

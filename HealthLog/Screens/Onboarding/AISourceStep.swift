@@ -157,23 +157,17 @@ struct AISourceStep: View {
     /// per-provider consent yet, so we set expectations honestly instead of
     /// firing a doomed prompt.
     private var onlineFollowUpNote: some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "info.circle")
-                // swiftlint:disable:next dynamic_type_bypass
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(HLText.secondary)
-                .accessibilityHidden(true)
-            Text(
-                String(
-                    localized: "You'll finish connecting your online provider in Settings → Assistant after setup."
-                )
+        // 1.4 B4 — the sentence alone; the info symbol beside it looked
+        // tappable and did nothing (one (i) per screen).
+        Text(
+            String(
+                localized: "You'll finish connecting your online provider in Settings → Assistant after setup."
             )
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
+        )
+        .font(.hlCaption)
+        .foregroundStyle(HLText.secondary)
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.top, HLSpace.xs)
-        .accessibilityElement(children: .combine)
     }
 
     /// v0.13 W4 — shown only when "Own key" is selected. Onboarding stays LEAN:
@@ -181,23 +175,17 @@ struct AISourceStep: View {
     /// user at the canonical key-entry path in Settings. Honest (real intent +
     /// clear next step), not a dead-end — mirrors the online follow-up note.
     private var byoKeyFollowUpNote: some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "info.circle")
-                // swiftlint:disable:next dynamic_type_bypass
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(HLText.secondary)
-                .accessibilityHidden(true)
-            Text(
-                String(
-                    localized: "You'll add your API key in Settings → Assistant after setup."
-                )
+        // 1.4 B4 — the sentence alone; the info symbol beside it looked
+        // tappable and did nothing (one (i) per screen).
+        Text(
+            String(
+                localized: "You'll add your API key in Settings → Assistant after setup."
             )
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
+        )
+        .font(.hlCaption)
+        .foregroundStyle(HLText.secondary)
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.top, HLSpace.xs)
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Default selection

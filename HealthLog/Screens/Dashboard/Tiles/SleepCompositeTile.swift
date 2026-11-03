@@ -83,7 +83,7 @@ public struct SleepCompositeTile: View {
         // W6b — the glyph + title route through the shared `HLMetricTileChrome`
         // primitives (the single tile-fragment code path). The Sleep header
         // keeps its OWN composition: the trailing accessory is the descriptor's
-        // `secondaryHint` (e.g. "letzte Nacht"), not a trend glyph — so it does
+        // `secondaryHint` (none for sleep since #146), not a trend glyph — so it does
         // not use `HLTileHeaderRow` (which is trend-shaped), but it does share
         // the glyph + title rendering so the chrome reads identically.
         return HStack(spacing: HLSpace.xs) {

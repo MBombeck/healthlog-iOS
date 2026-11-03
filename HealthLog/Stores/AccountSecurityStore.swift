@@ -20,8 +20,13 @@ public enum ChangePasswordOutcome: Equatable, Sendable {
     /// step-up that a Bearer client cannot produce. Distinct from `.failure`
     /// because the remedy is different and specific.
     case stepUpRequired
-    /// Server prose, shown verbatim (wrong current password, too weak,
-    /// breached, rate-limited …).
+    /// **B5 (1.4)** — the current password did not match. The server answers
+    /// that with a 401 whose prose is English only ("Current password is
+    /// incorrect"), so the sheet shows its own sentence. The session stays:
+    /// `APIClient` surfaces this 401 instead of refreshing and signing out
+    /// (``APIClient/isCredentialCheckRefusal(path:body:)``).
+    case wrongCurrentPassword
+    /// Server prose, shown verbatim (too weak, breached, rate-limited …).
     case failure(String)
 }
 
@@ -87,6 +92,10 @@ public final class AccountSecurityStore {
     /// `@MainActor` hop or a live repository.
     nonisolated static func classify(_ err: HLError) -> ChangePasswordOutcome {
         if SecurityStepUp.isRequired(err) { return .stepUpRequired }
+        // B5 (1.4) — every other 401 that reaches here is the server refusing
+        // the current password: a refusal of the session never arrives as
+        // `.server(401, …)` from this route (`APIClient.isCredentialCheckRefusal`).
+        if case .server(401, _, _) = err { return .wrongCurrentPassword }
         if case let .server(_, _, message) = err, !message.isEmpty {
             // Server prose is written for the end user and is more specific
             // than anything we could substitute ("Current password is

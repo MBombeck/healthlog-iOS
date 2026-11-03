@@ -155,6 +155,12 @@ public extension OutboxQueue.Operation {
         /// landed a no-op, so an offline quick-add can never double-increment the
         /// day total. Replay drains via `OutboxReplayService.dispatchNutrients`.
         case logNutrientWater
+        /// A5 (1.4, R3 S4) — Apple Health deletions of hand-kept readings.
+        /// `DELETE /api/measurements/by-external-ids` with
+        /// `Payloads.DeleteHealthKitSamples`. The route touches only the
+        /// owner's `APPLE_HEALTH` rows and each row once, so a replay is
+        /// harmless at any age. Replay drains via `dispatchMeasurementsAndMood`.
+        case deleteHealthKitSamples
         /// **Phase 07 — the forward-compatibility sentinel.** A `kindRaw` this
         /// build cannot name decodes to this case so the dispatcher's switch
         /// stays exhaustive and fail-closed.

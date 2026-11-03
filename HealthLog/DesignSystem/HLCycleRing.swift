@@ -91,6 +91,18 @@ public struct HLCycleRing: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    /// 1.4 B4 — `true` once the motion window has closed (`cycleRingMotionWindow`).
+    @State private var motionAtRest = false
+
+    /// Whether anything on the ring may move now: never under Reduce Motion or
+    /// Low Power, and only inside the window after the ring appears.
+    private var moves: Bool {
+        Self.movesNow(
+            reduceMotion: reduceMotion,
+            lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
+            atRest: motionAtRest
+        )
+    }
 
     public init(
         model: Model,
@@ -189,6 +201,7 @@ public struct HLCycleRing: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(accessibilityLabel))
         .accessibilityValue(Text(accessibilityValue))
+        .cycleRingMotionWindow(atRest: $motionAtRest)
     }
 
     // MARK: - Geometry group (crisp arcs/marker — keeps `.drawingGroup()`)
@@ -197,8 +210,8 @@ public struct HLCycleRing: View {
     private func geometryGroup(side: CGFloat, canvasSide: CGFloat) -> some View {
         let stroke = HLRing.derivedStroke(forSide: side)
         ZStack {
-            if motion == .sheen, !reduceMotion {
-                SheenLayer(side: side, scheme: colorScheme)
+            if motion == .sheen, moves {
+                HLCycleRingSheenLayer(side: side, scheme: colorScheme)
             }
             TrackRing(stroke: stroke)
             ArcsLayer(
@@ -206,7 +219,7 @@ public struct HLCycleRing: View {
                 cycleLength: model.cycleLengthDays,
                 stroke: stroke,
                 scheme: colorScheme,
-                tracerEnabled: motion == .tracer && !reduceMotion && model.showsDayMarker,
+                tracerEnabled: motion == .tracer && moves && model.showsDayMarker,
                 currentDay: model.dayOfCycle
             )
             if let window = model.fertileWindow {
@@ -226,7 +239,7 @@ public struct HLCycleRing: View {
                     stroke: stroke,
                     phase: phase(forDay: model.dayOfCycle),
                     scheme: colorScheme,
-                    breathing: motion == .breathe && !reduceMotion
+                    breathing: motion == .breathe && moves
                 )
             }
         }
@@ -255,7 +268,7 @@ public struct HLCycleRing: View {
     /// `motion`, so every variant read as "breathing". Always gated by Reduce
     /// Motion (then the static mean renders, no flicker).
     private var bloomBreathes: Bool {
-        motion == .breathe && !reduceMotion
+        motion == .breathe && moves
     }
 
     @ViewBuilder
@@ -317,9 +330,9 @@ public struct HLCycleRing: View {
         // makes the sheen pick read as a sheen (a specular band gliding the live
         // arc) rather than as "breathing". Under the other motions it would just
         // compete with the bloom/tracer, so we omit it. Reduce Motion → omitted.
-        let sweepActive = glow.sweep && motion == .sheen && !reduceMotion
+        let sweepActive = glow.sweep && motion == .sheen && moves
 
-        HLGlowDriver(active: sweepActive || (glow.ovulationSparkle && isOvulationPeak && !reduceMotion)) { t in
+        HLGlowDriver(active: sweepActive || (glow.ovulationSparkle && isOvulationPeak && moves)) { t in
             ZStack {
                 // Sweep: continuous motion only — omitted entirely under Reduce
                 // Motion. Framed to the inset `side` so the band tracks the
@@ -338,7 +351,7 @@ public struct HLCycleRing: View {
                         tint: tint,
                         t: t,
                         // `.none` is genuinely still: steady rest glow, no rise.
-                        active: motion != .none && !reduceMotion,
+                        active: motion != .none && moves,
                         scheme: colorScheme
                     )
                     .frame(width: canvasSide, height: canvasSide)
@@ -551,45 +564,10 @@ private struct DayMarker: View {
             guard breathing else { return }
             withAnimation(.linear(duration: 0)) { pulse = false }
         }
-    }
-}
-
-// MARK: - Sheen layer
-
-private struct SheenLayer: View {
-    let side: CGFloat
-    let scheme: ColorScheme
-
-    @State private var angle: Double = 0
-
-    var body: some View {
-        let stroke = HLRing.derivedStroke(forSide: side)
-        Circle()
-            .stroke(
-                AngularGradient(
-                    gradient: Gradient(colors: [
-                        HLText.primary.opacity(0),
-                        HLText.primary.opacity(scheme == .dark ? 0.10 : 0.07),
-                        HLText.primary.opacity(0)
-                    ]),
-                    center: .center
-                ),
-                style: StrokeStyle(lineWidth: stroke * 1.6, lineCap: .round)
-            )
-            .blur(radius: stroke * 0.6)
-            .rotationEffect(.degrees(angle))
-            .onAppear {
-                withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
-                    angle = 360
-                }
-            }
-            // W-PERF-SWR (High) — cancel the 12s `repeatForever` sheen rotation
-            // off-screen so it doesn't keep spinning (and redrawing) when the
-            // ring leaves the hierarchy. Reset to a static angle without
-            // animation; `onAppear` restarts the loop from 0 → 360.
-            .onDisappear {
-                withAnimation(.linear(duration: 0)) { angle = 0 }
-            }
+        // 1.4 B4 — the motion window closed: halt the loop the same way.
+        .onChange(of: breathing) { _, now in
+            if !now { withAnimation(.linear(duration: 0)) { pulse = false } }
+        }
     }
 }
 

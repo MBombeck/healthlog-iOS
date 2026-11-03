@@ -78,4 +78,35 @@ struct ScoreTileMotionTests {
         // capped to the same 20 fps interval the prism / cycle-glow drivers use.
         #expect(WellnessTileMotion.frameInterval == 1.0 / 20.0)
     }
+
+    // MARK: - 1.4 B4 — the motion comes to rest
+
+    @Test("the breath pauses once the overview's motion window has closed")
+    func pausesAtRest() {
+        #expect(WellnessTileMotion.isPaused(reduceMotion: false, lowPower: false, atRest: true))
+        #expect(!WellnessTileMotion.isPaused(reduceMotion: false, lowPower: false, atRest: false))
+    }
+
+    @Test("the window is a couple of breaths long, not open-ended")
+    func windowIsBounded() {
+        #expect(WellnessTileMotion.activeSeconds >= WellnessTileMotion.periodSeconds)
+        #expect(WellnessTileMotion.activeSeconds <= 15)
+    }
+
+    @Test("the overview bounds the rings' motion, and every moving effect reads the window")
+    func overviewBoundsTheMotion() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) throws -> String {
+            try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        }
+        #expect(try source("HealthLog/Screens/Insights/InsightsScreen.swift").contains(".insightsRingMotionWindow()"))
+        for path in [
+            "HealthLog/Screens/Insights/Sub/InsightsTileSurface.swift",
+            "HealthLog/Screens/Insights/Sub/WellnessGradientCard.swift",
+            "HealthLog/Screens/Insights/Sub/InsightsRingEffects.swift"
+        ] {
+            #expect(try source(path).contains("insightsRingMotionActive"), "\(path)")
+        }
+    }
 }

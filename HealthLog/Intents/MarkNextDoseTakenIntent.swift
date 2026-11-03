@@ -55,19 +55,32 @@ struct MarkNextDoseTakenIntent: AppIntent {
                 scheduledFor: Date(),
                 status: .taken
             )
-            return .result(
-                dialog: IntentDialog(
-                    LocalizedStringResource(
-                        "Marked \(nextDose.medicationName) as taken.",
-                        comment: "AppIntents — next-dose marked taken confirmation"
-                    )
-                )
-            )
+            return .result(dialog: IntentDialog(Self.confirmation(medicationName: nextDose.medicationName)))
         } catch let error as HLError where error.shouldPersistToOutbox {
             // Durably enqueued (incl. a transient-refresh 401) — saved, not lost.
             return .result(dialog: IntentCopy.queued(after: error))
         } catch {
             return .result(dialog: IntentCopy.writeFailed)
         }
+    }
+
+    /// **1.4** — the spoken confirmation. This intent runs from the lock
+    /// screen by design (Control Center, Action Button), so it keeps working
+    /// there, but it follows the switch that hides medication names on the
+    /// lock screen: with it on, the confirmation names no medication.
+    static func confirmation(
+        medicationName: String,
+        hidesName: Bool = LockScreenPrivacy.hideMedicationName()
+    ) -> LocalizedStringResource {
+        if hidesName {
+            return LocalizedStringResource(
+                "Marked your next dose as taken.",
+                comment: "AppIntents — next-dose marked taken confirmation without the medication name (lock-screen privacy on)"
+            )
+        }
+        return LocalizedStringResource(
+            "Marked \(medicationName) as taken.",
+            comment: "AppIntents — next-dose marked taken confirmation"
+        )
     }
 }

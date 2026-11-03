@@ -38,6 +38,13 @@ struct SettingsApiTokensScreen: View {
         }
         .navigationTitle("API tokens")
         .navigationBarTitleDisplayMode(.inline)
+        // 1.4 B2-c — where tokens come from (the wayfinding card that stood
+        // at the end of the list) is the screen's one (i).
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HLInfoButton(content: Self.info, accessibilityIdentifier: "settings.apiTokens.info")
+            }
+        }
         .task {
             guard backend.hasServer, store == nil, let api = container?.api else { return }
             let s = ApiTokenStore(repo: ApiTokenRepository(api: api))
@@ -62,23 +69,23 @@ struct SettingsApiTokensScreen: View {
             if !store.inactiveTokens.isEmpty {
                 inactiveCard(store: store)
             }
-            infoCard
         }
     }
 
+    static var info: HLInfoContent {
+        HLInfoContent(
+            title: String(localized: "API tokens"),
+            identifier: "settings.apiTokens.info.sheet",
+            about: String(localized: "settings.apiTokens.info.about")
+        )
+    }
+
     private func activeCard(store: ApiTokenStore) -> some View {
+        // 1.4 B2-c — no subtitle and no footer: each row shows its rights,
+        // and the revoke dialog says the revocation is immediate and final.
         HLSettingsCard(
             icon: "key",
-            title: "Active tokens",
-            subtitle: "Each one can read or write data through the API.",
-            footer: "Revoking takes effect immediately. Anything still using the token stops working.",
-            // R5-Ausnahme, R19: beide Slots tragen **verschiedene** Klasse-D-
-            // Aussagen — der Subtitle die Reichweite eines Tokens, der Footer
-            // die Sofortwirkung des Widerrufs. Der Seiten-Subtitle, der die
-            // erste Aussage bisher mittrug, ist mit W0 (E1) ersatzlos
-            // entfallen; sie hier zu streichen wäre eine Kürzung, keine
-            // Entdopplung.
-            bothSlotsJustification: "D-Fläche: Reichweite (Subtitle) und Widerrufsfolge (Footer) sind zwei Aussagen."
+            title: "Active tokens"
         ) {
             if store.isLoading, store.tokens.isEmpty {
                 HStack {
@@ -113,8 +120,7 @@ struct SettingsApiTokensScreen: View {
     private func inactiveCard(store: ApiTokenStore) -> some View {
         HLSettingsCard(
             icon: "clock.arrow.circlepath",
-            title: "Revoked and expired",
-            subtitle: "Kept so you can see what was cut off and when."
+            title: "Revoked and expired"
         ) {
             Button {
                 showInactive.toggle()
@@ -144,45 +150,6 @@ struct SettingsApiTokensScreen: View {
                     }
                 }
             }
-        }
-    }
-
-    /// R2 (Leerzustand) — die Karte existiert, weil dieser Screen bewusst
-    /// **keinen** Erstellen-Knopf hat: die drei Zeilen sagen, warum die Fläche
-    /// leer ist. Der frühere Subtitle war nur die abstrakte Zusammenfassung
-    /// genau dieser drei Zeilen (Klasse A) und fällt.
-    private var infoCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield",
-            title: "About API tokens"
-        ) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                infoRow(
-                    icon: "pills",
-                    text: "Medication ingest tokens are created on the medication itself, not here."
-                )
-                infoRow(
-                    icon: "plug",
-                    text: "Tokens for an external assistant live under the MCP connector."
-                )
-                infoRow(
-                    icon: "eye.slash",
-                    text: "A token's secret is shown only when it's created — it can't be recovered."
-                )
-            }
-        }
-    }
-
-    private func infoRow(icon: String, text: LocalizedStringKey) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: icon)
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(HLText.tertiary)
-                .frame(width: 20)
-            Text(text)
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

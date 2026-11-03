@@ -13,9 +13,9 @@ import SwiftUI
 /// choice the app does not have. Order is the whole of what this sheet
 /// customises now.
 ///
-/// Native reorder ONLY — `EditButton` arms one-touch drag handles + `.onMove`
-/// (the project's reorder-native rule; the custom jiggle/drag was retired in
-/// v0.8.7). Mirrors `DashboardCustomizationScreen`'s idiom.
+/// Native reorder ONLY — the list stands in edit mode from the start, so the
+/// drag handles of `.onMove` show at once (the project's reorder-native rule;
+/// the custom jiggle/drag was retired in v0.8.7).
 struct MedicationsLayoutCustomizeSheet: View {
     @Environment(MedicationsStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -29,13 +29,12 @@ struct MedicationsLayoutCustomizeSheet: View {
             .scrollContentBackground(.hidden)
             .hlScreenBackground()
             .hlScrollEdgeSoft()
+            // 1.4 B2 — the sheet exists to reorder, so it opens with the drag
+            // handles showing; no Edit button and no footer explaining one.
+            .environment(\.editMode, .constant(.active))
             .navigationTitle(String(localized: "med.layout.customize.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    EditButton()
-                        .tint(HLText.primary)
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(String(localized: "Done")) { dismiss() }
                         .tint(HLText.primary)
@@ -46,26 +45,20 @@ struct MedicationsLayoutCustomizeSheet: View {
 
     // MARK: - Reorder
 
+    /// 1.4 B4 — without an active medication there is nothing to order, and
+    /// the section is left out rather than holding a sentence that says so.
     @ViewBuilder
     private var orderSection: some View {
         let meds = store.activeMedications
-        Section {
-            if meds.isEmpty {
-                Text(String(localized: "med.layout.order.empty"))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-            } else {
+        if !meds.isEmpty {
+            Section {
                 ForEach(meds, id: \.id) { med in
                     orderRow(med)
                 }
                 .onMove(perform: moveMedication)
+            } header: {
+                Text(String(localized: "med.layout.order.section.header"))
             }
-        } header: {
-            Text(String(localized: "med.layout.order.section.header"))
-        } footer: {
-            Text(String(localized: "med.layout.order.section.footer"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
         }
     }
 

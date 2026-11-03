@@ -96,9 +96,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
             if let error = store.error {
                 errorCard(error)
             }
-            // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
-            // primitive as Dashboard/Insights, self-suppressing).
-            HLSyncStatusFooter(screenLoading: store.isLoading)
+            // 1.4 B2-c — no app sync footer on the assistant settings.
         }
         .task {
             guard !didPerformInitialLoad else { return }
@@ -236,11 +234,11 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
                             Text(provider.label)
                                 .font(.hlSubhead.weight(.semibold))
                                 .foregroundStyle(HLText.primary)
+                            // 1.4 B2-c — wraps instead of ending in "…".
                             Text(provider.subtitle)
                                 .font(.hlCaption)
                                 .foregroundStyle(HLText.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: HLSpace.sm)
                         if bindable.draftProvider == provider {
@@ -313,9 +311,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
         case .openai:
             Text("API key: get one at platform.openai.com under API Keys.")
         case .local:
-            Text(
-                "Base URL: e.g. https://ollama.example.com — the server has to reach this host publicly. Local 192.168.x.x addresses are blocked by default."
-            )
+            Text("aiprovider.local.help")
         case .unconfigured, .openaiCompatible:
             // `.openaiCompatible` has no iOS-editable field.
             EmptyView()
@@ -391,10 +387,11 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     /// briefing exists. We visualise that truth honestly here so the user
     /// understands the cascade.
     private var chainCard: some View {
+        // 1.4 B2-c — the two steps say the order; the footer about a
+        // "deterministic template" is gone.
         HLSettingsCard(
             icon: "arrow.triangle.branch",
-            title: "Order",
-            footer: "On errors, rate limits or a missing key, the server falls back to a deterministic template that only summarises local values."
+            title: "Order"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 chainStep(
@@ -516,15 +513,16 @@ private struct AIConsentToggleCard: View {
 
     var body: some View {
         let isGranted = consentStore.hasConsent(for: provider)
+        // 1.4 B4 — one row, one heading: the switch names what it allows,
+        // the footer that it is a revocable consent.
         HLSettingsCard(
-            icon: "checkmark.shield.fill",
-            title: "Assistant consent",
             // R18 — war ein hartkodiertes deutsches Literal ohne Katalog-
             // eintrag (PROJECT_GUIDE.md: keine hardcoded UI-Strings). Der englische
             // Quelltext ist jetzt der Schlüssel, die deutsche Fassung steht
             // wortgleich im Katalog — englische Nutzer sahen hier bislang
-            // deutschen Text. Inhalt unverändert (Klasse D).
-            footer: "This consent can be withdrawn at any time. Enabling shows a note about the data flow; your consent is only given by tapping “Accept”."
+            // deutschen Text. Klasse D. 1.4 B2-c: der Widerruf bleibt, der
+            // zweite Satz beschrieb nur, was beim Einschalten erscheint.
+            footer: "aiConsent.toggle.footer"
         ) {
             // R11 — war ein roher `Toggle` mit handgebautem Label-Block; die
             // Geometrie (Textbreite, Gap zum Schalter, Tinte der Beschreibung)

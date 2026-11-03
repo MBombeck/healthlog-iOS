@@ -32,7 +32,10 @@ struct LabScanSheet: View {
                 }
             }
             .hlScreenBackground()
-            .navigationTitle(Text("labs.scan.title"))
+            // 1.4 B4 — while the values are reviewed, "Speichern" joins
+            // "Abbrechen" in the bar and the long title was cut.
+            .navigationTitle(Text(scan.map { $0.step == .review || $0.step == .saving } ?? false
+                    ? "labs.scan.reviewTitle" : "labs.scan.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
             .task {

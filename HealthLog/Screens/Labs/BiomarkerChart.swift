@@ -49,19 +49,32 @@ struct BiomarkerChart: View {
         points: [DatedValue],
         unit: String,
         referenceLow: Double?,
-        referenceHigh: Double?
+        referenceHigh: Double?,
+        caption: String? = nil
     ) {
         self.unit = unit
         self.referenceLow = referenceLow
         self.referenceHigh = referenceHigh
+        self.caption = caption
         self.points = points.sorted { $0.date < $1.date }
     }
+
+    /// 1.4 B2-c — the card's one line under the chart (the custom metric's
+    /// "N of M in your target range"). `nil` for none.
+    private var caption: String?
 
     var body: some View {
         if points.count >= 2 {
             HLCard {
-                chart
-                    .frame(height: HLChartStyle.heightDetail)
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    chart
+                        .frame(height: HLChartStyle.heightRegular)
+                    if let caption {
+                        Text(verbatim: caption)
+                            .font(.hlSubhead)
+                            .foregroundStyle(HLText.secondary)
+                    }
+                }
             }
         } else {
             HLCard {
@@ -146,19 +159,7 @@ struct BiomarkerChart: View {
                     .foregroundStyle(HLText.secondary)
             }
         }
-        .chartXAxis {
-            AxisMarks(values: .automatic) { value in
-                if let date = value.as(Date.self) {
-                    AxisValueLabel {
-                        Text(date, format: .dateTime.day().month(.abbreviated))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                    AxisGridLine()
-                        .foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                }
-            }
-        }
+        .chartXAxis { ChartDateAxis.marks(for: points.map(\.date)) }
         .accessibilityLabel(Text("biomarker.detail.chart.a11y"))
         .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
     }

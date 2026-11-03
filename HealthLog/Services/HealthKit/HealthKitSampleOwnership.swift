@@ -32,31 +32,22 @@ import Foundation
 /// (HealthKit does not let a unit test forge another app's source revision).
 enum HealthKitSampleOwnership {
     /// App-private metadata marker stamped on **every** HealthLog write into
-    /// Apple Health (alongside `HKMetadataKeyExternalUUID`). It exists so the
-    /// **deletion** path can confirm ownership: `HKDeletedObject` exposes only
-    /// `uuid` + `metadata` — never `sourceRevision` — so the read path's
-    /// authoring-source check (`HKSource.default()`) is unavailable on delete.
-    /// A foreign app can set a colliding `HKMetadataKeyExternalUUID`, but it has
-    /// no reason to set *this* private key, so requiring both signals on the
-    /// delete path closes BH-final-diff H2 (a foreign deletion must NOT delete
-    /// our server row). The value is fixed and non-PII.
+    /// Apple Health (alongside `HKMetadataKeyExternalUUID`). A foreign app can
+    /// set a colliding `HKMetadataKeyExternalUUID`, but it has no reason to set
+    /// *this* private key, so the cycle writer's replace and delete path
+    /// (`CycleHealthKitWriter.isOwnMirror`) only touches samples carrying it or
+    /// authored by this app. The value is fixed and non-PII.
+    ///
+    /// It was also meant to prove ownership of a deletion (BH-final-diff H2),
+    /// but a deleted object keeps no metadata besides the sync identifier and
+    /// version. Since 1.4 the deletion path reads the sync identifier
+    /// (``HealthKitCopySyncIdentity``) instead.
     static let appOriginMetadataKey = "dev.healthlog.app.origin"
 
     /// The marker value written into ``appOriginMetadataKey``. A bare presence
     /// check would suffice, but a stable value keeps the predicate explicit and
     /// future-proofs against an accidental empty stamp.
     static let appOriginMetadataValue = "healthlog"
-
-    /// Whether a deleted sample's preserved metadata confirms it was minted by
-    /// THIS app. Requires both the app-origin marker **and** a non-empty
-    /// `HKMetadataKeyExternalUUID` (the server-linkage id). Used by the HK→server
-    /// delete-propagation path, which cannot see the authoring source.
-    static func isAppMintedDeletion(metadata: [String: Any]?) -> Bool {
-        guard let metadata else { return false }
-        guard let externalUUID = metadata[HKMetadataKeyExternalUUID] as? String,
-              !externalUUID.isEmpty else { return false }
-        return (metadata[appOriginMetadataKey] as? String) == appOriginMetadataValue
-    }
 
     /// Pure ownership predicate. A sample is **our own echo** (→ skip on read)
     /// iff it carries a non-empty external UUID **and** it was authored by this

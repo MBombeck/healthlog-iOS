@@ -28,13 +28,19 @@ struct CyclePhaseExplainer: View {
         // menstruation graphic should be framed like the other cards). The
         // section title leads as a heading ABOVE the card; the warm headline +
         // body copy + the bottom-anchored highlight image live inside the card.
+        //
+        // 1.4 B2 — the card keeps the picture, the chip and the headline; the
+        // longer text about the phase moved behind the screen's (i)
+        // (`CycleInfo`), and so did the guide link. The references stay at the
+        // card's foot, outside the combined element so VoiceOver reaches them
+        // as their own control (1.0.3, App Review 1.4.1).
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text("cycle.explain.title")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                    .accessibilityAddTraits(.isHeader)
-                HLCard {
+            Text("cycle.explain.title")
+                .font(.hlHeadline)
+                .foregroundStyle(HLText.primary)
+                .accessibilityAddTraits(.isHeader)
+            HLCard {
+                VStack(alignment: .leading, spacing: HLSpace.lg) {
                     VStack(alignment: .leading, spacing: HLSpace.lg) {
                         PhaseHighlightSlot(phase: phase)
                             .frame(maxWidth: .infinity)
@@ -45,20 +51,10 @@ struct CyclePhaseExplainer: View {
                             .font(.hlHeadline)
                             .foregroundStyle(HLText.primary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(Self.bodyKey(for: phase))
-                            .font(.hlBody)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .accessibilityElement(children: .combine)
+                    HLSourcesLink(topic: .cycle)
                 }
-            }
-            .accessibilityElement(children: .combine)
-            // 1.0.3 (1.4.1) — the copy is deterministic, not invented. Guide +
-            // references sit OUTSIDE the combined a11y element above, so
-            // VoiceOver reaches each as its own control.
-            HStack(spacing: HLSpace.lg) {
-                HLLearnMoreLink(concept: "CYCLE")
-                HLSourcesLink(topic: .cycle)
             }
         }
     }
@@ -111,7 +107,8 @@ struct CyclePhaseExplainer: View {
     }
 
     /// The warm, honest body of copy explaining what's happening right now.
-    nonisolated static func bodyKey(for phase: CyclePhasePalette.Phase) -> LocalizedStringKey {
+    /// 1.4 B2: read in the cycle screen's info sheet (`CycleInfo`).
+    nonisolated static func bodyKey(for phase: CyclePhasePalette.Phase) -> LocalizedStringResource {
         switch phase {
         case .menstrual: "cycle.explain.menstrual.body"
         case .follicular: "cycle.explain.follicular.body"

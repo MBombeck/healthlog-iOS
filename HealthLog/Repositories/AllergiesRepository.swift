@@ -65,8 +65,12 @@ public actor AllergiesRepository {
         }
         let frozenQuery = query
         @Sendable func networkFetch() async throws -> [AllergyDTO] {
-            let req: APIRequest<[AllergyDTO]> = .get("/api/allergies", query: frozenQuery)
-            return try await api.send(req)
+            // #147 (v1.43.7) — no `offset` here: a cut answer is asked
+            // once more at the route's ceiling (`CappedListReader`).
+            try await CappedListReader.readUpToCeiling(
+                api: api, path: "/api/allergies", query: frozenQuery,
+                limit: limit, ceiling: CappedListReader.allergiesCeiling
+            )
         }
         if let swr, includeInactive != false {
             return try await swr.fetchCachingFirst(

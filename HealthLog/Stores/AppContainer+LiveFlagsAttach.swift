@@ -82,6 +82,7 @@ extension AppContainer {
                 keychain: keychainForSpezi,
                 registry: authenticatedSessionRegistry,
                 uploader: uploader,
+                featureFlags: liveFlagsForSpezi,
                 deliveryFollowUp: Self.deliveryFollowUp(aggregates),
                 serverFreshness: serverFreshness
             )

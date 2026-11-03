@@ -1,38 +1,28 @@
 import Foundation
 
-/// Builds the Insights **Recovery** family from `GET /api/analytics?slice=summaries`
-/// — the SAME per-`MeasurementType` summaries map the web recovery page reads
+/// Builds the Insights **Recovery** family from `GET /api/analytics?slice=summaries`,
+/// the same per-`MeasurementType` summaries the web recovery page reads
 /// (`src/components/insights/recovery/recovery-section.tsx`).
 ///
-/// **Why not `/api/insights/recovery`?** v0141 W-DATAPARITY (P1): that route
-/// never existed server-side (no `src/app/api/insights/recovery/`), so the old
-/// call 404'd → `nil` → the recovery page rendered permanently empty even
-/// though the operator has the data (DAY_STRAIN, ENERGY_EXPENDITURE_KJ, …). The
-/// real source is the shared analytics summaries slice iOS already consumes for
-/// pill availability (`MeasurementsRepository.availableKinds()`), so no server
-/// deploy is needed for parity.
+/// **Server-authoritative, no client recompute.** Each item carries the
+/// server's `latest` and `avg30` unchanged; strain, load and energy are never
+/// derived on-device. The empty reason is the server's `recoveryEmpty`.
 ///
-/// **Server-authoritative, no client recompute.** Each block's value is the
-/// server-computed `latest` (or `mean`) reading for that type, rendered
-/// verbatim; strain / load are never derived on-device.
+/// **1.4 B3 — the 30-day gate.** A type is part of the family only when the
+/// server reports an `avg30` for it, which it does exactly when the type has a
+/// reading in the last 30 days. Older values (Alex's cardio recovery from
+/// 2024) therefore never appear as if they were current. The same rule decides
+/// the HRV measure: SDNN without a current reading and RMSSD with one means the
+/// HRV page shows RMSSD.
 ///
-/// **Per-block data-gate (web parity).** A block is included ONLY when its type
-/// carries `count > 0` in the summaries slice AND has a renderable value — the
-/// identical per-block gate the web uses (`summaries[TYPE].count > 0`).
-/// Crucially the family does NOT require the absent `ANS_CHARGE` / `CARDIO_LOAD`
-/// members: an operator with only `DAY_STRAIN` + `ENERGY_EXPENDITURE_KJ` (+ HR)
-/// renders exactly those blocks. HONEST-ONLY — no fabricated rows.
+/// **Cache strategy:** SWR under the Berlin-day-anchored `.insightsRecovery`
+/// key (five-minute freshness, see `CacheKey`). Pull-to-refresh revalidates.
 ///
-/// **Cache strategy:** daily SWR under the Berlin-day-anchored
-/// `.insightsRecovery(day:)` ladder — the built family is cached (cache-first on
-/// disk, single-flighted revalidation), painting cache-first on launch and
-/// flipping to a structural miss on day rollover.
-///
-/// **`nil` arm (graceful).** A `403` (analytics module gated off) / `404` / `422`
-/// maps to `nil` so the recovery page shows its honest empty state; any other
-/// transport error self-suppresses to `nil` too (SWR still serves a cached
-/// payload first when one exists). An empty family (no present recovery type)
-/// also returns `nil`.
+/// **Outcomes.** A built family (possibly empty, then carrying the server's
+/// reason) on success; `nil` when the slice is gated or absent (`403`, `404`,
+/// `422`), which the page shows as its calm empty state; a thrown error for a
+/// transport failure with nothing cached, which the page shows as a retry face
+/// instead of claiming there is no data.
 public actor RecoveryInsightsRepository {
     private let api: APIClientProtocol
     private let swr: SWRCoordinator?
@@ -42,9 +32,9 @@ public actor RecoveryInsightsRepository {
         self.swr = swr
     }
 
-    /// Fetches + builds the recovery family, or `nil` when nothing is renderable
-    /// (empty summaries) or the slice is gated / absent / errored.
-    public func fetch() async -> RecoveryInsightsDTO? {
+    /// Fetches and builds the recovery family. See the type doc for the three
+    /// outcomes.
+    public func fetch(forceRevalidate: Bool = false) async throws -> RecoveryInsightsDTO? {
         let api = api
         @Sendable func networkFetch() async throws -> RecoveryInsightsDTO {
             let req: APIRequest<RecoverySummariesEnvelope> = .get(
@@ -52,25 +42,20 @@ public actor RecoveryInsightsRepository {
                 query: [("slice", "summaries")]
             )
             let envelope = try await api.send(req)
-            return Self.buildFamily(from: envelope.summaries)
+            return Self.buildFamily(from: envelope.summaries, recoveryEmpty: envelope.recoveryEmpty)
         }
         do {
-            let family: RecoveryInsightsDTO = if let swr {
-                try await swr.fetchCachingFirst(
+            if let swr {
+                return try await swr.fetchCachingFirst(
                     .insightsRecovery(day: BerlinDayKey.string()),
                     decoding: RecoveryInsightsDTO.self,
+                    forceRevalidate: forceRevalidate,
                     fetch: networkFetch
                 )
-            } else {
-                try await networkFetch()
             }
-            return family.hasContent ? family : nil
+            return try await networkFetch()
         } catch let HLError.server(status, _, _) where status == 403 || status == 404 || status == 422 {
-            // Analytics gated off / route absent / rejected → graceful empty.
-            return nil
-        } catch {
-            // Transient transport error → self-suppress; SWR serves a cached
-            // payload first when present, and the next refresh retries.
+            // Analytics gated off / route absent / rejected → calm empty state.
             return nil
         }
     }
@@ -82,66 +67,103 @@ public actor RecoveryInsightsRepository {
 
     // MARK: - Family builder
 
-    /// The recovery-family types, in web render order (`recovery-section.tsx`
-    /// group order): recharge → strain & load → daily heart & energy. Each maps
-    /// to its summaries key via `MetricKind.availabilitySummaryKey` and its
-    /// unit / label via the shared `MetricKind` descriptor, so there is no
-    /// second source of truth to drift.
-    private static let familyOrder: [MetricKind] = [
-        .ansCharge, .dayStrain, .workoutStrain, .cardioLoad, .cardioRecovery,
+    /// The recovery-family types in page order: the recovery score first (the
+    /// number Alex means by "Erholung"), then the web's own order of the
+    /// device-native signals — recharge, strain and load, daily heart and
+    /// energy (`recovery-section.tsx`). Cardio recovery is not a member: it
+    /// has its own Insights page, like on the web.
+    static let familyOrder: [MetricKind] = [
+        .recoveryScore,
+        .ansCharge, .dayStrain, .workoutStrain, .cardioLoad,
         .averageHeartRate, .maxHeartRate, .energyExpenditureKJ
     ]
 
-    /// Pure: build the `RecoveryInsightsDTO` from the summaries map. A block is
-    /// emitted only when its type has `count > 0` AND a renderable value
-    /// (`latest ?? mean`). `nonisolated` + pure so the repository tests can pin
-    /// the contract without the actor.
+    /// Pure: the family from the summaries map. A type is a member only when
+    /// the server summarised a reading in the last 30 days (`avg30`) and has a
+    /// `latest`; both values pass through unchanged. `recoveryEmpty` rides
+    /// along as sent.
     nonisolated static func buildFamily(
-        from summaries: [String: RecoverySummariesEnvelope.Stat]
+        from summaries: [String: RecoverySummariesEnvelope.Stat],
+        recoveryEmpty: String? = nil
     ) -> RecoveryInsightsDTO {
-        var items: [RecoveryInsightsDTO.Item] = []
-        for kind in familyOrder {
+        let items = familyOrder.compactMap { kind -> RecoveryInsightsDTO.Item? in
             guard let key = kind.availabilitySummaryKey,
                   let stat = summaries[key],
-                  (stat.count ?? 0) > 0,
-                  let value = stat.latest ?? stat.mean else { continue }
-            let unit = kind.unit
-            items.append(
-                RecoveryInsightsDTO.Item(
-                    id: key,
-                    label: kind.displayName,
-                    value: value,
-                    unit: unit.isEmpty ? nil : unit
-                )
-            )
+                  let latest = stat.latest, latest.isFinite,
+                  let average = stat.avg30, average.isFinite else { return nil }
+            return RecoveryInsightsDTO.Item(id: key, latest: latest, average30: average)
         }
-        return RecoveryInsightsDTO(status: items.isEmpty ? "insufficient" : "ok", items: items)
+        return RecoveryInsightsDTO(
+            items: items,
+            emptyReason: recoveryEmpty,
+            hrvShowsRMSSD: hrvShowsRMSSD(in: summaries)
+        )
+    }
+
+    /// SDNN without a reading in the last 30 days, RMSSD with one. 1.4 B4:
+    /// also an account that never had SDNN at all but has RMSSD, so the HRV
+    /// page an RMSSD-only wearable opens (see `liveAvailableKinds`) never
+    /// stands on an empty SDNN series.
+    nonisolated static func hrvShowsRMSSD(in summaries: [String: RecoverySummariesEnvelope.Stat]) -> Bool {
+        guard let sdnnKey = MetricKind.hrv.availabilitySummaryKey,
+              let rmssdKey = MetricKind.hrvRMSSD.availabilitySummaryKey else { return false }
+        let sdnn = summaries[sdnnKey]
+        let rmssd = summaries[rmssdKey]
+        guard sdnn?.avg30 == nil else { return false }
+        if rmssd?.avg30 != nil { return true }
+        return (sdnn?.count ?? 0) == 0 && (rmssd?.count ?? 0) > 0
     }
 }
 
 /// Decode-only mirror of the `/api/analytics?slice=summaries` payload the
-/// recovery builder reads: the per-`MeasurementType` summaries map with the few
-/// stat fields the family needs. The built ``RecoveryInsightsDTO`` (not this raw
-/// envelope) is what round-trips the SWR cache.
+/// recovery builder reads (`AnalyticsSummariesSlice` in the server's OpenAPI).
+/// The built ``RecoveryInsightsDTO`` (not this raw envelope) is what
+/// round-trips the SWR cache.
 public struct RecoverySummariesEnvelope: Decodable, Sendable {
     public let summaries: [String: Stat]
+    /// Why the recovery page has nothing to chart (server v1.43.7), `nil` when
+    /// there is something to chart. A server older than v1.43.7 sends no field
+    /// at all; that reads as ``unreportedReason``, the page's general note.
+    public let recoveryEmpty: String?
 
-    public init(summaries: [String: Stat]) {
+    /// The reason assumed when the server does not report one.
+    public static let unreportedReason = "general"
+
+    public init(summaries: [String: Stat], recoveryEmpty: String? = nil) {
         self.summaries = summaries
+        self.recoveryEmpty = recoveryEmpty
     }
 
-    /// One per-type summary from the slice. Tolerant of the slice's many other
-    /// fields (Decodable ignores them); only `count` (the data-gate) and a
-    /// representative value (`latest` / `mean`) are read.
+    private enum CodingKeys: String, CodingKey {
+        case summaries, recoveryEmpty
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        summaries = try container.decode([String: Stat].self, forKey: .summaries)
+        // `null` is the server saying "something to chart"; a value this build
+        // cannot read is treated the same way rather than failing the slice.
+        if container.contains(.recoveryEmpty) {
+            recoveryEmpty = try? container.decodeIfPresent(String.self, forKey: .recoveryEmpty)
+        } else {
+            recoveryEmpty = Self.unreportedReason
+        }
+    }
+
+    /// One per-type summary from the slice. Only the fields the family needs
+    /// are read; the slice's many others are ignored.
     public struct Stat: Decodable, Sendable {
         public let count: Int?
         public let latest: Double?
         public let mean: Double?
+        /// Mean over the last 30 days, `null` when the window has no reading.
+        public let avg30: Double?
 
-        public init(count: Int?, latest: Double?, mean: Double?) {
+        public init(count: Int?, latest: Double?, mean: Double?, avg30: Double? = nil) {
             self.count = count
             self.latest = latest
             self.mean = mean
+            self.avg30 = avg30
         }
     }
 }

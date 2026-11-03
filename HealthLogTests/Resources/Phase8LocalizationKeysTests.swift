@@ -28,17 +28,10 @@ import Testing
 ///      is present in **both** locales, so a translation cannot silently drop
 ///      the number or the date it was written around.
 ///
-/// Two copy constraints from 08-22 are asserted as text rather than left to
-/// review, because both are claims about truth and not about tone:
-///
-///   * `vorsorge.history.empty` must say the ledger **begins with this
-///     release**. "No history yet" is a different and false statement for
-///     every reminder created before v1.37.20 — the server has no rows to
-///     backfill and never will.
-///   * `vorsorge.history.unsupported` must say the ledger is not offered **for
-///     this reminder**. It is a `404` on a per-reminder capability, not an
-///     empty history, and collapsing the two is exactly the confusion
-///     `VorsorgeCard.LedgerState` keeps apart in three separate cases.
+/// 08-22 also pinned two absent-ledger sentences as truth claims. 1.4 B2-b
+/// retired both: an empty ledger and one not offered for a reminder now render
+/// no section, which states nothing false either way (`VorsorgeCard.LedgerState`
+/// still keeps the three cases apart).
 @Suite("Phase 08 localization keys — DE/EN coverage for the reminder surfaces")
 struct Phase8LocalizationKeysTests {
     /// One catalogue key a Phase-8 surface renders, plus the format specifier
@@ -83,8 +76,10 @@ struct Phase8LocalizationKeysTests {
         // `VorsorgeReminderHistoryTests`.
         // Ledger chrome.
         RequiredKey("vorsorge.history.title"),
-        RequiredKey("vorsorge.history.empty"),
-        RequiredKey("vorsorge.history.unsupported"),
+        // 1.4 B2-b — `vorsorge.history.empty` and `.unsupported` left with the
+        // two sentences: an empty ledger and one not offered for a reminder now
+        // show no section at all, so neither can claim anything false about
+        // the history (the reason the two clauses below used to exist).
         RequiredKey("vorsorge.history.failed"),
         RequiredKey("vorsorge.history.retry"),
         RequiredKey("vorsorge.history.loadMore"),
@@ -172,8 +167,6 @@ struct Phase8LocalizationKeysTests {
             }
         }
 
-        violations.append(contentsOf: Self.ledgerAbsenceCopyViolations(catalog))
-
         #expect(
             violations.isEmpty,
             """
@@ -181,56 +174,6 @@ struct Phase8LocalizationKeysTests {
             \(violations.joined(separator: "\n"))
             """
         )
-    }
-
-    /// The two absent-ledger sentences, asserted for what they claim rather
-    /// than for how they read. Both are load-bearing: one denies a history that
-    /// never existed, the other denies a capability for one reminder.
-    private struct CopyClause: Sendable {
-        let key: String
-        let language: String
-        let phrase: String
-        let why: String
-    }
-
-    private static let ledgerAbsenceClauses: [CopyClause] = {
-        let beginsWithTheRelease =
-            "the empty ledger must say it begins with this release, not that there is no history"
-        let namesThisReminder =
-            "an unsupported ledger must name THIS reminder, not report an empty history"
-        return [
-            CopyClause(
-                key: "vorsorge.history.empty", language: "en",
-                phrase: "starts with this app version", why: beginsWithTheRelease
-            ),
-            CopyClause(
-                key: "vorsorge.history.empty", language: "de",
-                phrase: "beginnt mit dieser App-Version", why: beginsWithTheRelease
-            ),
-            CopyClause(
-                key: "vorsorge.history.unsupported", language: "en",
-                phrase: "this reminder", why: namesThisReminder
-            ),
-            CopyClause(
-                key: "vorsorge.history.unsupported", language: "de",
-                phrase: "diese Erinnerung", why: namesThisReminder
-            )
-        ]
-    }()
-
-    private static func ledgerAbsenceCopyViolations(_ catalog: [String: [String: Any]]) -> [String] {
-        var violations: [String] = []
-        for clause in ledgerAbsenceClauses {
-            guard let entry = catalog[clause.key],
-                  let value = value(in: entry, language: clause.language) else
-            {
-                continue // already reported as an absent key or an absent value
-            }
-            if !value.localizedCaseInsensitiveContains(clause.phrase) {
-                violations.append("\(clause.key) [\(clause.language)]: \(clause.why)")
-            }
-        }
-        return violations
     }
 
     // MARK: - Preservation

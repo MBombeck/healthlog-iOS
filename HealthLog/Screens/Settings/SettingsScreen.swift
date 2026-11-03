@@ -72,15 +72,10 @@ struct SettingsScreen: View {
             // live next to the profile they govern. The standalone gating
             // (a local install has no server account to sign out of or
             // delete) moved with them.
+            // 1.4 B2-c — the hub's sync footer is gone: the sync state has no
+            // bearing on a list of settings, and the symbol beside the avatar
+            // already carries it. The success haptic still confirms a pull.
             hubSection
-            // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
-            // primitive as Dashboard/Insights). Complements the existing
-            // success-haptic so the pull-to-refresh gesture reads
-            // identically to the content screens: spinner → tick →
-            // caption. Self-suppressing (standalone shows nothing).
-            Section {} footer: {
-                HLSyncStatusFooter(screenLoading: store.isLoading)
-            }
         }
         .scrollContentBackground(.hidden)
         .background(HLSurface.primary)
@@ -145,9 +140,8 @@ struct SettingsScreen: View {
     /// onboarding `NotificationsPermissionStep`. Renders only when the
     /// system reports `.notDetermined` or `.denied`; once the user
     /// grants permission the card disappears so it doesn't squat at the
-    /// top of Settings forever. Footer copy adapts to the underlying
-    /// status so the operator knows exactly what tapping the button
-    /// will do.
+    /// top of Settings forever. 1.4 B2-c: the row's subtitle says what a
+    /// tap does; the footer that said it again is gone.
     private var notificationsCalloutSection: some View {
         Section {
             Button {
@@ -161,8 +155,6 @@ struct SettingsScreen: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("settings.notifications.callout")
-        } footer: {
-            Text(notificationsCalloutFooter)
         }
     }
 
@@ -177,15 +169,6 @@ struct SettingsScreen: View {
         switch notificationAuthorizationStatus {
         case .denied: "Re-enable in iOS Settings"
         default: "For medication and mood reminders"
-        }
-    }
-
-    private var notificationsCalloutFooter: LocalizedStringKey {
-        switch notificationAuthorizationStatus {
-        case .denied:
-            "Without notification permission we can't send you reminders. Tap above to jump straight to iOS Settings."
-        default:
-            "iOS hasn't shown the permission dialog since login yet. Tap above to open it now."
         }
     }
 
@@ -220,6 +203,9 @@ struct SettingsScreen: View {
     /// Pair-later entry-point. Only renders when the user is in standalone
     /// mode — tap drops back into the OnboardingFlow Server branch with
     /// the user's local data intact, so they can convert without re-install.
+    /// 1.4 B2-c: what a server adds and that local values stay are one
+    /// subtitle; the header that repeated the row title and the footer
+    /// ("Health Score", "Doctor-Report") are gone.
     private var pairServerSection: some View {
         Section {
             Button {
@@ -228,17 +214,11 @@ struct SettingsScreen: View {
                 HLSettingsRow(
                     icon: "icloud.and.arrow.up.fill",
                     title: "Connect to server",
-                    subtitle: "Local values are preserved — you will be guided through the server steps."
+                    subtitle: "settings.pairServer.subtitle"
                 )
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("settings.pairServerRow")
-        } header: {
-            Text("Server connection")
-        } footer: {
-            Text(
-                "In local mode everything runs on this iPhone. With a server you get sync, assistant insights, Health Score, Doctor Report and Coach."
-            )
         }
     }
 
@@ -460,7 +440,8 @@ enum HubRow: String, CaseIterable, Identifiable {
     /// etwas trägt.
     ///
     /// Register: eine kurze Aufzählung oder ein Teilsatz, **Komma als einziges
-    /// Trennzeichen**, kein Schlusspunkt, `lineLimit(1)` unverändert. Der
+    /// Trennzeichen**, kein Schlusspunkt; passt in eine Zeile (seit 1.4 B2-c
+    /// bricht ein zu langer Untertitel um, statt mit „…“ zu enden). Der
     /// Mittelpunkt ist raus (Betreiber-Urteil: wirkt KI-generiert). Jede Zeile
     /// ist Katalog-Inhalt — rohe Literale gibt es hier nicht mehr.
     ///
@@ -485,7 +466,8 @@ enum HubRow: String, CaseIterable, Identifiable {
         case .sources: "Which source wins per metric"
         // v0.8.0 W7 — Insights customization moved to Appearance, so the
         // subtitle no longer promises tile customization here.
-        case .ai: "On-device coach, trend hints, AI provider"
+        // 1.4 B2-c — shortened to fit one line (it ended in "KI-Anbi…").
+        case .ai: "Coach, trend hints, AI provider"
         case .serverSync: "Connection, region, server version"
         // v0.14.7 C1 — generic exports only; the doctor-handover surfaces
         // moved to Mehr → "Mit dem Arzt teilen" (C2).

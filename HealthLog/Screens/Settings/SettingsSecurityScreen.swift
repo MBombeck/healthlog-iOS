@@ -52,11 +52,9 @@ struct SettingsSecurityScreen: View {
     /// R2/R5 — der frühere Subtitle („Ersetze dein aktuelles Passwort durch ein
     /// neues.") formulierte die Zeile darunter um und fällt damit die
     /// Abdeck-Probe: Kartentitel + Zeile bedienen sich unverändert.
+    /// 1.4 B4 — one row, one heading: "Passwort ändern" says it.
     private var passwordCard: some View {
-        HLSettingsCard(
-            icon: "lock.fill",
-            title: "settings.security.password.cardTitle"
-        ) {
+        HLSettingsCard {
             HLSettingsActionRow(
                 title: "settings.security.password.cta",
                 presents: .sheet
@@ -71,13 +69,11 @@ struct SettingsSecurityScreen: View {
     /// der Subtitle war ein Copy-Paste-Griff nach `settings.security.subtitle`
     /// und beschrieb den ganzen Hub statt dieser Karte. Seine Heimat ist die
     /// Konto-Karte, die hierher führt.
+    /// 1.4 B4 — one row, one heading: the row names its screen.
     private var passkeysCard: some View {
-        HLSettingsCard(
-            icon: "key.fill",
-            title: "settings.passkeys.title"
-        ) {
+        HLSettingsCard {
             HLSettingsActionRow(
-                title: "settings.passkeys.manage",
+                title: "settings.passkeys.title",
                 presents: .push
             ) {
                 PasskeyManagementScreen()

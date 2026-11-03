@@ -95,10 +95,10 @@ struct RecordCard: View {
     private var sparklineRow: some View {
         if record.sparklineValues.count >= 2 {
             sparklineChart
-                .frame(height: 32)
+                .frame(height: HLChartStyle.heightCompact)
         } else {
             // Reserve the slot so cards in the same row stay equal height.
-            Color.clear.frame(height: 32)
+            Color.clear.frame(height: HLChartStyle.heightCompact)
         }
     }
 
@@ -149,7 +149,9 @@ struct RecordCard: View {
             let label = Self.deltaLabel(delta: delta)
             HLBadge(label, icon: symbol, tone: tone)
         } else {
-            HLBadge("New record!", icon: "sparkles", tone: .neutral)
+            // 1.4 B4 — `HLBadge` takes a display string; the literal was
+            // never looked up, so German read "New record!".
+            HLBadge(String(localized: "New record!"), icon: "sparkles", tone: .neutral)
         }
     }
 

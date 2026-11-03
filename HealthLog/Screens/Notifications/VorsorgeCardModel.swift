@@ -245,6 +245,14 @@ enum VorsorgeCard {
         reminders.isEmpty
     }
 
+    /// **1.4 B4 — sources belong to a statement.** The reminders state the
+    /// screening cadences, so the page cites them while it shows any. The empty
+    /// state (and the first load) states nothing, and a lone "Quellen" under
+    /// "Noch keine Erinnerungen" cited nothing (DESIGN-HINTS rule 3).
+    static func showsSources(reminders: [MeasurementReminderRow]) -> Bool {
+        !shouldShowEmptyState(reminders: reminders)
+    }
+
     /// Relative next-due text (the web `relativeDueKey` mirror) — presentation of
     /// the server `nextDueAt` delta, never a cadence recompute. Shared by the card
     /// and the detail sheet so the two surfaces read identically.

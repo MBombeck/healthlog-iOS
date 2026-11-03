@@ -54,10 +54,9 @@ struct HeroItemKindSelectionSheet: View {
             }
             .hlScreenBackground()
             .hlScrollEdgeSoft()
-            .navigationTitle(Text(String(
-                localized: "Today highlights",
-                comment: "Today hero item picker title"
-            )))
+            // 1.4 B4 — short enough for the bar between Abbrechen and
+            // Fertig; "Highlights für heute" was cut.
+            .navigationTitle(Text("settings.dashboard.heroItems.sheetTitle"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

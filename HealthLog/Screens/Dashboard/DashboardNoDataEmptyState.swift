@@ -9,10 +9,9 @@ import SwiftUI
 /// where every row was already "Pinned" — a confusing dead-end as the very
 /// first impression of the app.
 ///
-/// This view is the data-empty branch: calm guidance toward connecting Apple
-/// Health (the `HealthKitConnectBanner` above carries the actual connect
-/// affordance when HK isn't granted yet) or capturing a first value via the
-/// centre "Erfassen" action. `TileGridEmptyState` stays reserved for the
+/// This view is the data-empty branch: the way to a first value (the centre
+/// "Erfassen" action); the `HealthKitConnectBanner` above carries the connect
+/// affordance when HK isn't granted yet. `TileGridEmptyState` stays reserved for the
 /// genuinely-hidden-everything case (see
 /// `DashboardScreen.hasUserHiddenAllMetricTiles`).
 struct DashboardNoDataEmptyState: View {
@@ -20,21 +19,22 @@ struct DashboardNoDataEmptyState: View {
     let onCapture: () -> Void
 
     var body: some View {
-        HLCard {
-            HLEmptyState(
-                icon: "heart.text.square",
-                title: "No data yet",
-                message: "Connect Apple Health or capture your first value — your metrics will appear here automatically."
-            ) {
-                HLButton(
-                    String(localized: "Capture first value"),
-                    icon: "plus",
-                    variant: .restrained,
-                    action: onCapture
-                )
-            }
-            .accessibilityIdentifier("dashboard.noDataEmptyState")
+        // 1.4 B2 — title and button only: the Apple Health banner above
+        // already asks for the connection, and the button says the rest.
+        // 1.4 B4 — the one empty-state form: on the page, not in a card, and
+        // the one action `.secondary`.
+        HLEmptyState(
+            icon: "heart.text.square",
+            title: "No data yet"
+        ) {
+            HLButton(
+                String(localized: "Capture first value"),
+                icon: "plus",
+                variant: .secondary,
+                action: onCapture
+            )
         }
+        .accessibilityIdentifier("dashboard.noDataEmptyState")
     }
 }
 

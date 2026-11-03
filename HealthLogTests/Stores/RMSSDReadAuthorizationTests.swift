@@ -56,16 +56,21 @@
             #expect(!h.defaults.bool(forKey: HKReadinessStore.rmssdReadRequestedKey(for: h.user)))
         }
 
-        @Test("on this system the public entry asks only where RMSSD resolves")
+        @Test("on this system the public entry asks RMSSD only where it resolves, waist always (B5)")
         func publicEntryFollowsTheSystem() async throws {
             let h = try Self.harness()
             // INT-N: the store's own defaults, not `.standard`, which V1's
             // `manual` tests now share through the same server version record.
             HealthKitServerTypeGate.record(ServerVersionInfo(version: "1.42.0"), defaults: h.defaults)
-            let asked = await h.store.requestRMSSDReadAuthorizationIfNeeded()
-            #expect(asked == (HeartRateVariabilityRMSSD.sampleType != nil))
-            if HeartRateVariabilityRMSSD.sampleType == nil {
-                #expect(h.service.requests.isEmpty)
+            let asked = await h.store.requestLateReadAuthorizationIfNeeded()
+            #expect(asked)
+            #expect(h.service.requests.count == 1)
+            let read = h.service.requests.first?.read ?? []
+            #expect(read.contains(HKQuantityType(.waistCircumference)))
+            if let rmssd = HeartRateVariabilityRMSSD.sampleType {
+                #expect(read == [rmssd, HKQuantityType(.waistCircumference)])
+            } else {
+                #expect(read == [HKQuantityType(.waistCircumference)])
             }
         }
 

@@ -30,39 +30,43 @@ struct SleepStageCompositionCard: View {
         SleepStageComposition.shares(of: SleepStageComposition.totals(of: nights))
     }
 
+    /// 1.4 B2 — a source that reports only a total has no stages in any
+    /// night: then the card is not there at all instead of saying so.
+    private var hasAnyStages: Bool {
+        !SleepStageComposition.shares(of: SleepStageComposition.totals(of: breakdown.perNight)).isEmpty
+    }
+
     var body: some View {
-        if !breakdown.perNight.isEmpty {
+        if hasAnyStages {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 InsightsSectionHeader("sleep.composition.section")
                 HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
                         HLRangePicker(selection: $window, style: .inline)
                         if nights.isEmpty || shares.isEmpty {
-                            // Stage-less nights in the window (a source that
-                            // reports only a total). Say so; do not draw an
+                            // Stage-less nights in this window only (other
+                            // windows have stages). Say so; do not draw an
                             // empty axis that looks like zero sleep.
                             Text("sleep.composition.noStages")
                                 .font(.hlFootnote)
                                 .foregroundStyle(HLText.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
+                            // The picker names the window; no caption repeats it.
                             chart
-                                .frame(height: 180)
+                                .frame(height: HLChartStyle.heightRegular)
                                 .accessibilityLabel(Text("sleep.composition.a11y"))
                                 .accessibilityValue(Text(accessibilitySummary))
-                            Text("sleep.composition.caption \(nights.count)")
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
                             percentageRows
                         }
+                        // 1.0.3 (App Review 1.4.1, audit row 17) — the stage
+                        // shares are read against what a night is expected to
+                        // look like, a claim with a literature behind it (AASM
+                        // 2015 and the rhythm set). 1.4 B2: at the card's foot,
+                        // where every other card carries its citation.
+                        HLSourcesLink(topic: .sleepRhythm)
                     }
                 }
-                // 1.0.3 (App Review 1.4.1, audit row 17) — the stage shares are
-                // read against what a night is expected to look like, which is a
-                // claim with a literature behind it (AASM 2015 and the rhythm
-                // set). Outside the card so the link is a peer of the section,
-                // not a row inside the chart's own stack.
-                HLSourcesLink(topic: .sleepRhythm)
             }
         }
     }
@@ -104,7 +108,9 @@ struct SleepStageCompositionCard: View {
             // screen every per-night tick collides, and a rotated forest of
             // dates is less legible than none.
             AxisMarks(values: edgeDayKeys) { value in
-                AxisValueLabel {
+                // 1.4 B4 — the edge labels start and end at their columns, so
+                // neither is cut (the app's one date-axis rule).
+                AxisValueLabel(anchor: ChartDateAxis.labelAnchor(index: value.index, count: value.count)) {
                     if let key = value.as(String.self) {
                         Text(SleepNightDay.label(forDayKey: key) ?? key)
                             .font(.hlCaption2)

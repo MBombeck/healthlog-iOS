@@ -124,7 +124,7 @@ struct HealthSyncCapabilityRegistry: Sendable {
     }
 
     /// The sample identifiers this registry's collection capability covers.
-    /// Identity, not a copy — the exact-35 claim cannot drift from the registry.
+    /// Identity, not a copy — the exact-count claim cannot drift from the registry.
     var sampleTypeIdentifiers: Set<String> {
         HealthLogSampleTypeRegistry.knownIdentifiers
     }
@@ -133,7 +133,7 @@ struct HealthSyncCapabilityRegistry: Sendable {
     /// product documentation states.
     var coversExactlyTheKnownSampleTypes: Bool {
         sampleTypeIdentifiers == HealthLogSampleTypeRegistry.knownIdentifiers
-            && sampleTypeIdentifiers.count == 35
+            && sampleTypeIdentifiers.count == HealthLogSampleTypeRegistry.expectedCount
     }
 
     /// Every capability the registry knows, including the ten non-sample

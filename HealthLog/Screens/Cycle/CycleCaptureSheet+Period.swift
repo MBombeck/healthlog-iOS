@@ -46,8 +46,6 @@ struct CycleCapturePeriodSection: View {
             .disabled(isSaving)
         } header: {
             Text("cycle.capture.period.header")
-        } footer: {
-            Text("cycle.capture.period.footer")
         }
         // A grid that arrives (or reloads) after "ended" was picked can take the
         // option away; never keep a choice the picker no longer shows.

@@ -10,23 +10,21 @@ import SwiftUI
 /// real state, and the *absent* state renders **nothing** — a metric the server
 /// has no assessment endpoint for (the ~30 long-tail kinds, exactly like web)
 /// shows no empty block. Self-suppression matrix:
-/// - **standalone / backend-down** → one calm `HLCloudDerivedPlaceholder` (the
-///   assessment is server-only and has no on-device source of truth — it must
-///   not spin forever offline, R4 §3.2). NOT suppressed-to-nothing: the operator
-///   should understand *why* the block is quiet (connect a server).
 /// - **loading / preparing** → a skeleton, never a bare spinner.
-/// - **consent-closed** → a compact "enable assistant insight" CTA (mirrors the
-///   `ChartDetailScreen` findings consent gate; the assessment is LLM prose so it
-///   stays behind the same consent contract).
-/// - **no provider** → the server's localized "assistant disabled" hint.
-/// - **ready** → the assessment prose with cached / updated-at provenance.
-/// - **empty / no endpoint for this kind** → renders nothing (self-suppress).
+/// - **failed** → one line with the way out (pull to refresh).
+/// - **ready** → the assessment prose with its provenance and sources in one
+///   line.
+/// - **everything else** → nothing. 1.4 B2 (R2 appendix B): no server, no
+///   provider and an empty body used to print a standing hint on every metric
+///   page ("Server-Funktion …", "Assistent-Befund nicht aktiviert"); the
+///   overview says it once, the metric page stays quiet. The consent arm was
+///   unreachable here (the read is not consent-gated) and is gone.
 ///
 /// **Monochrome / glass:** sits inside the existing `HLCard` rhythm, no glass on
 /// content, colour stays signal-only.
 struct AssessmentCard: View {
-    /// The server assessment envelope. `nil` = no endpoint for this kind, the
-    /// endpoint 404'd, OR consent is closed (then `consentClosed` is true).
+    /// The server assessment envelope. `nil` = no server, no endpoint for this
+    /// kind, or the endpoint 404'd.
     let assessment: MetricStatusDTO?
     /// True while the first `/api/insights/{metric}-status` fetch is in flight
     /// and no cached prose has painted yet — drives the skeleton (not a spinner).
@@ -38,32 +36,12 @@ struct AssessmentCard: View {
     /// stuck on a skeleton with no recovery signal. Ignored once ready text
     /// exists (a stale-good assessment wins over a failed revalidation).
     var failed: Bool = false
-    /// True when the AI-consent gate is closed: distinguishes "user hasn't
-    /// consented" (CTA) from "server returned no assessment" (silent).
-    let consentClosed: Bool
-    /// True iff this install is paired with a server. When `false` the
-    /// assessment — server-only — yields the cloud-derived placeholder instead
-    /// of a dead/spinning block (standalone calm-state).
-    let hasServer: Bool
-    /// Fired by the consent CTA — re-presents the AI consent sheet.
-    let onRequestConsent: () -> Void
-    /// Fired by the placeholder's "Server verbinden" CTA. `nil` hides the CTA
-    /// (preview / no `AuthStore` in scope).
-    var onConnectServer: (() -> Void)?
 
     var body: some View {
         switch state {
         case .suppressed:
             // ADAPTIVE: no assessment + nothing to prompt → render nothing.
             EmptyView()
-        case .standalone:
-            section {
-                HLCloudDerivedPlaceholder(
-                    variant: .inline,
-                    surfaceName: String(localized: "insights.metric.assessment.title"),
-                    onConnect: onConnectServer
-                )
-            }
         case .loading:
             section {
                 AssessmentSkeleton()
@@ -79,37 +57,9 @@ struct AssessmentCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("insights.metric.assessment.failed")
             }
-        case .consentRequired:
-            section {
-                consentCard
-            }
-        case let .noProvider(text):
-            // #64 — inline (no card) to match the editorial assessment treatment:
-            // the server's "assistant disabled" hint flows as calm body prose
-            // under the section header, not a boxed slab.
-            section {
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    if let text, !text.isEmpty {
-                        HLInsightProse(text: text)
-                    } else {
-                        Text("insights.metric.assessment.noProvider.title")
-                            .font(.hlBody)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
         case let .ready(text, cached, updatedAt):
             section {
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    AssessmentBody(text: text, cached: cached, updatedAt: updatedAt)
-                    // 1.0.3 (App Review 1.4.1) — how the assistant's prose is
-                    // produced. OUTSIDE `AssessmentBody`, whose root is a
-                    // `.combine`d accessibility element.
-                    HLSourcesLink(topic: .aiAssistant)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                AssessmentBody(text: text, cached: cached, updatedAt: updatedAt)
             }
         }
     }
@@ -129,42 +79,10 @@ struct AssessmentCard: View {
         }
     }
 
-    // MARK: - Consent CTA
-
-    private var consentCard: some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.sm) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(HLText.secondary)
-                    Text("insights.metric.assessment.consentCTA.title")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                }
-                Text(
-                    "Your assistant provider only analyzes the values after your consent. Excerpts of this measurement series are then transmitted to the provider."
-                )
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                HLButton("Show insights", variant: .primary) {
-                    onRequestConsent()
-                }
-                .accessibilityIdentifier("insights.metric.assessment.consentCTA")
-            }
-        }
-    }
-
     // MARK: - State resolution
 
     private var state: State {
-        Self.resolveState(
-            assessment: assessment,
-            isLoading: isLoading,
-            failed: failed,
-            consentClosed: consentClosed,
-            hasServer: hasServer
-        )
+        Self.resolveState(assessment: assessment, isLoading: isLoading, failed: failed)
     }
 }
 
@@ -174,11 +92,8 @@ struct AssessmentCard: View {
 /// can be unit-tested without hosting the SwiftUI view (A360-4 QoS-3).
 enum AssessmentCardState: Equatable {
     case suppressed
-    case standalone
     case loading
     case failed
-    case consentRequired
-    case noProvider(text: String?)
     case ready(text: String, cached: Bool, updatedAt: Date?)
 }
 
@@ -192,22 +107,13 @@ extension AssessmentCard {
     nonisolated static func resolveState(
         assessment: MetricStatusDTO?,
         isLoading: Bool,
-        failed: Bool,
-        consentClosed: Bool,
-        hasServer: Bool
+        failed: Bool
     ) -> AssessmentCardState {
-        // Server-only surface: no server → calm placeholder, never a spinner.
-        if !hasServer {
-            return .standalone
-        }
-        // Consent-closed wins over stale prose — never paint an assessment for a
-        // user who has not consented in the current session.
-        if consentClosed {
-            return .consentRequired
-        }
         if let assessment {
+            // 1.4 B2 — no provider: the page stays quiet (the overview and
+            // Settings say it once), instead of a standing "not activated".
             if !assessment.hasProvider {
-                return .noProvider(text: assessment.text)
+                return .suppressed
             }
             // Task #50 — ready prose wins (the server may serve last-good text
             // with `revalidating:true`; paint it immediately, the screen keeps
@@ -233,7 +139,8 @@ extension AssessmentCard {
             return .suppressed
         }
         // No envelope yet: skeleton while preparing, the QoS-3 terminal caption
-        // when a fetch failed before any envelope landed, else nothing to show.
+        // when a fetch failed before any envelope landed, else nothing to show
+        // (no server never fetches, so it lands here too).
         if isLoading { return .loading }
         return failed ? .failed : .suppressed
     }
@@ -263,7 +170,7 @@ private struct AssessmentBody: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             // v0.14.1 §5/§7 — the Einschätzung prose now reads in the SAME grey
-            // flowing style as the intro `descriptionSlot` (`HLText.secondary`),
+            // flowing style as the metric intro had (`HLText.secondary`),
             // not near-black `HLText.primary`. The operator wants Einschätzung +
             // Zusammenhänge to match the calm grey intro text on EVERY metric —
             // one flowing voice, never a louder white block.
@@ -271,35 +178,51 @@ private struct AssessmentBody: View {
             // preserved paragraph breaks + line spacing) instead of a dense
             // plain-`Text` block. See `HLInsightProse`.
             HLInsightProse(text: text)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text(String(localized: "AI finding: \(text)")))
 
-            // Provenance line — one calm caption beneath the prose. The operator
-            // did not recognise the old card as a server-generated AI assessment
-            // ("wo kommt das her, keine Ahnung"); we keep the plain attribution
-            // inline: "KI-Einschätzung, erstellt vor X", mirroring the briefing
-            // hero's `generatedPrefix`. The relative-time + cached glyph
-            // self-suppress when absent. U5 (1.1.1): a comma joins label and
-            // time (no middle dot); the cached glyph closes the line.
-            HStack(spacing: HLSpace.xxs) {
-                let label = String(localized: "insights.metric.assessment.aiLabel")
-                Text(verbatim: updatedAt == nil ? label : label + ",")
-                if let updatedAt {
-                    Text(verbatim: String(localized: "insights.briefingHero.generatedPrefix").localizedLowercase)
-                    Text(updatedAt, format: .relative(presentation: .named))
+            // 1.4 B2 — provenance and sources share one line (1.4.1: the
+            // assistant's sources stay visible next to its prose); a line too
+            // narrow for both stacks them. The link stays its own control.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: HLSpace.md) {
+                    provenance
+                    HLSourcesLink(topic: .aiAssistant)
                 }
-                if cached {
-                    Image(systemName: "tray.and.arrow.down")
-                        .accessibilityLabel(Text(String(localized: "Cached")))
+                VStack(alignment: .leading, spacing: 0) {
+                    provenance
+                    HLSourcesLink(topic: .aiAssistant)
                 }
             }
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
-            .lineLimit(1)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("insights.metric.assessment.generated")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Provenance line — one calm caption beneath the prose. The operator
+    /// did not recognise the old card as a server-generated AI assessment
+    /// ("wo kommt das her, keine Ahnung"); we keep the plain attribution
+    /// inline: "KI-Einschätzung, erstellt vor X", mirroring the briefing
+    /// hero's `generatedPrefix`. The relative-time + cached glyph
+    /// self-suppress when absent. U5 (1.1.1): a comma joins label and
+    /// time (no middle dot); the cached glyph closes the line.
+    private var provenance: some View {
+        HStack(spacing: HLSpace.xxs) {
+            let label = String(localized: "insights.metric.assessment.aiLabel")
+            Text(verbatim: updatedAt == nil ? label : label + ",")
+            if let updatedAt {
+                Text(verbatim: String(localized: "insights.briefingHero.generatedPrefix").localizedLowercase)
+                Text(updatedAt, format: .relative(presentation: .named))
+            }
+            if cached {
+                Image(systemName: "tray.and.arrow.down")
+                    .accessibilityLabel(Text(String(localized: "Cached")))
+            }
+        }
+        .font(.hlCaption)
+        .foregroundStyle(HLText.tertiary)
+        .lineLimit(1)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(String(localized: "AI finding: \(text)")))
+        .accessibilityIdentifier("insights.metric.assessment.generated")
     }
 }
 

@@ -87,8 +87,6 @@ struct CustomMetricEditorSheet: View {
                         .onSubmit { focusedField = .targetLow }
                 } header: {
                     Text("customMetric.editor.identity")
-                } footer: {
-                    Text("customMetric.editor.identity.hint")
                 }
 
                 Section {
@@ -99,22 +97,25 @@ struct CustomMetricEditorSheet: View {
                         .keyboardType(.numbersAndPunctuation)
                         .focused($focusedField, equals: .targetHigh)
                 } header: {
+                    // 1.4 B2-c — no footer: the fields are optional by their
+                    // placeholders, and the band shows itself on the chart.
                     Text("customMetric.editor.target")
-                } footer: {
-                    Text("customMetric.editor.target.hint")
                 }
 
                 Section {
-                    TextField("customMetric.editor.decimals", text: $decimalsText)
-                        .keyboardType(.numberPad)
-                        .focused($focusedField, equals: .decimals)
+                    // 1.4 B2-c — "leave empty for automatic" is the field's
+                    // placeholder instead of a footer.
+                    LabeledContent("customMetric.editor.decimals") {
+                        TextField("customMetric.editor.decimals.placeholder", text: $decimalsText)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .decimals)
+                    }
                     TextField("customMetric.editor.description", text: $descriptionText, axis: .vertical)
                         .lineLimit(2 ... 5)
                         .focused($focusedField, equals: .description)
                 } header: {
                     Text("customMetric.editor.display")
-                } footer: {
-                    Text("customMetric.editor.decimals.hint")
                 }
 
                 // CU-35 (3) — its own section, because it is not a display

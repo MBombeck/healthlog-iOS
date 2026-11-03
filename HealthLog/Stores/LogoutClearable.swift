@@ -90,7 +90,6 @@ extension SessionsStore: LogoutClearable {}
 extension SettingsStore: LogoutClearable {}
 extension StravaIntegrationStore: LogoutClearable {}
 extension SyncModeStore: LogoutClearable {}
-extension TrendsOverlayStore: LogoutClearable {}
 extension WellnessCardVisibilityStore: LogoutClearable {} // local UI-pref — per-card Insights score-card hide
 extension WhoopIntegrationStore: LogoutClearable {}
 extension WithingsIntegrationStore: LogoutClearable {}

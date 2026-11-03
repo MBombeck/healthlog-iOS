@@ -51,8 +51,8 @@ extension QASweepScreenshotsTest {
     /// content by a predictable ~40 % of the screen.
     func scrollDown() {
         let window = app.windows.firstMatch
-        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
-        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.32))
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: scrollColumn, dy: 0.72))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: scrollColumn, dy: 0.32))
         start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 600, thenHoldForDuration: 0.3)
         settle(1.2)
     }

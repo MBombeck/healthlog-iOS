@@ -18,11 +18,7 @@ struct NutrientDetailScreen: View {
                 Section { HLAsyncListSkeletonRows() }
             } else {
                 Section {
-                    HLEmptyState(
-                        icon: "leaf",
-                        title: "nutrients.detail.empty.title",
-                        message: "nutrients.detail.empty.subtitle"
-                    )
+                    HLEmptyState(icon: "leaf", title: "nutrients.detail.empty.title")
                 }
             }
             Section {} footer: {
@@ -80,11 +76,10 @@ struct NutrientDetailScreen: View {
                     .font(.hlCaption.monospacedDigit())
                     .foregroundStyle(HLText.tertiary)
             }
-            Text(reference.source)
-                .font(.hlCaption2)
-                .foregroundStyle(HLText.tertiary)
-            // 1.0.3 (1.4.1) — the reference values' own citation.
-            HLSourcesLink(topic: .nutrition)
+            // 1.0.3 (1.4.1) — the reference values' own citation. 1.4 B2: the
+            // server's reference name is the citation control itself instead
+            // of a caption with a second "Quellen" row under it.
+            HLSourcesLink(topic: .nutrition, style: .captionText(reference.source))
         }
     }
 

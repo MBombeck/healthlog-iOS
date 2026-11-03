@@ -110,7 +110,7 @@ struct AllergiesListScreen: View {
                 title: "allergies.empty.title",
                 message: "allergies.empty.subtitle"
             ) {
-                HLButton("allergies.add.title", icon: "plus", variant: .primary) {
+                HLButton("allergies.add.title", icon: "plus", variant: .secondary) {
                     showAddSheet = true
                 }
             }

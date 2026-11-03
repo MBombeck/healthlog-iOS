@@ -34,4 +34,47 @@ extension InsightsContainerScreen {
                 .accessibilityIdentifier("insights.page.ecg")
         }
     }
+
+    // MARK: - Deep links to data-gated pages (1.4 C1)
+
+    /// Resolve the router's parked Insights slug onto the pager, then admit a
+    /// data-gated special target whose source has already answered empty.
+    func stageDeepLink() {
+        pager.stageInsightsMetricIfRequested(
+            router: router,
+            liveOrderedSelections: liveOrderedSelections,
+            pages: pagerPages
+        )
+        applyAdmittedSpecialTarget()
+    }
+
+    /// A data-gated source answered: record it, and land a link that waited
+    /// for it.
+    func settleSpecial(_ page: InsightsSpecialPage) {
+        pager.markSpecialSettled(page)
+        applyAdmittedSpecialTarget()
+    }
+
+    /// A deep link to mood, medications or ECG on an account without that data
+    /// used to stay staged forever: the strip offers no such page, so the link
+    /// did nothing at all. Admitting the page latches its pill, after which the
+    /// live order holds the target and the staged link lands on the page's own
+    /// empty state, the same way Workouts and Recovery show theirs.
+    private func applyAdmittedSpecialTarget() {
+        guard pager.admitStagedSpecialIfSettled() else { return }
+        pager.tryApplyStagedMetric(liveOrderedSelections: liveOrderedSelections, pages: pagerPages)
+    }
+}
+
+extension View {
+    /// 1.4 C1 — where an Insights special page puts its empty state: from the
+    /// top, inside the page margins, like Workouts and ECG. Mood and
+    /// Medications centred theirs without margins, so the button ran into
+    /// both screen edges once a link could reach those pages empty.
+    func insightsEmptyStatePlacement() -> some View {
+        frame(maxWidth: .infinity)
+            .padding(.horizontal, HLSpace.xl)
+            .padding(.top, HLSpace.xxxl)
+            .frame(maxHeight: .infinity, alignment: .top)
+    }
 }

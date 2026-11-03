@@ -235,15 +235,22 @@ struct MeasurementsPickerScreen: View {
 
 /// Calm empty state for an account with no measurements at all — not a dead
 /// box. Mirrors the `MeasurementListScreen.EmptyState` copy/glyph so the two
-/// surfaces feel like one family, and reuses the existing "No measurements yet"
-/// xcstrings key.
+/// surfaces feel like one family. 1.4 B2 — the title and the way to a first
+/// reading, no sentence explaining what a list of types is for.
 private struct EmptyState: View {
+    @Environment(AppRouter.self) private var router
+
     var body: some View {
-        HLEmptyState(
-            icon: "tray",
-            title: "No measurements yet",
-            message: "Log your first measurement to browse it by type here."
-        )
+        HLEmptyState(icon: "tray", title: "No measurements yet") {
+            HLButton(
+                String(localized: "Log a measurement"),
+                icon: "plus",
+                variant: .secondary
+            ) {
+                router.requestCapture()
+            }
+            .accessibilityIdentifier("measurements.picker.empty.log")
+        }
         .accessibilityIdentifier("measurements.picker.empty")
     }
 }

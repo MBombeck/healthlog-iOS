@@ -20,19 +20,43 @@ struct SettingsSiriShortcutsScreen: View {
         HLSettingsPage(title: "Siri & Shortcuts") {
             phrasesCard
             quickActionsCard
-            howItWorksCard
         }
         .navigationTitle("Siri & Shortcuts")
         .navigationBarTitleDisplayMode(.inline)
+        // 1.4 B2-c — what happens to a spoken entry, and that Siri needs you
+        // signed in, is the screen's (i); the how-it-works card is gone.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HLInfoButton(content: Self.info, accessibilityIdentifier: "settings.siri.info")
+            }
+        }
+    }
+
+    static var info: HLInfoContent {
+        HLInfoContent(
+            title: String(localized: "Siri & Shortcuts"),
+            identifier: "settings.siri.info.sheet",
+            about: String(localized: "settings.siri.info.about"),
+            sections: [
+                HLInfoContent.Section(
+                    title: String(localized: "settings.siri.info.signin.title"),
+                    paragraphs: [
+                        String(localized: "You need to be signed in. If you’re signed out, Siri will ask you to open HealthLog first.")
+                    ]
+                )
+            ]
+        )
     }
 
     // MARK: - What you can say
 
     private var phrasesCard: some View {
+        // 1.4 B2-c — how to use the phrases, read before the list instead of
+        // after it.
         HLSettingsCard(
             icon: "mic.fill",
             title: "What you can say",
-            footer: "Start any phrase with “Hey Siri”. Replace the example values and medication names with your own."
+            subtitle: "Start any phrase with “Hey Siri”. Replace the example values and medication names with your own."
         ) {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
                 ForEach(Array(Self.phrases.enumerated()), id: \.offset) { idx, entry in
@@ -48,9 +72,9 @@ struct SettingsSiriShortcutsScreen: View {
     private func phraseRow(_ entry: PhraseEntry) -> some View {
         HStack(alignment: .top, spacing: HLSpace.md) {
             Image(systemName: entry.symbol)
-                .font(.hlSubhead)
+                .font(.hlIcon(HLIconSize.md))
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 24, alignment: .center)
+                .hlInfoIconColumn()
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text(entry.phrase)
@@ -85,34 +109,6 @@ struct SettingsSiriShortcutsScreen: View {
                 SiriTipView(intent: LogMeasurementIntent())
                     .siriTipViewStyle(.automatic)
                     .accessibilityIdentifier("settings.siri.tip")
-            }
-        }
-    }
-
-    // MARK: - How it works
-
-    private var howItWorksCard: some View {
-        HLSettingsCard(
-            icon: "info.circle.fill",
-            title: "How it works"
-        ) {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                Text(
-                    """
-                    Logging by voice goes through the same secure path as the app: your entry is saved to your \
-                    account, mirrored to Apple Health when relevant, and queued safely if you’re offline — it \
-                    syncs the next time you open HealthLog.
-                    """
-                )
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(
-                    "You need to be signed in. If you’re signed out, Siri will ask you to open HealthLog first."
-                )
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

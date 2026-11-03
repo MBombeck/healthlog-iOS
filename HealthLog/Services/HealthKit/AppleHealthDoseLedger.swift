@@ -169,19 +169,28 @@ struct AppleHealthDoseLedger: Sendable {
     ///     contract. Everything else stays pending, including doses held back
     ///     because their concept is not mirrored yet and doses in a chunk that
     ///     never reached the server.
+    ///   - readWindow: **1.4 / iOS 27** — how far back the sweep could read
+    ///     dose events. A pending dose older than that cannot come back, so its
+    ///     absence says nothing and it stays pending.
     ///
     /// The horizon only ever moves forward, and it moving forward is safe
     /// precisely because the holes travel with it in `pending`.
     func commit(
         observed: [String: Date],
         accountedFor: Set<String>,
+        readWindow: HealthReadWindow = .unlimited,
         requiring lease: HealthSyncAuthenticatedLease
     ) throws {
         let previous = record()
         // Everything within the read window is re-observed, so a previously
         // pending identity that does not come back was deleted in Apple Health
-        // and is correctly dropped rather than held forever.
-        let pending = observed.filter { !accountedFor.contains($0.key) }
+        // and is correctly dropped rather than held forever. One that lies
+        // before a limited window (iOS 27) could not come back and is kept: a
+        // dose that never reached the server must not be dropped as deleted.
+        let unreadable = (previous?.pending ?? [:]).filter { identity, instant in
+            observed[identity] == nil && readWindow.hidesAbsence(endingAt: instant)
+        }
+        let pending = observed.filter { !accountedFor.contains($0.key) }.merging(unreadable) { current, _ in current }
         let horizon = [previous?.horizon, observed.values.max()]
             .compactMap { $0 }
             .max()

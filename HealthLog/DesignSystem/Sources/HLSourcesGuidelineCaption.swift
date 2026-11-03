@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// A status card's guideline caption ("ESH 2023", "WHO 2000") already names the
 /// authority a classification rests on; it was just inert text. This makes the
-/// caption itself the way into ``HLSourcesSheet`` — the affordance sits exactly
+/// caption itself the way into ``HLInfoSheet`` — the affordance sits exactly
 /// where the claim is made, instead of a second "Sources" control repeating the
 /// same thing a line below.
 ///

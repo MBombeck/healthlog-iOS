@@ -59,17 +59,6 @@ enum UnifiedSharingCopy {
         }
     }
 
-    /// FW5-C's provenance badge, kept per output because "your server" means a
-    /// rendered PDF on one path and the canonical FHIR bundle on the other.
-    static func sourceLabel(_ source: FHIRExportSource, form: UnifiedSharingStore.OutputForm) -> String {
-        switch (source, form) {
-        case (.server, .fhir): String(localized: "Source: your server (canonical FHIR).")
-        case (.local, .fhir): String(localized: "Source: this device (offline FHIR).")
-        case (.server, _): String(localized: "Source: your server (rendered PDF).")
-        case (.local, _): String(localized: "Source: this device (offline PDF).")
-        }
-    }
-
     /// The two things the selection panel may have to say about itself, moved
     /// here with the panel it used to live on (`ReportSelectionCard`, removed
     /// in 18-03).

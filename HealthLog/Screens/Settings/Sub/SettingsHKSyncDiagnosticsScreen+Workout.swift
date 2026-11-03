@@ -8,13 +8,13 @@ extension SettingsHKSyncDiagnosticsScreen {
     /// „Liefert selbstständig") for the local outcome and the history import,
     /// and printed the enum spellings as values. Both now say what they are.
     var workoutDeliveryCard: some View {
+        // 1.4 B2-c — no subtitle: the one it had described the background
+        // wakes on the support screen, not this card.
         HLSettingsCard(
             icon: "figure.run",
-            title: "Workout",
-            subtitle: "settings.hkdiag.wakes_subtitle"
+            title: "Workout"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HKSyncDiagnosticsSourceTag(source: .deviceStored)
                 statRow(
                     label: "settings.hkdiag.workout_observer",
                     value: registrationLabel

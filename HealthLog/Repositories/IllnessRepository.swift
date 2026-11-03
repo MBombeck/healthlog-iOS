@@ -105,15 +105,19 @@ public actor IllnessRepository {
 
     /// `GET /api/illness/episodes` — the caller's live episodes, newest-first by
     /// onset. `includeResolved=false` hides resolved episodes.
+    ///
+    /// #147 (v1.43.7) — the route caps a page at `limit` (at most 100) and
+    /// says `meta.truncated` when more exist; the read goes on with `offset`
+    /// until the list is whole, so an account with more episodes than one
+    /// page never loses its oldest ones.
     public func episodes(limit: Int = 100, includeResolved: Bool = true) async throws -> [IllnessEpisodeDTO] {
-        let api = api
         let query: [(String, String)] = [
             ("limit", String(limit)),
             ("includeResolved", includeResolved ? "true" : "false")
         ]
-        let frozenQuery = query
-        let req: APIRequest<[IllnessEpisodeDTO]> = .get("/api/illness/episodes", query: frozenQuery)
-        return try await api.send(req)
+        return try await CappedListReader.readAllPages(api: api, path: "/api/illness/episodes", query: query) {
+            (page: [IllnessEpisodeDTO]) in page
+        }
     }
 
     /// `GET /api/illness/episodes/{id}` — single episode incl. the decrypted note.

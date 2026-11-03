@@ -53,8 +53,8 @@ struct W2I18nKeysTests {
         "chart.axis.scale.logarithmic",
         "chart.stat.mean",
         "chart.stat.median",
-        "chart.aggregation.label",
-        "chart.source.manual",
+        // 1.4 B2 removed "chart.aggregation.label" and "chart.source.manual"
+        // with the dead TrendsOverlayCard and ChartDetailSourcesRow.
         // W2-7 surface names + isolated
         "cloud_derived.surface.ai_provider",
         "cloud_derived.surface.withings",
@@ -68,8 +68,7 @@ struct W2I18nKeysTests {
         "dashboard.customize.visible.value",
         "healthscore.pillar.weightTrend",
         "healthscore.source.mixed",
-        "trends.averaging.raw",
-        "trends.averaging.daily.a11y",
+        // 1.4 B4 removed the "trends.averaging.*" keys with the dead TrendsOverlayStore.
         "sources.mode.bidirectional",
         "export.create.button",
         "glp1.titration.date.label",
@@ -78,19 +77,13 @@ struct W2I18nKeysTests {
         "notifications.diagnostics.allowed",
         "notifications.diagnostics.denied",
         "notifications.error.apns.unknown",
-        // W2-8 statistik briefing
-        "briefing.measurements.none",
-        "briefing.mood.today",
-        "briefing.mood.latest",
-        "briefing.healthscore.weekly",
+        // W2-8 statistik briefing — 1.4 B4 removed its keys with StatistikModeBriefingService.
         // W2-9 insights digest (the aux-screen keys left with the screens, #115 B7)
         "insights.digest.bp.optimal",
         "insights.digest.bp.normal",
-        "insights.digest.alert.success",
-        "insights.digest.alert.warning",
-        "insights.mood.avg7",
+        // 1.4 B2 removed the alert and mood-average keys with the dead
+        // AlertsList / MoodSummaryCard (InsightsDigestComponents.swift).
         // W2-10 chart axis / VoiceOver
-        "chart.axis.zscore",
         "chart.axis.index",
         "chart.series.sparkline",
         "chart.scrubber.selection",
@@ -108,7 +101,8 @@ struct W2I18nKeysTests {
         // #13 (2026-06-11): the heatmap window is operator-selectable; the empty-state
         // key became a %lld format key driven by the picked week count.
         "Once you log medications and acknowledge reminders, your %lld-week compliance history appears here.",
-        "Ask me a question about your data — I know your history and can explain what the numbers mean.",
+        // 1.4 B2-c — the coach's "Ask me a question about your data" welcome
+        // subtitle was deleted; its anchor went with it.
         // v0.13.1 WAVE I18N — German-completeness sweep. The six UnitPreferences
         // picker labels (shipped English-in-DE — the operator's "Settings shows
         // English" report), the three mis-translated cognate keys, the Mood
@@ -122,11 +116,12 @@ struct W2I18nKeysTests {
         "Millimoles per liter (mmol/L)",
         "Self-hosted",
         "Channels",
-        "External ID",
+        // 1.4 B2 removed "External ID" with the raw ID row on the workout detail.
         "30 days",
         "90 days",
         "1 year",
-        "Order your sources per data type. The topmost source wins when several values exist for the same time.",
+        // 1.4 B2-c — "Order your sources per data type …" left with the editor's
+        // lead section; its anchor went with it.
         "Sources without values are still shown so you can set the order before a sensor first syncs.",
         "Every metric returns to its original order: Apple Health → Withings → Manual.",
         // swiftlint:disable:next line_length
@@ -180,9 +175,8 @@ struct W2I18nKeysTests {
             "settings.localreport.title",
             "med.form.advanced.section",
             "chart.axis.y.label",
-            "chart.source.manual",
             "healthscore.source.mixed",
-            "trends.averaging.raw",
+            // 1.4 B4: "trends.averaging.raw" left with the dead TrendsOverlayStore.
             "sources.mode.bidirectional",
             "export.create.button",
             "notifications.diagnostics.allowed",
@@ -195,7 +189,6 @@ struct W2I18nKeysTests {
             "Richer findings and Coach from your server's AI provider. Needs a server connection.",
             "You can remove your key at any time in Settings → Assistant.",
             "Once you log medications and acknowledge reminders, your %lld-week compliance history appears here.",
-            "Ask me a question about your data — I know your history and can explain what the numbers mean.",
             // v0.13.1 WAVE I18N — each MUST carry a real DE distinct from the EN
             // source (the regressions we are pinning).
             "Kilograms (kg)",
@@ -206,11 +199,9 @@ struct W2I18nKeysTests {
             "Millimoles per liter (mmol/L)",
             "Self-hosted",
             "Channels",
-            "External ID",
             "30 days",
             "90 days",
             "1 year",
-            "Order your sources per data type. The topmost source wins when several values exist for the same time.",
             "Sources without values are still shown so you can set the order before a sensor first syncs.",
             "Every metric returns to its original order: Apple Health → Withings → Manual.",
             // swiftlint:disable:next line_length

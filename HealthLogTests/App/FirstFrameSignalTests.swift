@@ -44,7 +44,7 @@
             }
             // Every waiter must actually be parked before the emit, or the case
             // would be satisfied by 100 late arrivals taking the fast path.
-            let allParked = await phase09Settle { signal.waitingCount == 100 }
+            let allParked = await phase09AwaitCondition { signal.waitingCount == 100 }
             #expect(allParked, "100 waiters must park on an unemitted signal")
 
             signal.emit()
@@ -80,7 +80,7 @@
             // framework reports a skip, the run prints "N tests passed" and
             // exits 0, and this contract goes unchecked (09-02's finding).
             let doomed = Task { await signal.wait() }
-            #expect(await phase09Settle { signal.waitingCount == 1 })
+            #expect(await phase09AwaitCondition { signal.waitingCount == 1 })
             doomed.cancel()
             await doomed.value
             #expect(signal.waitingCount == 0)
@@ -88,7 +88,7 @@
             #expect(!Task.isCancelled, "the test's own task must still be alive")
 
             let survivor = Task { await signal.wait() }
-            #expect(await phase09Settle { signal.waitingCount == 1 })
+            #expect(await phase09AwaitCondition { signal.waitingCount == 1 })
             signal.emit()
             await survivor.value
             #expect(signal.waitingCount == 0)
@@ -106,7 +106,7 @@
                 Text(verbatim: "phase09-first-frame").hlEmitFirstFrame(signal),
                 size: CGSize(width: 120, height: 60)
             )
-            #expect(await phase09Settle { signal.emitCount >= 1 })
+            #expect(await phase09AwaitCondition { signal.emitCount >= 1 })
             #expect(signal.emitCount == 1, "one view lifetime is one first frame")
             #expect(signal.hasEmitted)
 
@@ -141,7 +141,7 @@
                 Text(verbatim: "phase09-no-first-frame"),
                 size: CGSize(width: 120, height: 60)
             )
-            _ = await phase09Settle(yields: 200) { signal.emitCount >= 1 }
+            _ = await phase09Settle { signal.emitCount >= 1 }
             #expect(signal.emitCount == 0)
             #expect(!signal.hasEmitted)
         }

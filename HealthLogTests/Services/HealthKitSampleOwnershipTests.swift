@@ -103,49 +103,11 @@
             )
         }
 
-        // MARK: - Deletion-path ownership (BH-final-diff H2)
+        // MARK: - Deletion path
 
-        // `HKDeletedObject` carries only `uuid` + `metadata` (no `sourceRevision`),
-        // so the delete path confirms ownership via the app-origin marker stamped
-        // on every write. A FOREIGN deletion that happens to carry a colliding
-        // `HKMetadataKeyExternalUUID` must NOT be propagated — otherwise a third
-        // party's deletion could delete our server row.
-
-        @Test("our own deletion (origin marker + UUID) ⇒ propagate")
-        func ownDeletionIsPropagated() {
-            let metadata: [String: Any] = [
-                HKMetadataKeyExternalUUID: "mine-1",
-                HealthKitSampleOwnership.appOriginMetadataKey: HealthKitSampleOwnership.appOriginMetadataValue
-            ]
-            #expect(HealthKitSampleOwnership.isAppMintedDeletion(metadata: metadata))
-        }
-
-        @Test("FOREIGN deletion with colliding UUID but NO origin marker ⇒ do NOT propagate")
-        func foreignDeletionWithCollidingUUIDIsNotPropagated() {
-            let metadata: [String: Any] = [HKMetadataKeyExternalUUID: "mine-1"]
-            #expect(!HealthKitSampleOwnership.isAppMintedDeletion(metadata: metadata))
-        }
-
-        @Test("deletion with origin marker but NO external UUID ⇒ do NOT propagate")
-        func deletionWithoutExternalUUIDIsNotPropagated() {
-            let metadata: [String: Any] = [
-                HealthKitSampleOwnership.appOriginMetadataKey: HealthKitSampleOwnership.appOriginMetadataValue
-            ]
-            #expect(!HealthKitSampleOwnership.isAppMintedDeletion(metadata: metadata))
-        }
-
-        @Test("deletion with nil metadata ⇒ do NOT propagate")
-        func deletionWithNilMetadataIsNotPropagated() {
-            #expect(!HealthKitSampleOwnership.isAppMintedDeletion(metadata: nil))
-        }
-
-        @Test("deletion with empty external UUID ⇒ do NOT propagate")
-        func deletionWithEmptyUUIDIsNotPropagated() {
-            let metadata: [String: Any] = [
-                HKMetadataKeyExternalUUID: "",
-                HealthKitSampleOwnership.appOriginMetadataKey: HealthKitSampleOwnership.appOriginMetadataValue
-            ]
-            #expect(!HealthKitSampleOwnership.isAppMintedDeletion(metadata: metadata))
-        }
+        // The deletion-path predicate that lived here (`isAppMintedDeletion`)
+        // read our external UUID and origin marker from a deleted object, which
+        // keeps neither. A6 (1.4) reads the sync identifier instead; its tests
+        // are in `HealthKitMirrorTombstoneTests`.
     }
 #endif

@@ -15,12 +15,10 @@ import SwiftUI
 /// its own extension file to keep the host type under the body-length budget.
 extension AppleHealthIntegrationDetailScreen {
     var importCard: some View {
-        HLSettingsCard(
-            icon: "tray.and.arrow.down.fill",
-            title: "settings.applehealth_import.hero_title",
-            subtitle: "settings.applehealth_import.card_subtitle"
-        ) {
-            HLSettingsActionRow(title: "settings.applehealth_import.card_nav_row", presents: .push) {
+        // 1.4 B2-c — the "export ZIP" subtitle is gone. 1.4 B4 — one row,
+        // one heading: the row names its screen.
+        HLSettingsCard {
+            HLSettingsActionRow(title: "settings.applehealth_import.hero_title", presents: .push) {
                 SettingsAppleHealthImportScreen()
             }
             .accessibilityIdentifier("settings.integrations.appleHealthImportRow")

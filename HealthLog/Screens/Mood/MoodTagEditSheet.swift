@@ -86,10 +86,12 @@ struct MoodTagEditSheet: View {
     }
 
     private var labelCard: some View {
+        // 1.4 B2 — the length rule shows only when the name breaks it (the
+        // save button is disabled then); an empty field needs no sentence.
         HLSettingsCard(
             icon: "tag",
             title: "mood.tags.edit.label.title",
-            footer: "mood.tags.edit.label.footer"
+            footer: trimmedLabel.count > 40 ? "mood.tags.edit.label.footer" : nil
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 TextField(String(localized: "mood.tags.edit.label.placeholder"), text: $label)

@@ -54,16 +54,26 @@
                 if current.isFinished { return .finished }
                 if Task.isCancelled { return .cancelled }
 
-                let moved = results.contains { $0.pagesCollected > 0 || ($0.history?.pagesCollected ?? 0) > 0 }
+                // A2 (1.4, R3 S6) — progress is a page whose rows were taken.
+                // An empty live page, a held page and one parked in the outbox
+                // are not; until 1.3.0 they all were, so a catch-up without a
+                // server never paused.
+                let moved = results.contains(where: AnchoredHealthSampleCollector.madeProgress)
                 quietRounds = moved ? 0 : quietRounds + 1
                 if quietRounds >= Self.stalledRoundLimit { return .stalled }
             }
         }
 
         private func overview(lease: HealthSyncAuthenticatedLease, window: Date) async -> HealthHistoryOverview {
-            let keys = Self.serverCollectable(Self.collectedTypeIdentifiers)
-                .compactMap { lease.cursorKey(typeIdentifier: $0) }
-            return await HealthHistoryOverview(types: cursors.historyStatus(for: keys, cutoff: window))
+            let types = Self.serverCollectable(Self.collectedTypeIdentifiers)
+            let keys = types.compactMap { lease.cursorKey(typeIdentifier: $0) }
+            // B5 (1.4, R4 2.1) — a walk that reached the readable boundary is
+            // done as far as Apple Health lets it go.
+            let readable = await collector.readWindows(for: types)
+            return await HealthHistoryOverview(
+                types: cursors.historyStatus(for: keys, cutoff: window, readable: readable),
+                readable: readable
+            )
         }
 
         /// Switches the #128 shortcut off for every partition, after the live

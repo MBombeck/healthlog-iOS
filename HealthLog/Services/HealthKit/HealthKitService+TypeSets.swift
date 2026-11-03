@@ -62,6 +62,10 @@ import Foundation
             // W28d — Apple walking-steadiness fall-risk classifier.
             set.insert(HKQuantityType(.appleWalkingSteadiness))
             set.insert(HKQuantityType(.bodyMassIndex))
+            // B5 (1.4) — waist circumference, read only (never written back).
+            // An installation that answered the sheet before 1.4 is asked once
+            // (`HKReadinessStore.requestLateReadAuthorizationIfNeeded`).
+            set.insert(HKQuantityType(.waistCircumference))
             // W-HKREAD — nine additive quantity signals the server maps
             // end-to-end (server v1.10.0). Collected via the Spezi
             // `CollectSamples` path; their read auth must join the always-on

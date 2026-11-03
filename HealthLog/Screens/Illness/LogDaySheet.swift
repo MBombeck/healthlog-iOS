@@ -33,7 +33,9 @@ struct LogDaySheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("illness.daylog.section.date") {
+                // 1.4 B4 — a section of one row has no title of its own: the
+                // row is the heading ("Datum" over "Datum" said it twice).
+                Section {
                     DatePicker("illness.daylog.date", selection: $date, displayedComponents: [.date])
                         // #115 1.5 — pick days in the zone `dayKey` cuts in.
                         .environment(\.timeZone, ProfileDay.timeZone)
@@ -70,7 +72,7 @@ struct LogDaySheet: View {
     }
 
     private var impactSection: some View {
-        Section("illness.daylog.section.impact") {
+        Section {
             Picker("illness.daylog.impact", selection: $functionalImpact) {
                 // The blank option is what makes "not specified" reachable —
                 // without it the Picker could never return to `nil` and the

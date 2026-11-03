@@ -422,7 +422,7 @@ import Testing
         }
 
         @Test("standalone→paired transition fires the upload hook")
-        func standaloneToPairedFires() async throws {
+        func standaloneToPairedFires() async {
             let (store, sync) = makeStore(initialMode: .standalone)
             let box = FireBox()
             store.adoptUploadHook = { _ in
@@ -435,8 +435,8 @@ import Testing
             // Re-pick server + log in → terminal `.authenticated` consumes the flag.
             store.setPhaseForTesting(.authenticating(user()))
             store.completeOnboarding()
-            // The hook runs in a detached Task; let it land.
-            try await Task.sleep(nanoseconds: 200_000_000)
+            // The hook runs in a detached Task; let it land (T1 1.4: awaited, not slept 200 ms).
+            await phase09AwaitCondition { await MainActor.run { if case .done = store.adoptUploadState { true } else { false } } }
             #expect(box.fired)
             // The state surfaced a terminal `.done`.
             if case .done = store.adoptUploadState {} else {
@@ -448,7 +448,7 @@ import Testing
         /// `retryAdoptUpload()` re-fires the hook. The first run fails (→ `.failed`),
         /// the retry succeeds (→ `.done`). Proves the recovery path exists.
         @Test("failed adopt re-arms; manual retry re-runs to .done")
-        func failedAdoptRetrySucceeds() async throws {
+        func failedAdoptRetrySucceeds() async {
             let (store, sync) = makeStore(initialMode: .standalone)
             let attempts = AttemptBox()
             store.adoptUploadHook = { _ in
@@ -462,7 +462,7 @@ import Testing
             store.beginServerPairing()
             store.setPhaseForTesting(.authenticating(user()))
             store.completeOnboarding()
-            try await Task.sleep(nanoseconds: 200_000_000)
+            await phase09AwaitCondition { await MainActor.run { if case .failed = store.adoptUploadState { true } else { false } } }
             // First run failed.
             if case .failed = store.adoptUploadState {} else {
                 Issue.record("expected .failed after first run, got \(store.adoptUploadState)")
@@ -470,7 +470,7 @@ import Testing
 
             // Manual retry (behind the failed banner) re-runs the (idempotent) upload.
             store.retryAdoptUpload()
-            try await Task.sleep(nanoseconds: 200_000_000)
+            await phase09AwaitCondition { await MainActor.run { if case .done = store.adoptUploadState { true } else { false } } }
             #expect(attempts.count == 2)
             if case .done = store.adoptUploadState {} else {
                 Issue.record("expected .done after retry, got \(store.adoptUploadState)")

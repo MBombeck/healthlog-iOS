@@ -57,13 +57,6 @@ struct InsightsWorkoutsPage: View {
                     accessibilityIdentifierSuffix: "workouts"
                 )
 
-                if let meta = store.meta, meta.droppedDuplicates > 0 {
-                    Text("Duplicate workouts (Watch + scale) were merged.")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .padding(.horizontal, HLSpace.xs)
-                }
-
                 HLCard {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(store.workouts.enumerated()), id: \.element.id) { index, workout in
@@ -145,37 +138,29 @@ struct InsightsWorkoutsPage: View {
     private var emptyState: some View {
         ScrollView {
             VStack(spacing: HLSpace.lg) {
+                // 1.4 B4 — one lockup, one action: the sync that pulls the
+                // workouts in (it asks for the read permission first). The
+                // second "Open Apple Health" button below it is gone; the
+                // permission lives in Settings like every other Health read.
                 HLEmptyState(
                     icon: "figure.run",
                     title: "No workouts yet",
                     message: "Workouts appear here as soon as Apple Watch or another source reports one."
-                )
-
-                VStack(spacing: HLSpace.sm) {
+                ) {
                     HLButton(
                         String(localized: "Sync from Apple Health"),
                         icon: "heart.text.square",
-                        variant: .primary,
-                        size: .large,
+                        variant: .secondary,
                         isLoading: isSyncing
                     ) {
                         Task { await syncFromAppleHealth() }
                     }
                     .disabled(isSyncing)
                     .accessibilityIdentifier("insights.workouts.empty.sync")
-
-                    HLButton(
-                        String(localized: "Open Apple Health"),
-                        variant: .secondary,
-                        size: .large
-                    ) {
-                        openAppleHealth()
-                    }
-                    .accessibilityIdentifier("insights.workouts.empty.openHealth")
                 }
-                .padding(.horizontal, HLSpace.xl)
             }
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, HLSpace.xl)
             .padding(.top, HLSpace.xxxl)
             .padding(.bottom, HLSpace.xxxl)
         }
@@ -193,16 +178,5 @@ struct InsightsWorkoutsPage: View {
         await hkReadiness.requestAuthorization()
         await hkReadiness.triggerManualSync()
         await store.refresh()
-    }
-
-    /// Öffnet die Health-App, damit der Nutzer den Workout-Lesezugriff dort
-    /// selbst umstellen kann. **Nicht** die Quellen-Detailseite — Apple bietet
-    /// Drittanbietern keinen Deep-Link dorthin (Begründung samt Beleg an
-    /// ``HKReadinessStore/healthAppDeepLink``). No-op auf Nicht-UIKit-Builds.
-    private func openAppleHealth() {
-        #if canImport(UIKit)
-            guard let url = HKReadinessStore.healthAppDeepLink else { return }
-            UIApplication.shared.open(url)
-        #endif
     }
 }

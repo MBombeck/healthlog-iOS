@@ -147,6 +147,13 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
     public let trendSentiment: TrendSentiment?
     /// #135 — which way a change of this metric counts for this person.
     public let direction: TrendVerdict?
+    /// **1.4 B4** — the server's catalogue keys behind ``title`` and ``unit``,
+    /// kept so the SWR round-trip stores the KEY and resolves it again on the
+    /// way back. It used to store the resolved text only, so a cached summary
+    /// answered in the language of the day it was fetched, for the rest of that
+    /// day and offline, after the person switched the app's language.
+    let titleKey: String?
+    let unitKey: String?
 
     public init(
         id: String,
@@ -159,7 +166,9 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         sparkline: [Double],
         updatedAt: Date?,
         trendSentiment: TrendSentiment? = nil,
-        direction: TrendVerdict? = nil
+        direction: TrendVerdict? = nil,
+        titleKey: String? = nil,
+        unitKey: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -172,6 +181,8 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         self.updatedAt = updatedAt
         self.trendSentiment = trendSentiment
         self.direction = direction
+        self.titleKey = titleKey
+        self.unitKey = unitKey
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -203,14 +214,10 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         // #135 — additive v1.43 fields; an unreadable block is "not sent".
         trendSentiment = try? c.decodeIfPresent(TrendSentiment.self, forKey: .trendSentiment)
         direction = try? c.decodeIfPresent(TrendVerdict.self, forKey: .direction)
-        title = try Self.resolve(
-            key: c.decodeIfPresent(String.self, forKey: .titleKey),
-            legacy: c.decodeIfPresent(String.self, forKey: .title)
-        )
-        unit = try Self.resolve(
-            key: c.decodeIfPresent(String.self, forKey: .unitKey),
-            legacy: c.decodeIfPresent(String.self, forKey: .unit)
-        )
+        titleKey = try c.decodeIfPresent(String.self, forKey: .titleKey)
+        unitKey = try c.decodeIfPresent(String.self, forKey: .unitKey)
+        title = try Self.resolve(key: titleKey, legacy: c.decodeIfPresent(String.self, forKey: .title))
+        unit = try Self.resolve(key: unitKey, legacy: c.decodeIfPresent(String.self, forKey: .unit))
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -218,6 +225,10 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         try c.encode(id, forKey: .id)
         try c.encode(kind, forKey: .kind)
         try c.encode(title, forKey: .title)
+        // 1.4 B4 — the keys ride along, so a cached row resolves in the
+        // current language when it is read back (see ``titleKey``).
+        try c.encodeIfPresent(titleKey, forKey: .titleKey)
+        try c.encodeIfPresent(unitKey, forKey: .unitKey)
         // v0.14 / v1.11.5 — straight encode (no sleep ×60 re-encode hack). Since
         // `init(from:)` no longer rewrites sleep (the server sends hours
         // directly), encode is a plain inverse and the SWR cache round-trip

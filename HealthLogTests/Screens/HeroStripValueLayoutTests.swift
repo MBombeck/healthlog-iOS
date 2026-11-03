@@ -72,6 +72,22 @@
             return host.sizeThatFits(in: CGSize(width: Self.width, height: .greatestFiniteMagnitude)).height
         }
 
+        /// 1.4 B2 — the BP card carries one line more than the pulse card: the
+        /// pulse pressure and mean pressure derived from the same reading. Its
+        /// own fitted height (inside the card's padding, plus the strip's row
+        /// spacing) is allowed on top; a wrapped number still is not.
+        private func derivedLineHeight(typeSize: DynamicTypeSize) -> CGFloat {
+            let readout = BPDerivedReadout.derive(systolic: 128, diastolic: 93)!
+            let view = Text("insights.bp.derived.line \(readout.pulsePressure) \(readout.meanArterialPressure)")
+                .font(.hlCaption)
+                .fixedSize(horizontal: false, vertical: true)
+                .environment(\.locale, Locale(identifier: "de_DE"))
+                .dynamicTypeSize(typeSize)
+            let host = UIHostingController(rootView: view)
+            let inner = Self.width - 2 * HLSpace.lg
+            return host.sizeThatFits(in: CGSize(width: inner, height: .greatestFiniteMagnitude)).height + HLSpace.sm
+        }
+
         @Test(
             "128/93 takes no more height than a two-digit value, de",
             arguments: [
@@ -84,12 +100,13 @@
 
             let bpHeight = fittedHeight(bp, typeSize: typeSize)
             let pulseHeight = fittedHeight(pulse, typeSize: typeSize)
+            let derived = derivedLineHeight(typeSize: typeSize)
 
             #expect(bpHeight > 0)
             // A wrapped number adds at least one large-title line (> 30 pt).
             #expect(
-                bpHeight <= pulseHeight + 4,
-                "BP hero is \(bpHeight) pt tall vs \(pulseHeight) pt for a pulse at \(typeSize)"
+                bpHeight <= pulseHeight + derived + 4,
+                "BP hero is \(bpHeight) pt tall vs \(pulseHeight) pt for a pulse (+\(derived) derived) at \(typeSize)"
             )
         }
 

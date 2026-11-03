@@ -319,8 +319,8 @@ struct MoodScreen: View {
                 Text(MoodCopy.scoreLabel(value))
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(2) // 1.4 B4 — a second line instead of a smaller word.
+                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())

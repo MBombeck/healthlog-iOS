@@ -79,10 +79,10 @@ import Testing
         // MARK: - 1. MOOD_REMINDER category registration
 
         @Test("MOOD_REMINDER category registers with the operator-mandated 3 actions")
-        func moodCategoryRegistration() async throws {
+        func moodCategoryRegistration() async {
             let appRouter = AppRouter()
             _ = makeService(appRouter: appRouter)
-            try await Task.sleep(nanoseconds: 50_000_000)
+            await awaitNotificationCategory(NotificationService.categoryMood)
             let categories = await UNUserNotificationCenter.current().notificationCategories()
             guard let mood = categories.first(where: { $0.identifier == NotificationService.categoryMood }) else {
                 Issue.record("MOOD_REMINDER category not registered")
@@ -109,10 +109,10 @@ import Testing
         }
 
         @Test("Three categories are all registered together")
-        func allCategoriesRegistered() async throws {
+        func allCategoriesRegistered() async {
             let appRouter = AppRouter()
             _ = makeService(appRouter: appRouter)
-            try await Task.sleep(nanoseconds: 50_000_000)
+            await awaitNotificationCategory(NotificationService.categoryMood)
             let categories = await UNUserNotificationCenter.current().notificationCategories()
             let identifiers = Set(categories.map(\.identifier))
             #expect(identifiers.contains(NotificationService.categoryMedication))
@@ -471,6 +471,17 @@ import Testing
                 return (Self.okResponse(req), Data(body.utf8))
             }
             await store.load()
+        }
+    }
+
+    /// T1 (1.4) — `setNotificationCategories` lands on UNUserNotificationCenter's
+    /// own queue, as ONE call for every category, so one identifier being there
+    /// means the whole set is. Awaited (bounded by time) instead of the former
+    /// 50 ms sleep; the callers still assert what was registered.
+    func awaitNotificationCategory(_ identifier: String) async {
+        await phase09AwaitCondition {
+            await UNUserNotificationCenter.current().notificationCategories()
+                .contains { $0.identifier == identifier }
         }
     }
 

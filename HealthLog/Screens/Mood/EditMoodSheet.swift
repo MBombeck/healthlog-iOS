@@ -172,8 +172,9 @@ struct EditMoodSheet: View {
                 Text(MoodCopy.scoreLabel(value))
                     .font(.hlCaption)
                     .foregroundStyle(score == value ? AnyShapeStyle(.tint) : AnyShapeStyle(HLText.secondary))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    // 1.4 B4 — a second line instead of a smaller word.
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
@@ -236,9 +237,7 @@ struct EditMoodSheet: View {
                 }
                 .padding(.vertical, HLSpace.xxs)
             }
-            Text("Suggestions are non-binding. Tap a tag to apply it.")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+            // 1.4 B2 — the chips are plainly offers; no line says so.
         }
     }
 

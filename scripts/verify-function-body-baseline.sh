@@ -47,11 +47,13 @@ FBL_EXCEPTION_CEILING=7
 # Reusable chart assets. 09-08 deleted exactly one proven-unreachable host
 # (HealthLog/Screens/Charts/ChartDetailScreen.swift); everything reusable that
 # lived beside it stays, and a later "cleanup" may not take these with it.
+# 1.4 B2-a (R2 appendix A) removed TrendsOverlayCard and ChartDetailSourcesRow
+# from this list: no screen mounted either any more, R2 ruled them dead code,
+# and `ChartDetailCutoverTests.reusableChartAssets` moved with them.
 FBL_REUSABLE_ASSETS=(
     "HealthLog/Screens/Charts/ChartDetailComponents.swift"
     "HealthLog/Screens/Charts/ChartDetailDrillDownRow.swift"
     "HealthLog/Screens/Charts/ChartDetailHeroTrend.swift"
-    "HealthLog/Screens/Charts/ChartDetailSourcesRow.swift"
     "HealthLog/Screens/Charts/ChartsAccessibility.swift"
     "HealthLog/Screens/Charts/FullscreenChartCover.swift"
     "HealthLog/Screens/Charts/HLTileMetricChart.swift"
@@ -59,7 +61,6 @@ FBL_REUSABLE_ASSETS=(
     "HealthLog/Screens/Charts/MetricChartContent.swift"
     "HealthLog/Screens/Charts/MetricChartMath.swift"
     "HealthLog/Screens/Charts/SelectedPointCallout.swift"
-    "HealthLog/Screens/Charts/TrendsOverlayCard.swift"
     "HealthLog/Stores/ChartDetailStore.swift"
     "HealthLog/Stores/ChartDetailStore+Loading.swift"
 )

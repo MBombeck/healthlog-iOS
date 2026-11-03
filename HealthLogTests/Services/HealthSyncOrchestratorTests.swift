@@ -66,13 +66,13 @@ struct HealthSyncOrchestratorTests {
 
     // MARK: - Registry totality
 
-    @Test("the registry names every capability and exactly the thirty-five sample types")
+    @Test("the registry names every capability and exactly the thirty-six sample types")
     func registryIsExact() {
         let registry = HealthSyncCapabilityRegistry.unsupportedEverywhere()
         #expect(registry.namesEveryCapability)
         #expect(registry.capabilities.count == HealthSyncCapability.allCases.count)
         #expect(registry.coversExactlyTheKnownSampleTypes)
-        #expect(registry.sampleTypeIdentifiers.count == 35)
+        #expect(registry.sampleTypeIdentifiers.count == HealthLogSampleTypeRegistry.expectedCount)
         #expect(registry.sampleTypeIdentifiers == HealthLogSampleTypeRegistry.knownIdentifiers)
     }
 

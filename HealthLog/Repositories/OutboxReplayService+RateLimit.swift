@@ -70,20 +70,20 @@ extension OutboxReplayService {
     /// row, as long as this pass's pause budget allows. A wait beyond it is
     /// rethrown as `HLError.rateLimited` carrying the wait, which
     /// ``onRateLimited(_:retryAfter:)`` turns into a hold.
-    func pausingOnRateLimit(
+    func pausingOnRateLimit<Value>(
         _ op: OutboxQueue.Operation,
         passStartedAt: Date,
-        dispatch: () async throws -> Void
-    ) async throws {
+        dispatch: () async throws -> Value
+    ) async throws -> Value {
         if rateLimit.passStartedAt != passStartedAt {
             rateLimit.passStartedAt = passStartedAt
             rateLimit.pausedThisPass = 0
         }
         while true {
             do {
-                try await dispatch()
+                let result = try await dispatch()
                 rateLimit.consecutive = 0
-                return
+                return result
             } catch let HLError.rateLimited(retryAfter) {
                 rateLimit.consecutive += 1
                 let wait = rateLimitWait(retryAfter)

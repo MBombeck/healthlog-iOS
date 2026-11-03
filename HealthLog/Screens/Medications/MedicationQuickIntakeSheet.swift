@@ -170,18 +170,14 @@ struct MedicationQuickIntakeSheet: View {
             ),
             // Build 6.1 — nothing is due, but the operator may still have taken
             // (or want to back-date) an intake.
-            onLogManually: { path.append(FreeIntakeRoute()) },
-            onClose: onDismiss
+            onLogManually: { path.append(FreeIntakeRoute()) }
         )
     }
 
     private func chooserList(options: MedicationQuickIntakeOptions) -> some View {
         ScrollView {
+            // 1.4 B2 — the sheet's title asks the question; no line repeats it.
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                Text("meds.quick.chooser.header")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .padding(.horizontal, HLSpace.lg)
                 // H4 — "take all due" appears only when ≥2 doses are due. Each
                 // dose still rides the single-intake path (own idempotency key).
                 let due = options.due

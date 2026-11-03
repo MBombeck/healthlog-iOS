@@ -192,7 +192,9 @@ struct MoodFactorCrosstabRowView: View {
 private extension FactorMetricCrosstabRow {
     /// Human factor label for the sentence — resolves the server `labelKey`
     /// (lowercased so it reads naturally mid-sentence: "your worse sleep days").
+    /// 1.4 B4: in German a noun keeps its capital; "arbeit-Tagen" was wrong.
     var labelKeyHumanFallback: String {
-        MoodTagCatalogL10n.resolve(labelKey).lowercased()
+        let label = MoodTagCatalogL10n.resolve(labelKey)
+        return Bundle.main.preferredLocalizations.first?.hasPrefix("de") == true ? label : label.lowercased()
     }
 }

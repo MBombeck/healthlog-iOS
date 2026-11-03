@@ -21,15 +21,16 @@
     ///
     /// **1.2 / V4 — one OS-gated member.** HRV as RMSSD exists from iOS 27 on
     /// (see ``HeartRateVariabilityRMSSD``). It joins the set only where the
-    /// running system resolves the type, so the contract is 35 on iOS 26 and
-    /// older and 36 on iOS 27 and later; the fixed literal stays at 35.
+    /// running system resolves the type, so the contract is 36 on iOS 26 and
+    /// older and 37 on iOS 27 and later; the fixed literal holds 36 since
+    /// B5 (1.4) added waist circumference.
     enum HealthLogSampleTypeRegistry {
         /// How many server-bound sample types the fixed literal below holds.
         ///
         /// Declared separately from the set so a duplicated or dropped line in the
         /// literal below fails a test instead of quietly changing what the app
         /// syncs.
-        static let baseExpectedCount = 35
+        static let baseExpectedCount = 36
 
         /// Exactly how many server-bound sample types the app collects on the
         /// running system: the fixed literal plus the OS-gated types this
@@ -60,6 +61,9 @@
                 HKQuantityTypeIdentifier.bodyMass.rawValue,
                 HKQuantityTypeIdentifier.bodyFatPercentage.rawValue,
                 HKQuantityTypeIdentifier.bodyTemperature.rawValue,
+                // B5 (1.4) — waist circumference, server `WAIST_CIRCUMFERENCE`
+                // since v1.25.0 (sent in metres, stored in centimetres).
+                HKQuantityTypeIdentifier.waistCircumference.rawValue,
                 HKQuantityTypeIdentifier.bloodPressureSystolic.rawValue,
                 HKQuantityTypeIdentifier.bloodPressureDiastolic.rawValue,
                 HKQuantityTypeIdentifier.bloodGlucose.rawValue,

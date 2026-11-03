@@ -21,8 +21,7 @@ struct A11yStringKeysTests {
     /// `%@` / `%lld` format args are part of the stored value; we assert presence
     /// + non-empty, not the formatted output.
     static let a11yKeys: [String] = [
-        // InsightsVitalsDashboard — confidence-band VoiceOver label (new key).
-        "Confidence %@",
+        // 1.4 B4 removed "Confidence %@" with the dead derived block (InsightsVitalsDashboard).
         // ArchivedMedicationsSection — restore button.
         "Restore %@",
         // Add/EditMedicationSheet — remove-time button.

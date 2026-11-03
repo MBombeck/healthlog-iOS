@@ -50,7 +50,7 @@ import Foundation
     /// legacy observer pipeline back on.
     public actor HealthKitService: HealthKitServiceProtocol {
         public let store: HKHealthStore
-        private let keychain: KeychainStoring
+        let keychain: KeychainStoring
         private let bundleID: String
         /// Optional FeatureFlags-Service stash. Post-W-A5 + v0.5.6
         /// dead-shim-sweep no runtime path on this actor reads from it;
@@ -162,6 +162,15 @@ import Foundation
         /// `HealthKitServerMirrorPlanner`); the create-time write and the mirror
         /// never both write the same row.
         var serverMirrorClaims: Set<String> = []
+
+        /// **B5 (1.4)** — where the person's per-type direction comes from
+        /// (``HealthKitWriteBackPolicy``). `nil` until the composition root
+        /// attaches it: then nothing restricts the writes, as before 1.4.
+        var writeBackPolicyProvider: (@Sendable () async -> HealthKitWriteBackPolicy?)?
+
+        public func attachWriteBackPolicy(_ provider: (@Sendable () async -> HealthKitWriteBackPolicy?)?) async {
+            writeBackPolicyProvider = provider
+        }
 
         public func setDeletionReconciler(_ reconciler: MeasurementDeletionReconciler?) {
             deletionReconciler = reconciler

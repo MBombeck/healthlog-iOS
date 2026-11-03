@@ -68,12 +68,6 @@ struct SettingsHealthScoreScreen: View {
         if let store {
             if store.config != nil {
                 pillarsCard(store: store)
-                // 1.0.3 (App Review 1.4.1) — the card footer states the
-                // eligibility rule ("at least three different areas of
-                // health, one physically measured"). The references behind
-                // that rule sit directly under it, outside the card so
-                // VoiceOver reaches the control on its own.
-                HLSourcesLink(topic: .healthScore)
                 saveSection(store: store)
             } else if store.loadFailed {
                 loadFailedState(store: store)
@@ -107,8 +101,10 @@ struct SettingsHealthScoreScreen: View {
             // R2 (Grenze/Limit) — the hard bound the server enforces, stated
             // once, before the decision. Deliberately does not name which
             // pillars share an area: that mapping lives on the server and a
-            // copy of it here would go stale without anyone noticing.
-            footer: "At least three different areas of health have to remain, one of them physically measured. Several pillars can describe the same area and then count together as one."
+            // copy of it here would go stale without anyone noticing. 1.4
+            // B2-c: it is the card's subtitle, above the switches it governs,
+            // instead of a footer under eight of them.
+            subtitle: "At least three different areas of health have to remain, one of them physically measured. Several pillars can describe the same area and then count together as one."
         ) {
             ForEach(store.offeredPillars, id: \.rawValue) { pillar in
                 HLSettingsToggleRow(
@@ -122,6 +118,10 @@ struct SettingsHealthScoreScreen: View {
                     accessibilityID: "settings.healthScore.pillar.\(pillar.rawValue)"
                 )
             }
+            // 1.0.3 (App Review 1.4.1) — the references behind the rule in the
+            // subtitle. 1.4 B2-c: inside the card that states the rule, no
+            // longer loose between the card and the Save button.
+            HLSourcesLink(topic: .healthScore)
         }
     }
 

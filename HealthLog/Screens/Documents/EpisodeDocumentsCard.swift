@@ -41,11 +41,11 @@ struct EpisodeDocumentsCard: View {
                 header
                 if isLoading {
                     ProgressView().controlSize(.small)
-                } else if documents.isEmpty {
-                    Text("documents.episodeCard.emptyLine")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.tertiary)
                 } else {
+                    // 1.4 B4 — no "no documents linked yet" under the heading:
+                    // an empty card says it with its one action (upload),
+                    // like every empty state. Linking an existing document
+                    // stays on the document's own detail.
                     ForEach(documents.prefix(Self.previewLimit)) { document in
                         documentRow(document)
                     }
@@ -102,8 +102,10 @@ struct EpisodeDocumentsCard: View {
 
     private var actions: some View {
         HStack(spacing: HLSpace.sm) {
-            HLButton("documents.episodeCard.link", icon: "link", variant: .secondary, size: .compact) {
-                showLinkPicker = true
+            if !documents.isEmpty {
+                HLButton("documents.episodeCard.link", icon: "link", variant: .secondary, size: .compact) {
+                    showLinkPicker = true
+                }
             }
             HLButton("documents.episodeCard.upload", icon: "arrow.up.doc", variant: .secondary, size: .compact) {
                 showUpload = true

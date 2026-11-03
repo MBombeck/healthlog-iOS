@@ -70,8 +70,17 @@ public actor MentalHealthRepository {
         }
         let frozenQuery = query
         @Sendable func networkFetch() async throws -> [MentalHealthAssessmentDTO] {
-            let req: APIRequest<MentalHealthHistoryResponse> = .get("/api/mental-health/assessments", query: frozenQuery)
-            return try await api.send(req).assessments
+            guard offset == 0 else {
+                let req: APIRequest<MentalHealthHistoryResponse> = .get("/api/mental-health/assessments", query: frozenQuery)
+                return try await api.send(req).assessments
+            }
+            // #147 (v1.43.7) — a first-page read goes on with `offset`
+            // while `meta.truncated`, so the history is whole.
+            return try await CappedListReader.readAllPages(
+                api: api,
+                path: "/api/mental-health/assessments",
+                query: frozenQuery
+            ) { (page: MentalHealthHistoryResponse) in page.assessments }
         }
         if let swr, instrument == nil, offset == 0 {
             return try await swr.fetchCachingFirst(

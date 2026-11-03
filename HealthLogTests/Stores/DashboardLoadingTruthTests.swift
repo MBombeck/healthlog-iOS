@@ -144,7 +144,7 @@
                 )
             }
             let load = Task { await cancelled.load() }
-            let raised = await phase09Settle { await MainActor.run { cancelled.isLoading } }
+            let raised = await phase09AwaitCondition { await MainActor.run { cancelled.isLoading } }
             #expect(raised, "the cold-cache emission must raise the skeleton first")
             load.cancel()
             _ = await load.value
@@ -180,7 +180,7 @@
             let load = Task { await store.load() }
 
             // The `.empty` emission from the cold cache is what raises the flag.
-            let raised = await phase09Settle { await MainActor.run { store.isLoading } }
+            let raised = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             #expect(raised, "the cold-cache emission must raise the skeleton first")
 
             store.clearOnLogout()

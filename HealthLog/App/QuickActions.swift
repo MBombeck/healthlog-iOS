@@ -19,10 +19,18 @@ import Foundation
 /// triggered, and the consume runs once the auth bootstrap promotes the phase).
 ///
 /// **Why the marker hand-off, not the `AppRouter` directly?** The shortcut
-/// callback fires in the UIKit app-delegate, before the SwiftUI environment /
+/// callback fires at the UIKit edge, before the SwiftUI environment /
 /// composition root is reachable, and possibly during a cold launch where
 /// `AppRouter` doesn't exist yet. The marker file is the established, testable
 /// seam for exactly this "UIKit edge → app consumes on foreground" shape.
+///
+/// **1.4 — the scene, not the app delegate.** HealthLog is a scene-based
+/// SwiftUI app, and UIKit hands a scene-based app its shortcut through the
+/// scene: in the connection options on a cold launch, in
+/// `windowScene(_:performActionFor:completionHandler:)` while it runs. The
+/// app-delegate callbacks the shortcuts were wired to (`launchOptions` and
+/// `application(_:performActionFor:)`) never fire there. ``HLSceneDelegate``
+/// takes the warm path, the app delegate's scene configuration the cold one.
 enum HLQuickAction: String, CaseIterable {
     case measurement
     case medication
@@ -110,7 +118,10 @@ enum HLQuickAction: String, CaseIterable {
         /// shortcut was recognised + a marker was written, `false` for an
         /// unknown shortcut type (UIKit's `completionHandler` contract).
         @discardableResult
-        static func handle(_ shortcutItem: UIApplicationShortcutItem) -> Bool {
+        static func handle(
+            _ shortcutItem: UIApplicationShortcutItem,
+            store: CaptureRequestStore = CaptureRequestStore()
+        ) -> Bool {
             guard let action = HLQuickAction(shortcutType: shortcutItem.type) else {
                 // The shortcut type is an operator-grade reverse-DNS identifier
                 // (enum-shaped, no PII), so `.public` is the sanctioned use here.
@@ -121,7 +132,7 @@ enum HLQuickAction: String, CaseIterable {
                 return false
             }
             do {
-                try CaptureRequestStore().write(
+                try store.write(
                     CaptureRequestStore.Request(requestedAt: .now, surface: action.captureSurface)
                 )
             } catch {

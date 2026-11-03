@@ -26,15 +26,14 @@ struct EmptyMedicationsState: View {
     let onAdd: () -> Void
 
     var body: some View {
-        HLEmptyState(
-            icon: "pills",
-            title: "No medications yet",
-            message: "Add your first medication. Reminders, compliance heatmap and history follow automatically."
-        ) {
+        // 1.4 B2 — title and button say it; the sentence that promised
+        // what follows (and repeated the button) is gone. 1.4 B4: the one
+        // action is the app's secondary button, like every empty state.
+        HLEmptyState(icon: "pills", title: "No medications yet") {
             HLButton(
                 String(localized: "Add medication"),
                 icon: "plus",
-                variant: .restrained,
+                variant: .secondary,
                 action: onAdd
             )
         }
@@ -91,10 +90,11 @@ struct MedicationDeepLinkPlaceholder: View {
     var body: some View {
         Group {
             if isNotFound {
+                // 1.4 B4 — the sentence keeps only what the title does not say.
                 HLEmptyState(
                     icon: "pills.circle",
                     title: "Medication not found",
-                    message: "This medication is no longer available. It may have been archived or deleted."
+                    message: "medications.deeplink.notFound.reason"
                 )
                 .accessibilityIdentifier("medications.deeplink.notFound")
             } else {

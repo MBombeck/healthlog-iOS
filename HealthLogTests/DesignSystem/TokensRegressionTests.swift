@@ -42,11 +42,11 @@ struct TokensRegressionTests {
 
     @Test("Chart style heights are non-zero + ordered")
     func chartHeightsOrderly() {
-        // Compact (sparkline) < detail (drill-down) ≤ emoji-axis (mood).
-        // Encodes the visual hierarchy commitment.
+        // 1.4 B4 — two heights: the line without axes (tiles, cards) and every
+        // chart with axes. The regular height fits the mood scale's labels.
         #expect(HLChartStyle.heightCompact > 0)
-        #expect(HLChartStyle.heightDetail > HLChartStyle.heightCompact)
-        #expect(HLChartStyle.heightEmojiAxis >= HLChartStyle.heightDetail)
+        #expect(HLChartStyle.heightRegular > HLChartStyle.heightCompact)
+        #expect(HLChartStyle.heightRegular >= 220)
     }
 
     @Test("Opacity tokens are within 0…1 and ordered")
@@ -319,80 +319,11 @@ struct TokensRegressionTests {
         #expect(TokensRegressionTests.resolvedHex(of: HLChartTints.thresholdLow, traits: darkT) == 0x50FA7B)
     }
 
-    @Test("V052-R1: multi-series companions are graphite shades (collision-free)")
-    @MainActor
-    func multiSeriesCompanionsAreGraphite() {
-        TokensRegressionTests.resetPreferredTint()
-        // V052-R1 reconcile (2026-05-17) — Visual-Polish-1 shipped a fixed
-        // 4-tint Dracula palette but operator design-QA on v0.5.2 caught a
-        // regression: when the user-picked accent collides with one of the
-        // Dracula companions (e.g. `.cyan` accent → weight series cyan AND
-        // BP series cyan), two overlaid metrics collapsed onto the same hue.
-        //
-        // The new contract: lead series follows user-picked accent.
-        // Companions paint in a monochrome graphite ramp derived from
-        // `HLText.primary` at three opacities (~0.80 / ~0.55 / ~0.35) so
-        // the accent line always reads as the headline and companions
-        // stay distinct from the accent regardless of pick.
-        //
-        // Note: alpha extraction round-trips through UIColor → display-P3
-        // and quantises to ~0.05 steps, so we assert with a tolerance
-        // wide enough to survive the colour-space coercion but tight
-        // enough to catch an intentional ramp-step refactor.
-        // v0.8.1: resolve against dark traits where `HLText.primary` is
-        // full-opacity, so the companion ramp scales cleanly off 1.0 (in light
-        // mode the alpha-over-surface base 0.90 would scale the whole ramp).
-        let darkT = UITraitCollection(userInterfaceStyle: .dark)
-        let alt1Alpha = TokensRegressionTests.resolvedAlpha2(of: HLChartTints.seriesAlt1, traits: darkT)
-        let alt2Alpha = TokensRegressionTests.resolvedAlpha2(of: HLChartTints.seriesAlt2, traits: darkT)
-        let alt3Alpha = TokensRegressionTests.resolvedAlpha2(of: HLChartTints.seriesAlt3, traits: darkT)
-
-        // Companion ramp steps — Tokens.swift sets 0.80 / 0.55 / 0.35;
-        // UIColor round-trip lands in [0.78..0.82] / [0.55..0.60] / [0.30..0.36].
-        #expect(abs(alt1Alpha - 0.80) < 0.05)
-        #expect(abs(alt2Alpha - 0.575) < 0.05)
-        #expect(abs(alt3Alpha - 0.325) < 0.05)
-
-        // Lightness is monotonically decreasing — every step is distinct.
-        #expect(alt1Alpha > alt2Alpha)
-        #expect(alt2Alpha > alt3Alpha)
-
-        // Bottom of the ramp must still sit clearly above the gridline
-        // noise floor (`HLChartGrid.lineOpacity` = 0.10) so the dimmest
-        // companion never disappears into the chart background.
-        #expect(alt3Alpha > HLChartGrid.lineOpacity)
-    }
-
-    @Test("V052-R1: multiSeriesRamp orders accent → alt1 → alt2 → alt3")
-    @MainActor
-    func multiSeriesRampOrderIsDeterministic() {
-        TokensRegressionTests.resetPreferredTint()
-        // Consumers (`TrendsOverlayCard`) index into `multiSeriesRamp` by
-        // metric position so the same metric always renders in the same
-        // visual lane (accent / 0.80-graphite / 0.55-graphite / 0.35-graphite).
-        // Lock the ramp order so a reordering doesn't silently re-paint
-        // every existing series.
-        let darkT = UITraitCollection(userInterfaceStyle: .dark)
-        #expect(HLChartTints.multiSeriesRamp.count == 4)
-        // v0.8.1: index 0 = monochrome lead series (`HLText.primary`), no
-        // longer the user-picked accent — off-white #EBEBF5 in dark.
-        #expect(TokensRegressionTests.resolvedHex(of: HLChartTints.multiSeriesRamp[0], traits: darkT) == 0xEBEBF5)
-        // Indices 1..3 = graphite companions, monotonically decreasing alpha.
-        let a1 = TokensRegressionTests.resolvedAlpha2(of: HLChartTints.multiSeriesRamp[1], traits: darkT)
-        let a2 = TokensRegressionTests.resolvedAlpha2(of: HLChartTints.multiSeriesRamp[2], traits: darkT)
-        let a3 = TokensRegressionTests.resolvedAlpha2(of: HLChartTints.multiSeriesRamp[3], traits: darkT)
-        #expect(abs(a1 - 0.80) < 0.05)
-        #expect(abs(a2 - 0.575) < 0.05)
-        #expect(abs(a3 - 0.325) < 0.05)
-        #expect(a1 > a2)
-        #expect(a2 > a3)
-    }
-
     @Test("Theme-2.0 chart-grid tokens encode ultra-subtle Withings treatment")
     func theme2ChartGridIsSubtle() {
         // Operator spec: grid ~10% primary-text opacity, no chunky lines.
-        // Threshold dash pattern is `[4, 3]` so dashes stay discrete at the
-        // 80pt compact tile height through 220pt emoji-axis height.
+        // Threshold dash pattern is `[4, 3]` so dashes stay discrete at both
+        // chart heights (36 pt compact, 220 pt regular).
         #expect(HLChartGrid.lineOpacity == 0.10)
         #expect(HLChartGrid.lineWidth == 0.5)
         #expect(HLChartGrid.labelOpacity == 0.40)
@@ -561,28 +492,6 @@ struct HLChartTintsMonochromeTests {
         #expect(TokensRegressionTests.resolvedAlpha(of: HLChartTints.series, traits: darkT) == 1.0)
         #expect(TokensRegressionTests.resolvedAlpha(of: HLChartTints.seriesMid, traits: darkT) == 0.7)
         #expect(TokensRegressionTests.resolvedAlpha(of: HLChartTints.seriesLow, traits: darkT) == 0.4)
-        UserDefaults.standard.removeObject(forKey: "hl.settings.tint")
-    }
-
-    @Test("multiSeriesRamp[0] stays monochrome — companion slots stay graphite")
-    @MainActor
-    func multiSeriesRampHeadStaysMonochrome() {
-        let darkT = UITraitCollection(userInterfaceStyle: .dark)
-        UserDefaults.standard.set("orange", forKey: "hl.settings.tint")
-        let ramp = HLChartTints.multiSeriesRamp
-        #expect(ramp.count == 4)
-        // Head no longer tracks the picker — it is the monochrome lead series.
-        #expect(TokensRegressionTests.resolvedHex(of: ramp[0], traits: darkT) == 0xEBEBF5)
-        // Companions stay graphite shades derived from `HLText.primary`. Alpha
-        // tolerance covers UIColor display-P3 round-trip quantisation.
-        let a1 = TokensRegressionTests.resolvedAlpha(of: ramp[1], traits: darkT)
-        let a2 = TokensRegressionTests.resolvedAlpha(of: ramp[2], traits: darkT)
-        let a3 = TokensRegressionTests.resolvedAlpha(of: ramp[3], traits: darkT)
-        #expect(abs(a1 - 0.80) < 0.05)
-        #expect(abs(a2 - 0.575) < 0.06)
-        #expect(abs(a3 - 0.325) < 0.05)
-        #expect(a1 > a2)
-        #expect(a2 > a3)
         UserDefaults.standard.removeObject(forKey: "hl.settings.tint")
     }
 }

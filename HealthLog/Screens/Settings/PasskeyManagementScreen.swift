@@ -28,12 +28,10 @@ struct PasskeyManagementScreen: View {
                 if store.isLoading, store.passkeys.isEmpty {
                     ProgressView().frame(maxWidth: .infinity)
                 } else if store.passkeys.isEmpty {
-                    VStack(alignment: .leading, spacing: HLSpace.sm) {
-                        Text("settings.passkeys.empty.title")
-                            .font(.hlBody).foregroundStyle(HLText.secondary)
-                        Text("settings.passkeys.empty.body")
-                            .font(.hlCaption).foregroundStyle(HLText.tertiary)
-                    }
+                    // 1.4 B2-c — what a passkey is good for moved into the one
+                    // footer sentence under "Add a passkey".
+                    Text("settings.passkeys.empty.title")
+                        .font(.hlBody).foregroundStyle(HLText.secondary)
                 } else {
                     ForEach(store.passkeys) { passkey in
                         VStack(alignment: .leading, spacing: HLSpace.xs) {
@@ -89,13 +87,10 @@ struct PasskeyManagementScreen: View {
                 Text("settings.passkeys.web.title")
             } footer: {
                 // R12 — Fußnoten-Tinte in Listen-Gerüsten ist `HLText.secondary`.
-                Text("settings.passkeys.web.body")
+                // 1.4 B2-c — one sentence: where passkeys are added and what
+                // they give you; the reason why it is the browser is gone.
+                Text("settings.passkeys.web.footer")
                     .foregroundStyle(HLText.secondary)
-            }
-            // v0.14.8 W2-SYNCUX — canonical sync-status footer (same primitive
-            // as Dashboard/Insights, self-suppressing via empty-section footer).
-            Section {} footer: {
-                HLSyncStatusFooter(screenLoading: store.isLoading)
             }
         }
         // W3b B3 — iOS 26+ soft scroll-edge (no-op on iOS 18-25).

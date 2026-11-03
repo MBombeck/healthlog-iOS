@@ -22,15 +22,6 @@ struct AccountUnitSurfaceTests {
         var id = "u1"
     }
 
-    private func measurement(_ kind: MetricKind, _ value: Double, daysAgo: Int = 1) -> HealthLog.Measurement {
-        HealthLog.Measurement(
-            id: "\(kind.rawValue)-\(daysAgo)-\(value)",
-            kind: kind,
-            recordedAt: Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date(),
-            value: .scalar(value)
-        )
-    }
-
     private func record(_ type: String, value: Double, unit: String) -> PersonalRecordDTO {
         PersonalRecordDTO(
             id: "r-\(type)", userId: "u1", metricType: type, metricSlot: nil, direction: .max,
@@ -141,28 +132,9 @@ struct AccountUnitSurfaceTests {
         #expect(metricTiles.first { $0.kind == .weight }?.valueText.hasSuffix(" kg") == true)
     }
 
-    @Test("Insights trends row: latest value in lb")
-    func trendsRow() throws {
-        let rows = [measurement(.weight, 74, daysAgo: 5), measurement(.weight, 73.5, daysAgo: 1)]
-        let chart = try #require(InsightsTrendsRow.chart(for: .weight, in: rows, units: imperial))
-        #expect(chart.valueText.hasSuffix(" lb"))
-        #expect(chart.valueText.hasPrefix(162.04.formatted(.number.precision(.fractionLength(1)))))
-    }
-
-    @Test("Statistik briefing floor: weight finding in lb")
-    func briefingFloor() throws {
-        let briefing = try #require(StatistikModeBriefingService.compose(
-            measurements: [measurement(.weight, 73.5, daysAgo: 1)],
-            moodEntries: [],
-            compliance: nil,
-            healthScore: nil,
-            locale: posix,
-            units: imperial
-        ))
-        let finding = try #require(briefing.keyFindings.first { $0.sourceMetric == "weight" })
-        #expect(finding.detail.hasSuffix(" lb"))
-        #expect(!finding.detail.contains("kg"))
-    }
+    // 1.4 B4 — the Statistik briefing floor case went with
+    // `StatistikModeBriefingService`, whose only caller was the deleted
+    // on-device briefing hero.
 
     @Test("Cycle phase board: °C average → °F, a phase DELTA by the factor alone")
     func cyclePhaseBoard() {

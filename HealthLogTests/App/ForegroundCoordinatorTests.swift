@@ -50,11 +50,11 @@
             // Independent work must be able to run to completion while the
             // medication load is still parked. That is the overlap half, and it
             // is settled by the barrier rather than by a deadline.
-            let independentWorkFinished = await phase09Settle {
+            let independentWorkFinished = await phase09AwaitCondition {
                 spy.hasEnded(.cycleGate) && spy.hasEnded(.networkRevalidate)
             }
             #expect(independentWorkFinished, "independent legs must not wait on the medication leg")
-            #expect(await phase09Settle { spy.hasStarted(.moodRevalidate) })
+            #expect(await phase09AwaitCondition { spy.hasStarted(.moodRevalidate) })
             // 22-02 (D-20-EXEC-A) — this was the ONE bare assertion in the
             // neighbourhood: both expectations around it settle through the
             // barrier, this one read the spy directly. Under parallel-test CPU
@@ -64,7 +64,7 @@
             // (which is a happens-before, not a deadline). The mechanism IS the
             // missing barrier; no stronger claim than that is available for a
             // scheduling hazard, and none is made.
-            #expect(await phase09Settle { spy.hasStarted(.medicationLoad) })
+            #expect(await phase09AwaitCondition { spy.hasStarted(.medicationLoad) })
             let overlapped = spy.maxConcurrent >= 2
 
             independent.open()
@@ -108,7 +108,7 @@
                     await session.publish { published.record("generation") }
                 }
             ])]))
-            #expect(await phase09Settle { spy.hasStarted(.medicationLoad) })
+            #expect(await phase09AwaitCondition { spy.hasStarted(.medicationLoad) })
             coordinator.retire()
             gate.open()
             _ = await pass.value
@@ -130,7 +130,7 @@
                 ])]),
                 lease: lease
             )
-            #expect(await phase09Settle { accountSpy.hasStarted(.medicationLoad) })
+            #expect(await phase09AwaitCondition { accountSpy.hasStarted(.medicationLoad) })
             registry.activate(ownerID: "phase09-owner-b")
             accountGate.open()
             _ = await accountPass.value
@@ -174,14 +174,14 @@
                 ForegroundLeg([spy.step(.outboxDrain) { _ in await slow.wait() }]),
                 ForegroundLeg([spy.step(.cycleGate) { _ in }])
             ]))
-            #expect(await phase09Settle { spy.hasStarted(.medicationLoad) && spy.hasStarted(.outboxDrain) })
-            let deadlineRequested = await phase09Settle {
+            #expect(await phase09AwaitCondition { spy.hasStarted(.medicationLoad) && spy.hasStarted(.outboxDrain) })
+            let deadlineRequested = await phase09AwaitCondition {
                 clock.requested.contains(ForegroundCoordinator.Budget.standard.deadline)
             }
             clock.fire(ForegroundCoordinator.Budget.standard.deadline)
             // Both members end because they were cancelled, not because the test
             // let them go — the barrier is still shut at this point.
-            let cancelledWithoutRelease = await phase09Settle {
+            let cancelledWithoutRelease = await phase09AwaitCondition {
                 spy.hasEnded(.medicationLoad) && spy.hasEnded(.outboxDrain)
             }
             // Released unconditionally so a shape with no deadline fails rather
@@ -208,11 +208,11 @@
                 ForegroundLeg([ownerSpy.step(.medicationLoad) { _ in await ownerGate.wait() }]),
                 ForegroundLeg([ownerSpy.step(.insightsWarm) { _ in await ownerGate.wait() }])
             ]))
-            #expect(await phase09Settle {
+            #expect(await phase09AwaitCondition {
                 ownerSpy.hasStarted(.medicationLoad) && ownerSpy.hasStarted(.insightsWarm)
             })
             ownerCoordinator.retire()
-            let drainedWithoutRelease = await phase09Settle {
+            let drainedWithoutRelease = await phase09AwaitCondition {
                 ownerSpy.hasEnded(.medicationLoad) && ownerSpy.hasEnded(.insightsWarm)
             }
             ownerGate.open()
@@ -291,7 +291,7 @@
             let pass = cancelled.begin(ForegroundPlan(legs: [
                 ForegroundLeg([spy.step(.outboxDrain) { _ in await gate.wait() }])
             ]))
-            #expect(await phase09Settle { spy.hasStarted(.outboxDrain) })
+            #expect(await phase09AwaitCondition { spy.hasStarted(.outboxDrain) })
             cancelled.retire()
             gate.open()
             _ = await pass.value

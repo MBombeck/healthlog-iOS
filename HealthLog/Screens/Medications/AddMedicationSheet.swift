@@ -21,6 +21,7 @@ struct AddMedicationSheet: View {
     let onDismiss: () -> Void
 
     @Environment(MedicationsStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Required fields
     @State private var name: String = ""
@@ -89,7 +90,9 @@ struct AddMedicationSheet: View {
             .hlScrollEdgeSoft()
             // 20-04 (B3) — a drag puts the keyboard away as it goes.
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Add medication")
+            // 1.4 B4 — its own key: between "Abbrechen" and "Speichern" the
+            // German "Medikament hinzufügen" was cut to "Medikament…".
+            .navigationTitle("med.add.title")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -129,7 +132,9 @@ struct AddMedicationSheet: View {
 
     /// Optional entry-point into the Photo-of-Med pipeline (T-6). Rendered
     /// above the required fields so users can quickly OCR-prefill the form
-    /// from a medication-package photo before manual completion.
+    /// from a medication-package photo before manual completion. 1.4 B2: no
+    /// footer; the photo sheet states its on-device promise where the photo is
+    /// taken.
     private var photoOfMedSection: some View {
         Section {
             Button {
@@ -139,9 +144,6 @@ struct AddMedicationSheet: View {
             }
             .disabled(isSaving)
             .accessibilityIdentifier("add-medication-photo-button")
-        } footer: {
-            Text("Optional: photograph the packaging to suggest name and dose. The image never leaves the device.")
-                .font(.hlCaption)
         }
     }
 
@@ -201,10 +203,8 @@ struct AddMedicationSheet: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(Text("Remove time"))
                     }
-                    Text(formattedTime(row.time))
-                        .font(.hlMetric(.subheadline))
-                        .foregroundStyle(HLText.secondary)
-                        .monospacedDigit()
+                    // 1.4 B4 — the picker shows the time; the second "08:00"
+                    // beside it repeated it in wire form.
                 }
             }
             if times.count < MedicationCadenceLogic.maxTimes(for: cadenceKind) {
@@ -216,9 +216,6 @@ struct AddMedicationSheet: View {
             }
         } header: {
             Text("med.schedule.times.header")
-        } footer: {
-            Text(timesFooterKey)
-                .font(.hlCaption)
         }
     }
 
@@ -233,51 +230,73 @@ struct AddMedicationSheet: View {
         }
     }
 
+    /// 1.4 B4 — the optional fields fold out as rows of this one section, at
+    /// the same inset as every other row. A `DisclosureGroup` indented them a
+    /// second time inside the card.
     private var advancedSection: some View {
         Section {
-            DisclosureGroup("med.form.advanced.section", isExpanded: $showAdvanced) {
-                Picker("Category", selection: $category) {
-                    ForEach(MedicationCategoryOption.allCases) { option in
-                        Text(option.displayName).tag(option)
-                    }
+            Button {
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { showAdvanced.toggle() }
+            } label: {
+                HStack {
+                    Text("med.form.advanced.section")
+                        .foregroundStyle(HLText.primary)
+                    Spacer(minLength: HLSpace.sm)
+                    Image(systemName: "chevron.down")
+                        .font(.hlSubhead.weight(.semibold))
+                        .foregroundStyle(HLText.tertiary)
+                        .rotationEffect(.degrees(showAdvanced ? 0 : -90))
+                        .accessibilityHidden(true)
                 }
-                Picker("Class", selection: $treatmentClass) {
-                    ForEach(MedicationTreatmentClassOption.allCases) { option in
-                        Text(option.displayName).tag(option)
-                    }
-                }
-                Picker("med.schedule.advanced.deliveryForm.label", selection: $deliveryForm) {
-                    ForEach(MedicationDeliveryFormOption.allCases) { option in
-                        Text(option.labelKey).tag(option)
-                    }
-                }
-                InjectionSiteTrackingSection(
-                    isInjection: .constant(deliveryForm == .injection),
-                    trackInjectionSites: $trackInjectionSites,
-                    allowedInjectionSites: $allowedInjectionSites
-                )
-                TextField("med.form.dosesPerUnit.optional", text: $dosesPerUnitText)
-                    .keyboardType(.numberPad)
-                UnitsPerDosePicker(selection: $unitsPerDose)
-                Toggle("Notifications", isOn: $notificationsEnabled)
-                if cadenceKind != .asNeeded {
-                    Toggle("med.schedule.advanced.grace.toggle", isOn: $graceEnabled)
-                    if graceEnabled {
-                        HLIntStepperRow(
-                            titleKey: "med.schedule.advanced.grace.label",
-                            value: $graceMinutes,
-                            range: 1 ... 1440,
-                            unitKey: nil
-                        )
-                    }
-                }
+                .contentShape(Rectangle())
             }
-        } footer: {
-            // v0.9.0 — delivery toggles (Live Activity / Kritischer Alarm) are
-            // edit-only by design: their prefs are keyed by med-id, which
-            // doesn't exist before the med is created.
-            Text("med.add.delivery.hint")
-                .font(.hlCaption)
+            .buttonStyle(.plain)
+            if showAdvanced {
+                advancedRows
+            }
+        }
+        // v0.9.0 — delivery toggles (Live Activity / Kritischer Alarm) are
+        // edit-only by design: their prefs are keyed by med-id, which doesn't
+        // exist before the med is created. 1.4 B2: the footer that pointed at
+        // the edit sheet is gone.
+    }
+
+    @ViewBuilder
+    private var advancedRows: some View {
+        Picker("Category", selection: $category) {
+            ForEach(MedicationCategoryOption.allCases) { option in
+                Text(option.displayName).tag(option)
+            }
+        }
+        Picker("Class", selection: $treatmentClass) {
+            ForEach(MedicationTreatmentClassOption.allCases) { option in
+                Text(option.displayName).tag(option)
+            }
+        }
+        Picker("med.schedule.advanced.deliveryForm.label", selection: $deliveryForm) {
+            ForEach(MedicationDeliveryFormOption.allCases) { option in
+                Text(option.labelKey).tag(option)
+            }
+        }
+        InjectionSiteTrackingSection(
+            isInjection: .constant(deliveryForm == .injection),
+            trackInjectionSites: $trackInjectionSites,
+            allowedInjectionSites: $allowedInjectionSites
+        )
+        TextField("med.form.dosesPerUnit.optional", text: $dosesPerUnitText)
+            .keyboardType(.numberPad)
+        UnitsPerDosePicker(selection: $unitsPerDose)
+        Toggle("Notifications", isOn: $notificationsEnabled)
+        if cadenceKind != .asNeeded {
+            Toggle("med.schedule.advanced.grace.toggle", isOn: $graceEnabled)
+            if graceEnabled {
+                HLIntStepperRow(
+                    titleKey: "med.schedule.advanced.grace.label",
+                    value: $graceMinutes,
+                    range: 1 ... 1440,
+                    unitKey: nil
+                )
+            }
         }
     }
 
@@ -293,14 +312,6 @@ struct AddMedicationSheet: View {
         }
         if kind == .asNeeded {
             graceEnabled = false
-        }
-    }
-
-    private var timesFooterKey: LocalizedStringKey {
-        switch cadenceKind {
-        case .rolling: "med.schedule.times.footer.rolling"
-        case .asNeeded: "med.schedule.times.footer.asNeeded"
-        default: "med.schedule.times.footer.standard"
         }
     }
 
@@ -407,10 +418,6 @@ struct AddMedicationSheet: View {
                 times[idx].time = TimeOfDay(hour: comps.hour ?? 0, minute: comps.minute ?? 0)
             }
         )
-    }
-
-    private func formattedTime(_ time: TimeOfDay) -> String {
-        MedicationFormLogic.formatTime(time)
     }
 }
 

@@ -120,7 +120,8 @@
         private func host(_ store: SyncStateStore, screenLoading: Bool) -> some View {
             VStack(spacing: HLSpace.lg) {
                 Text(verbatim: "Content")
-                HLSyncStatusFooter(screenLoading: screenLoading)
+                // 1.4 decision 3 — the in-flight beats are Today's footer.
+                HLSyncStatusFooter(screenLoading: screenLoading, scope: .today)
             }
             .frame(maxWidth: .infinity)
             .background(Color.black)

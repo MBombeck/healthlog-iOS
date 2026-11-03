@@ -21,20 +21,6 @@ import Testing
 struct MentalWellbeingConsistencyTests {
     private static let screen = "HealthLog/Screens/MentalHealth/MentalWellbeingScreen.swift"
 
-    /// The copy budget for the page description, stated here rather than in a
-    /// review comment so it is enforceable. 247 characters of German prose under
-    /// a title is a paragraph; a page description is one sentence.
-    static let pageDescriptionBudget = 120
-
-    private static func localized(_ key: String, _ language: String) -> String {
-        String(
-            localized: LocalizedStringResource(
-                String.LocalizationValue(key),
-                locale: Locale(identifier: language)
-            )
-        )
-    }
-
     // MARK: - 1. The licence obligation (GREEN now, GREEN forever)
 
     @Test("Die WHO-5-/SCI-Zuschreibung steht im Detail-Sheet — und bleibt dort")
@@ -104,27 +90,14 @@ struct MentalWellbeingConsistencyTests {
 
     // MARK: - 3. G3 — the header prose
 
-    @Test("Die Seitenbeschreibung passt in ihr Budget, in beiden Sprachen")
-    func pageDescriptionIsShort() {
-        var violations: [String] = []
-        for language in ["de", "en"] {
-            let value = Self.localized("mentalHealth.pageDescription", language)
-            if value.count > Self.pageDescriptionBudget {
-                violations.append("\(language): \(value.count) chars (budget \(Self.pageDescriptionBudget))")
-            }
-        }
-
-        #expect(
-            violations.isEmpty,
-            """
-            EXPECTED_RED: 247 characters of header prose
-
-            G3. A page description is one sentence that says what the screen is for. The four \
-            instrument names, their parenthesised domains and the trend caveat are all \
-            legitimate content — they are just not header content; the instrument cards name \
-            themselves and the detail sheet carries the rest. Offen: \(violations)
-            """
-        )
+    /// 1.4 B2 — the budget case became a removal: the description paragraph
+    /// left the screen and the catalogue. The cards name the four check-ins,
+    /// the detail sheet shows the trend the sentence spoke about.
+    @Test("Die Seitenbeschreibung ist entfallen")
+    func pageDescriptionIsGone() throws {
+        let source = try Phase8SourceScan.stripped(Self.screen)
+        #expect(!source.contains("mentalHealth.pageDescription"))
+        #expect(!source.contains("mentalHealth.noResultYet"))
     }
 
     @Test("Der Titel erscheint genau einmal")

@@ -14,9 +14,8 @@ import SwiftUI
 /// fail-soft today. Reviewer cross-checks the privacy URL here against
 /// the privacy manifest declarations; mismatch is a reject risk.
 ///
-/// Updates card is iOS-only (TestFlight handles updates on Apple
-/// platforms) — surfaced as a placeholder, not removed, so the IA matches
-/// web column-for-column.
+/// The web's Updates card has no iOS counterpart since 1.4 B2-c: the App
+/// Store delivers updates and a card that only said so was removed.
 struct SettingsAboutScreen: View {
     @Environment(\.appContainer) var container
     /// #134 — "Support-Info kopieren" (`SettingsAboutScreen+SupportInfo.swift`).
@@ -32,7 +31,6 @@ struct SettingsAboutScreen: View {
             disclaimerCard
             linksCard
             supportCard
-            updatesCard
         }
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
@@ -58,34 +56,11 @@ struct SettingsAboutScreen: View {
             // verschiedene Aussagen und dürfen nicht zusammengelegt werden.
             bothSlotsJustification: "Apple 1.4.1 Disclaimer-Karte: Leseaufforderung (D) und Notruf-Hinweis (Klasse 4) sind zwei geschützte Aussagen."
         ) {
-            disclaimerRow(
-                icon: "stethoscope",
-                text: "appstore.disclaimer.not_for_diagnosis"
-            )
-            disclaimerRow(
-                icon: "cross.case.fill",
-                text: "appstore.disclaimer.consult_doctor"
-            )
-            disclaimerRow(
-                icon: "function",
-                text: "appstore.disclaimer.methodology"
-            )
+            HLIconTextRow(icon: "stethoscope", "appstore.disclaimer.not_for_diagnosis")
+            HLIconTextRow(icon: "cross.case.fill", "appstore.disclaimer.consult_doctor")
+            HLIconTextRow(icon: "function", "appstore.disclaimer.methodology")
         }
         .accessibilityIdentifier("settings.about.disclaimerCard")
-    }
-
-    private func disclaimerRow(icon: String, text: LocalizedStringKey) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.md) {
-            Image(systemName: icon)
-                .font(.hlCallout.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 24)
-            Text(text)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
     }
 
     /// UI-Standard R2 — der Subtitle („App-Identität und Build-Informationen.")
@@ -169,60 +144,17 @@ struct SettingsAboutScreen: View {
         }
     }
 
-    /// PB-future PA2 §4 — Updates card on web auto-runs a version check
-    /// against `/api/version/check-updates`. On iOS App-Store / TestFlight
-    /// handles updates natively, so a manual check is non-functional. We
-    /// surface the card so the IA matches web, with copy explaining the
-    /// platform reality.
-    ///
-    /// UI-Standard R5 — die Karte belegte beide Beitext-Slots mit derselben
-    /// Aussage („Updates werden über den App Store ausgeliefert." + „iOS
-    /// verwendet den App Store für Updates — kein manueller Check nötig.").
-    /// Der Subtitle bleibt, der Footer als Langfassung ist gefallen.
-    ///
-    /// **08-07 — die Zeile behauptete Aktualität, die niemand geprüft hatte.**
-    /// Ein grünes Siegel plus die Aussage, die installierte Version sei die
-    /// aktuelle, ist eine Behauptung über den App Store — und iOS fragt hier
-    /// niemanden, weder den Store noch den Server. Die Karte bleibt (die IA
-    /// spiegelt Web spaltenweise), sagt jetzt aber nur noch das, was diese App
-    /// selbst weiß: sie prüft nicht. Der Subtitle nennt den Lieferweg, die
-    /// Zeile die Grenze — zwei verschiedene Aussagen, kein R5-Fall.
-    private var updatesCard: some View {
-        HLSettingsCard(
-            icon: "arrow.triangle.2.circlepath",
-            title: "Updates",
-            subtitle: "Updates ship through the App Store."
-        ) {
-            HStack(spacing: HLSpace.md) {
-                Image(systemName: "info.circle")
-                    .font(.hlIcon(HLIconSize.lg))
-                    .foregroundStyle(HLText.secondary)
-                Text("settings.about.updates.no_version_check")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                Spacer()
-            }
-            .accessibilityIdentifier("settings.about.updatesRow")
-        }
-    }
+    // 1.4 B2-c — the Updates card is gone. It had no function: "updates
+    // ship through the App Store" plus "this app does not check", beside a
+    // decorative (i) that did nothing when tapped.
 
     // MARK: - Helpers
 
+    /// v0.11 W-settings-typography: `.hlSubhead` label, `.hlBody` value (the
+    /// Server-screen statRow contract, b146/W37-P4). 1.4 B4: the shared
+    /// `HLSettingsStatRow`, which stacks at the accessibility sizes.
     private func statRow(label: LocalizedStringKey, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            // v0.11 W-settings-typography: match the canonical Settings row
-            // label scale (`.hlSubhead`, 15pt) like Server/Account — was
-            // `.hlBody` (17pt), 2pt larger than every sibling row. Value drops
-            // the numeric `.hlMetric` font for the semantic `.hlBody` token
-            // (mirrors the Server-screen statRow contract, b146/W37-P4).
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer(minLength: HLSpace.md)
-            Text(value)
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-        }
+        HLSettingsStatRow(label: Text(label), value: value)
     }
 
     /// parity 2.9 — the in-product privacy policy of the **configured**

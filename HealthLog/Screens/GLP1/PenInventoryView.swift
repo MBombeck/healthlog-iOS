@@ -14,15 +14,26 @@ public struct PenInventoryView: View {
     /// drug is resolved. `nil` when the user is logging a generic.
     public let catalogPrefill: PenInventoryPrefill?
 
-    public init(store: PenInventoryStore, catalogPrefill: PenInventoryPrefill? = nil) {
+    /// 1.4 B2 — with no pen logged the section is one row in the GLP-1
+    /// stack's shared "add" card (``GLP1DetailStack``).
+    private let showsAddRowOnly: Bool
+
+    public init(store: PenInventoryStore, catalogPrefill: PenInventoryPrefill? = nil, showsAddRowOnly: Bool = false) {
         _store = State(initialValue: store)
         self.catalogPrefill = catalogPrefill
+        self.showsAddRowOnly = showsAddRowOnly
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            header
-            content
+        Group {
+            if showsAddRowOnly {
+                GLP1AddRow(title: "Add pen", systemImage: "tray") { showingAdd = true }
+            } else {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    header
+                    content
+                }
+            }
         }
         .sheet(isPresented: $showingAdd) {
             PenInventoryEditSheet(prefill: catalogPrefill) { manufacturer, dose, dispensedAt, firstUsedAt, notes in
@@ -62,41 +73,13 @@ public struct PenInventoryView: View {
         }
     }
 
-    @ViewBuilder
     private var content: some View {
-        if store.pens.isEmpty {
-            emptyState
-        } else {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                if let active = store.activePen {
-                    activePenCard(active)
-                }
-                stockSummary
-                penListCard
+        VStack(alignment: .leading, spacing: HLSpace.md) {
+            if let active = store.activePen {
+                activePenCard(active)
             }
-        }
-    }
-
-    private var emptyState: some View {
-        HLCard(style: .ghost) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Label(
-                    String(localized: "No pen logged yet"),
-                    systemImage: "tray"
-                )
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                Text(String(
-                    localized: "Log your pens to keep track of supply and prescriptions."
-                ))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                // #52 — the "Hersteller + Dosisstärke werden lokal gespeichert"
-                // footnote is GONE: since server v1.31.0 the inventory row carries
-                // both fields, so nothing about a pen is device-local any more.
-                // The caveat existed only because the back-fill was missing.
-            }
+            stockSummary
+            penListCard
         }
     }
 
@@ -166,15 +149,14 @@ public struct PenInventoryView: View {
         }
     }
 
+    /// 1.4 B2 — the further pens, when there are any; no card saying there
+    /// are none.
+    @ViewBuilder
     private var penListCard: some View {
-        HLCard {
-            VStack(spacing: 0) {
-                let nonActive = store.pens.filter { !$0.isActive }
-                if nonActive.isEmpty {
-                    Text(String(localized: "No further pens logged."))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                } else {
+        let nonActive = store.pens.filter { !$0.isActive }
+        if !nonActive.isEmpty {
+            HLCard {
+                VStack(spacing: 0) {
                     ForEach(Array(nonActive.enumerated()), id: \.element.id) { idx, pen in
                         PenRow(pen: pen) {
                             Task { await store.markFinished(id: pen.id) }

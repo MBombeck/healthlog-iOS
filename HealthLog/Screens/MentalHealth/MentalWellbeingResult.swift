@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// The result phase: a "saved" status, the total score + severity band (a
+/// The result phase: one card with the total score + severity band (a
 /// descriptive screen label, never a diagnosis), the gentle "consider a
-/// professional" note when `totalScore >= actionThreshold`, then — iff the item-9
-/// flag is set — the ``MentalHealthCrisisCard`` immediately below. The verbatim
-/// Pfizer attribution footnote, and a "take another check-in" action close it out.
+/// professional" note when `totalScore >= actionThreshold`, the screening
+/// disclaimer and the verbatim attribution with its Sources link; then — iff the
+/// item-9 flag is set — the ``MentalHealthCrisisCard`` immediately below, and a
+/// "take another check-in" action.
 ///
 /// SAFETY: the crisis card here renders strictly from ``MentalHealthStore/Result``
 /// (server-driven when online, bundled fallback when the upload failed / the
@@ -15,20 +16,6 @@ struct MentalWellbeingResult: View {
     var body: some View {
         if let result = store.result {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                // 1.0.3 (1.4.1) — the screening disclaimer belongs where the
-                // score is read, not only on the opt-in screen.
-                Text("mentalHealth.disclaimer")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("mentalHealth.result.disclaimer")
-
-                Text(result.serverDerived ? "mentalHealth.saved" : "mentalHealth.result.provisionalNote")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("mentalHealth.result.status")
-
                 resultCard(result)
 
                 if let crisis = result.crisis {
@@ -36,11 +23,6 @@ struct MentalWellbeingResult: View {
                     MentalHealthCrisisCard(crisis: crisis)
                         .accessibilityIdentifier("mentalHealth.crisisCard")
                 }
-
-                attribution(result)
-
-                // 1.0.3 (1.4.1) — the validation paper behind this instrument.
-                HLSourcesLink(topic: .mentalHealth(result.instrument))
 
                 HLButton(String(localized: "mentalHealth.result.takeAnother"), variant: .secondary) {
                     store.backToChoose()
@@ -50,12 +32,26 @@ struct MentalWellbeingResult: View {
         }
     }
 
+    /// 1.4 B2 — everything that belongs to the result stands in its card: the
+    /// offline note under the title (only when the result is not the server's
+    /// yet; "Saved" no longer says the obvious), the score and band, the
+    /// screening disclaimer where the score is read (1.0.3, App Review 1.4.1),
+    /// and at the foot the required attribution with the validation paper.
     private func resultCard(_ result: MentalHealthStore.Result) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                Text("mentalHealth.result.title")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
+                VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                    Text("mentalHealth.result.title")
+                        .font(.hlHeadline)
+                        .foregroundStyle(HLText.primary)
+                    if !result.serverDerived {
+                        Text("mentalHealth.result.provisionalNote")
+                            .font(.hlCaption)
+                            .foregroundStyle(HLText.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("mentalHealth.result.status")
+                    }
+                }
                 HStack(alignment: .firstTextBaseline) {
                     Text("mentalHealth.result.totalLabel")
                         .font(.hlSubhead)
@@ -76,13 +72,23 @@ struct MentalWellbeingResult: View {
                         .foregroundStyle(HLText.primary)
                 }
                 if result.showConsiderProfessional {
+                    // 1.4 B4 — a line of the card in body ink instead of a
+                    // grey box inside it; the stronger ink keeps it noticed.
                     Text(considerKey(result))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLText.primary)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(HLSpace.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
+                }
+                Text("mentalHealth.disclaimer")
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("mentalHealth.result.disclaimer")
+                VStack(alignment: .leading, spacing: 0) {
+                    attribution(result)
+                    // 1.0.3 (1.4.1) — the validation paper behind this instrument.
+                    HLSourcesLink(topic: .mentalHealth(result.instrument))
                 }
             }
         }

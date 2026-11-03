@@ -75,6 +75,10 @@ public enum MeasurementBatchAcceptance {
         public static let hourBucketUnsupportedType = "hour_bucket_unsupported_type"
         /// X4 — an hourly row more than 400 days back.
         public static let hourBucketTooOld = "hour_bucket_too_old"
+        /// A2 (1.4, server v1.42) — a `duplicate` whose hour (heart rate, HRV,
+        /// SpO2 after 90 days) or day (the mean types after 36 hours) the server
+        /// has already folded into a `stats:` row (`folded-window.ts`).
+        public static let foldedWindow = "folded_window"
     }
 
     /// The prefix of a mutable daily-statistics upsert identity

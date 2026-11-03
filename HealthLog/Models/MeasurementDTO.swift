@@ -18,20 +18,19 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
     public let measuredAt: Date
     public let notes: String?
     public let source: ServerMeasurementSource?
-    /// **CU-18 / Server-Migration 0274 — nullbar AUCH auf `BLOOD_GLUCOSE`.**
-    /// Der Kontext war schon immer `Optional`, aber bis Migration 0274 trug
-    /// jede Glukose-Zeile garantiert einen der vier Werte. Seit 0274 darf er
-    /// auf einer `BLOOD_GLUCOSE`-Zeile schlicht `null` sein — kein Lesepfad
-    /// darf daraus einen Default erfinden (siehe `toDomain()`; die UI zeigt
-    /// dann "Kein Kontext", nicht "Nüchtern").
+    /// **CU-18 / Server-Migration 0274 — nullbar AUCH auf `BLOOD_GLUCOSE`.** Bis
+    /// 0274 trug jede Glukose-Zeile einen der vier Werte, seither darf er dort
+    /// `null` sein. Kein Lesepfad erfindet daraus einen Default (siehe
+    /// `toDomain()`; die UI zeigt dann "Kein Kontext", nicht "Nüchtern").
     ///
     /// **Asymmetrie:** `POST /api/measurements` (Einzelanlage) verlangt den
-    /// Kontext weiterhin — der Schreibpfad (`MeasurementCreateDTO`) bleibt
-    /// unverändert.
+    /// Kontext weiterhin; der Schreibpfad (`MeasurementCreateDTO`) bleibt gleich.
     public let glucoseContext: GlucoseContext?
     public let externalId: String?
     public let createdAt: Date?
     public let updatedAt: Date?
+    /// #146 (v1.43.7) — night and naps of a sleep row, see ``SleepNightSplit``.
+    public internal(set) var sleepSplit: SleepNightSplit?
 
     public init(
         id: String,
@@ -95,6 +94,7 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
         externalId = try c.decodeIfPresent(String.self, forKey: .externalId)
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        sleepSplit = type == .sleepDuration ? SleepNightSplit(sleepRowFrom: decoder) : nil
     }
 
     /// Reads `glucoseContext` as a raw string and maps it onto the closed enum.
@@ -494,17 +494,15 @@ public extension MeasurementWireDTO {
         } else if type == .bloodPressureDiastolic {
             .bloodPressure(systolic: 0, diastolic: value)
         } else if type == .sleepDuration {
-            // v0.14 — read the server's EXPLICIT `unit` instead of a hardcoded
-            // ÷60 guard. Against the LIVE v1.11.5 contract the
-            // `/api/measurements` LIST collapses `SLEEP_DURATION` to ONE
-            // per-NIGHT row carrying the night's TIME ASLEEP (CORE+DEEP+REM)
-            // with `unit: "minutes"` (server `getUnitForType("SLEEP_DURATION")`
-            // → "minutes"). `MetricKind.sleep`'s `.durationHM` formatter +
-            // `kind.unit == "h"` expect HOURS, so we convert minutes → hours.
-            // If a surface ever sends the value already in hours (`unit: "h"`,
-            // as the dashboard summary + series routes do) it's a passthrough —
-            // no double-divide. Default to the minutes assumption when the unit
-            // is absent (legacy fixtures / the historical list shape).
+            // v0.14 — read the server's EXPLICIT `unit`, no hardcoded ÷60. The
+            // LIST collapses `SLEEP_DURATION` to one row per wake day in
+            // `unit: "minutes"`; since v1.43.7 its `value` is the day's whole
+            // time asleep, the main night plus its naps (#146; the night
+            // alone rides on `sleepSplit`). `.durationHM` expects HOURS, so
+            // minutes → hours; a value already in hours (`unit: "h"`, as on the
+            // summary + series routes) passes through, and an absent unit
+            // keeps the minutes assumption (legacy fixtures / the historical
+            // list shape).
             .scalar(Self.sleepHours(from: value, unit: unit))
         } else if type == .bloodGlucose {
             // W-B183 — DEFENSIVE glucose unit-at-source guard ahead of server
@@ -521,7 +519,7 @@ public extension MeasurementWireDTO {
         } else {
             .scalar(value)
         }
-        return Measurement(
+        var measurement = Measurement(
             id: id,
             kind: kind,
             recordedAt: measuredAt,
@@ -540,6 +538,8 @@ public extension MeasurementWireDTO {
             // Kein Default, kein "wahrscheinlich nüchtern".
             glucoseContext: glucoseContext
         )
+        measurement.sleepSplit = sleepSplit
+        return measurement
     }
 
     /// Normalises a server `SLEEP_DURATION` value into the app's HOURS display

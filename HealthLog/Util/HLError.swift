@@ -310,7 +310,7 @@ public extension HLError {
             String(localized: "Couldn't read the data. Please try again.")
         case .aiUnavailable:
             // Surface placeholder owns the user-facing copy
-            // (`feature_disabled.title` / `feature_disabled.subtitle`).
+            // (`feature_disabled.title`, plus the server reason when sent).
             // Banner copy stays neutral so it can't render twice if a
             // caller both throws into the banner AND mounts the
             // placeholder card.

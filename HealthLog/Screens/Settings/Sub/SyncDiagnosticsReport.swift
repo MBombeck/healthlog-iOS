@@ -37,6 +37,10 @@ struct SyncDiagnosticsReport: Equatable {
         /// INT-Q (X4, #138) — the hourly backfill's progress for this
         /// account; `nil` when the server does not take hourly rows.
         var hourly: HourlyStatsStatus?
+        /// 1.4 B4 — the heart-rate bucket path (#12). The screen shows its
+        /// gates in words only; the identifiers a tester quotes back live
+        /// here. `nil` leaves the block out.
+        var hrBuckets: HRBucketDiagnosticsSnapshot?
     }
 
     let text: String
@@ -63,19 +67,28 @@ struct SyncDiagnosticsReport: Equatable {
     // MARK: - Sections
 
     private static func serverSection(_ input: Input) -> [String] {
+        appleHealthLines(input.server, loadFailed: input.serverLoadFailed)
+    }
+
+    /// The Apple Health block of `GET /api/integrations/healthkit`: state,
+    /// reason and since, delivery, background sync, then per type the arrival
+    /// facts (no values, no reading times). Shared with "Support-Info
+    /// kopieren" (#134), so both reports say it in the same words.
+    static func appleHealthLines(_ server: HKServerSyncHealthSummary?, loadFailed: Bool) -> [String] {
         var lines = ["[server] GET /api/integrations/healthkit"]
-        guard let server = input.server else {
-            lines.append(input.serverLoadFailed ? "not reachable" : "not loaded")
+        guard let server else {
+            lines.append(loadFailed ? "not reachable" : "not loaded")
             return lines
         }
         guard server.hasServerData else {
             lines.append("no sync data yet")
             return lines
         }
+        let since = server.since.map { " since \(stamp($0))" } ?? ""
         if let health = server.health {
-            lines.append("state: \(health.state.wireValue) (\(health.reason.wireValue))")
+            lines.append("state: \(health.state.wireValue) (\(health.reason.wireValue))\(since)")
         } else if let verdict = server.verdict {
-            lines.append("legacy verdict: \(verdict.rawValue)")
+            lines.append("legacy verdict: \(verdict.rawValue)\(since)")
         }
         lines.append("delivers on its own: \(autonomyWord(server.autonomy))")
         lines.append("last background sync: \(stampOrNever(server.lastBackgroundSyncAt))")
@@ -112,6 +125,9 @@ struct SyncDiagnosticsReport: Equatable {
         if let hourly = input.hourly {
             lines.append("hourly backfill: \(hourly.backfillDaysCompleted) of \(hourly.backfillDaysTotal) days")
         }
+        if let buckets = input.hrBuckets {
+            lines += heartRateBucketLines(buckets)
+        }
         if !input.history.isEmpty {
             lines.append("history:")
             for row in input.history {
@@ -138,6 +154,25 @@ struct SyncDiagnosticsReport: Equatable {
         }
         if active.isEmpty { lines.append("  no activity since launch") }
         return lines
+    }
+
+    /// 1.4 B4 — the heart-rate bucket path with its gate identifiers
+    /// (`cutoverPending`, `uploaded`, …), the words Console prints after
+    /// `gate=`. No reading, only dates, gates and counts.
+    static func heartRateBucketLines(_ snapshot: HRBucketDiagnosticsSnapshot) -> [String] {
+        let cutover = snapshot.cutover.map { day($0) } ?? "not armed"
+        return [
+            "heart rate buckets: cutover \(cutover)",
+            "  last accepted: \(stampOrNever(snapshot.ledger.lastAcceptedBucket))",
+            "  last run: \(gateEvent(snapshot.ledger.lastEvent))",
+            "  last held by: \(gateEvent(snapshot.ledger.lastSuppression))",
+            "  raw fallback days: \(snapshot.rawFallbackDayCount)"
+        ]
+    }
+
+    private static func gateEvent(_ event: HRBucketSyncLedger.Event?) -> String {
+        guard let event else { return "never" }
+        return "\(event.gate.rawValue) at \(stamp(event.at)), \(event.count) rows"
     }
 
     // MARK: - Words

@@ -47,9 +47,6 @@ struct SettingsServerScreen: View {
         HLSettingsPage(title: "Server") {
             currentServerCard
             versionCard
-            if isPairedAuth {
-                changeServerCard
-            }
         }
         // QoL-A2 (Glass H1) — scroll-edge glass now owned centrally by the
         // `HLSettingsPage` inner ScrollView; no outer-layer patch here.
@@ -80,13 +77,17 @@ struct SettingsServerScreen: View {
     private var currentServerCard: some View {
         HLSettingsCard(
             icon: "server.rack",
-            title: "Current server",
-            subtitle: "Data is synced against this address."
+            title: "Current server"
         ) {
             statRow(label: "Address", value: currentHostDisplay)
                 .accessibilityIdentifier("settings.server.hostRow")
             statRow(label: "Region", value: regionLabel)
                 .accessibilityIdentifier("settings.server.regionRow")
+            // 1.4 B2-c — the switch is a row of the card it changes; its own
+            // card repeated "Change server" as title and row.
+            if isPairedAuth {
+                changeServerRow
+            }
         }
     }
 
@@ -161,20 +162,17 @@ struct SettingsServerScreen: View {
     /// bevorsteht; R3 gibt die Aussage dem Ort der Handlung.
     ///
     /// R9 — der frühere `.ghost`-Vollbreitenknopf war in Wahrheit eine Zeile
-    /// in einer Karte, die ein Sheet öffnet.
-    private var changeServerCard: some View {
-        HLSettingsCard(
-            icon: "arrow.triangle.swap",
-            title: "Change server"
+    /// in einer Karte, die ein Sheet öffnet. 1.4 B2-c — die Zeile steht jetzt
+    /// in der Karte „Aktueller Server"; die eigene Karte trug denselben Titel
+    /// wie ihre einzige Zeile.
+    private var changeServerRow: some View {
+        HLSettingsActionRow(
+            title: "Change server",
+            presents: .sheet
         ) {
-            HLSettingsActionRow(
-                title: "Change server",
-                presents: .sheet
-            ) {
-                presentChangeServerSheet = true
-            }
-            .accessibilityIdentifier("settings.server.changeServerButton")
+            presentChangeServerSheet = true
         }
+        .accessibilityIdentifier("settings.server.changeServerButton")
     }
 
     // MARK: - Helpers
@@ -287,8 +285,9 @@ private struct ChangeServerSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
+                // 1.4 B2-c — no lead card: it held only "you must sign in
+                // again", which the button "Switch and sign in again" says.
                 VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    headerCard
                     urlInputCard
                     statusRow
                     Spacer(minLength: HLSpace.lg)
@@ -316,18 +315,6 @@ private struct ChangeServerSheet: View {
 
     private var currentHostHint: String {
         container?.configuredServer.baseURL?.absoluteString ?? ""
-    }
-
-    private var headerCard: some View {
-        HLSettingsCard(
-            icon: "exclamationmark.shield.fill",
-            title: "New server address",
-            // R5 — der Subtitle formulierte den Kartentitel um; der Footer
-            // trägt die Folge und ist damit der eine belegte Beitext-Slot.
-            footer: "After switching you must sign in again — existing sessions are only valid on the previous server."
-        ) {
-            EmptyView()
-        }
     }
 
     private var urlInputCard: some View {

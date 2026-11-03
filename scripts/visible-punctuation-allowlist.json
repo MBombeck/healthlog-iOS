@@ -43,16 +43,6 @@
       "path": "HealthLog/Services/Vision/LabReportParser.swift",
       "contains": "0123456789/%^*.·µμ°‰",
       "reason": "Character set the OCR parser accepts in a unit token (kg·min). Parser input, not output."
-    },
-    {
-      "path": "HealthLog/Screens/Labs/LabsChangesCard.swift",
-      "contains": "→",
-      "reason": "Trend glyph of the ↑ / ↓ / → set for an unchanged lab value. A direction symbol next to a number, not a separator in a sentence; VoiceOver reads the separate accessibility text."
-    },
-    {
-      "path": "HealthLog/Services/StatistikModeBriefingService.swift",
-      "contains": "→",
-      "reason": "Same ↑ / ↓ / → trend glyph set for a steady value in the statistics briefing row."
     }
   ]
 }

@@ -1,7 +1,7 @@
 import Foundation
 
-/// MDR-safe-by-design briefing shape consumed by `DailyBriefingHero` and
-/// other on-device renderers. The fields are deliberately **observational**
+/// MDR-safe-by-design briefing shape produced by `OnDeviceBriefingService`.
+/// The fields are deliberately **observational**
 /// — diagnostic / predictive / prescriptive output is filtered out by
 /// `MDRSafetyFilter` before this struct is ever surfaced.
 ///

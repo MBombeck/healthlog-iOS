@@ -78,7 +78,8 @@ extension EditProfileScreen {
             if let err = identityValidationError {
                 HLFormErrorText(err)
             } else {
-                Text("Optional. Used on the Doctor report cover and the FHIR export.")
+                // 1.4 B2-c — where these identifiers go, in one sentence.
+                Text("editProfile.identity.footer")
             }
         }
     }

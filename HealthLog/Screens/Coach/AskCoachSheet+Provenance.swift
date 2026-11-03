@@ -9,58 +9,16 @@ import SwiftUI
 // still mounts them, so they cannot be `private` across files.
 
 #if canImport(SpeziChat)
-    /// **CO4 (v0154)** — the collapsed "what I'm looking at" disclosure under a
-    /// server-arm assistant reply, mirroring the web coach's `<details>` evidence
-    /// block. Collapsed by default (privacy doctrine — never auto-expand the raw
-    /// keyValues). Expanded body: metric/window/`n=count` chips (monochrome
-    /// capsules, SF-symbol shape not colour) + the load-bearing keyValues rows
-    /// (value + unit, window as a parenthetical tail). DS-tokened throughout.
-    struct CoachProvenanceDisclosure: View {
-        let provenance: CoachServerService.CoachProvenance
-        @State private var expanded = false
+    /// **CO4 (v0154)** — the "what I'm looking at" toggle under a server-arm
+    /// assistant reply, mirroring the web coach's `<details>` evidence block.
+    /// Collapsed by default (privacy doctrine — never auto-expand the raw
+    /// keyValues). 1.4 B2-c: the toggle sits in the reply's one action row
+    /// (`CoachReplyActions`) and the body opens below that row.
+    struct CoachProvenanceToggle: View {
+        @Binding var expanded: Bool
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         var body: some View {
-            // M1 (fix round 1) — no affordance when there is nothing behind it.
-            // `CoachProvenance.isEmpty` (the store's mount condition) is false
-            // for a windows-only envelope, but `chips` derives from `metrics`
-            // and `keyValues` may be absent — so that envelope used to offer a
-            // chevron that expanded into blank space. The chip fallback below
-            // rescues the windows-only case; this guard covers whatever is left.
-            if hasExpandableContent {
-                disclosure
-            }
-        }
-
-        private var disclosure: some View {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                disclosureHeader
-                if expanded {
-                    VStack(alignment: .leading, spacing: HLSpace.sm) {
-                        if !chips.isEmpty {
-                            chipFlow
-                        }
-                        if let keyValues = provenance.keyValues, !keyValues.isEmpty {
-                            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                                ForEach(keyValues) { keyValue in
-                                    keyValueRow(keyValue)
-                                }
-                            }
-                        }
-                        // 1.0.3 (App Review 1.4.1, audit row 7) — the Sources
-                        // link moved OUT of this disclosure and up under every
-                        // assistant reply (`AskCoachSheet+Transcript.swift`).
-                        // A citation a reviewer has to expand a collapsed block
-                        // to find, on one arm of three, is not a citation.
-                    }
-                    .transition(.opacity)
-                }
-            }
-            .padding(.leading, HLSpace.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-
-        private var disclosureHeader: some View {
             Button {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                     expanded.toggle()
@@ -76,6 +34,7 @@ import SwiftUI
                     HLDisclosureChevron()
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -87,21 +46,44 @@ import SwiftUI
             )
             .accessibilityAddTraits(.isButton)
         }
+    }
 
-        /// Is there anything to show once the chevron is tapped? Drives whether
-        /// the disclosure renders at all (M1).
-        private var hasExpandableContent: Bool {
-            !chips.isEmpty || !(provenance.keyValues?.isEmpty ?? true)
+    /// **CO4** — the expanded evidence: metric/window/`n=count` chips
+    /// (monochrome capsules, SF-symbol shape not colour) + the load-bearing
+    /// keyValues rows (value + unit, window as a parenthetical tail).
+    struct CoachProvenanceBody: View {
+        let provenance: CoachServerService.CoachProvenance
+
+        /// Is there anything to show once the toggle is tapped? Drives whether
+        /// the toggle renders at all (M1, fix round 1: a windows-only envelope
+        /// used to offer a chevron that expanded into blank space).
+        static func hasContent(_ provenance: CoachServerService.CoachProvenance) -> Bool {
+            !chips(for: provenance).isEmpty || !(provenance.keyValues?.isEmpty ?? true)
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                let chips = Self.chips(for: provenance)
+                if !chips.isEmpty {
+                    chipFlow(chips)
+                }
+                if let keyValues = provenance.keyValues, !keyValues.isEmpty {
+                    VStack(alignment: .leading, spacing: HLSpace.xs) {
+                        ForEach(keyValues) { keyValue in
+                            keyValueRow(keyValue)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         /// Pairs each metric with the first window (web parity: a single
         /// window-per-metric) + its sample count when present.
         ///
         /// **M1 (fix round 1)** — when the envelope names windows but no
-        /// metrics, the windows become the chips rather than nothing. The server
-        /// told us what it looked at over; saying so is better than an empty
-        /// block, and better than hiding a disclosure that does have content.
-        private var chips: [ProvenanceChipModel] {
+        /// metrics, the windows become the chips rather than nothing.
+        static func chips(for provenance: CoachServerService.CoachProvenance) -> [ProvenanceChipModel] {
             let primaryWindow = provenance.windows.first
             guard !provenance.metrics.isEmpty else {
                 return provenance.windows.map { window in
@@ -120,7 +102,7 @@ import SwiftUI
         /// Horizontal chip strip — the canonical app chip-row pattern
         /// (`SourcesChipStrip`): a non-clipping horizontal scroll so a handful of
         /// metric chips never reflow the bubble column or get truncated.
-        private var chipFlow: some View {
+        private func chipFlow(_ chips: [ProvenanceChipModel]) -> some View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: HLSpace.xs) {
                     ForEach(chips) { model in
@@ -214,40 +196,8 @@ import SwiftUI
         }
     }
 
-    // MARK: - Token footer (CO5 / v0154)
-
-    /// **CO5 (v0154)** — the quiet per-turn token-usage caption under a
-    /// server-arm reply, mirroring the web `MessageTokenFooter`. Renders nothing
-    /// when there is no count (the store only stashes usage with a non-nil
-    /// total). `.hlCaption` + `HLText.tertiary`, monospaced digits (web's
-    /// `tabular-nums`).
-    struct CoachTokenFooter: View {
-        let usage: CoachServerService.CoachUsage
-
-        var body: some View {
-            if let total = usage.totalTokens {
-                Text(label(total))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .monospacedDigit()
-                    .padding(.leading, HLSpace.md)
-                    .accessibilityLabel(label(total))
-            }
-        }
-
-        private func label(_ total: Int) -> String {
-            if let model = usage.model, !model.isEmpty {
-                return String(
-                    localized: "\(total) tokens · \(model)",
-                    comment: "CO5 — quiet per-turn token-usage footer with provider model."
-                )
-            }
-            return String(
-                localized: "\(total) tokens",
-                comment: "CO5 — quiet per-turn token-usage footer."
-            )
-        }
-    }
+    // 1.4 B2-c — the per-turn token footer (CO5) is gone: a token count is
+    // developer information, not something the reader of an answer needs.
 
     // MARK: - Provenance label resolver (CO4)
 

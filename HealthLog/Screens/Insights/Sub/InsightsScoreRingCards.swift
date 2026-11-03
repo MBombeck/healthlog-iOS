@@ -45,7 +45,7 @@ struct ScoreRingCard: View {
                             fraction: WellnessScorePresentation.ringFraction(dto) ?? 0,
                             isHero: glowPhaseIndex == 0
                         )
-                    Text(InsightsDerivedBlock.title(for: dto.metric))
+                    Text(InsightsDerivedCopy.title(for: dto.metric))
                         // v0.14.1 polish — the label under the ring read "extrem
                         // hart"; dropped semibold→medium + (on the dark gradient
                         // tile) the calmer off-white palette label so it sits
@@ -96,7 +96,7 @@ struct ScoreRingCard: View {
     }
 
     private var accessibilityLabel: String {
-        let title = InsightsDerivedBlock.title(for: dto.metric)
+        let title = InsightsDerivedCopy.title(for: dto.metric)
         if WellnessScorePresentation.isInsufficient(dto) {
             return String(localized: "\(title): not enough data yet")
         }
@@ -148,7 +148,7 @@ struct FitnessDeltaRingCard: View {
                     // Legibility safeguard (see ScoreRingCard) — only on the
                     // warm-gradient surface (Concept F).
                     .modifier(WellnessRingShadow(active: appearance.ringShadowActive))
-                    Text(InsightsDerivedBlock.title(for: dto.metric))
+                    Text(InsightsDerivedCopy.title(for: dto.metric))
                         // v0.14.1 polish — calmer label (medium weight + off-white
                         // palette ink on the gradient tile, primary on mono / glass).
                         .font(.hlSubhead.weight(.medium))
@@ -191,7 +191,7 @@ struct FitnessDeltaRingCard: View {
     }
 
     private var accessibilityLabel: String {
-        let title = InsightsDerivedBlock.title(for: dto.metric)
-        return "\(title), \(InsightsDerivedBlock.fitnessHeadline(dto.value?.fitnessAgeDeltaYears))"
+        let title = InsightsDerivedCopy.title(for: dto.metric)
+        return "\(title), \(InsightsDerivedCopy.fitnessHeadline(dto.value?.fitnessAgeDeltaYears))"
     }
 }

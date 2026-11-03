@@ -163,7 +163,6 @@ public extension AppContainer {
             mentalHealthStore,
             aiProviderStore,
             chartsStore,
-            trendsOverlayStore,
             doctorReportStore,
             localDoctorReportStore,
             disclaimerAckStore,

@@ -98,6 +98,19 @@
             if path == "/api/analytics", value("slice") == "summaries" { return ok(summariesJSON) }
             if path == "/api/insights/layout" { return ok(layoutJSON) }
             if path == "/api/measurement-reminders" { return ok("[]") }
+            // 1.4 C1 — an account that never logged a mood or uploaded an ECG.
+            // The shared table's `{}` decodes as neither, so both reads failed
+            // and the Insights pages could not show their empty states. The
+            // `-uitest-area-meds` overlay still outranks this with mood data.
+            if path == "/api/mood-entries" { return ok(#"{"entries":[],"meta":{"total":0}}"#) }
+            if path == "/api/insights/ecg" {
+                return ok(#"{"data":{"recordings":[],"hasRecordings":false},"error":null}"#)
+            }
+            // 1.4 B4-z — the server version, so Konto → Sicherheit and Server
+            // show their real states instead of "could not be read". Only in
+            // the sweep: the auth journeys keep the version-less server their
+            // login tests are about (`HermeticUITestSupport.webLoginRoutesArgument`).
+            if path == "/api/version" { return ok(#"{ "data": { "version": "1.43.10" }, "error": null }"#) }
             if path == "/api/measurements/series" {
                 guard let kind = value("kind"), let entry = series.first(where: { $0.seriesKind == kind }) else {
                     return nil

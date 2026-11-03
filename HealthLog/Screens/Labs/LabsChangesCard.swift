@@ -54,10 +54,8 @@ struct LabsChangesCard: View {
                         }
                     }
 
-                    Text("clinicalSignals.labs.caption")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // 1.4 B2-c — the title says what the rows are; the closing
+                    // caption that said it again is gone.
                 }
             }
             .accessibilityIdentifier("labs.clinicalSignals.changes")
@@ -106,16 +104,18 @@ private struct ChangeRow: View {
         return change.unit.isEmpty ? value : "\(value) \(change.unit)"
     }
 
-    /// Signed delta with an explicit +/− and the direction glyph.
+    /// Signed delta with an explicit +/− and, when it moved, the direction
+    /// glyph. 1.4 B2-c: an unchanged value carries no arrow (no "→" in
+    /// visible text).
     private var deltaLine: String {
         let glyph = switch change.direction {
-        case "up": "↑"
-        case "down": "↓"
-        default: "→"
+        case "up": "↑ "
+        case "down": "↓ "
+        default: ""
         }
         let signed = (change.delta > 0 ? "+" : "") + Self.format(change.delta)
         let previous = Self.format(change.previous)
-        return "\(glyph) \(signed), \(String(localized: "clinicalSignals.labs.previous")) \(previous)"
+        return "\(glyph)\(signed), \(String(localized: "clinicalSignals.labs.previous")) \(previous)"
     }
 
     private var accessibilityText: String {

@@ -23,7 +23,7 @@
             // dashboard summary) and returns `nil` for everything else, so
             // the scenario + default tables below are reached unchanged.
             if HermeticUITestSupport.isMarketingOverlayActive,
-               let marketing = MarketingFixtures.response(forPath: path, method: method)
+               let marketing = MarketingFixtures.response(forPath: path, method: method, query: query)
             {
                 return marketing
             }
@@ -138,8 +138,8 @@
         }
 
         /// The opt-in overlays: the 1.0.3 citation-evidence table
-        /// (`-uitest-citations`, App Review 1.4.1) and the 18-03 sharing family.
-        /// Both answer `nil` outside their own routes, so the router keeps ONE branch.
+        /// (`-uitest-citations`, App Review 1.4.1), the 18-03 sharing family and
+        /// the status routes (`+Integrations`): `nil` elsewhere, ONE branch.
         private static func overlayResponse(forPath path: String, method m: String) -> (status: Int, body: Data)? {
             CitationFixtures.response(forPath: path, method: m) ?? sharingResponse(forPath: path, method: m)
         }
@@ -159,7 +159,7 @@
             if path.hasPrefix("/api/share-links") {
                 return method == "POST" ? ok(shareLinkCreatedJSON) : ok(shareLinkListJSON)
             }
-            return nil
+            return integrationStatusResponse(forPath: path)
         }
 
         /// Heuristic empty body: plural / list-shaped routes decode an empty

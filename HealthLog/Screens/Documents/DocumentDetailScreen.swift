@@ -77,8 +77,9 @@ struct DocumentDetailScreen: View {
                 if let actionError {
                     HLFormErrorText(actionError)
                 }
-                uploadedMetaLine
-                aiReadProvenanceLine
+                // 1.4 B2-c — "added on …" is the metadata card's last row and
+                // "read by AI" is the summary card's title; no loose captions
+                // under the cards.
             }
             .padding(HLSpace.lg)
         }
@@ -156,14 +157,7 @@ struct DocumentDetailScreen: View {
         }
     }
 
-    private var uploadedMetaLine: some View {
-        Text(uploadedText)
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var uploadedText: String {
+    var uploadedText: String {
         let template = String(localized: "documents.detail.uploadedMeta")
         return String(format: template, DocumentFormat.mediumDate(document.createdAt), DocumentFormat.bytes(document.byteSize))
     }

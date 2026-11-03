@@ -178,9 +178,10 @@ struct SettingsAIScreen: View {
     /// Der Untertitel „Alles zum Coach an einem Ort." ist gefallen: er stand
     /// wortgleich noch einmal auf der Zielseite, einen Navigationsschritt später
     /// (R3), und sagte nichts, was der Titel nicht sagt.
+    /// 1.4 B4 — one row, one heading: "Coach" with its chevron.
     private var coachCard: some View {
-        HLSettingsCard(icon: "bubble.left.and.bubble.right", title: "Coach") {
-            HLSettingsActionRow(title: "Open coach", presents: .push) {
+        HLSettingsCard {
+            HLSettingsActionRow(title: "Coach", presents: .push) {
                 SettingsCoachScreen()
             }
             .accessibilityIdentifier("SettingsAIScreen.coach.row")

@@ -10,27 +10,38 @@ import SwiftUI
 /// informative, never an alarm (the server `rangeStatus` is rendered as-is).
 struct BiomarkerLastMeasurementCard: View {
     let latest: LabResultDTO
+    /// 1.0.3 (App Review 1.4.1) — the sources behind the range verdict. 1.4
+    /// B2-c: they sit in this card, the one that states the verdict, since the
+    /// explainer they stood under moved behind the page's (i). `nil` hides it.
+    var sourcesTopic: MedicalSourceTopic?
 
     var body: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(valueLabel)
-                        .font(.hlMetric(.largeTitle))
-                        .monospacedDigit()
-                        .foregroundStyle(HLText.primary)
-                    Spacer(minLength: HLSpace.sm)
-                    LabRangeBadge(status: latest.rangeStatus)
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(valueLabel)
+                            .font(.hlMetric(.largeTitle))
+                            .monospacedDigit()
+                            .foregroundStyle(HLText.primary)
+                        Spacer(minLength: HLSpace.sm)
+                        LabRangeBadge(status: latest.rangeStatus)
+                    }
+                    Text(takenCaption)
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLText.secondary)
+                    // #126 3.5 — a reading the server converted names what was printed.
+                    LabConversionNote(conversion: LabConversion(latest))
                 }
-                Text(takenCaption)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                // #126 3.5 — a reading the server converted names what was printed.
-                LabConversionNote(conversion: LabConversion(latest))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text(accessibilityText))
+                // Outside the combined element, so VoiceOver reaches it as its
+                // own control.
+                if let sourcesTopic {
+                    HLSourcesLink(topic: sourcesTopic)
+                }
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(accessibilityText))
     }
 
     private var valueLabel: String {

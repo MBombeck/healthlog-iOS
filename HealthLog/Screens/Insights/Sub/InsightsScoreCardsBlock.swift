@@ -8,7 +8,7 @@ import SwiftUI
 
 /// **I-2 — the wellness-score RING CARDS on the Insights overview.**
 ///
-/// Replaces the plain-text `InsightsDerivedBlock` rendering for the wellness
+/// Replaced the plain-text "More from your data" rendering for the wellness
 /// scores with monochrome `HLScoreRing` cards (the centrepiece of the Insights
 /// redesign). Layout, top→bottom:
 ///
@@ -19,9 +19,9 @@ import SwiftUI
 /// - **Signale des Tages** — an HONEST deviation-COUNT card (text/count, never a
 ///   ring, never AI).
 ///
-/// The re-frame metrics that aren't ring-promoted in I-2 (Vascular age, HRV
-/// balance) keep their existing plain-text treatment via ``InsightsDerivedBlock``
-/// — this block self-suppresses them. Monochrome, no glass (glass lives only on
+/// Since v0.14.9 the re-frame metrics (Vascular age, HRV balance) render as
+/// ring tiles here too, so every derived score has exactly one surface (the old
+/// text lane was deleted in 1.4 B4). Monochrome, no glass (glass lives only on
 /// the detail-sheet hero), reduce-motion-gated.
 ///
 /// **Confidence gate (honest).** A core score whose server envelope is
@@ -85,8 +85,7 @@ struct InsightsScoreCardsBlock: View {
     /// The core 0–100 scores rendered as ring cards (ordered). v0.14.8 Item-2 —
     /// RECOVERY_SCORE (Erholung) + STRESS_SCORE are promoted from the "More from
     /// your data" text lane to the SAME canonical `ScoreRingCard` the operator
-    /// loves; both carry a `value.score` so they're tile-able, and the dedup
-    /// (`ringPromotedIDs`) auto-drops them from `InsightsDerivedBlock.textMetrics`.
+    /// loves; both carry a `value.score` so they're tile-able.
     nonisolated static let ringScoreOrder = ["READINESS", "SLEEP_SCORE", "STRAIN_SCORE", "RECOVERY_SCORE", "STRESS_SCORE"]
 
     /// The Cardio-Fitness gauge ID — rendered as the open-bottom gauge card.
@@ -100,13 +99,6 @@ struct InsightsScoreCardsBlock: View {
     nonisolated static let hrvBalanceID = "HRV_BALANCE"
     /// The "Signale des Tages" deviation-count ID — rendered as the count card.
     nonisolated static let deviationID = "COINCIDENT_DEVIATION"
-
-    /// **The single source of truth** for which derived-metric IDs this block
-    /// promotes to a ring / gauge / count card. `InsightsDerivedBlock` filters
-    /// THESE out of its text lane so each score renders EXACTLY once — both sides
-    /// read the same list, so no ID can appear twice or vanish.
-    nonisolated static let ringPromotedIDs: Set<String> =
-        Set(ringScoreOrder).union([gaugeID, vascularID, hrvBalanceID, deviationID])
 
     // v0141 — `hideableCardOrder` + `isCardPresent` (the per-card show/hide
     // catalogue) live in `InsightsScoreCardsBlock+Visibility.swift`.

@@ -70,7 +70,6 @@ struct InsightsCorrelationsSlot: View {
                     Task { await correlationsStore.setDismissed(dismissed, for: pair) }
                 },
                 pendingIDs: correlationsStore.pendingIDs,
-                resurfacedIDs: correlationsStore.resurfacedIDs,
                 actionError: correlationsStore.actionError,
                 onSelectMetric: onSelectMetric
             )

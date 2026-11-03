@@ -50,6 +50,11 @@ struct CycleScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let store, !store.isDisabled {
+                // 1.4 B2 — the one (i): the current phase in full, the method
+                // behind phases and predictions, the guide.
+                ToolbarItem(placement: .topBarTrailing) {
+                    HLInfoButton(content: info(store: store), accessibilityIdentifier: "cycle.info")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showAdvancedSettings = true
@@ -137,7 +142,8 @@ struct CycleScreen: View {
                         averageLength: store.stats?.avgLengthDays
                     )
                     CycleInsightsSection(store: store)
-                    healthSyncFooter
+                    // 1.4 B2 — the Apple Health link moved into the settings
+                    // sheet; nothing stands loose under the last card.
                     // b177 sync-status footer — self-suppresses until the first
                     // sync handshake lands.
                     HLSyncStatusFooter(screenLoading: store.isLoading)
@@ -242,31 +248,12 @@ struct CycleScreen: View {
         }
     }
 
-    // MARK: - Apple-Health sync affordance
+    // MARK: - Info
 
-    /// **v0.14.8 W2 (Settings-IA §3.b)** — a quiet, caption-grade cross-link to
-    /// the Apple-Health sync controls. The only cycle↔HK control used to be
-    /// buried three levels deep (Settings → Integrationen → Apple Health) and
-    /// was unfindable from here; this footer makes the data flow visible where
-    /// the user actually sees the data. Styled after `SyncStatusCaption` (one
-    /// centered tertiary caption, no chrome) so it stays the quietest possible
-    /// affordance.
-    private var healthSyncFooter: some View {
-        NavigationLink {
-            AppleHealthIntegrationDetailScreen()
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "heart.text.square")
-                Text("cycle.health.syncLink")
-                HLDisclosureChevron()
-            }
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("cycle.home.healthSyncLink")
+    private func info(store: CycleStore) -> HLInfoContent {
+        let insights = store.insights
+        let showsPatterns = insights.map { !$0.isLearning && ($0.headline != nil || !$0.rows.isEmpty) } ?? false
+        return CycleInfo.content(phase: currentPhase(store: store), showsPatterns: showsPatterns)
     }
 
     // MARK: - Calendar

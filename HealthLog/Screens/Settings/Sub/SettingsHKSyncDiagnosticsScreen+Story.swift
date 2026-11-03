@@ -12,47 +12,9 @@ import SwiftUI
 // nothing new moves the first, never the second, so distance and energy no
 // longer look stale on a day when nothing changed.
 
-/// Where a fact on the Sync Diagnostics screen comes from.
-enum HKSyncDiagnosticsSource: Equatable, CaseIterable {
-    /// `GET /api/integrations/healthkit`, read fresh when the screen opens.
-    case server
-    /// This iPhone, kept across launches (outbox, upload record, history cursor).
-    case deviceStored
-    /// This iPhone, counted since the last launch.
-    case deviceSession
-
-    var label: String {
-        switch self {
-        case .server: String(localized: "settings.hkdiag.source.server")
-        case .deviceStored: String(localized: "settings.hkdiag.source.device_stored")
-        case .deviceSession: String(localized: "settings.hkdiag.source.device_session")
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .server: "server.rack"
-        case .deviceStored, .deviceSession: "iphone"
-        }
-    }
-}
-
-/// The one-line "where this comes from" at the top of a diagnostics card.
-struct HKSyncDiagnosticsSourceTag: View {
-    let source: HKSyncDiagnosticsSource
-
-    var body: some View {
-        Label {
-            Text(verbatim: source.label)
-        } icon: {
-            Image(systemName: source.symbol)
-                .accessibilityHidden(true)
-        }
-        .font(.hlCaption2)
-        .foregroundStyle(HLText.tertiary)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-}
+// 1.4 B2-c — the per-card "Quelle: …" line is gone: the server card is the
+// only card from the server, and the (i) says which of this iPhone's cards
+// count since the last launch and which are kept across launches.
 
 // MARK: - Server rows (`metricFreshness`)
 
@@ -118,9 +80,18 @@ struct ServerFreshnessFacts: Equatable {
         return String(localized: "settings.hkdiag.freshness_background \(Self.relative(background))")
     }
 
+    /// #146 / server #1247 — "Last entered here 2 minutes ago" on a type
+    /// the server writes back to Apple Health, as the server sends it. It
+    /// explains why the row reads fresh although Apple Health sent nothing new;
+    /// the time on the right (`lastSeenAt`) and `stale` stay the server's own.
+    var enteredHereLabel: String? {
+        guard let entered = row.lastEnteredHereAt else { return nil }
+        return String(localized: "settings.hkdiag.freshness_entered_here \(Self.relative(entered))")
+    }
+
     /// The caption lines under the type name, in reading order.
     var detailLines: [String] {
-        [checkedLabel, newValueLabel, backgroundLabel].compactMap { $0 }
+        [checkedLabel, newValueLabel, backgroundLabel, enteredHereLabel].compactMap { $0 }
     }
 
     static func relative(_ date: Date) -> String {
@@ -175,6 +146,15 @@ extension KindRow {
             }
             return .newValue(new, checkedSince: checked)
         }
+    }
+
+    /// 1.4 B4 — a row with nothing to report since the launch: nothing read,
+    /// skipped or parked, no check, no new value. Its status says "Ruhend";
+    /// "0 gelesen, 0 übertragen" and "Seit dem App-Start noch nichts" under
+    /// every such row said it twice more, on twenty-odd rows.
+    var isQuiet: Bool {
+        status() == .idle && stats.samplesReadTotal == 0 && registeredSkipCount == 0
+            && stats.samplesParkedTotal == 0 && timeFact == .none
     }
 
     /// The most recent of both, for sorting.

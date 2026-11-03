@@ -38,16 +38,16 @@
     // Nothing here logs a value, a health label, an owner id, or a token: the
     // results this type returns are named counts and dispositions.
 
-    /// One bounded page read out of HealthKit for a single sample type.
-    ///
-    /// `newAnchor` is the resume token the *query* produced. It is never persisted
-    /// by this type directly — only through the verified commit seam.
+    /// One bounded HealthKit page of one type; `newAnchor` is persisted only through the commit seam.
     struct AnchoredHealthSamplePage: Sendable, Equatable {
         let samples: [HKSample]
         let deletedObjectCount: Int
         let newAnchor: HKQueryAnchor?
         /// `true` when the page filled its limit, so more is waiting behind it.
         let mayHaveMore: Bool
+        /// Deleted since the anchor: UUIDs for the server (A5), server ids of HealthLog copies (A6).
+        var deletedSampleIDs: [String] = []
+        var deletedCopyServerIDs: [String] = []
 
         static func == (lhs: AnchoredHealthSamplePage, rhs: AnchoredHealthSamplePage) -> Bool {
             lhs.samples.count == rhs.samples.count
@@ -101,21 +101,20 @@
         }
     }
 
-    /// 1.3 (#127) — the history seam: samples of one type whose start date
-    /// lies in `window`, newest start first, at most `limit` (`nil` = all).
-    protocol HealthSampleHistoryQuerying: Sendable {
-        func historyPage(
-            typeIdentifier: String,
-            within window: HealthSampleDateWindow,
-            limit: Int?
-        ) async throws -> [HKSample]
-    }
-
     /// The mapping/transmission seam. The collector owns *when* a page is read and
     /// whether its cursor moves; it owns none of the wire mapping, which stays with
     /// `HealthLogStandard`'s extracted consumption operation.
     protocol HealthSamplePageConsuming: Sendable {
         func consume(
+            _ samples: [HKSample],
+            ofType typeIdentifier: String,
+            requiring lease: HealthSyncAuthenticatedLease
+        ) async -> HealthSyncPageOutcome
+
+        /// A2 (1.4, R-A7, #138) — one page of the history walk: the same
+        /// consumption, posted as `syncTrigger: "backfill"` where the server
+        /// takes it, so history never moves the server's live arrival stamps.
+        func consumeHistory(
             _ samples: [HKSample],
             ofType typeIdentifier: String,
             requiring lease: HealthSyncAuthenticatedLease
@@ -151,17 +150,6 @@
             var history: HistoryResult?
         }
 
-        /// What the history (and, for an upgrade, the legacy) leg did for one
-        /// type in one pass.
-        struct HistoryResult: Sendable, Equatable {
-            let pagesCollected: Int
-            let samplesRead: Int
-            let disposition: HealthSyncDisposition
-            let holdReason: HealthSyncHoldReason?
-            /// Nothing is owed any more by either leg.
-            let isFinished: Bool
-        }
-
         /// Objects per anchored page. Large enough that a normal wake finishes in
         /// one round trip, small enough that a year of backlog cannot build one
         /// unbounded in-memory batch. Matches `MeasurementBatchUploader`'s own
@@ -181,6 +169,10 @@
         /// cursor at once. Uptime at start; a run older than
         /// `HealthSampleSplitPolicy.staleHistoryRun` no longer blocks.
         var historyRun: (token: UUID, startedAt: TimeInterval)?
+        /// A2 (1.4, R-A8) — types whose history another path owns (the summed
+        /// types, which the statistics path sends as day and hour totals).
+        /// Their raw history is never walked.
+        let historyOwnedElsewhere: @Sendable (String) -> Bool
         /// V1 — what a delivery waits for after its drain: the statistics and
         /// pulse-bucket sweeps its pages requested.
         private let deliveryFollowUp: (@Sendable () async -> Void)?
@@ -203,6 +195,7 @@
             history: (any HealthSampleHistoryQuerying)? = nil,
             pageLimit: Int = AnchoredHealthSampleCollector.defaultPageLimit,
             clock: HealthSampleSplitClock = .live,
+            historyOwnedElsewhere: @escaping @Sendable (String) -> Bool = { _ in false },
             deliveryFollowUp: (@Sendable () async -> Void)? = nil
         ) {
             self.cursors = cursors
@@ -212,6 +205,7 @@
             self.history = history
             self.pageLimit = max(1, pageLimit)
             self.clock = clock
+            self.historyOwnedElsewhere = historyOwnedElsewhere
             self.deliveryFollowUp = deliveryFollowUp
         }
 
@@ -253,6 +247,11 @@
             let allowance = historyBudget ?? .required(for: budget)
             guard budget.allowsFirstHistoryImport, allowance.pagesPerType > 0, history != nil else {
                 return results
+            }
+            // A2 (1.4, R3 S6) — a live page found the server out of reach: no
+            // history this pass, it would only read pages it cannot send.
+            if results.contains(where: { $0.holdReason == .serverUnreachable }) {
+                return results.map { Self.withUnreachableHistory($0) }
             }
             await beforeHistory?()
             let order = (historyOrder ?? typeIdentifiers).filter { typeIdentifiers.contains($0) }
@@ -346,8 +345,8 @@
                 }
 
                 samplesRead += page.samples.count
-                let outcome = await consumer.consume(
-                    page.samples,
+                let outcome = await consumeLive(
+                    page,
                     ofType: typeIdentifier,
                     requiring: lease
                 )

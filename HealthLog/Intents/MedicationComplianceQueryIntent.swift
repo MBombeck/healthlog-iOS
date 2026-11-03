@@ -28,6 +28,10 @@ struct MedicationComplianceQueryIntent: AppIntent {
 
     static let openAppWhenRun: Bool = false
 
+    /// **1.4** — it reads today's adherence aloud, so Siri asks for Face ID or
+    /// the passcode first instead of answering on a locked iPhone.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
     /// Read-only — surface it as a query in Spotlight / Siri.
     static let isDiscoverable: Bool = true
 

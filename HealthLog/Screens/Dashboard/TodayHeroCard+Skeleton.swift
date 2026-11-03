@@ -55,16 +55,14 @@ enum TodayHeroCopy {
     // `daily.today.delta*` / `daily.today.readFullBriefing` catalog entries were
     // retired with them.
 
-    static var sleepPending: String {
-        local("daily.today.sleepPending")
+    /// 1.4 B2 — the one word under the ring while last night's sleep is
+    /// still missing (it replaced the `daily.today.sleepPending` sentence).
+    static var provisional: String {
+        local("daily.today.scoreProvisional")
     }
 
     static var worthALook: String {
         local("daily.today.worthALook")
-    }
-
-    static var allClear: String {
-        local("daily.today.allClear")
     }
 
     // 25-02 (E-2026-08-29 #2) — `provisionalA11y` was DELETED together with

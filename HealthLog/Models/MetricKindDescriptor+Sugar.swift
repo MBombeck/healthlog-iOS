@@ -104,6 +104,12 @@ public extension MetricKind {
     /// temperature deviation (factor only), waist circumference (cm → in),
     /// walking+running distance (m → mi) and walking speed (m/s → mph). The
     /// conversions themselves live in `UnitPreferences.transform(for:)`.
+    ///
+    /// **1.4 B4** — two families that no account setting chooses, so every
+    /// surface that already reads the account unit shows them the same way:
+    /// energy expenditure, which the server keeps in kJ (WHOOP's unit), reads
+    /// in kcal like active energy everywhere else in the app (plan decision 4);
+    /// day and workout strain carry their 0 to 21 scale as their label.
     enum UnitFamily: Sendable, Hashable, CaseIterable {
         case weight
         case bloodPressure
@@ -113,6 +119,8 @@ public extension MetricKind {
         case circumference
         case distance
         case speed
+        case energy
+        case strainScale
     }
 
     var unitFamily: UnitFamily? {
@@ -126,6 +134,8 @@ public extension MetricKind {
         case .waistCircumference: .circumference
         case .distanceWalkingRunning: .distance
         case .walkingSpeed: .speed
+        case .energyExpenditureKJ: .energy
+        case .dayStrain, .workoutStrain: .strainScale
         default: nil
         }
     }

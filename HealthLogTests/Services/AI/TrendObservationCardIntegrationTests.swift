@@ -13,8 +13,8 @@ import Testing
 /// I-4 integration suite for the on-device wiring layer.
 ///
 /// Covers the call-site wirings between I-1 / I-2 producers (services +
-/// caches) and the consuming surfaces (`OnDeviceBriefingHero`,
-/// `TrendObservationCard`). The view bodies themselves are SwiftUI-rendered
+/// caches) and the consuming surfaces (the on-device briefing hero, deleted in
+/// 1.4 B4, and `TrendObservationCard`). The view bodies themselves are SwiftUI-rendered
 /// and exercised by the snapshot suite (`TrendObservationCardSnapshotTests`);
 /// the unit-test contract verified here is the data-flow contract:
 ///

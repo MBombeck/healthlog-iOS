@@ -20,70 +20,41 @@
             deletionReconciler = reconciler
         }
 
-        /// Notifies the standard about a batch of deleted HealthKit objects.
-        ///
-        /// **A360-5 M-1 — close the HK→server delete triangle.** Previously a
-        /// no-op, so a measurement the user deleted in Apple Health stayed on
-        /// the HealthLog server forever (one-way mirror → orphaned rows). We now
-        /// extract each deleted sample's `HKMetadataKeyExternalUUID` (the id our
-        /// own writes stamp, and the externalId the server dedups on) and
-        /// forward the set to the injected `MeasurementDeletionReconciler`, which
-        /// issues `DELETE /api/measurements/by-external-ids` (idempotent — a
-        /// replay on an already-deleted set is a server-side no-op).
-        ///
-        /// **BH-final-diff H2 — ownership-confirmed deletions only.** A foreign
-        /// app can set a colliding `HKMetadataKeyExternalUUID`; deleting that
-        /// foreign sample must NOT delete our server row. The read/anti-echo path
-        /// confirms ownership with two signals (externalUUID present AND author ==
-        /// `HKSource.default()`), but `HKDeletedObject` exposes only `uuid` +
-        /// `metadata` — never `sourceRevision`. We therefore stamp every HealthLog
-        /// write with an app-private origin marker
-        /// (``HealthKitSampleOwnership/appOriginMetadataKey``, preserved in the
-        /// deletion's metadata) and propagate a deletion ONLY when that marker
-        /// AND the external UUID are both present. Anything we cannot confirm as
-        /// ours is dropped (safe: an orphaned server row converges on the next
-        /// full reconcile / list-load — silent over-deletion is the worse hazard).
-        ///
-        /// A nil reconciler (pre-attach / tests) keeps the old no-op behaviour.
-        /// Failures are logged, not thrown: a transient network error must not
-        /// crash the collector.
+        /// The `HealthKitConstraint` witness. Nothing calls it: since Phase 07
+        /// no `CollectSamples` is registered, and the app-owned collector hands
+        /// a page's deletions to ``consumeDeletions(_:ofType:requiring:)``
+        /// instead (A5). Until 1.4 this read our external UUID out of the
+        /// deleted object's metadata, which HealthKit does not keep (only the
+        /// sync identifier and version survive a deletion), so it could not
+        /// have propagated anything even when it was still called.
         func handleDeletedObjects<Sample>(
-            _ deletedObjects: some Collection<HKDeletedObject> & Sendable,
-            ofType sampleType: SampleType<Sample>
-        ) async {
-            guard !deletedObjects.isEmpty else { return }
-            let identifier = sampleType.hkSampleType.identifier
-            let externalIDs = HealthKitMirrorTombstones.mintedIDs(fromDeletedMetadata: deletedObjects.map(\.metadata))
-            // S1 / public #11 — the server keeps a non-Apple-Health row when its
-            // sample is deleted here, so remember the id: the server→Health
-            // mirror must not write the reading straight back.
-            HealthKitMirrorTombstones().record(externalIDs)
-            guard !externalIDs.isEmpty else {
-                HLLog.healthKit
-                    .debug(
-                        "Spezi HK \(identifier, privacy: .public) deletion batch \(deletedObjects.count, privacy: .public) — no app-minted (origin-marked) externalUUID linkage, skipped"
-                    )
-                return
+            _: some Collection<HKDeletedObject> & Sendable,
+            ofType _: SampleType<Sample>
+        ) async {}
+    }
+
+    /// **A5 (1.4, R3 S4)** — the deletions of an anchored page, forwarded by
+    /// ``HealthSampleDeletionForwarder`` through the attached reconciler, and
+    /// kept in the same durable queue as an unaccepted page when they cannot go
+    /// out.
+    ///
+    /// **A6 (1.4)** — a deleted HealthLog copy keeps its server row (that is
+    /// the rule: deleting a copy in Apple Health deletes nothing on the
+    /// server). Its server id goes into the owner's mirror tombstones, so the
+    /// server mirror does not write the reading back, and it is not forwarded.
+    extension HealthLogStandard: HealthSampleDeletionConsuming {
+        func consumeDeletions(
+            _ externalIDs: [String],
+            copiesOf serverIDs: [String],
+            ofType typeIdentifier: String,
+            requiring lease: HealthSyncAuthenticatedLease
+        ) async -> HealthSyncHoldReason? {
+            if !serverIDs.isEmpty {
+                if let refusal = lease.refusal { return refusal.holdReason }
+                HealthKitMirrorTombstones(ownerID: lease.ownerID).record(serverIDs)
             }
-            guard let deletionReconciler else {
-                HLLog.healthKit
-                    .debug(
-                        "Spezi HK \(identifier, privacy: .public) deletion batch \(externalIDs.count, privacy: .public) — reconciler unwired, skipped"
-                    )
-                return
-            }
-            do {
-                try await deletionReconciler.reconcileDeletedExternalIDs(externalIDs)
-                HLLog.healthKit
-                    .info(
-                        "Spezi HK \(identifier, privacy: .public) deletion batch \(externalIDs.count, privacy: .public) → server delete-by-external-id propagated"
-                    )
-            } catch {
-                HLLog.healthKit
-                    .warning(
-                        "Spezi HK \(identifier, privacy: .public) deletion propagation failed (will converge on next reconcile): \(error.localizedDescription, privacy: .public)"
-                    )
-            }
+            return await HealthSampleDeletionForwarder(server: deletionReconciler, queue: retryQueue)
+                .forward(externalIDs, ofType: typeIdentifier, requiring: lease)
         }
     }
 #endif

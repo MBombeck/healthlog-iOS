@@ -14,7 +14,8 @@ import SwiftUI
 ///   4. Naps — a compact secondary list, surfaced separately from the main
 ///      band track (never merged in).
 ///
-/// `main == nil` (no sleep data) → a clean empty state.
+/// `main == nil` with naps (a day of naps alone, server v1.43.7 #146) →
+/// the naps section on its own; no sleep at all → a clean empty state.
 ///
 /// All instants in the DTO are UTC; this screen converts them to the user's
 /// CURRENT local timezone for the axis + band positioning.
@@ -34,9 +35,7 @@ struct SleepHypnogramScreen: View {
         _isLoading = State(initialValue: initialNight == nil)
         // Seed the navigation anchor so test/preview hosts (no repository →
         // no latest-load) still show the night header for the seeded night.
-        _latestDayKey = State(initialValue: initialNight?.main.map {
-            SleepNightRepository.utcDayKey(for: $0.night)
-        })
+        _latestDayKey = State(initialValue: initialNight.flatMap(Self.anchorDayKey(for:)))
     }
 
     @Environment(\.appContainer) private var appContainer
@@ -55,19 +54,19 @@ struct SleepHypnogramScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
                 nightNavigationHeader
-                if isLoading, night == nil {
+                switch Self.content(for: night, isLoading: isLoading) {
+                case .loading:
                     loadingState
-                } else if let session = night?.main {
+                case let .night(session):
                     summaryRow(for: session)
                     hypnogramCard(for: session)
                     legend(for: session)
                     napsSection
-                    // 1.0.3 (App Review 1.4.1, audit row 17) — the stage names
-                    // and the way a night is cut into them are AASM scoring,
-                    // not HealthLog's own vocabulary. At the foot of the
-                    // explanatory copy, once for the whole night.
-                    HLSourcesLink(topic: .sleepRhythm)
-                } else {
+                case .napsOnly:
+                    // #146 — a date with naps but no main night shows the
+                    // naps, not "no sleep data for this night".
+                    napsSection
+                case .empty:
                     emptyState
                 }
             }
@@ -102,8 +101,8 @@ struct SleepHypnogramScreen: View {
         do {
             let fresh = try await repo.night(forDayKey: dayKey)
             night = fresh
-            if dayKey == nil, let main = fresh.main {
-                latestDayKey = SleepNightRepository.utcDayKey(for: main.night)
+            if dayKey == nil, let anchor = Self.anchorDayKey(for: fresh) {
+                latestDayKey = anchor
             }
         } catch {
             if night == nil { loadError = true }
@@ -215,13 +214,10 @@ struct SleepHypnogramScreen: View {
             // composition of per-stage TOTALS, not measured onsets. Show the
             // honest distribution band + an approximate caption — never the
             // fake lane timeline.
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                summaryDistribution(for: session)
-                Label("sleep.hypnogram.reconstructed", systemImage: "wand.and.stars")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .labelStyle(.titleAndIcon)
-            }
+            // 1.4 B2 — the distribution's own caption already says the source
+            // delivers stage totals only; a second "approximate" line under it
+            // said the same.
+            summaryDistribution(for: session)
         } else if SleepHypnogramLayout.isSummaryShaped(session.segments)
             || session.end <= session.start
         {
@@ -235,7 +231,7 @@ struct SleepHypnogramScreen: View {
             // Measured hypnogram (Apple Health / Withings / Fitbit / Oura) —
             // real, alternating onsets, render as-is with no approximate caption.
             hypnogramChart(for: session)
-                .frame(height: 200)
+                .frame(height: HLChartStyle.heightRegular)
                 .accessibilityLabel(Text("sleep.hypnogram.a11y"))
                 // A11Y (audit-v0162 §5) — a proper chart descriptor so VoiceOver
                 // reads each sleep phase + its clock span (via the audio-graph
@@ -297,14 +293,8 @@ struct SleepHypnogramScreen: View {
                 }
             }
         }
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                AxisGridLine().foregroundStyle(HLText.primary.opacity(HLChartGrid.lineOpacity))
-                AxisValueLabel(format: .dateTime.hour().minute())
-                    .font(.hlCaption2)
-                    .foregroundStyle(HLText.secondary)
-            }
-        }
+        // 1.4 B4 — the app's one date-axis rule (time of day for a night).
+        .chartXAxis { ChartDateAxis.marks(for: [session.start, session.end]) }
     }
 
     /// Lane label, bottom→top: the deep-most stage at index 0, the shallow
@@ -348,23 +338,32 @@ struct SleepHypnogramScreen: View {
         if !stages.isEmpty {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    ForEach(Array(stages), id: \.self) { stage in
-                        HStack(spacing: HLSpace.sm) {
-                            RoundedRectangle(cornerRadius: HLRadius.xs)
-                                .fill(color(for: stage))
-                                .frame(width: 16, height: 16)
-                            Text(stage.displayKey)
-                                .font(.hlFootnote)
-                                .foregroundStyle(HLText.primary)
-                            Spacer()
-                            if let minutes = session.stages[stage] {
-                                Text(durationText(minutes))
-                                    .font(.hlFootnote)
-                                    .foregroundStyle(HLText.secondary)
-                                    .monospacedDigit()
-                            }
-                        }
-                    }
+                    stageRows(Array(stages), session: session)
+                    // 1.0.3 (App Review 1.4.1, audit row 17) — the stage names
+                    // and the way a night is cut into them are AASM scoring,
+                    // not HealthLog's own vocabulary. 1.4 B2: at the foot of
+                    // the card that names the stages, not loose under the page.
+                    HLSourcesLink(topic: .sleepRhythm)
+                }
+            }
+        }
+    }
+
+    private func stageRows(_ stages: [SleepStage], session: SleepSession) -> some View {
+        ForEach(stages, id: \.self) { stage in
+            HStack(spacing: HLSpace.sm) {
+                RoundedRectangle(cornerRadius: HLRadius.xs)
+                    .fill(color(for: stage))
+                    .frame(width: 16, height: 16)
+                Text(stage.displayKey)
+                    .font(.hlFootnote)
+                    .foregroundStyle(HLText.primary)
+                Spacer()
+                if let minutes = session.stages[stage] {
+                    Text(durationText(minutes))
+                        .font(.hlFootnote)
+                        .foregroundStyle(HLText.secondary)
+                        .monospacedDigit()
                 }
             }
         }
@@ -381,15 +380,12 @@ struct SleepHypnogramScreen: View {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
                         ForEach(Array(naps.enumerated()), id: \.offset) { _, nap in
                             HStack {
-                                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                                    Text(napTimeRange(for: nap))
-                                        .font(.hlFootnote)
-                                        .foregroundStyle(HLText.primary)
-                                        .monospacedDigit()
-                                    Text("sleep.naps.label")
-                                        .font(.hlCaption)
-                                        .foregroundStyle(HLText.secondary)
-                                }
+                                // 1.4 B2 — the section is titled "Nickerchen";
+                                // each row does not need to say it again.
+                                Text(napTimeRange(for: nap))
+                                    .font(.hlFootnote)
+                                    .foregroundStyle(HLText.primary)
+                                    .monospacedDigit()
                                 Spacer()
                                 Text(durationText(nap.asleepMinutes ?? nap.inBedMinutes))
                                     .font(.hlMetric(.callout))

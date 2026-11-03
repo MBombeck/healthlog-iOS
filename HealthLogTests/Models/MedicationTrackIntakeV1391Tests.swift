@@ -187,13 +187,14 @@ struct MedicationTrackIntakeV1391Tests {
         #expect(try Self.tracked().allowsManualDoseLogging)
     }
 
-    @Test("the card's next line says 'not tracked' instead of reading the stored schedule as a plan")
+    @Test("the card claims no next intake for a record instead of reading the stored schedule as a plan")
     func cardNextLine() throws {
         let strip = try MedicationCardSchedule.resolve(
             medication: Self.recordOnly(), lastTakenAt: nil, scheduleSummary: "21:00",
             windowStatus: nil, nextDose: nil, now: .now
         )
-        #expect(strip.next?.value == String(localized: "med.card.schedule.not_tracked"))
+        // 1.4 B2: the "Nur dokumentiert" badge carries it; no line repeats it.
+        #expect(strip.next == nil)
     }
 
     // MARK: - Helpers

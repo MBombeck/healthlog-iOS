@@ -89,6 +89,13 @@ import Foundation
             return events.compactMap(Self.record(from:))
         }
 
+        /// 1.4 / iOS 27 — the dose-event type's readable window. Medication
+        /// objects are not samples and are never limited; their dose events are.
+        public func doseReadWindow() async -> HealthReadWindow {
+            guard #available(iOS 26.0, *) else { return .unlimited }
+            return await HealthKitAuthorizedHistory(store: makeStore()).window(for: HKObjectType.medicationDoseEventType())
+        }
+
         public func observeDoseEvents(
             _ onChange: @escaping @Sendable () async -> Void
         ) async -> (any AppleHealthDoseEventObservation)? {

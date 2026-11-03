@@ -12,11 +12,9 @@ struct CycleStartNoticeRow: View {
 
     var body: some View {
         let sentence = notice.sentence()
+        // 1.4 B2 — a plain line in the calendar card: no decorative info
+        // glyph and no box inside the card, a 44 pt close target.
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            Image(systemName: "info.circle")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .accessibilityHidden(true)
             Text(sentence)
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.primary)
@@ -26,15 +24,13 @@ struct CycleStartNoticeRow: View {
                 Image(systemName: "xmark")
                     .font(.hlCaption.weight(.semibold))
                     .foregroundStyle(HLText.tertiary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("cycle.startNotice.dismiss"))
             .accessibilityIdentifier("cycle.startNotice.dismiss")
         }
-        .padding(HLSpace.md)
-        .background(HLSurface.tertiary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("cycle.startNotice")
         .onAppear {

@@ -156,10 +156,12 @@ struct AboutMeScreen: View {
     /// genau die Frage, die der Editor sonst aufwirft — dort gibt es kein
     /// Gewichtsfeld, weil das Gewicht eine Messung ist und kein Profilwert.
     private var bodyDataCard: some View {
+        // 1.4 B2-c — the weight's origin is said only when there is a weight
+        // row it can be about.
         HLSettingsCard(
             icon: "figure.stand",
             title: "aboutMe.body.title",
-            footer: "aboutMe.body.footer"
+            footer: latestWeightDisplay == nil ? nil : "aboutMe.body.footer"
         ) {
             infoRow(icon: "ruler.fill", label: "aboutMe.body.height", value: heightDisplay)
             infoRow(icon: "person.fill.questionmark", label: "aboutMe.body.sex", value: sexDisplay)
@@ -254,8 +256,8 @@ struct AboutMeScreen: View {
     /// (`InjectionSiteTrackingSection`); the site picker after logging an
     /// injection links here as well.
     private var injectionSitesCard: some View {
-        HLSettingsCard(icon: "circle.grid.cross", title: "Injection sites") {
-            HLSettingsActionRow(title: "Manage sites", presents: .push) {
+        HLSettingsCard { // 1.4 B4 — one row, one heading: the row names its screen.
+            HLSettingsActionRow(title: "Injection sites", presents: .push) {
                 SettingsInjectionSitesScreen()
             }
             .accessibilityIdentifier("aboutMe.injectionSitesRow")
@@ -359,13 +361,13 @@ struct AboutMeScreen: View {
     /// selbst ist jetzt die kanonische `HLSettingsActionRow(presents: .push)`
     /// statt einer handgebauten Chevron-Zeile.
     private var anamnesisCard: some View {
-        HLSettingsCard(
-            icon: "list.clipboard.fill",
-            title: "anamnesis.title"
-        ) {
+        // 1.4 B4 — one row, one heading: "Anamnese" names the screen, the
+        // three things it holds are the row's subtitle.
+        HLSettingsCard {
             HLSettingsActionRow(
                 icon: "smoke.fill",
-                title: "anamnesis.aboutMe.subtitle",
+                title: "anamnesis.title",
+                subtitle: "anamnesis.aboutMe.subtitle",
                 presents: .push
             ) {
                 SettingsAnamnesisScreen()

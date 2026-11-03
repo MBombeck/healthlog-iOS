@@ -39,6 +39,13 @@ struct ShareWithClinicianScreen: View {
         }
         .navigationTitle("Share with clinician")
         .navigationBarTitleDisplayMode(.inline)
+        // 1.4 B2-c — how links work, and what a replacement for a retired link
+        // means, is the screen's one (i) instead of two text blocks.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HLInfoButton(content: info, accessibilityIdentifier: "settings.shareLinks.info")
+            }
+        }
         .task {
             guard backend.hasServer, store == nil, let api = container?.api else { return }
             let s = ShareLinkStore(
@@ -63,8 +70,25 @@ struct ShareWithClinicianScreen: View {
                 retiredCard(store: store)
             }
             linksCard(store: store)
-            infoCard
         }
+    }
+
+    /// The three facts every link shares, plus, while retired links exist,
+    /// what a replacement carries.
+    private var info: HLInfoContent {
+        var sections: [HLInfoContent.Section] = []
+        if let store, !store.retiredLinks.isEmpty {
+            sections.append(HLInfoContent.Section(
+                title: String(localized: "shareLink.retired.title"),
+                paragraphs: [String(localized: "shareLink.remint.body")]
+            ))
+        }
+        return HLInfoContent(
+            title: String(localized: "Share with clinician"),
+            identifier: "settings.shareLinks.info.sheet",
+            about: String(localized: "settings.shareLinks.info.about"),
+            sections: sections
+        )
     }
 
     /// **18-03 — this screen no longer mints anything.**
@@ -85,14 +109,12 @@ struct ShareWithClinicianScreen: View {
     /// oder geteilt werden. Die Klasse-D-Zusage verliert damit nichts an
     /// Stärke, sie steht nur noch an ihrer Heimat (R3/R19).
     private func createCard(store: ShareLinkStore) -> some View {
-        HLSettingsCard(
-            icon: "link.badge.plus",
-            title: "New share link",
-            subtitle: "Pick a label, a time range, and an expiry date."
-        ) {
+        // 1.4 B2-c — no subtitle: it described the next screen. 1.4 B4 —
+        // one row, one heading: "Neuer Freigabe-Link" with its chevron.
+        HLSettingsCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HLSettingsActionRow(
-                    title: "Create link",
+                    title: "New share link",
                     presents: .push
                 ) {
                     UnifiedSharingScreen(preselectedForm: .link)
@@ -127,16 +149,10 @@ struct ShareWithClinicianScreen: View {
             // Preambel des Erstellen-Sheets, also dort, wo der Ersatz-Link
             // tatsächlich entsteht. Keine Aussage geht verloren.
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                // 18-03 — the unabridged statement used to be the create
-                // sheet's preamble. The sheet is gone, so it lands here, which
-                // is where the user actually meets the retired link: a
-                // replacement carries a NEW token and a NEW passphrase, and the
-                // recipient needs both again.
-                Text("shareLink.remint.body")
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("shareLink.remint.body")
+                // 1.4 B2-c — the unabridged statement (a replacement carries a
+                // NEW token and a NEW passphrase, the recipient needs both
+                // again) is in the screen's (i) while retired links exist;
+                // the card keeps the state and the action.
                 ForEach(store.retiredLinks) { link in
                     HStack(spacing: HLSpace.md) {
                         Text(link.label)
@@ -186,32 +202,6 @@ struct ShareWithClinicianScreen: View {
                     }
                 }
             }
-        }
-    }
-
-    private var infoCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield",
-            title: "How sharing works"
-        ) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                infoRow(icon: "clock", text: "Every link expires automatically (max 90 days).")
-                infoRow(icon: "eye.slash", text: "Links open a read-only record view — no account access.")
-                infoRow(icon: "xmark.circle", text: "Revoke any link at any time to end access instantly.")
-            }
-        }
-    }
-
-    private func infoRow(icon: String, text: LocalizedStringKey) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: icon)
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(HLText.tertiary)
-                .frame(width: 20)
-            Text(text)
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

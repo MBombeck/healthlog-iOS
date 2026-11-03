@@ -334,10 +334,8 @@ private struct CoachSourceChoiceView: View {
                     action: commitSelection
                 )
                 .tint(HLAccent.primary)
-                Text(String(localized: "You can change this anytime in Settings."))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .multilineTextAlignment(.center)
+                // 1.4 B2-c — no "change this anytime in Settings" line under
+                // the choice; it is a setting, and it says so where it lives.
             }
             .padding(HLSpace.lg)
             // The source-choice shelf, same rule as the provider-needed one.

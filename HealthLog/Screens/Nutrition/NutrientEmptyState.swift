@@ -108,6 +108,9 @@ enum NutrientEmptyState: String, Equatable, CaseIterable {
 /// to figure out.
 struct NutrientEmptyStateView: View {
     let state: NutrientEmptyState
+    /// The window `GET /api/nutrients` checked, named at the end of the
+    /// message ("Geprüft wurden die letzten 7 Tage."). `nil` leaves it out.
+    var windowDays: Int?
     /// Flips the `nutrients` module on and prepares HealthKit access.
     let onEnableModule: () async -> Void
 
@@ -117,14 +120,14 @@ struct NutrientEmptyStateView: View {
         if let descriptor = state.presentationDescriptor() {
             HLEmptyState(
                 icon: descriptor.icon,
-                title: LocalizedStringKey(descriptor.titleKey),
-                message: LocalizedStringKey(descriptor.messageKey)
+                title: Text(LocalizedStringKey(descriptor.titleKey)),
+                message: Text(verbatim: Self.message(descriptor.messageKey, windowDays: windowDays))
             ) {
                 if descriptor.primaryAction == .enableModule, let actionKey = descriptor.actionKey {
                     HLButton(
                         actionKey,
                         icon: "checkmark.circle",
-                        variant: .primary,
+                        variant: .secondary,
                         isLoading: isEnabling
                     ) {
                         Task {
@@ -140,5 +143,13 @@ struct NutrientEmptyStateView: View {
             ProgressView()
                 .frame(maxWidth: .infinity)
         }
+    }
+
+    /// The state's sentence, followed by the checked window when there is
+    /// one: one paragraph instead of a sentence plus a loose caption.
+    nonisolated static func message(_ key: String, windowDays: Int?) -> String {
+        let message = String(localized: String.LocalizationValue(key))
+        guard let windowDays else { return message }
+        return message + " " + String(localized: "nutrients.list.empty.window \(windowDays)")
     }
 }

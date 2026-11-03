@@ -18,11 +18,11 @@ public enum MedicationUnitsPerDose: Hashable, Sendable, CaseIterable, Identifiab
     /// sent: a combined value like 1½ (1.5) or 2¼ (2.25), or a measured amount
     /// like 0.8. Since server v1.39.1 (final tag) every write path accepts any
     /// value above 0 and at most 100 with up to four decimals, and the web
-    /// editor enters them. This build still offers only the curated choices (a
-    /// v1.39.0 server refuses anything else and the app does not probe the
-    /// server version for it). This case lets the editor show the real value,
-    /// and a save that does not touch the field can never round it to a
-    /// curated option.
+    /// editor enters them. This case lets the editor show the real value, and a
+    /// save that does not touch the field can never round it to a curated
+    /// option. **B5 (1.4, #126 3.11)** — the halves above one unit (1½ …
+    /// 9½) are picker options too, once the server is known to take them
+    /// (``pickerOptions(offeringHalves:)``).
     case other(Double)
 
     /// Server-supported split-pill fractions, decimal values matched exactly.
@@ -49,6 +49,34 @@ public enum MedicationUnitsPerDose: Hashable, Sendable, CaseIterable, Identifiab
     /// The curated picker options: the five fractions, then whole 1…10.
     public static var allCases: [MedicationUnitsPerDose] {
         fractions.map { .fraction($0) } + (1 ... pickerWholeMax).map { .whole($0) }
+    }
+
+    /// **B5 (1.4, #126 3.11)** — the first server release whose write
+    /// paths take a whole number plus a fraction (`isSupportedUnitsPerDose`,
+    /// #1034). An older server answers 1½ with a 422.
+    public static let combinedMinimumServerVersion = "1.39.1"
+
+    /// What the units-per-dose pickers offer, in order. With
+    /// `offeringHalves` the halves above one unit sit between the wholes
+    /// (1, 1½, 2 … 9½, 10); a half is ``other(_:)``, the value
+    /// ``from(decimal:)`` gives back for it, so a stored 1.5 finds its row.
+    public static func pickerOptions(offeringHalves: Bool) -> [MedicationUnitsPerDose] {
+        guard offeringHalves else { return allCases }
+        var options: [MedicationUnitsPerDose] = fractions.map { .fraction($0) }
+        for whole in 1 ... pickerWholeMax {
+            options.append(.whole(whole))
+            if whole < pickerWholeMax {
+                options.append(.other(Double(whole) + 0.5))
+            }
+        }
+        return options
+    }
+
+    /// Whether the configured server is known to take 1½ and the like. The
+    /// last `GET /api/version` answer decides; unknown answers `false`, and
+    /// the picker stays on the curated set.
+    static func serverTakesHalves(defaults: UserDefaults = .standard) -> Bool {
+        KnownServerVersion.isAtLeast(combinedMinimumServerVersion, defaults: defaults)
     }
 
     /// Maps a server-side decimal back onto a curated option. A supported

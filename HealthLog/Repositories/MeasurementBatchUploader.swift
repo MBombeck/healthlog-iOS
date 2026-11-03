@@ -135,6 +135,13 @@ public actor MeasurementBatchUploader {
         successNotifierSlot.withLock { $0 = notifier }
     }
 
+    /// A2 (1.4) — the `syncTrigger` a batch posted right now carries. A page
+    /// parked in the outbox keeps it, so its replay reports the wake that read
+    /// the rows instead of no trigger at all.
+    nonisolated var wireSyncTrigger: SyncTrigger {
+        syncTrigger.wireValue
+    }
+
     /// Sendet alle `entries` als ein oder mehrere Batches. Liefert einen Outcome
     /// pro tatsächlich abgesetztem Batch. Wirf nur wenn der Server-Call **für den
     /// aktuellen Batch** unwiederbringlich fehlschlägt — vorherige Batches in

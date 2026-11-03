@@ -260,6 +260,34 @@
             #expect(hk.mirrorCallCount == firstMirrorCalls)
         }
 
+        @Test("B5 — a mirror pass that could not decide leaves the one-shot due")
+        func undecidedMirrorKeepsTheBackfillDue() async throws {
+            let recorder = HistoryRecorder(rowsForSource: [
+                ServerMeasurementSource.withings.rawValue: [withingsWeight(id: "w-1")]
+            ])
+            let hk = MockHealthKitWriter()
+            hk.mirrorDecides = false
+            let store = try await makeStore(
+                recorder: recorder,
+                hk: hk,
+                defaults: freshDefaults(),
+                userID: "user-a",
+                standalone: false
+            )
+
+            // The person's direction setting was not known: nothing written,
+            // and the next launch walks the history again.
+            await store.runHistoricalBackfillForTesting()
+            await store.runHistoricalBackfillForTesting()
+            #expect(hk.mirrorCallCount == 2)
+
+            // Once a pass decides, the marker is set and the gate holds.
+            hk.mirrorDecides = true
+            await store.runHistoricalBackfillForTesting()
+            await store.runHistoricalBackfillForTesting()
+            #expect(hk.mirrorCallCount == 3)
+        }
+
         @Test("A different user gets their own one-shot (per-user partition)")
         func perUserPartition() async throws {
             let recorder = HistoryRecorder(rowsForSource: [

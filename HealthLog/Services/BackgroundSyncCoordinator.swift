@@ -561,13 +561,24 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     ///
     /// 1. **Reschedule first** — the next BGTask is submitted before any work
     ///    runs, so a crash mid-sweep does not kill the recurrence (WWDC19).
-    /// 2. **Expiration handler** — on iOS-driven expiration it cancels the
-    ///    in-flight work `Task` *and* completes the BGTask (`success: false`)
-    ///    immediately, so iOS always sees a completion and does not throttle us.
+    /// 2. **Expiration handler first** — installed before anything else runs
+    ///    (R-A1, 1.4; ``BGTaskWake``). On iOS-driven expiration it cancels the
+    ///    work `Task`, or keeps it from starting, *and* completes the BGTask
+    ///    (`success: false`) immediately, so iOS always sees a completion. It
+    ///    used to be set only after the main-actor heartbeat hop, the
+    ///    reschedule and the start of the work; an expiry in that window found
+    ///    no handler at all.
     /// 3. **Exactly-once `setTaskCompleted`** — a one-shot guard
     ///    (``OneShotCompletion``) makes the normal path and the expiration path
     ///    race-safe: whichever fires first wins, the other is a no-op.
     func runBGSync(on task: some BGTaskCompleting) async {
+        // BGProcessing grants ~30s/wake. On expiry the handler cancels the
+        // in-flight work AND completes exactly-once with success=false. Our
+        // anchor persistence writes only AFTER sample processing, so an aborted
+        // pass loses no data — the next wake re-reads the same window.
+        let wake = BGTaskWake(task: task) {
+            HLLog.healthKit.warning("BGTask Expiration-Handler getriggert — Sweep abgebrochen.")
+        }
         HLLog.healthKit.info("BG HK sync ran") // DEBUG-Anker — von Anleitung gefordert.
 
         // #66 P0.1 (Baustein 4) — honest evidence: this BGProcessing wake
@@ -578,35 +589,19 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         // Reschedule BEFORE work so a crash doesn't kill the recurrence.
         scheduleNextBGSync()
 
-        let completion = OneShotCompletion()
-        let expirationFlag = ExpirationFlag()
-
-        // The work runs in a child Task so the expiration handler can cancel it.
-        let work = Task { [weak self] in
-            await self?.runBGSyncPasses(expirationFlag: expirationFlag)
-        }
-
-        // Expiration: BGProcessing grants ~30s/wake. On expiry we cancel the
-        // in-flight work AND complete exactly-once with success=false. Our
-        // anchor persistence writes only AFTER sample processing, so an aborted
-        // pass loses no data — the next wake re-reads the same window.
-        task.setExpirationHandler {
-            expirationFlag.set()
-            work.cancel()
-            HLLog.healthKit.warning("BGTask Expiration-Handler getriggert — Sweep abgebrochen.")
-            completion.complete(task: task, success: false)
-        }
-
         guard healthKit != nil else {
-            completion.complete(task: task, success: false)
+            wake.finish(success: false)
             return
         }
 
-        await work.value
+        // The work runs in a child Task so the expiration handler can cancel it.
+        await wake.run { [weak self] expirationFlag in
+            await self?.runBGSyncPasses(expirationFlag: expirationFlag)
+        }
 
         // Normal path completion — exactly-once guarded against the expiration
         // handler having already fired.
-        completion.complete(task: task, success: !expirationFlag.value)
+        wake.finish()
     }
 
     /// The actual sync passes, each expiration-guarded + best-effort. Split out
@@ -719,6 +714,11 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// `BGProcessingTask` so an AppRefresh grant (short runtime budget) is never
     /// wasted on multi-thousand-row backfills.
     func runBGRefresh(on task: some BGTaskCompleting) async {
+        // R-A1 (1.4) — the expiration handler first, as in runBGSync. The
+        // AppRefresh grant is the short one, so the window mattered most here.
+        let wake = BGTaskWake(task: task) {
+            HLLog.healthKit.warning("BGAppRefresh Expiration-Handler getriggert — Refresh abgebrochen.")
+        }
         HLLog.healthKit.info("BG HK refresh ran") // DEBUG-Anker, analog runBGSync.
 
         // #66 P0.1 (Baustein 4) — honest evidence: this AppRefresh wake fired.
@@ -728,23 +728,11 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         // recurrence (Apple-Pattern, mirrors runBGSync).
         scheduleNextBGRefresh()
 
-        let completion = OneShotCompletion()
-        let expirationFlag = ExpirationFlag()
-
-        let work = Task { [weak self] in
+        await wake.run { [weak self] expirationFlag in
             await self?.runBGRefreshPasses(expirationFlag: expirationFlag)
         }
 
-        task.setExpirationHandler {
-            expirationFlag.set()
-            work.cancel()
-            HLLog.healthKit.warning("BGAppRefresh Expiration-Handler getriggert — Refresh abgebrochen.")
-            completion.complete(task: task, success: false)
-        }
-
-        await work.value
-
-        completion.complete(task: task, success: !expirationFlag.value)
+        wake.finish()
     }
 
     /// The light AppRefresh pass, expiration-guarded + best-effort (an unwired
@@ -833,19 +821,3 @@ final class OneShotCompletion: @unchecked Sendable {
         let task: BGTask
     }
 #endif
-
-/// Atomisches Flag für den Expiration-Handler. NSLock-basiert weil `BGTask.expirationHandler`
-/// auf einer beliebigen Thread läuft — wir wollen kein Actor-Hopping in einem Code-Pfad,
-/// der vom System "harten" Cutoff hat.
-private final class ExpirationFlag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var didExpire = false
-
-    func set() {
-        lock.withLock { didExpire = true }
-    }
-
-    var value: Bool {
-        lock.withLock { didExpire }
-    }
-}

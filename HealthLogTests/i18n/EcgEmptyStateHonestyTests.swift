@@ -20,10 +20,9 @@ import Testing
 /// This suite pins the copy against four ways it could rot back:
 ///
 /// 1. **No phantom sync.** The copy may not describe an automatic transfer.
-/// 2. **The honest distinction survives.** "Nothing uploaded yet" and "this
-///    device cannot record ECGs" are different facts and must stay separate;
-///    the hardware sentence stays calm — no error framing, no hardware sales
-///    pitch.
+/// 2. **The honest distinction survives.** "Nothing uploaded yet" does not
+///    turn into "this device cannot record ECGs" (1.4 B2 removed the separate
+///    hardware sentence; the cause sentence still does not absorb it).
 /// 3. **The path that works today is named and walkable.** Apple Health →
 ///    `export.zip` → Einstellungen → Apple-Health-Import, with a route
 ///    (``AppRouter/requestAppleHealthImport()``) rather than only a description.
@@ -50,7 +49,6 @@ struct EcgEmptyStateHonestyTests {
         "insights.ecg.empty.pathStep2",
         "insights.ecg.empty.pathStep3",
         "insights.ecg.empty.cta",
-        "insights.ecg.empty.hardwareNote",
         // GH #74 — the third reason the surface can be empty, and the only one
         // with an action behind it. Joins the list rather than sitting outside
         // it, so every guard below (no phantom sync, no dated promise, no
@@ -108,9 +106,12 @@ struct EcgEmptyStateHonestyTests {
         // copy explicitly denies the wrong reading.
         #expect(de.contains("nicht, weil keine existiert"))
         #expect(en.lowercased().contains("not because none exists"))
-        // …and it states plainly that the app does not fetch them itself.
-        #expect(de.contains("Apple Health"))
-        #expect(en.contains("Apple Health"))
+        // 1.4 B1 — the body used to add that HealthLog does not fetch ECGs
+        // from Apple Health on its own. Since GH #74 it does, behind the
+        // switch ``uploadOff`` names, so that sentence was the new phantom:
+        // a denial of a transfer that now exists. It must not come back.
+        #expect(!de.contains("nicht von selbst"), "der Rumpf bestreitet die Übernahme aus Apple Health")
+        #expect(!en.lowercased().contains("does not currently fetch"), "the body denies the Apple Health transfer")
     }
 
     @Test("Kein Versprechen mit Datum — der Live-Sync wird nirgends terminiert")
@@ -136,33 +137,18 @@ struct EcgEmptyStateHonestyTests {
         }
     }
 
-    // MARK: - 2. The hardware case is separate and calm
+    // MARK: - 2. The hardware case stays out of the cause sentence
 
-    @Test("Fehlende EKG-Hardware ist ein eigener, ruhiger Satz — kein Fehler")
-    func hardwareNoteIsCalmAndSeparate() throws {
-        let de = try value("insights.ecg.empty.hardwareNote", "de")
-        let en = try value("insights.ecg.empty.hardwareNote", "en")
-        // Explicitly de-escalated.
-        #expect(de.contains("kein Fehler"))
-        #expect(en.lowercased().contains("not an error"))
-        // The distinction is only honest if the two facts live in two strings —
-        // the body must not absorb the hardware case.
+    /// 1.4 B2 — the separate hardware sentence ("Aufzeichnen kann ein EKG nur
+    /// ein Gerät mit EKG-Funktion … Das ist kein Fehler.") is gone: the ECG
+    /// page only appears once a recording exists, so the empty branch is for
+    /// the rare latched case, and the sentence explained the obvious. What
+    /// stays is the distinction itself: the cause sentence still does not
+    /// claim the hardware case.
+    @Test("Der Ursachen-Satz nimmt den Hardware-Fall nicht auf")
+    func bodyStaysOffTheHardwareCase() throws {
         let body = try value("insights.ecg.empty.body", "de")
         #expect(!body.contains("Apple Watch"), "Hardware-Fall gehört nicht in den Ursachen-Satz")
-    }
-
-    @Test("Kein Kaufaufruf für Hardware")
-    func hardwareNoteDoesNotSell() throws {
-        let forbidden = [
-            "kauf", "erwerben", "anschaffen", "hol dir", "besorg", "upgrade",
-            "buy", "purchase", "get an apple watch", "you need an"
-        ]
-        for language in ["de", "en"] {
-            let text = try value("insights.ecg.empty.hardwareNote", language).lowercased()
-            for needle in forbidden {
-                #expect(!text.contains(needle), "Hardware-Hinweis (\(language)) verkauft: '\(needle)'")
-            }
-        }
     }
 
     // MARK: - 3. The path that works today
@@ -259,9 +245,9 @@ struct EcgEmptyStateHonestyTests {
 
     @Test("Die Zuschreibung der bestückten Fläche bleibt — wer das Urteil erzeugt hat")
     func populatedSurfaceKeepsItsDisclaimer() throws {
-        // CU-37 rewrote only the empty branch. Der Block wird von
-        // `EcgDisclaimerBlock` auf jeder bestückten EKG-Fläche nicht-abweisbar
-        // gerendert.
+        // CU-37 rewrote only the empty branch. Der Satz wird von
+        // `EcgAttributionFooter` auf jeder bestückten EKG-Fläche nicht-abweisbar
+        // gerendert (1.4 B2: am Fuß der Karte, die er zuschreibt).
         //
         // UI-Standard R17 (U1): was der Satz trägt, ist die URHEBERSCHAFT des
         // Urteils — es stammt vom Aufzeichnungsgerät, und HealthLog liest die

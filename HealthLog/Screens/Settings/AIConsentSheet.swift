@@ -52,25 +52,25 @@ struct AIConsentSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: HLSpace.md) {
-                        bulletRow(
-                            symbol: "lock.shield",
-                            text: String(
+                        HLIconTextRow(
+                            icon: "lock.shield",
+                            verbatim: String(
                                 localized: "Your name, email, and device ID are never sent."
                             )
                         )
                         if showsExternalProcessingDisclosure {
-                            bulletRow(
-                                symbol: "doc.viewfinder",
-                                text: documentProcessingDisclosure
+                            HLIconTextRow(
+                                icon: "doc.viewfinder",
+                                verbatim: documentProcessingDisclosure
                             )
-                            bulletRow(
-                                symbol: "building.2",
-                                text: recipientBulletText
+                            HLIconTextRow(
+                                icon: "building.2",
+                                verbatim: recipientBulletText
                             )
                         }
-                        bulletRow(
-                            symbol: "arrow.uturn.backward",
-                            text: String(localized: "You can disable transmission at any time in Settings → Assistant.")
+                        HLIconTextRow(
+                            icon: "arrow.uturn.backward",
+                            verbatim: String(localized: "You can disable transmission at any time in Settings → Assistant.")
                         )
                     }
                     .padding(HLSpace.md)
@@ -112,10 +112,8 @@ struct AIConsentSheet: View {
                         action: onAccept
                     )
                     .tint(HLAccent.primary)
-                    Text("You can change this choice at any time in Settings.")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .multilineTextAlignment(.center)
+                    // 1.4 B2-c — no third "change it anytime" line: the
+                    // last bullet above already says how to take it back.
                 }
                 .padding(HLSpace.lg)
                 .background(HLMaterialBackground(.regularMaterial))
@@ -278,22 +276,6 @@ struct AIConsentSheet: View {
             true
         case .userChosen:
             provider != .local
-        }
-    }
-
-    private func bulletRow(symbol: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            // T2-4 + Y8: bullet symbols stay mono; size lifts off the
-            // raw 16pt literal onto the .hlCallout Dynamic-Type-aware
-            // token so glyph weight tracks the body copy beside it.
-            Image(systemName: symbol)
-                .font(.hlCallout.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 24)
-            Text(text)
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

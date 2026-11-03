@@ -64,11 +64,11 @@
             lock.withLock { _writtenMeasurements }
         }
 
-        /// W-HKBACKFILL — records every batch handed to the server-origin mirror
-        /// (latest-page + historical backfill) so the backfill suite can pin the
-        /// run-once gate, source policy, and what reaches the mirror.
+        /// W-HKBACKFILL — every batch handed to the server-origin mirror; B5 (1.4):
+        /// `mirrorDecides == false` plays a pass that could not decide.
         private var _mirrorCallCount = 0
         private var _mirroredMeasurements: [HealthLog.Measurement] = []
+        var mirrorDecides = true
 
         var mirrorCallCount: Int {
             lock.withLock { _mirrorCallCount }
@@ -78,10 +78,11 @@
             lock.withLock { _mirroredMeasurements }
         }
 
-        func mirrorServerMeasurements(_ measurements: [HealthLog.Measurement]) async {
+        func mirrorServerMeasurements(_ measurements: [HealthLog.Measurement]) async -> Bool {
             lock.withLock {
                 _mirrorCallCount += 1
                 _mirroredMeasurements.append(contentsOf: measurements)
+                return mirrorDecides
             }
         }
 
@@ -767,7 +768,6 @@
         }
 
         func write(_: HealthLog.Measurement) async throws {}
-        func mirrorServerMeasurements(_: [HealthLog.Measurement]) async {}
         func writeMood(_: MoodEntry) async throws {}
         func deleteMood(id _: String) async throws {}
         func requestMoodAuthorization() async throws {}

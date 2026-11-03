@@ -27,6 +27,11 @@ import SwiftUI
 struct ComplianceRingCard: View {
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(MedicationsStore.self) private var medicationsStore
+    /// 1.4 B4 — the ring grows with the text (capped), so its "heute" stays
+    /// inside the stroke; at the accessibility sizes the numbers move under
+    /// the ring instead of wrapping word by word beside it.
+    @ScaledMetric(relativeTo: .body) private var scaledRingSide: CGFloat = 92
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let snapshot: ComplianceSnapshot
     /// **v0.5.6 HOME-COMPLIANCE-SHEET.** Optional tap callback wired by
     /// the dashboard root to present `AnstehendeEinnahmenSheet`. When
@@ -45,111 +50,86 @@ struct ComplianceRingCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            Group {
-                if isFullyEmpty {
-                    emptyStateCard
-                } else {
-                    contentCard
-                }
-            }
-            .modifier(TappableComplianceModifier(
-                isActive: onTap != nil && !isFullyEmpty,
-                tapTick: tapTick,
-                onTap: {
-                    tapTick &+= 1
-                    onTap?()
-                }
-            ))
-            // 1.0.3 (App Review 1.4.1) — the compliance percentage and the
-            // band colouring it are clinical conventions; the link names the
-            // references. Deliberately OUTSIDE the tappable card: nesting a
-            // Button inside the card's own Button would let the intake sheet
-            // swallow the tap, and VoiceOver would read one merged control.
-            // Suppressed on the empty card — there is no claim to cite yet.
-            if !isFullyEmpty {
-                HLSourcesLink(topic: .medicationCompliance)
-                    .padding(.horizontal, HLSpace.lg)
-            }
-        }
-    }
-
-    private var emptyStateCard: some View {
-        // v0.5.5.2 — discrete empty-state hint instead of a hollow
-        // ring with em-dash. Keeps the card surface but stops
-        // pretending there's data to read.
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text(String(localized: "Medication compliance"))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                Text(String(localized: "No reminders scheduled yet"))
-                    .font(.hlTitle3)
-                    .foregroundStyle(HLText.primary)
-                Text(String(localized: "Add an entry in the Medications tab to see reminders + compliance here."))
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        // 1.4 B2 — without any schedule and without any history the card has
+        // nothing to say and no action, so it is not there at all (it used to
+        // stay as an onboarding sentence for everyone without medications).
+        // The loose "Quellen" row under it is gone too: the ring here is
+        // monochrome and only counts doses, the method behind the band colours
+        // lives on the medication detail where those colours are drawn.
+        if !isFullyEmpty {
+            contentCard
+                .modifier(TappableComplianceModifier(
+                    isActive: onTap != nil,
+                    tapTick: tapTick,
+                    onTap: {
+                        tapTick &+= 1
+                        onTap?()
+                    }
+                ))
         }
     }
 
     private var contentCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HStack(alignment: .center, spacing: HLSpace.lg) {
-                    HLRing(
-                        progress: snapshot.ratio,
-                        label: String(localized: "today"),
-                        value: snapshot.hasSchedule ? "\(snapshot.takenToday)/\(snapshot.scheduledToday)" : "—",
-                        tint: HLText.primary,
-                        // Audit H2 — VoiceOver otherwise reads only the bare
-                        // value ("4 / 6"); frame it as the compliance ring.
-                        accessibilityLabel: snapshot.ringAccessibilityLabel
-                    )
-                    .frame(width: 92, height: 92)
-                    VStack(alignment: .leading, spacing: HLSpace.xs) {
-                        Text(String(localized: "Medication compliance"))
-                            .font(.hlCaption).foregroundStyle(HLText.secondary)
-                        Text(snapshot.hasSchedule
-                            ? String(localized: "\(Self.percentLabel(snapshot.ratio)) today")
-                            : String(localized: "Nothing scheduled today"))
-                            .font(.hlTitle2)
-                            .foregroundStyle(snapshot.hasSchedule ? HLText.primary : HLText.tertiary)
-                        // v0.6.1.26 — subtitle line carries the calm
-                        // "X noch offen" / "Alles eingenommen" copy; the
-                        // overdue suffix renders only when an intake
-                        // crossed its scheduledAt, picking up the red
-                        // status-bad tint to draw the attention the
-                        // top-of-Home banner used to own.
-                        HStack(spacing: HLSpace.xs) {
-                            // U5 (1.1.1): a trailing comma joins the overdue
-                            // suffix, no middle dot.
-                            Text(verbatim: overdueCount > 0 ? subtitle + "," : subtitle)
-                                .font(.hlSubhead).foregroundStyle(HLText.secondary)
-                            if overdueCount > 0 {
-                                Text(String(localized: "overdue"))
-                                    .font(.hlSubhead.weight(.semibold))
-                                    .foregroundStyle(HLColor.statusBad)
-                            }
-                        }
+                // 1.4 B4 — Today's one card heading, the metric tiles' glyph
+                // and title, instead of a plain caption beside the ring.
+                HLTileHeaderRow(icon: "pills.fill", title: Text(String(localized: "Medication compliance"))) { EmptyView() }
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: HLSpace.md) {
+                        ring
+                        textColumn
                     }
-                    Spacer()
-                    // v0.6.1.3 Y4.1 — Operator-direction: drop the
-                    // decorative trailing chevron from the Home
-                    // Medikamente row. Tap-affordance stays via the
-                    // surrounding TappableComplianceModifier; the
-                    // chevron added visual noise without communicating
-                    // anything the press-feedback haptic + sheet-on-tap
-                    // doesn't already convey.
+                } else {
+                    HStack(alignment: .center, spacing: HLSpace.lg) {
+                        ring
+                        textColumn
+                        Spacer()
+                    }
                 }
                 if !sparklineValues.isEmpty {
                     HLSparkline(values: sparklineValues, tint: HLText.tertiary)
-                        .frame(height: 36)
+                        .frame(height: HLChartStyle.heightCompact)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityHidden(true) // surface conveyed via ring/subtitle copy
                 }
+            }
+        }
+    }
+
+    private var ringSide: CGFloat {
+        min(scaledRingSide, 160)
+    }
+
+    private var ring: some View {
+        HLRing(
+            progress: snapshot.ratio,
+            label: String(localized: "today"),
+            value: snapshot.hasSchedule ? "\(snapshot.takenToday)/\(snapshot.scheduledToday)" : "—",
+            tint: HLText.primary,
+            // Audit H2 — VoiceOver otherwise reads only the bare
+            // value ("4 / 6"); frame it as the compliance ring.
+            accessibilityLabel: snapshot.ringAccessibilityLabel
+        )
+        .frame(width: ringSide, height: ringSide)
+    }
+
+    private var textColumn: some View {
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
+            Text(snapshot.hasSchedule
+                ? String(localized: "\(Self.percentLabel(snapshot.ratio)) today")
+                : String(localized: "Nothing scheduled today"))
+                .font(.hlTitle2)
+                .foregroundStyle(snapshot.hasSchedule ? HLText.primary : HLText.tertiary)
+            // v0.6.1.26 — subtitle line carries the calm
+            // "X noch offen" / "Alles eingenommen" copy; the
+            // overdue suffix renders only when an intake
+            // crossed its scheduledAt, picking up the red
+            // status-bad tint to draw the attention the
+            // top-of-Home banner used to own. 1.4 B2: nothing
+            // scheduled has no subtitle, the title says it.
+            if let subtitle {
+                subtitleRow(subtitle)
             }
         }
     }
@@ -165,11 +145,27 @@ struct ComplianceRingCard: View {
         return !hasHistoricalRate
     }
 
-    private var subtitle: String {
-        guard snapshot.hasSchedule else { return String(localized: "No intakes scheduled for today.") }
+    private var subtitle: String? {
+        guard snapshot.hasSchedule else { return nil }
         return snapshot.scheduledToday == snapshot.takenToday
             ? String(localized: "All taken — nice.")
             : String(localized: "\(snapshot.scheduledToday - snapshot.takenToday) still open")
+    }
+
+    /// "1 still open", with the red "overdue" suffix when the server flags an
+    /// open dose as overdue.
+    private func subtitleRow(_ subtitle: String) -> some View {
+        HStack(spacing: HLSpace.xs) {
+            // U5 (1.1.1): a trailing comma joins the overdue suffix, no
+            // middle dot.
+            Text(verbatim: overdueCount > 0 ? subtitle + "," : subtitle)
+                .font(.hlSubhead).foregroundStyle(HLText.secondary)
+            if overdueCount > 0 {
+                Text(String(localized: "overdue"))
+                    .font(.hlSubhead.weight(.semibold))
+                    .foregroundStyle(HLColor.statusBad)
+            }
+        }
     }
 
     /// v0.6.1.26 — count of today's intakes the SERVER flags as an open

@@ -61,7 +61,7 @@
                 let harness = Phase09AuthHarness(flow: flow, acceptanceGate: gate)
                 await harness.prepare()
                 let running = Task { @MainActor in await harness.complete() }
-                let parked = await phase09Settle { gate.waitingCount == 1 }
+                let parked = await phase09AwaitCondition { gate.waitingCount == 1 }
                 #expect(parked, "\(flow.rawValue) never reached its acceptance hop")
 
                 harness.store.enterStandaloneMode()
@@ -102,10 +102,10 @@
             )
 
             let older = Task { @MainActor in await harness.store.loginWithWebLogin(anchor: harness.anchor) }
-            let sheetIsUp = await phase09Settle { sheetGate.waitingCount == 1 }
+            let sheetIsUp = await phase09AwaitCondition { sheetGate.waitingCount == 1 }
             #expect(sheetIsUp, "the older attempt never opened its sheet")
             let newer = Task { @MainActor in await harness.store.loginWithSSO(anchor: harness.anchor) }
-            let newerIsParked = await phase09Settle { exchangeGate.waitingCount == 1 }
+            let newerIsParked = await phase09AwaitCondition { exchangeGate.waitingCount == 1 }
             #expect(newerIsParked, "the newer attempt never reached its hop")
             #expect(harness.store.isWorking, "the newer attempt is the one working")
 
@@ -138,7 +138,7 @@
             retired.store.setPhaseForTesting(.authenticated(previous))
 
             let stale = Task { @MainActor in await retired.complete() }
-            let staleIsParked = await phase09Settle { retiredGate.waitingCount == 1 }
+            let staleIsParked = await phase09AwaitCondition { retiredGate.waitingCount == 1 }
             #expect(staleIsParked, "the attempt never reached its exchange")
             _ = await retired.store.handleUnauthorized()
             #expect(retired.store.phase == .unauthenticated, "the 401 bridge did not retire the session")

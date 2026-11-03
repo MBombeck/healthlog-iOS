@@ -40,7 +40,9 @@ struct DashboardCustomizationScreen: View {
         // the navigation Liquid Glass instead of clipping cleanly.
         // iOS 18-25: no-op (system stays flat-translucent).
         .hlScrollEdgeSoft()
-        .navigationTitle(String(localized: "Customize dashboard"))
+        // 1.4 B4 — "Dashboard anpassen" was cut to "Dashboard an…" between
+        // "Bearbeiten" and the reset button; the screen lists the tiles.
+        .navigationTitle(String(localized: "dashboard.customize.screenTitle"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // v0.14 b147 — explicit EditButton so the visible section shows
@@ -134,18 +136,16 @@ struct DashboardCustomizationScreen: View {
         let hidden = layoutStore.layout.widgets
             .filter { !$0.effectiveTileVisible && Self.hasHomeSurface($0.id) }
             .sorted { $0.order < $1.order }
-        Section {
-            if hidden.isEmpty {
-                Text(String(localized: "All tiles are active. You haven't hidden anything."))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-            } else {
+        // 1.4 B2-c — nothing hidden, no section: an empty "Hidden" list with
+        // "you haven't hidden anything" under it said nothing.
+        if !hidden.isEmpty {
+            Section {
                 ForEach(hidden) { row in
                     customizationRow(row, isVisible: false)
                 }
+            } header: {
+                Text(String(localized: "Hidden"))
             }
-        } header: {
-            Text(String(localized: "Hidden"))
         }
     }
 

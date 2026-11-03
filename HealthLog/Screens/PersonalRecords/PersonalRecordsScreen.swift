@@ -48,12 +48,6 @@ struct PersonalRecordsScreen: View {
     @Environment(AuthStore.self) private var authStore
     /// QoL-A2 (Felt-craft #5) — gate the celebration-dismiss fade on reduce-motion.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// v1.18.3 — Rest Mode source (server-authoritative via the Health Score).
-    /// When active (+ illness enabled), the streak rail carries a calm note that
-    /// a recovery gap is expected. The streaks themselves are step-driven
-    /// records (`StreakComputer`) and are NEVER penalised by an illness episode —
-    /// this is render-side softening only.
-    @Environment(HealthScoreStore.self) private var healthScoreStore
 
     @State private var selectedShareRecord: PersonalRecord?
     @State private var celebrationRecord: PersonalRecord?
@@ -141,8 +135,13 @@ struct PersonalRecordsScreen: View {
                     .padding(.horizontal, HLSpace.lg)
                 }
 
-                bucketPicker(selection: $bindableStore.selectedBucket)
-                    .padding(.horizontal, HLSpace.lg)
+                // 1.4 B2 — the picker offers only ranges that hold a record, so
+                // no range opens on an empty grid with an apology under it.
+                let buckets = Self.availableBuckets(store.enrichedRecords)
+                if buckets.count > 1 {
+                    bucketPicker(buckets, selection: $bindableStore.selectedBucket)
+                        .padding(.horizontal, HLSpace.lg)
+                }
 
                 gridSection
 
@@ -150,13 +149,9 @@ struct PersonalRecordsScreen: View {
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
                         HLSectionLabel(LocalizedStringKey(Layout.streaksHeader))
                             .padding(.horizontal, HLSpace.lg)
-                        // v1.18.3 — calm rest-aware note in the streaks section.
-                        // Records are step-driven (StreakComputer) and untouched
-                        // by an illness episode; this only softens the framing.
-                        RestModeGate(score: healthScoreStore.score) { restMode in
-                            RestModeAnnotationPill(restMode: restMode, style: .caption)
-                                .padding(.horizontal, HLSpace.lg)
-                        }
+                        // 1.4 B2 — no rest-mode paragraph here: the note
+                        // belongs to Today and the recovery page, not between
+                        // a heading and its rail.
                         StreakRail(streaks: store.streakRecords) { record in
                             selectedShareRecord = record
                         }
@@ -176,6 +171,13 @@ struct PersonalRecordsScreen: View {
             }
             .padding(.top, HLSpace.md)
             .padding(.bottom, HLSpace.xxxl)
+        }
+        .onChange(of: Self.availableBuckets(store.enrichedRecords), initial: true) { _, buckets in
+            // A range that lost its last record (or never had one) hands the
+            // selection to the narrowest range that has something.
+            if !buckets.contains(store.selectedBucket), let first = buckets.first {
+                store.selectedBucket = first
+            }
         }
     }
 
@@ -227,30 +229,8 @@ struct PersonalRecordsScreen: View {
 
     @ViewBuilder
     private var gridSection: some View {
-        let visible = store.visibleRecords.filter { record in
-            // Streak records render in the rail instead of the grid.
-            let slot = (record.base.metricSlot ?? "").lowercased()
-            return !(slot.contains("serie") || slot.contains("streak"))
-        }
-        if visible.isEmpty {
-            VStack(spacing: HLSpace.sm) {
-                Image(systemName: "tray")
-                    // swiftlint:disable:next dynamic_type_bypass
-                    .font(.system(
-                        size: 36,
-                        weight: .regular
-                    )) // Empty-state hero medallion glyph — intentionally off the HLIconSize scale (>hero/28pt), decorative with no
-                    // accompanying scaling text.
-                    .foregroundStyle(HLText.tertiary)
-                Text(LocalizedStringKey(Layout.bucketEmpty))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, HLSpace.xl)
-            .padding(.horizontal, HLSpace.lg)
-        } else {
+        let visible = Self.gridRecords(store.visibleRecords)
+        if !visible.isEmpty {
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: HLSpace.md), GridItem(.flexible(), spacing: HLSpace.md)],
                 spacing: HLSpace.md
@@ -265,9 +245,24 @@ struct PersonalRecordsScreen: View {
         }
     }
 
-    private func bucketPicker(selection: Binding<TimeBucket>) -> some View {
+    /// Streak records render in the rail instead of the grid.
+    nonisolated static func gridRecords(_ records: [PersonalRecord]) -> [PersonalRecord] {
+        records.filter { record in
+            let slot = (record.base.metricSlot ?? "").lowercased()
+            return !(slot.contains("serie") || slot.contains("streak"))
+        }
+    }
+
+    /// 1.4 B2 — the time ranges that hold at least one grid record, in picker
+    /// order (narrowest first). Empty when there is no grid record at all.
+    nonisolated static func availableBuckets(_ records: [PersonalRecord]) -> [TimeBucket] {
+        let grid = gridRecords(records)
+        return TimeBucket.allCases.filter { bucket in grid.contains { bucket.includes($0.bucket) } }
+    }
+
+    private func bucketPicker(_ buckets: [TimeBucket], selection: Binding<TimeBucket>) -> some View {
         Picker(selection: selection) {
-            ForEach(TimeBucket.allCases) { bucket in
+            ForEach(buckets) { bucket in
                 Text(LocalizedStringKey(bucket.label))
                     .tag(bucket)
             }
@@ -298,16 +293,15 @@ extension PersonalRecordsScreen {
     /// no catalog entry (1.0.3 / audit row 18): the screen title, the bucket
     /// empty line, the comparison header and the milestones header all rendered
     /// raw German in the English UI — on the screen a reviewer chasing
-    /// citations reaches through `BenchmarkSourceSheet`. `streaksHeader` stays a
-    /// literal because "Streaks" is the word in both locales.
+    /// citations reaches through `BenchmarkSourceSheet`. `streaksHeader` was the
+    /// last literal ("Streaks" in both locales); German reads "Serien" since 1.4.
     enum Layout {
         static let navigationTitle = "records.title"
         static let emptyTitle = "No personal records yet"
         static let emptySubtitle =
             "Personal bests per metric unlock once you have enough data."
-        static let bucketEmpty = "records.empty.bucket"
         static let bucketPickerLabel = "Time range"
-        static let streaksHeader = "Streaks"
+        static let streaksHeader = "records.streaks.header"
         static let milestonesHeader = "records.milestones.header"
         static let comparisonHeader = "records.comparison.header"
     }

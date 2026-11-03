@@ -50,13 +50,11 @@ struct WhoopIntegrationScreen: View {
     /// Liegt jetzt auf `HLSettingsPage` + `HLSettingsCard`.
     private var liveBody: some View {
         HLSettingsPage(title: "WHOOP") {
+            // 1.4 B4 — the credentials step lives in the WHOOP card. A second
+            // card below left this one with a title, a pill and an empty body.
             connectionCard
-            if store.stage == .needsCredentials {
-                credentialsCard
-            }
-            // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
-            // primitive as Dashboard/Insights, self-suppressing).
-            HLSyncStatusFooter(screenLoading: store.isWorking)
+            // 1.4 B2-c — no app sync footer; the card says when WHOOP last
+            // synced.
         }
         .navigationTitle("WHOOP")
         // SET-V2-C (C-4) — integrations detail canon is `.inline` (uniform with AppleHealthIntegrationDetailScreen).
@@ -87,7 +85,11 @@ struct WhoopIntegrationScreen: View {
     private var statusPill: some View {
         switch store.stage {
         case .loading:
-            HLStatusPill(.unknown(label: String(localized: "Checking")))
+            // 1.4 B4 — "Checking" only while it is; after a failed read the
+            // card's sentence says what happened.
+            if store.error == nil {
+                HLStatusPill(.unknown(label: String(localized: "Checking")))
+            }
         case .needsCredentials:
             HLStatusPill(.disconnected(label: String(localized: "Not configured")))
         case .needsConnect:
@@ -142,7 +144,8 @@ struct WhoopIntegrationScreen: View {
     private var statusSubtitle: String? {
         switch store.stage {
         case .loading:
-            return String(localized: "Loading WHOOP status.")
+            // 1.4 B2-c — the "Checking" pill says it.
+            return nil
         case .needsCredentials:
             return nil
         case .needsConnect:
@@ -164,8 +167,10 @@ struct WhoopIntegrationScreen: View {
     @ViewBuilder
     private var stageContent: some View {
         switch store.stage {
-        case .loading, .needsCredentials:
+        case .loading:
             EmptyView()
+        case .needsCredentials:
+            credentialsFields
         case .needsConnect:
             connectActions
         case .tokenExpired, .connected:
@@ -175,46 +180,42 @@ struct WhoopIntegrationScreen: View {
 
     // MARK: - 1. Credentials entry
 
-    private var credentialsCard: some View {
-        HLSettingsCard(
-            icon: "key.horizontal.fill",
-            title: "WHOOP developer credentials"
+    @ViewBuilder
+    private var credentialsFields: some View {
+        // Klasse D — die Aussage „verschlüsselt auf deinem Server
+        // gespeichert, nie auf diesem iPhone" bleibt wortgleich und an
+        // ihrem Ort (direkt über den Feldern, die das Secret aufnehmen).
+        Text(
+            "Create a WHOOP developer app at developer.whoop.com, then paste its Client ID and Client Secret here. They are stored encrypted on your server and never on this iPhone."
+        )
+        .font(.hlCaption)
+        .foregroundStyle(HLText.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+        TextField(String(localized: "Client ID"), text: $clientIdDraft)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .accessibilityIdentifier("settings.whoop.clientIdField")
+
+        SecureField(String(localized: "Client Secret"), text: $clientSecretDraft)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .accessibilityIdentifier("settings.whoop.clientSecretField")
+
+        // v0.14.1 #6 — was "Save credentials" / "Zugangsdaten
+        // speichern"; shortened to the canonical "Save" / "Speichern"
+        // (operator: too long/confusing on credential screens).
+        // R9 — „Speichern" am Formularende ist das Commit dieses Schritts;
+        // in dieser Stufe rendert kein zweites `.primary`.
+        HLButton(
+            String(localized: "Save"),
+            variant: .primary,
+            isLoading: store.isWorking
         ) {
-            // Klasse D — die Aussage „verschlüsselt auf deinem Server
-            // gespeichert, nie auf diesem iPhone" bleibt wortgleich und an
-            // ihrem Ort (direkt über den Feldern, die das Secret aufnehmen).
-            Text(
-                "Create a WHOOP developer app at developer.whoop.com, then paste its Client ID and Client Secret here. They are stored encrypted on your server and never on this iPhone."
-            )
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            TextField(String(localized: "Client ID"), text: $clientIdDraft)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("settings.whoop.clientIdField")
-
-            SecureField(String(localized: "Client Secret"), text: $clientSecretDraft)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("settings.whoop.clientSecretField")
-
-            // v0.14.1 #6 — was "Save credentials" / "Zugangsdaten
-            // speichern"; shortened to the canonical "Save" / "Speichern"
-            // (operator: too long/confusing on credential screens).
-            // R9 — „Speichern" am Formularende ist das Commit dieses Schritts;
-            // in dieser Stufe rendert kein zweites `.primary`.
-            HLButton(
-                String(localized: "Save"),
-                variant: .primary,
-                isLoading: store.isWorking
-            ) {
-                Task { await saveCredentials() }
-            }
-            .disabled(!canSaveCredentials || store.isWorking)
-            .accessibilityIdentifier("settings.whoop.saveCredentialsButton")
+            Task { await saveCredentials() }
         }
+        .disabled(!canSaveCredentials || store.isWorking)
+        .accessibilityIdentifier("settings.whoop.saveCredentialsButton")
     }
 
     private var canSaveCredentials: Bool {
@@ -396,7 +397,7 @@ struct WhoopIntegrationScreen: View {
     /// Maps the server `errorCode` (carried on `HLError.server(code:)`) to a
     /// human message for the `test` probe + the connect/credentials failures.
     private func mappedErrorMessage(_ error: HLError) -> String {
-        if case let .server(_, code, message) = error {
+        if case let .server(_, code, _) = error {
             switch code {
             case "not_configured":
                 return String(localized: "Save your WHOOP credentials before testing.")
@@ -411,9 +412,13 @@ struct WhoopIntegrationScreen: View {
             case "timeout":
                 return String(localized: "WHOOP took too long to respond. Try again.")
             default:
-                return message
+                // 1.4 B4 — a 4xx message as the server words it, a 5xx as
+                // the calm sentence (userFacingDescription decides).
+                return error.userFacingDescription
             }
         }
-        return error.localizedDescription
+        // 1.4 B4 — never the decoder's text; the technical detail is in
+        // "Support-Info kopieren" (RecentFailureLog).
+        return error.userFacingDescription
     }
 }

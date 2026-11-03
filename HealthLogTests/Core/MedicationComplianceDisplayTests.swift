@@ -76,6 +76,30 @@ struct MedicationComplianceDisplayTests {
     func complianceDisplayPRNNoRows() {
         let snapshot = MedicationsStore.ComplianceCardSnapshot(rate7: nil, rate30: nil)
         #expect(snapshot.displayRows.isEmpty)
+        #expect(snapshot.listRow == nil)
+    }
+
+    /// 1.4 B4 — the list card paints one bar, the 30-day window both server
+    /// cadences carry; the detail page keeps every window.
+    @Test("The list bar is the 30-day window for daily and weekly cadences alike")
+    func listRowIsTheThirtyDayWindow() {
+        let daily = MedicationsStore.ComplianceCardSnapshot(
+            rate7: 86, rate30: 93,
+            displayShortDays: 7, displayShortRate: 86, displayLongDays: 30, displayLongRate: 93
+        )
+        #expect(daily.listRow?.days == 30)
+        #expect(daily.listRow?.rate == 93)
+        let weekly = MedicationsStore.ComplianceCardSnapshot(
+            rate7: 100, rate30: 100,
+            displayShortDays: 30, displayShortRate: 100, displayLongDays: 90, displayLongRate: 92
+        )
+        #expect(weekly.listRow?.days == 30)
+        #expect(weekly.listRow?.rate == 100)
+        let legacy = MedicationsStore.ComplianceCardSnapshot(rate7: 86, rate30: 93)
+        #expect(legacy.listRow?.days == 30)
+        let shortOnly = MedicationsStore.ComplianceCardSnapshot(rate7: 71, rate30: nil)
+        #expect(shortOnly.listRow?.days == 7)
+        #expect(MedicationsStore.ComplianceCardSnapshot.unavailable.listRow == nil)
     }
 
     /// **v0.14.2 M5 — short-window streak decode.** The server emits

@@ -156,7 +156,7 @@ struct InsightsMetricStatusCard: View {
                     // operator flagged as "der Verlauf ist nicht mitgekommen".
                     if descriptor.showsSparkline, let values = descriptor.sparklineValues {
                         HLSparkline(values: values, tint: HLText.secondary)
-                            .frame(height: 40)
+                            .frame(height: HLChartStyle.heightCompact)
                             .accessibilityLabel(Text("Trend"))
                     }
                 }

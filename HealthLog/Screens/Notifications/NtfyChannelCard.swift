@@ -26,11 +26,8 @@ struct NtfyChannelCard: View {
     @State private var testTick = 0
 
     var body: some View {
-        HLSettingsCard(
-            icon: "server.rack",
-            title: "notifications.ntfy.title",
-            footer: "notifications.ntfy.footer"
-        ) {
+        // 1.4 B2 — the fields name what to enter; no footer repeats them.
+        HLSettingsCard(icon: "server.rack", title: "notifications.ntfy.title") {
             Toggle(isOn: $enabled) {
                 Text("notifications.ntfy.enable")
                     .font(.hlSubhead.weight(.semibold))

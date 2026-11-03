@@ -16,8 +16,7 @@ import SwiftUI
 /// - **screening** — the severity-band chart ("score · band" annotation, same
 ///   `mentalHealth.band.*` keys) + a "check-in" action + a reference row into the
 ///   mental-health surface. The crisis / item-9 UI is NOT duplicated here.
-/// - **free-text** — no chart: Next/Last + location (if set) + an honest
-///   "no linked measurement" hint + mark-done.
+/// - **free-text** — no chart: Next/Last + location (if set) + mark-done.
 struct VorsorgeReminderDetailSheet: View {
     let row: MeasurementReminderRow
     /// **ROUTE-07 (08-22)** — the shared store, passed **explicitly** rather than
@@ -65,6 +64,9 @@ struct VorsorgeReminderDetailSheet: View {
                         detailBody(model: model)
                     }
                     VorsorgeReminderLedgerSection(row: currentRow, store: store)
+                        // Loads here, not inside the section: the section is
+                        // absent while the ledger is empty (1.4 B2).
+                        .task { await store.loadHistory(id: row.id) }
                 }
                 .padding(HLSpace.lg)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -175,15 +177,17 @@ struct VorsorgeReminderDetailSheet: View {
 
     // MARK: - Metric arm
 
+    /// 1.4 B2 — under two readings there is no chart and no "history appears
+    /// later" block with a retry; a single reading still shows in the list.
     @ViewBuilder
     private func metricBody(model: VorsorgeDetailModel) -> some View {
         if model.isLoading, model.points.isEmpty {
             loadingState
-        } else if !model.points.isEmpty {
-            chart(model: model, bandByID: [:])
-            recentReadings(model: model)
         } else {
-            emptyState(model: model)
+            if !model.points.isEmpty {
+                chart(model: model, bandByID: [:])
+            }
+            recentReadings(model: model)
         }
     }
 
@@ -195,8 +199,6 @@ struct VorsorgeReminderDetailSheet: View {
             loadingState
         } else if !model.points.isEmpty {
             chart(model: model, bandByID: bandByID(model: model, instrument: instrument))
-        } else {
-            emptyState(model: model)
         }
         // The crisis / item-9 UI is NOT duplicated here — it stays owned by the
         // mental-health surface. We only point the way there.
@@ -235,23 +237,13 @@ struct VorsorgeReminderDetailSheet: View {
 
     // MARK: - Free-text arm
 
+    /// 1.4 B2 — the location when there is one; a free-text reminder needs no
+    /// line saying it has no linked measurement.
+    @ViewBuilder
     private var freeTextBody: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            if let location = row.location, !location.isEmpty {
-                detailRow(label: String(localized: "reminders.create.location.label"), value: location)
-            }
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "info.circle")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
-                Text("vorsorge.detail.freeText.noMetric")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-            }
-            .accessibilityElement(children: .combine)
+        if let location = row.location, !location.isEmpty {
+            detailRow(label: String(localized: "reminders.create.location.label"), value: location)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Chart
@@ -328,26 +320,6 @@ struct VorsorgeReminderDetailSheet: View {
         }
     }
 
-    private func emptyState(model: VorsorgeDetailModel) -> some View {
-        VStack(spacing: HLSpace.sm) {
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.hlTitle2)
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityHidden(true)
-            Text("vorsorge.detail.empty.title")
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-            Text("vorsorge.detail.empty.body")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.center)
-            HLButton("Retry", variant: .secondary) {
-                Task { await model.load() }
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 180)
-    }
-
     // MARK: - Lifecycle
 
     private func onAppear() async {
@@ -374,9 +346,9 @@ struct VorsorgeReminderDetailSheet: View {
 /// ledger and *not* the row for exactly that reason, and the row is used here
 /// only for its `id`.
 ///
-/// The three ways a ledger can be absent stay three different sentences: not
-/// asked yet, honestly empty (the ledger begins at the release that introduced
-/// it and cannot be backfilled), and not offered for this reminder at all.
+/// The three ways a ledger can be absent stay three different states: not
+/// asked yet (a spinner), honestly empty and not offered for this reminder at
+/// all. 1.4 B2: the last two show no section rather than a sentence each.
 private struct VorsorgeReminderLedgerSection: View {
     let row: MeasurementReminderRow
     let store: MeasurementRemindersStore
@@ -385,16 +357,23 @@ private struct VorsorgeReminderLedgerSection: View {
         VorsorgeCard.ledgerState(store.ledger(for: row.id))
     }
 
+    /// 1.4 B2 — an empty ledger and one not offered for this reminder show no
+    /// section: no heading over a sentence about app versions. The host starts
+    /// the load (`.task` at the call site), because an absent section cannot.
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("vorsorge.history.title")
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-            content
+        switch state {
+        case .empty, .unsupported:
+            EmptyView()
+        default:
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                Text("vorsorge.history.title")
+                    .font(.hlHeadline)
+                    .foregroundStyle(HLText.primary)
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("vorsorge.detail.history")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("vorsorge.detail.history")
-        .task { await store.loadHistory(id: row.id) }
     }
 
     @ViewBuilder
@@ -404,10 +383,8 @@ private struct VorsorgeReminderLedgerSection: View {
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 60)
                 .accessibilityLabel(Text("vorsorge.history.title"))
-        case .unsupported:
-            note("vorsorge.history.unsupported")
-        case .empty:
-            note("vorsorge.history.empty")
+        case .unsupported, .empty:
+            EmptyView()
         case let .loaded(entries, hasMore):
             entryList(entries)
             if hasMore { loadMoreButton }
@@ -473,17 +450,11 @@ private struct VorsorgeReminderLedgerSection: View {
         .accessibilityIdentifier("vorsorge.detail.history.retry")
     }
 
+    /// 1.4 B2 — plain caption, no decorative info glyph.
     private func note(_ key: LocalizedStringKey) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
-            Image(systemName: "info.circle")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityHidden(true)
-            Text(key)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        Text(key)
+            .font(.hlCaption)
+            .foregroundStyle(HLText.tertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -17,9 +17,9 @@ import SwiftUI
 ///   accent now lives only on `HLSettingsRow` leading chips.
 /// - `hlSubhead` (15pt) semibold title — aligns visually with the per-row
 ///   body font rather than a 20pt heading shouting at the user.
-/// - Optional `hlCaption` subtitle in `textSecondary` directly below the
-///   title row, single line (was 2 pre-W1-4) unless the card passes
-///   `subtitleWraps: true` (F1, 1.1.0) for a subtitle that must be read whole.
+/// - Optional subtitle in `textSecondary` directly below the title row. It
+///   wraps at every text size (1.4 B2-c, HIG Dynamic Type: wrap, never
+///   truncate); a subtitle too long for its card is shortened, not cut.
 /// - `Divider` at 60% opacity separating header block from body.
 /// - 16pt internal spacing inside the body (matches web `space-y-4`).
 /// - Canonical card radius (`HLRadius.card` = 20, W6-2) on an
@@ -38,20 +38,14 @@ import SwiftUI
 /// every Settings page visually identical to its web counterpart.
 public struct HLSettingsCard<Content: View>: View {
     private let icon: String
-    private let title: LocalizedStringKey
+    /// `nil` for a card whose one row is its own heading (1.4 B4).
+    private let title: LocalizedStringKey?
     private let subtitle: LocalizedStringKey?
     private let footer: LocalizedStringKey?
     private let bothSlotsJustification: StaticString?
-    /// F1 (1.1.0) — `true` lets the subtitle wrap at every text size. Opt-in
-    /// per card: most subtitles are a short label and keep the one-line
-    /// density; a card whose subtitle is an explanation the person needs in
-    /// full (the sharing list's "checked means: this data goes with it") sets
-    /// it, because a truncated rule is a wrong rule.
-    private let subtitleWraps: Bool
     private let trailing: AnyView?
     private let content: Content
-    /// v0.14.1 08-04 — same policy as `HLSettingsRow`: the header's layout and
-    /// the subtitle's line cap are a function of the text size.
+    /// v0.14.1 08-04 — the header's layout is a function of the text size.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Standard constructor — icon + title + optional subtitle + body.
@@ -68,7 +62,6 @@ public struct HLSettingsCard<Content: View>: View {
         subtitle: LocalizedStringKey? = nil,
         footer: LocalizedStringKey? = nil,
         bothSlotsJustification: StaticString? = nil,
-        subtitleWraps: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.icon = icon
@@ -76,7 +69,6 @@ public struct HLSettingsCard<Content: View>: View {
         self.subtitle = subtitle
         self.footer = footer
         self.bothSlotsJustification = bothSlotsJustification
-        self.subtitleWraps = subtitleWraps
         trailing = nil
         self.content = content()
         warnOnDoubleSlot()
@@ -91,7 +83,6 @@ public struct HLSettingsCard<Content: View>: View {
         subtitle: LocalizedStringKey? = nil,
         footer: LocalizedStringKey? = nil,
         bothSlotsJustification: StaticString? = nil,
-        subtitleWraps: Bool = false,
         @ViewBuilder trailing: () -> some View,
         @ViewBuilder content: () -> Content
     ) {
@@ -100,10 +91,28 @@ public struct HLSettingsCard<Content: View>: View {
         self.subtitle = subtitle
         self.footer = footer
         self.bothSlotsJustification = bothSlotsJustification
-        self.subtitleWraps = subtitleWraps
         self.trailing = AnyView(trailing())
         self.content = content()
         warnOnDoubleSlot()
+    }
+
+    /// **1.4 B4 — a card with one row has one heading.** "Coach" over "Coach
+    /// aktivieren", "Aktive Sitzungen" over "Sitzungen verwalten": a title
+    /// above a card's only row said the row's name twice. This card has no
+    /// header and no divider; the row is the heading (and carries the
+    /// subtitle the card used to, `HLSettingsActionRow(subtitle:)` or the
+    /// toggle's description). `footer:` keeps a consequence or data-flow line.
+    public init(
+        footer: LocalizedStringKey? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        icon = ""
+        title = nil
+        subtitle = nil
+        self.footer = footer
+        bothSlotsJustification = nil
+        trailing = nil
+        self.content = content()
     }
 
     /// E9 — DEBUG-Warnung, wenn Subtitle **und** Footer belegt sind, ohne dass
@@ -121,7 +130,9 @@ public struct HLSettingsCard<Content: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            header
+            if title != nil {
+                header
+            }
             if let subtitle {
                 // v0.6.1.5 Y5 — subtitle upgrades from `.hlCaption`
                 // (12pt) to `.hlSubhead` (15pt) per handbook §1.3
@@ -133,20 +144,19 @@ public struct HLSettingsCard<Content: View>: View {
                 // ordering. The new size sits above the card body's
                 // own caption rows so the strict-monotonic step-down
                 // holds.
-                // 08-04: the one-line cap is a standard-size density decision.
-                // A card header that truncates the sentence explaining what the
-                // card is, precisely when the user has asked for larger text,
-                // is the defect — not the density.
-                // F1: a card that opts in with `subtitleWraps` wraps at every size.
-                let wraps = subtitleWraps || dynamicTypeSize.isAccessibilitySize
+                // 1.4 B2-c — the one-line cap is gone at every size (it was a
+                // standard-size density decision, 08-04 lifted it for the
+                // accessibility sizes, F1 per card). A truncated subtitle ended
+                // in "…" at the default size on about forty cards; HIG asks
+                // text to wrap, and a subtitle that is too long gets shorter.
                 Text(subtitle)
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
-                    .lineLimit(wraps ? nil : 1)
-                    .truncationMode(.tail)
-                    .fixedSize(horizontal: false, vertical: wraps)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Divider().opacity(0.6)
+            if title != nil {
+                Divider().opacity(0.6)
+            }
             VStack(alignment: .leading, spacing: HLSpace.lg) {
                 content
             }
@@ -202,11 +212,14 @@ public struct HLSettingsCard<Content: View>: View {
 
     // W1-4 — title icon dropped per R5 #2 finding #3.
     // `icon:` argument retained for ABI stability but unused.
+    @ViewBuilder
     private var titleText: some View {
-        Text(title)
-            .font(.hlSubhead.weight(.semibold))
-            .foregroundStyle(HLText.primary)
-            .fixedSize(horizontal: false, vertical: true)
+        if let title {
+            Text(title)
+                .font(.hlSubhead.weight(.semibold))
+                .foregroundStyle(HLText.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

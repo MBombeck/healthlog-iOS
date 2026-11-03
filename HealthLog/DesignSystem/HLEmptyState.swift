@@ -21,6 +21,14 @@ import SwiftUI
 /// `HLCard`, or a full-bleed centre via `.containerCentered()`).
 ///
 /// MONOCHROME: the lockup is informational, never a signal — no status colour.
+///
+/// **1.4 B4 — the one form, and how to fill it.** An empty or failed surface
+/// is this lockup placed directly on the page or list, never inside an
+/// `HLCard`, a ghost card or a settings card (a box around "nothing" is a
+/// card in a card). It carries a symbol, a title, at most one sentence that
+/// says something the title and the button do not, and at most one action,
+/// an `HLButton` with `variant: .secondary` ("Try again" for a failure).
+/// A second way out belongs in the toolbar, not under the first.
 struct HLEmptyState<Actions: View>: View {
     private let icon: String
     private let title: Text
@@ -102,12 +110,8 @@ extension View {
 
 #Preview("HLEmptyState") {
     VStack(spacing: HLSpace.xl) {
-        HLEmptyState(
-            icon: "tray",
-            title: "No measurements yet",
-            message: "Log your first measurement to see the history."
-        ) {
-            HLButton("Log a measurement", icon: "plus", variant: .restrained) {}
+        HLEmptyState(icon: "tray", title: "No measurements yet") {
+            HLButton("Log a measurement", icon: "plus", variant: .secondary) {}
         }
         HLEmptyState(
             icon: "face.smiling",

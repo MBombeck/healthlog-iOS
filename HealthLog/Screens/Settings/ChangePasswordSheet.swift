@@ -105,6 +105,8 @@ struct ChangePasswordSheet: View {
             message(failure == .mismatch
                 ? "settings.security.password.mismatch"
                 : "settings.security.password.incomplete")
+        case .wrongCurrentPassword:
+            message("settings.security.password.wrongCurrent")
         case .stepUpRequired:
             // The honest wall: the server needs a fresh second-factor
             // confirmation that a Bearer client structurally cannot produce.

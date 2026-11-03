@@ -54,10 +54,15 @@ public struct FeatureDisabledCard: View {
                     Text(String(localized: "feature_disabled.title"))
                         .font(.hlHeadline)
                         .foregroundStyle(HLText.secondary)
-                    Text(reason ?? String(localized: "feature_disabled.subtitle"))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // 1.4 B2 — only the server's own reason; without one the
+                    // title stands alone (the old fallback named an internal
+                    // "Operator" the reader does not know).
+                    if let reason {
+                        Text(reason)
+                            .font(.hlSubhead)
+                            .foregroundStyle(HLText.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer(minLength: 0)
             }

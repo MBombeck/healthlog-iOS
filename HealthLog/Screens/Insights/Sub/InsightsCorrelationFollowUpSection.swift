@@ -32,35 +32,62 @@ import SwiftUI
 /// **Nothing is recomputed.** The drill-in targets come from the block's own
 /// `drillIns(for:)`, so this section and the card can never disagree about what
 /// a pair reaches.
-struct InsightsCorrelationFollowUpSection: View {
+struct InsightsCorrelationFollowUpSection<Relevance: View>: View {
     let pair: DiscoveredCorrelation
     /// Deep-links a channel into its own Insights page. `nil` (no host wiring)
-    /// leaves only the explanation, which is still an honest follow-up.
+    /// leaves the numbers and the pair's actions, still an honest follow-up.
     var onSelectMetric: ((MetricKind) -> Void)?
+    /// "Ask the coach about this", scoped to both channels; `nil` while the
+    /// coach capability offers no entry.
+    var onAskCoach: ((DiscoveredCorrelation) -> Void)?
+    /// The block's "Nicht relevant für mich" control, when the pair has one.
+    @ViewBuilder var relevance: () -> Relevance
 
     private var drillIns: [MetricKind] {
         InsightsCorrelationsDiscoveryBlock.drillIns(for: pair)
     }
 
+    /// 1.4 B2 — what used to stack under every card lives here, behind
+    /// "Details": the paired-day count and r first (the transparency line),
+    /// then the channels' own pages, the coach, the relevance statement. The
+    /// card above keeps the citation; a pair without a page of its own simply
+    /// has no page row instead of a sentence saying so.
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            if drillIns.isEmpty || onSelectMetric == nil {
-                Text("insights.correlations.detail.noPage")
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("insights.correlations.detail.noPage")
-            } else {
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
+            Text(InsightsCorrelationsDiscoveryBlock.statLine(for: pair))
+                .font(.hlCaption.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(HLText.tertiary)
+                .accessibilityIdentifier("insights.correlations.detail.stats")
+            if onSelectMetric != nil {
                 ForEach(drillIns, id: \.self) { kind in
                     metricLink(kind)
                 }
             }
-            // 1.4.1 — the follow-up is still a correlation statement, so it
-            // carries the same citation as the card it opened from.
-            HLSourcesLink(topic: .correlations)
+            if let onAskCoach {
+                askCoachLink(action: onAskCoach)
+                    .accessibilityIdentifier("insights.correlations.discovery.askCoach")
+            }
+            relevance()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, HLSpace.xs)
+    }
+
+    private func askCoachLink(action: @escaping (DiscoveredCorrelation) -> Void) -> some View {
+        Button {
+            action(pair)
+        } label: {
+            HStack(spacing: HLSpace.xs) {
+                Image(systemName: "sparkles")
+                    .font(.hlIcon(HLIconSize.sm))
+                Text(String(localized: "Ask the coach about this"))
+                    .font(.hlFootnote)
+            }
+            .foregroundStyle(HLText.secondary)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func metricLink(_ kind: MetricKind) -> some View {

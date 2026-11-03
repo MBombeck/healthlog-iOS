@@ -138,7 +138,6 @@ extension AppContainer {
             dailyBriefingStore,
             healthScoreStore,
             chartsStore,
-            trendsOverlayStore,
             doctorReportStore,
             localDoctorReportStore,
             labsStore,

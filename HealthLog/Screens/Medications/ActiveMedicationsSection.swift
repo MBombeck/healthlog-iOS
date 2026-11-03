@@ -196,36 +196,17 @@ struct EmptyActiveMedicationsState: View {
     let onAdd: () -> Void
 
     var body: some View {
-        VStack(spacing: HLSpace.md) {
-            Image(systemName: "pills")
-                .font(.hlIcon(HLIconSize.hero, weight: .light))
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityHidden(true)
-                .padding(.top, HLSpace.sm)
-            // Y8: hierarchy correction per handbook §2.7 — title must
-            // be headline (17pt), body subhead (15pt). The prior
-            // subhead-semibold + caption shape inverted the empty
-            // state into caption-only reading weight.
-            Text("medications.section.active.empty.title")
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-            Text("medications.section.active.empty.body")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, HLSpace.md)
+        // 1.4 B2 — only archived medications exist here, so "your first
+        // medication" was wrong; title and button carry the state. 1.4 B4: the
+        // app's one empty-state lockup instead of a hand-built copy of it.
+        HLEmptyState(icon: "pills", title: "medications.section.active.empty.title") {
             HLButton(
                 String(localized: "medications.section.active.empty.cta"),
                 icon: "plus",
-                variant: .restrained,
+                variant: .secondary,
                 action: onAdd
             )
-            .padding(.horizontal, HLSpace.md)
-            .padding(.top, HLSpace.xxs)
-            .padding(.bottom, HLSpace.sm)
             .accessibilityIdentifier("medications.section.active.empty.cta")
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, HLSpace.md)
     }
 }

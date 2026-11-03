@@ -29,23 +29,26 @@ struct HRBucketDiagnosticsSnapshot: Equatable, Sendable {
 
 extension SettingsHKSyncDiagnosticsScreen {
     var heartRateBucketCard: some View {
+        // 1.4 B2-c — what the cutover means is in the (i).
         HLSettingsCard(
             icon: "heart.text.square",
-            title: "settings.hkdiag.hrbuckets.title",
-            subtitle: "settings.hkdiag.hrbuckets.subtitle"
+            title: "settings.hkdiag.hrbuckets.title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HKSyncDiagnosticsSourceTag(source: .deviceStored)
                 statRow(label: "settings.hkdiag.hrbuckets.cutover", value: hrBucketCutoverLabel)
                 statRow(
                     label: "settings.hkdiag.hrbuckets.last_accepted",
                     value: hrBucketDateLabel(hrBucketSnapshot?.ledger.lastAcceptedBucket)
                 )
                 statRow(label: "settings.hkdiag.hrbuckets.last_run", value: hrBucketEventLabel(hrBucketSnapshot?.ledger.lastEvent))
-                statRow(
-                    label: "settings.hkdiag.hrbuckets.last_suppression",
-                    value: hrBucketEventLabel(hrBucketSnapshot?.ledger.lastSuppression)
-                )
+                // 1.4 B4 — when the last run was itself the hold, the row
+                // below said the same gate and time a second time.
+                if hrBucketSnapshot?.ledger.lastSuppression != hrBucketSnapshot?.ledger.lastEvent {
+                    statRow(
+                        label: "settings.hkdiag.hrbuckets.last_suppression",
+                        value: hrBucketEventLabel(hrBucketSnapshot?.ledger.lastSuppression)
+                    )
+                }
                 statRow(
                     label: "settings.hkdiag.hrbuckets.raw_days",
                     value: "\(hrBucketSnapshot?.rawFallbackDayCount ?? 0)"

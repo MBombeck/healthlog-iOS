@@ -168,7 +168,10 @@
             let store = makeStore(minimumSyncingHold: .seconds(3))
             stub(status: 200)
             let handshake = Task { await store.handshake() }
-            try await Task.sleep(for: .milliseconds(100))
+            // T1 (1.4) — awaited (bounded by time), not a 100 ms sleep: the
+            // glyph is read as soon as the handshake has started, well inside
+            // the 3 s hold, however slowly a loaded machine gets there.
+            await phase09AwaitCondition { await MainActor.run { store.indicatorGlyph == .syncing } }
             #expect(store.indicatorGlyph == .syncing)
             let image = try render(header(store: store, showsPanel: false), name: "02-syncing", dark: dark)
             #expect(hasInk(image, in: glyphRect))

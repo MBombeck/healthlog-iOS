@@ -117,7 +117,8 @@ extension NotificationsScreen {
     @ViewBuilder
     func channelStateLine(_ channel: NotificationChannel, resolvedState: ResolvedChannelState) -> some View {
         if !channel.globallyEnabled {
-            Text("Globally disabled — please contact the operator.")
+            // 1.4 B2 — the state in plain words, without "operator".
+            Text("notifications.channel.notEnabled")
                 .font(.hlCaption)
                 .foregroundStyle(HLText.secondary)
         } else {
@@ -258,10 +259,9 @@ extension NotificationsScreen {
         HLSettingsCard(
             icon: "paperplane.fill",
             title: "Diagnostics",
-            // UI-Standard R5 (U6) — Footer: höchstens zwei Sätze. Der dritte
-            // („So prüfst du Permission + Banner-Sichtbarkeit.") ist in den
-            // ersten gewandert; keine Aussage fehlt.
-            footer: "Sends a local test notification to your device — no data reaches the server, so this checks permission and banner visibility. With Focus or notification summaries active, iOS may delay the banner."
+            // UI-Standard R5 (U6) — Footer: höchstens zwei Sätze. 1.4 B2: one,
+            // in the reader's words (no "server").
+            footer: "notifications.test.footer"
         ) {
             Menu {
                 ForEach(TestPushVariant.allCases) { variant in

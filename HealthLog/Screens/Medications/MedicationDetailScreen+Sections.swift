@@ -78,23 +78,28 @@ struct MedicationHeroSection: View {
                     Spacer()
                 }
 
-                // Category pill — same chrome as the list card's category pill,
-                // shown for EVERY med (GLP-1 INN/class badges moved into the
-                // badge row below) so the hero block is structurally identical
-                // across med types.
-                Text(categoryLabel)
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
-                    .padding(.horizontal, HLSpace.sm)
-                    .padding(.vertical, HLSpace.xs)
-                    .background(HLSurface.tertiary, in: Capsule())
+                // Category pill — same chrome and the same rule as the list
+                // card's (1.4 B4: only a category that tells something; no
+                // "Medikament" or "Sonstige" pill). GLP-1 INN/class badges ride
+                // the badge row below.
+                if let categoryLabel {
+                    Text(categoryLabel)
+                        .font(.hlCaption.weight(.semibold))
+                        .foregroundStyle(HLText.secondary)
+                        .padding(.horizontal, HLSpace.sm)
+                        .padding(.vertical, HLSpace.xs)
+                        .background(HLSurface.tertiary, in: Capsule())
+                }
 
                 // Consistent "Letzte / Nächste Einnahme" strip — the SAME label
                 // set + order the list card uses, regardless of cadence or med
-                // type. Always two rows so every detail hero has the same rhythm.
+                // type. A record has nothing due (v1.39.1, #1033): its
+                // "Nur dokumentiert" badge below says so, as on the list card.
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
                     heroScheduleRow(labelKey: "med.card.schedule.daily.last.label", value: lastValue)
-                    heroScheduleRow(labelKey: "med.card.schedule.daily.next.label", value: nextValue)
+                    if medication.tracksIntake {
+                        heroScheduleRow(labelKey: "med.card.schedule.daily.next.label", value: nextValue)
+                    }
                 }
 
                 HStack(spacing: HLSpace.sm) {
@@ -132,11 +137,8 @@ struct MedicationHeroSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var categoryLabel: String {
-        guard let raw = medication.category, !raw.isEmpty else {
-            return String(localized: "med.card.category.fallback")
-        }
-        return MedicationCard.localizedCategory(raw, label: medication.categoryLabel)
+    private var categoryLabel: String? {
+        MedicationCard.categoryPillLabel(category: medication.category, label: medication.categoryLabel)
     }
 
     private var lastValue: String {
@@ -147,8 +149,6 @@ struct MedicationHeroSection: View {
     }
 
     private var nextValue: String {
-        // v1.39.1 (#1033) — nothing is due on a medication kept as a record.
-        guard medication.tracksIntake else { return String(localized: "med.card.schedule.not_tracked") }
         guard let next = MedicationCard.computeNextDose(
             medication: medication,
             timeZone: profileTimeZone,
@@ -537,34 +537,6 @@ struct NotesSection: View {
                     .font(.hlBody)
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
-
-// MARK: - Unknown GLP-1 brand
-
-struct UnknownGLP1BrandSection: View {
-    let brand: String
-
-    var body: some View {
-        HLCard(style: .ghost) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Label(
-                    String(localized: "Drug level curve not available"),
-                    systemImage: "info.circle"
-                )
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                Text(String(
-                    format: String(
-                        localized: "%@ is not in the EMA catalog. A drug level curve is only available for approved GLP-1 medicines."
-                    ),
-                    brand
-                ))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

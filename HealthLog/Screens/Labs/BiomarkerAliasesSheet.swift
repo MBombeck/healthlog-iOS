@@ -27,6 +27,8 @@ struct BiomarkerAliasesSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // 1.4 B2-c — what this list does is its header, read before the
+                // rows instead of after them.
                 Section {
                     ForEach(aliases, id: \.self) { alias in
                         Text(verbatim: alias)
@@ -40,7 +42,7 @@ struct BiomarkerAliasesSheet: View {
                         Button("labs.aliases.add", action: addDraft)
                             .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
-                } footer: {
+                } header: {
                     Text("labs.aliases.footer")
                 }
                 if let inlineError {

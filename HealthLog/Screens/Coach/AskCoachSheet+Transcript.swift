@@ -69,43 +69,12 @@ import SwiftUI
                                     // 1.0.3 (App Review 1.4.1, audit row 7) — the
                                     // citation under EVERY assistant reply, on
                                     // every arm, visible without expanding
-                                    // anything. It used to live inside the
-                                    // server-arm provenance disclosure, which
-                                    // mounts on one arm of three and starts
-                                    // collapsed: on-device and BYO replies
-                                    // carried no Sources affordance at all, and
-                                    // the server's was one tap away from being
-                                    // seen. Sibling of the bubble, so it sits
-                                    // outside the bubble's
-                                    // `.accessibilityElement(children: .combine)`
-                                    // and reads as its own control.
+                                    // anything. 1.4 B2-c: it shares one row with
+                                    // "What I'm looking at" and the thumbs
+                                    // (`CoachReplyActions`); the per-turn token
+                                    // count is gone.
                                     if isAssistant(entity) {
-                                        HLSourcesLink(topic: .aiAssistant)
-                                            .padding(.leading, HLSpace.md)
-                                    }
-                                    // CO4 (v0154) — the collapsed "what I'm
-                                    // looking at" provenance disclosure under a
-                                    // server-arm assistant reply. Server-arm only
-                                    // (on-device / BYO carry no provenance).
-                                    if isAssistant(entity),
-                                       let provenance = store.provenanceByEntity[entity.id]
-                                    {
-                                        CoachProvenanceDisclosure(provenance: provenance)
-                                    }
-                                    // Server-parity: thumbs only on assistant
-                                    // replies the server persisted (server-arm
-                                    // turns carry a message id) — on-device /
-                                    // BYO / hydrated rows never show the row.
-                                    if isAssistant(entity), store.feedback.canRate(entityID: entity.id) {
-                                        CoachFeedbackRow(store: store, entityID: entity.id)
-                                    }
-                                    // CO5 (v0154) — quiet per-turn token footer
-                                    // under a server-arm reply. Server-arm only;
-                                    // skipped when no count (on-device / BYO).
-                                    if isAssistant(entity),
-                                       let usage = store.usageByEntity[entity.id]
-                                    {
-                                        CoachTokenFooter(usage: usage)
+                                        CoachReplyActions(store: store, entityID: entity.id)
                                     }
                                 }
                                 .id(entity.id)
@@ -379,6 +348,54 @@ import SwiftUI
         }
     }
 
+    /// **1.4 B2-c — the one row under an assistant reply.** Sources (every
+    /// arm, App Review 1.4.1), the server arm's "What I'm looking at" toggle and
+    /// the thumbs share a line; the evidence opens below it. Where the line is
+    /// too narrow, the toggle moves to a second line. The sources link stays
+    /// outside the bubble's combined accessibility element.
+    private struct CoachReplyActions: View {
+        let store: CoachConversationStore
+        let entityID: UUID
+        @State private var showsEvidence = false
+
+        var body: some View {
+            let provenance = store.provenanceByEntity[entityID]
+            let hasEvidence = provenance.map(CoachProvenanceBody.hasContent) ?? false
+            let canRate = store.feedback.canRate(entityID: entityID)
+            VStack(alignment: .leading, spacing: HLSpace.xs) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: HLSpace.md) {
+                        HLSourcesLink(topic: .aiAssistant)
+                        if hasEvidence {
+                            CoachProvenanceToggle(expanded: $showsEvidence)
+                        }
+                        Spacer(minLength: 0)
+                        if canRate {
+                            CoachFeedbackRow(store: store, entityID: entityID)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: HLSpace.xs) {
+                        HStack(spacing: HLSpace.md) {
+                            HLSourcesLink(topic: .aiAssistant)
+                            Spacer(minLength: 0)
+                            if canRate {
+                                CoachFeedbackRow(store: store, entityID: entityID)
+                            }
+                        }
+                        if hasEvidence {
+                            CoachProvenanceToggle(expanded: $showsEvidence)
+                        }
+                    }
+                }
+                if showsEvidence, let provenance {
+                    CoachProvenanceBody(provenance: provenance)
+                        .transition(.opacity)
+                }
+            }
+            .padding(.leading, HLSpace.md)
+        }
+    }
+
     /// **Server-parity (v1.4.23 H7 route)** — subtle thumbs-up/down under a
     /// server-persisted assistant reply. Secondary-styled (tertiary ink,
     /// icon-only) so it never competes with the prose; the selected thumb
@@ -404,7 +421,6 @@ import SwiftUI
                     current: rating
                 )
             }
-            .padding(.leading, HLSpace.md)
         }
 
         private func thumb(

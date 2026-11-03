@@ -65,19 +65,20 @@ struct InsightsMetricStatusCardTests {
         }
     }
 
-    @Test("sparse generic metric (only a latest value) shows a reduced card, no chip")
-    func sparseGenericReducedCard() {
+    @Test("sparse generic metric (only a latest value) shows no 30-day card")
+    func sparseGenericHasNoCard() {
         let descriptor = InsightsMetricStatusDescriptor.build(
             kind: .pulse,
             digest: nil,
             target: nil,
-            latestValue: 64
+            latestValue: 64,
+            sparklineValues: [61, 63, 64]
         )
-        #expect(descriptor.hasAnyContent, "A latest value should still paint a (reduced) card.")
-        #expect(descriptor.headlineValue == "64", "The honest headline is the latest reading.")
-        #expect(descriptor.chipLabel == nil, "No target → no classification chip (no empty chip).")
-        #expect(descriptor.pctInTarget == nil, "No target → no In-Range bar.")
-        #expect(descriptor.targetBandCaption == nil, "No target → no Zielband.")
+        // 1.4 B4 — the card sits under "30 Tage Durchschnitt". The latest
+        // reading has its own card above it; it is never this card's headline.
+        #expect(descriptor.headlineValue == nil, "A latest reading is not a 30-day average.")
+        #expect(!descriptor.showsSparkline, "Without an average the card carries no line either.")
+        #expect(!descriptor.hasAnyContent, "No server mean and no target → no card.")
     }
 
     @Test("generic metric with a target surfaces chip + Zielband + In-Range pct")
@@ -158,7 +159,7 @@ struct InsightsMetricStatusCardTests {
     func nonTargetedKindShowsTrendWithoutBand() {
         let descriptor = InsightsMetricStatusDescriptor.build(
             kind: .activeEnergy,
-            digest: ComprehensiveDigest(summaries: ["ACTIVE_ENERGY": MetricSummary(avg30: 480)]),
+            digest: ComprehensiveDigest(summaries: ["ACTIVE_ENERGY_BURNED": MetricSummary(avg30: 480)]),
             target: nil, // server emits no target row for active energy
             latestValue: 510,
             sparklineValues: [420, 455, 480, 505, 510]
@@ -524,5 +525,61 @@ struct InsightsMetricStatusCardClassificationQualifierTests {
             latestValue: nil
         )
         #expect(healthy.chipTone == .success, "A normal-weight chip still reads as reassuring.")
+    }
+}
+
+/// **1.4 B4 — the "30 Tage Durchschnitt" card shows the server's mean.** It
+/// fell back to the latest reading whenever the (consent-gated) digest had no
+/// average: day strain and RMSSD showed today's value, a stopped SDNN its June
+/// reading.
+@Suite("1.4 B4: the 30-day card shows the server's 30-day mean")
+struct InsightsMetricStatusAverageTests {
+    @Test(
+        "day strain and RMSSD read the summaries slice's 30-day mean, never the latest reading",
+        arguments: [(MetricKind.dayStrain, 12.0, 15.0), (MetricKind.hrvRMSSD, 48.0, 52.0)]
+    )
+    func wearableKindsShowTheServerMean(kind: MetricKind, average: Double, latest: Double) {
+        // No digest: an account without a configured AI provider never loads
+        // it, and the digest's summaries need not cover WHOOP types.
+        let descriptor = InsightsMetricStatusDescriptor.build(
+            kind: kind,
+            digest: nil,
+            target: nil,
+            latestValue: latest,
+            sparklineValues: [14, 11, latest],
+            serverAverage30: average
+        )
+        #expect(descriptor.headlineValue == average.formatted(.number.precision(.fractionLength(0 ... 1))))
+        #expect(descriptor.showsSparkline)
+    }
+
+    @Test("the digest's average wins over the summaries slice's")
+    func digestAverageWins() {
+        let digest = ComprehensiveDigest(summaries: ["DAY_STRAIN": MetricSummary(avg30: 11)])
+        let descriptor = InsightsMetricStatusDescriptor.build(
+            kind: .dayStrain,
+            digest: digest,
+            target: nil,
+            latestValue: 15,
+            serverAverage30: 13
+        )
+        #expect(descriptor.headlineValue == "11")
+    }
+
+    @Test("a series that stopped (no reading in 30 days) shows no 30-day card")
+    func stoppedSeriesHasNoCard() {
+        // SDNN on Alex's account: the last reading is from June, so the server
+        // reports no `avg30` anywhere. The card used to show the June value.
+        let digest = ComprehensiveDigest(summaries: ["HEART_RATE_VARIABILITY": MetricSummary(avg30: nil)])
+        let descriptor = InsightsMetricStatusDescriptor.build(
+            kind: .hrv,
+            digest: digest,
+            target: nil,
+            latestValue: 47,
+            sparklineValues: [45, 47],
+            serverAverage30: nil
+        )
+        #expect(descriptor.headlineValue == nil)
+        #expect(!descriptor.hasAnyContent)
     }
 }

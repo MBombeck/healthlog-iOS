@@ -12,7 +12,8 @@ import SwiftUI
 /// - The **caption** reads the server's `resolvedUnitsPerDose` for the slot —
 ///   the effective figure the server's own intake-consumption resolver uses.
 ///   It is displayed, never written (`MedicationScheduleDTO.encode(to:)` drops
-///   the key) and never re-derived here.
+///   the key) and never re-derived here. 1.4 B2: only while the slot inherits
+///   ("Standard"), the one state where the picker does not show the figure.
 ///
 /// The caption is withheld the moment anything it depends on has moved locally
 /// — this slot's own picker, or the medication-level dose it inherits from —
@@ -40,7 +41,9 @@ struct SlotDosePicker: View {
             }
         }
         .accessibilityIdentifier("med.schedule.slotDose.\(index)")
-        if let effective = serverEffective[timeKey], !isLocallyEdited {
+        // 1.4 B2 — only under "Standard": there the figure is what the choice
+        // means. Under an explicit unit it repeated the picker.
+        if let effective = serverEffective[timeKey], !isLocallyEdited, current == .inherit {
             Text("med.schedule.slotDose.effective \(MedicationUnitsPerDose.from(decimal: effective).label)")
                 .font(.hlCaption)
                 .foregroundStyle(HLText.tertiary)
@@ -52,7 +55,7 @@ struct SlotDosePicker: View {
     /// reasoning as ``UnitsPerDosePicker``: without a matching tag the
     /// selection would snap to something the user never chose.
     private var options: [MedicationUnitsPerDose] {
-        var all = MedicationUnitsPerDose.allCases
+        var all = MedicationUnitsPerDose.pickerOptions(offeringHalves: MedicationUnitsPerDose.serverTakesHalves())
         if case let .override(current) = current, !all.contains(current) {
             all.append(current)
         }

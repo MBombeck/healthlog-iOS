@@ -202,15 +202,24 @@ enum HealthKitUpdateNotice {
     /// survived its own completed flow. `.unknown` falls back to the state
     /// rule (25-01's exact behaviour) — the status only ever suppresses when
     /// the system affirmatively answers, it never invents a card.
+    ///
+    /// 1.4 B2 — `bannerAsksToConnect`: when the dashboard's connect banner owns
+    /// the same request (its rule holds, shown or snoozed), the `.connect`
+    /// card stays away, so Today never asks twice in two cards stacked on top
+    /// of each other. The card keeps its own job where the banner refuses
+    /// (the `isConnected` latch) and keeps `.newTypes` either way.
     static func visibleVariant(
         state: HKReadinessStore.ConnectionState,
         statuses: [String: HKReadinessStore.AuthStatus],
         sheetStatus: SheetStatus = .unknown,
+        bannerAsksToConnect: Bool = false,
         defaults: UserDefaults = .standard
     ) -> Variant? {
         guard arming(in: defaults) == .armed else { return nil }
         guard !isDismissed(in: defaults) else { return nil }
         guard sheetStatus != .answered else { return nil }
-        return variant(state: state, statuses: statuses)
+        let candidate = variant(state: state, statuses: statuses)
+        if candidate == .connect, bannerAsksToConnect { return nil }
+        return candidate
     }
 }

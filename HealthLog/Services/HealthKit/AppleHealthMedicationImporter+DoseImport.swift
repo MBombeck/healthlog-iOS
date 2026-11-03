@@ -14,6 +14,8 @@ extension AppleHealthMedicationImporter {
     struct PreparedDose {
         let identity: String
         let entry: MedicationsRepository.BulkIntakeEntry
+        /// A2 (1.4) — when the dose was logged: it decides live or history.
+        var recordedAt: Date = .distantPast
     }
 
     /// What one chunk proved: the running tally, which identities the server
@@ -30,6 +32,7 @@ extension AppleHealthMedicationImporter {
         into summaryIn: AppleHealthMedicationSyncSummary,
         doses: [AppleHealthDoseRecord],
         ledger: AppleHealthDoseLedger,
+        readWindow: HealthReadWindow = .unlimited,
         maxChunks: Int? = nil,
         requiring lease: HealthSyncAuthenticatedLease
     ) async -> AppleHealthMedicationSyncSummary {
@@ -62,16 +65,25 @@ extension AppleHealthMedicationImporter {
                 accountedFor.insert(dose.eventUUID)
                 continue
             }
-            prepared.append(PreparedDose(identity: dose.eventUUID, entry: entry))
+            prepared.append(PreparedDose(identity: dose.eventUUID, entry: entry, recordedAt: dose.recordedAt))
         }
 
         // W3 (1.3) — a short wake posts at most `maxChunks` chunks. The rest is
         // observed but not accounted for, so the ledger keeps it pending.
-        let chunks = prepared.chunked(into: Self.maxEntriesPerBatch)
+        //
+        // A2 (1.4, #138) — doses of the live window (two days, as for the
+        // sample streams) go first and under the pass's trigger; older ones
+        // are history and go out as `backfill` where the server takes it, so
+        // a first import of years of doses does not read as a fresh arrival.
+        let liveFloor = clock().addingTimeInterval(-HealthSampleSplitPolicy.liveLookback)
+        let live = prepared.filter { $0.recordedAt >= liveFloor }
+        let history = prepared.filter { $0.recordedAt < liveFloor }
+        let chunks = live.chunked(into: Self.maxEntriesPerBatch).map { (doses: $0, backfill: false) }
+            + history.chunked(into: Self.maxEntriesPerBatch).map { (doses: $0, backfill: true) }
         let budget = maxChunks.map { max(0, $0) } ?? chunks.count
-        summary.dosesDeferredToNextSweep += chunks.dropFirst(budget).reduce(0) { $0 + $1.count }
-        for chunk in chunks.prefix(budget) {
-            let outcome = await transmit(chunk, into: summary, requiring: lease)
+        summary.dosesDeferredToNextSweep += chunks.dropFirst(budget).reduce(0) { $0 + $1.doses.count }
+        for (chunk, backfill) in chunks.prefix(budget) {
+            let outcome = await transmit(chunk, backfill: backfill, into: summary, requiring: lease)
             summary = outcome.summary
             accountedFor.formUnion(outcome.settled)
             if outcome.stop { break }
@@ -82,7 +94,7 @@ extension AppleHealthMedicationImporter {
         // was: the next sweep re-offers the same doses and the server folds the
         // repeat on the dose UUID.
         do {
-            try ledger.commit(observed: observed, accountedFor: accountedFor, requiring: lease)
+            try ledger.commit(observed: observed, accountedFor: accountedFor, readWindow: readWindow, requiring: lease)
         } catch {
             HLLog.healthKit.error("APPLE-MED dose ledger not committed — sweep holds its window")
         }
@@ -97,6 +109,7 @@ extension AppleHealthMedicationImporter {
     /// deduplicates instead of writing a second intake row.
     private func transmit(
         _ chunk: [PreparedDose],
+        backfill: Bool,
         into summaryIn: AppleHealthMedicationSyncSummary,
         requiring lease: HealthSyncAuthenticatedLease
     ) async -> ChunkOutcome {
@@ -110,10 +123,14 @@ extension AppleHealthMedicationImporter {
         do {
             // Check 1 of 2 — before the request.
             try lease.requireCurrent()
+            var trigger = syncTrigger.wireValue
+            if backfill {
+                trigger = await SyncTriggerContext.bindingBackfill { syncTrigger.wireValue }
+            }
             let response = try await repo.bulkImportAppleHealthDoses(
                 chunk.map(\.entry),
                 idempotencyKey: envelope?.idempotencyKey,
-                syncTrigger: syncTrigger.wireValue
+                syncTrigger: trigger
             )
             // Check 2 of 2 — an account replacement that lands during the await
             // must not let this chunk stamp progress into the new owner's ledger.

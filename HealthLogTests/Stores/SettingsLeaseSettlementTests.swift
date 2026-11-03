@@ -132,7 +132,7 @@
                 return Self.serverError(request)
             }
             let inFlight = Task { await store.load() }
-            let raised = await phase09Settle { await MainActor.run { store.isLoading } }
+            let raised = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
             #expect(raised, "the cold-cache emission must raise the skeleton first")
 
             // The session is revoked underneath it. No new account arrives.

@@ -49,7 +49,8 @@ struct WorkoutsPagingPresentationTests {
             #expect(ParityCatalog.value(entry, language: "en") == values.en)
             #expect(ParityCatalog.value(entry, language: "de") == values.de)
         }
-        for key in ["workouts.paging.loading", "workouts.paging.failed", "workouts.paging.end"] {
+        // 1.4 B2 — the list's end shows nothing, so `workouts.paging.end` left the catalog.
+        for key in ["workouts.paging.loading", "workouts.paging.failed"] {
             let entry = try #require(catalog.strings[key], "missing catalog key \(key)")
             #expect(ParityCatalog.value(entry, language: "en") != nil)
             #expect(ParityCatalog.value(entry, language: "de") != nil)

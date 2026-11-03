@@ -92,6 +92,17 @@ public extension MedicationsStore {
             if let rate30 { rows.append((30, rate30)) }
             return rows
         }
+
+        /// **1.4 B4 — one bar in the list.** The medication list paints one
+        /// adherence row per card: the 30-day window, which both server
+        /// cadences carry (a daily medication as its long window, a weekly one
+        /// such as a GLP-1 pen as its short one). The detail page keeps every
+        /// window. Without a 30-day row the longest one stands in; `nil` where
+        /// ``displayRows`` is empty.
+        public var listRow: (days: Int, rate: Int)? {
+            let rows = displayRows
+            return rows.first { $0.days == 30 } ?? rows.last
+        }
     }
 
     /// **#115 B7 — what the card shows when the server gave no answer.**

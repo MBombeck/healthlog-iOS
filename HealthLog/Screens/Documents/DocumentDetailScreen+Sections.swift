@@ -20,10 +20,13 @@ extension DocumentDetailScreen {
     /// for, so the whole section collapses.
     @ViewBuilder
     var summarySection: some View {
+        // 1.4 B2-c — the card's title says the summary comes from AI (it was a
+        // loose "Read by AI" caption at the end of the page), and the pending
+        // state is the same card with a spinner instead of a loose line.
         if let prose = document.resolvedSummary {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    HLSectionLabel("documents.detail.summary.title")
+                    HLSectionLabel("documents.detail.summary.aiTitle")
                     // Web parity: the AI narrative is FOREGROUND content, not
                     // muted meta (only the generation date below is muted).
                     HLInsightProse(text: prose, color: HLText.primary)
@@ -37,11 +40,20 @@ extension DocumentDetailScreen {
             }
             .accessibilityIdentifier("documents.detail.summary")
         } else if contentIndexEnabled {
-            Text("documents.detail.summary.pending")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+            HLCard {
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    HLSectionLabel("documents.detail.summary.aiTitle")
+                    HStack(spacing: HLSpace.sm) {
+                        ProgressView().controlSize(.small)
+                        Text("documents.detail.summary.pending")
+                            .font(.hlSubhead)
+                            .foregroundStyle(HLText.secondary)
+                    }
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("documents.detail.summary.pending")
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("documents.detail.summary.pending")
         }
     }
 
@@ -66,22 +78,6 @@ extension DocumentDetailScreen {
                 .font(.hlSubhead)
             }
             .accessibilityIdentifier("documents.detail.labValues")
-        }
-    }
-
-    // MARK: - AI-read provenance (Wave 4.6 / research A4.6)
-
-    /// The web's muted `documents.ai.statusAiRead` line — shown only when the
-    /// content index was produced by a provider READING the original (`vision`),
-    /// never for a local extraction. Pure provenance, never a to-do.
-    @ViewBuilder
-    var aiReadProvenanceLine: some View {
-        if document.isAiRead {
-            Label("documents.ai.statusAiRead", systemImage: "sparkles")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("documents.detail.aiRead")
         }
     }
 
@@ -136,6 +132,10 @@ extension DocumentDetailScreen {
                     .onChange(of: filingDate) { _, _ in Task { await commitDate() } }
                     .accessibilityIdentifier("documents.detail.date")
                 }
+                // 1.4 B2-c — when and how big, as the card's last line.
+                Text(uploadedText)
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
             }
         }
     }
@@ -153,11 +153,9 @@ extension DocumentDetailScreen {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 fieldLabel("documents.detail.conditionsLabel")
-                if document.conditionLinks.isEmpty {
-                    Text("documents.detail.noConditions")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.tertiary)
-                } else {
+                // 1.4 B2-c — no "not linked" line: the label and the button
+                // below say it.
+                if !document.conditionLinks.isEmpty {
                     HLFlowChips(items: document.conditionLinks.map(\.name))
                 }
                 HLButton("documents.detail.linkCondition", icon: "link", variant: .secondary, size: .compact) {
@@ -255,7 +253,7 @@ struct DocumentConditionLinkEditor: View {
                     }
                 }
             }
-            .navigationTitle(Text("documents.detail.conditionsLabel"))
+            .navigationTitle(Text("documents.detail.conditionsSheetTitle"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

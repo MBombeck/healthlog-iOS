@@ -401,7 +401,7 @@ struct AICapabilityMixedReadTests {
         let dto = try await closed.fetchAssessment(metric: .bloodPressure, locale: "de")
         #expect(dto?.text == nil)
         let state = AssessmentCard.resolveState(
-            assessment: dto, isLoading: false, failed: false, consentClosed: false, hasServer: true
+            assessment: dto, isLoading: false, failed: false
         )
         #expect(state == .suppressed)
 

@@ -175,7 +175,7 @@ struct ResetDataScreen: View {
                 ) {
                     Task { await performReset() }
                 }
-                .disabled(isResetting || typedConfirmation != requiredConfirmation)
+                .disabled(isResetting || !DeleteConfirmationPhrase.matches(typedConfirmation, required: requiredConfirmation))
                 .accessibilityIdentifier(Self.resetButtonIdentifier)
 
                 HLButton(String(localized: "Back"), variant: .secondary, size: .regular) {
@@ -289,7 +289,7 @@ struct ResetDataScreen: View {
     // MARK: - Action
 
     private func performReset() async {
-        guard typedConfirmation == requiredConfirmation, !isResetting else { return }
+        guard DeleteConfirmationPhrase.matches(typedConfirmation, required: requiredConfirmation), !isResetting else { return }
         guard let container else { return }
         isResetting = true
         resetError = nil

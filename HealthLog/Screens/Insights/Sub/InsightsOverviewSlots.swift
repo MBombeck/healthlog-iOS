@@ -212,7 +212,6 @@ struct InsightsWellnessScoresSlot: View {
     var body: some View {
         if backend.hasServer, InsightsOverviewGate.isVisible(.wellnessScores, appContainer) {
             InsightsServerDerivedOverview(
-                derivedMetrics: derivedInsightsStore.presentable,
                 // I-2 — full list (incl. insufficient arms) for the score-ring gate.
                 derivedMetricsAll: derivedInsightsStore.metrics,
                 onSelectMetric: onSelectMetric,
@@ -228,14 +227,11 @@ struct InsightsWellnessScoresSlot: View {
                 showsCorrelations: false
             )
 
-            // v0.14.1 — warm-in-flight placeholder. Self-suppresses the instant a
-            // score lands. Never a spinner.
+            // v0.14.1 — warm-in-flight placeholder, self-suppressing the instant a
+            // score lands. Never a spinner. 1.4 B2: the shape of the score tiles
+            // instead of a loose grey sentence under the section.
             if derivedInsightsStore.warming, derivedInsightsStore.presentable.isEmpty {
-                Text("insights.overview.derived.preparing")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("insights.overview.derived.preparing")
+                InsightsScoreCardsSkeleton()
             }
         }
     }
@@ -302,45 +298,12 @@ struct InsightsDailyBriefingSlot: View {
     }
 }
 
-// MARK: - Trends slot (DailyBriefingStore + MeasurementsStore)
-
-/// Owns the TRENDS row (mini charts driven by the briefing's flagged metrics,
-/// falling back to the bp/weight/pulse triple). Reads
-/// `DailyBriefingStore.briefing` + `MeasurementsStore.recent` here so a new
-/// measurement / briefing warm invalidates ONLY this slot.
-struct InsightsTrendsSlot: View {
-    /// True while the screen is in its cold-launch skeleton window (passed from
-    /// the host's latched `isShowingInitialSkeleton`, so we never add a 2nd gate).
-    let isLoading: Bool
-    let onSelect: (MetricKind) -> Void
-
-    @Environment(DailyBriefingStore.self) private var briefingStore
-    @Environment(MeasurementsStore.self) private var measurementsStore
-    /// #115 · 1.3 — the digest's slope directions feed the annotation.
-    @Environment(InsightsStore.self) private var insightsStore
-
-    var body: some View {
-        InsightsTrendsRow(
-            kinds: InsightsTrendChartSelector.select(
-                keyFindings: briefingStore.briefing?.keyFindings ?? []
-            ),
-            measurements: measurementsStore.recent,
-            digest: insightsStore.comprehensive?.digest,
-            isLoading: isLoading,
-            onSelect: onSelect
-        )
-    }
-}
-
 // MARK: - Empty / error slot (InsightsStore + Backend)
 
 /// Owns the standalone cloud-derived placeholder + the empty / error states.
 /// Reads `InsightsStore` + `Backend` (+ `AuthStore` for the connect CTA) here so
 /// a digest refresh invalidates ONLY this slot.
 struct InsightsEmptyErrorSlot: View {
-    /// F1 — the AI capability that names the reason for an empty overview.
-    let appContainer: AppContainer?
-
     @Environment(InsightsStore.self) private var store
     @Environment(BackendAvailability.self) private var backend
     @Environment(AuthStore.self) private var authStore
@@ -370,8 +333,8 @@ struct InsightsEmptyErrorSlot: View {
         }
     }
 
-    /// F1 — empty only when the server has answered with no cards; the
-    /// sentence follows the real reason (see ``InsightsEmptyState``).
+    /// F1 — empty only when the server has answered with no cards and there is
+    /// no recorded data (see ``InsightsEmptyState``).
     private var emptyState: InsightsEmptyState? {
         let serverCount = store.comprehensive?.digest?.totalMeasurements ?? 0
         return InsightsEmptyState.resolve(
@@ -380,8 +343,7 @@ struct InsightsEmptyErrorSlot: View {
             cardsEmpty: store.cards.isEmpty,
             isLoading: store.isLoading,
             hasError: store.error != nil,
-            hasRecordedData: serverCount > 0 || !measurementsStore.recent.isEmpty,
-            briefing: appContainer?.aiCapabilityGate.state(.briefing) ?? .legacy
+            hasRecordedData: serverCount > 0 || !measurementsStore.recent.isEmpty
         )
     }
 }
@@ -411,7 +373,6 @@ struct InsightsOverviewBody: View {
     @Environment(HealthScoreStore.self) private var healthScoreStore
     @Environment(InsightsTargetsStore.self) private var insightsTargetsStore
     @Environment(MoodStore.self) private var moodStore
-    @Environment(SettingsStore.self) private var settings
     /// Parity Build 4 · 4.5 — the server-first overview SECTION arrangement
     /// (which blocks show, in what order). Read here, on the composition owner,
     /// so a section edit re-lays-out the column and nothing else.
@@ -425,11 +386,9 @@ struct InsightsOverviewBody: View {
         } else {
             loadedContent
         }
-        // Discreet last-synced caption via the shared footer.
-        HLSyncStatusFooter(
-            screenLoading: store.isLoading,
-            firstLoginPreparing: settings.profile == nil && store.comprehensive == nil
-        )
+        // The shared sync footer: real states only (1.4 decision 3). The
+        // first-login hint is the `FirstLoginSyncBanner`'s, not a second line.
+        HLSyncStatusFooter(screenLoading: store.isLoading)
     }
 
     /// The ordered zones, each a store-scoped leaf so a mutation invalidates
@@ -463,7 +422,7 @@ struct InsightsOverviewBody: View {
         InsightsCorrelationsSlot(appContainer: appContainer, onSelectMetric: onSelectMetric)
 
         // ── Standalone placeholder + empty / error states (anchored last). ──
-        InsightsEmptyErrorSlot(appContainer: appContainer)
+        InsightsEmptyErrorSlot()
     }
 
     /// One overview section by its server id. The case order below is the
@@ -476,6 +435,11 @@ struct InsightsOverviewBody: View {
     /// still round-trips and still governs the WEB block. `ecg` likewise has no
     /// iOS surface yet (`02-insights.md` §B); its row is editable from the phone
     /// so the operator can arrange the web overview, but iOS renders nothing.
+    ///
+    /// `trends` joined them in 1.4 B4. Its cards repeated Vitalwerte (weight
+    /// twice) and the Heute tiles (blood pressure, pulse) with the same line
+    /// and no sentence; each metric keeps its Vitalwerte card, its Heute tile
+    /// and its page in the strip.
     @ViewBuilder
     private func section(_ id: String) -> some View {
         switch id {
@@ -489,8 +453,6 @@ struct InsightsOverviewBody: View {
             InsightsDailyBriefingSlot(appContainer: appContainer)
         case InsightsLayoutSectionId.vitals:
             InsightsVitalsSlot(appContainer: appContainer, onSelect: onSelectMetric)
-        case InsightsLayoutSectionId.trends:
-            InsightsTrendsSlot(isLoading: isShowingInitialSkeleton, onSelect: onSelectMetric)
         case InsightsLayoutSectionId.cycleSummary:
             InsightsCycleTile(
                 store: appContainer?.cycleStore,

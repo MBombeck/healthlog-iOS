@@ -64,9 +64,9 @@ struct SettingsCoachScreen: View {
                 if appContainer?.aiCapabilityGate.allowsOnDevice(.coach) ?? true {
                     coachToggleCard
                 } else {
-                    // Caption naming the server's reason (operator, record,
-                    // module, the person's own switch).
-                    killSwitchCaption
+                    // The server's reason (operator, record, module, the
+                    // person's own switch), inside the Coach card.
+                    killSwitchCard
                 }
             }
             // Build 9 (9.2) — server-wide coach availability (Decision A / E-3).
@@ -96,7 +96,11 @@ struct SettingsCoachScreen: View {
                 CoachInsightsPrivacyCard(store: store)
                 CoachWindowCard(store: store) // #126 P2 defaultWindow
             }
-            heroVisibilityCard
+            // 1.4 B2-c — only while there is a card to bring back; a greyed
+            // row without its footer said nothing.
+            if settingsStore.coachHeroDismissed {
+                heroVisibilityCard
+            }
             memoryCard
             if backend.hasServer {
                 conversationsCard
@@ -105,6 +109,13 @@ struct SettingsCoachScreen: View {
         }
         .navigationTitle("Coach")
         .navigationBarTitleDisplayMode(.inline)
+        // 1.4 B2-c — the screen's one (i): what cadence suggestions are and
+        // where conversations are kept, said once instead of under the cards.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HLInfoButton(content: info, accessibilityIdentifier: "settings.coach.info")
+            }
+        }
         // 6.6 — hydrate the Coach/AI privacy flags from the server on appear
         // (server-first). Skipped in standalone (no store to reach).
         .task {
@@ -157,11 +168,12 @@ struct SettingsCoachScreen: View {
     ///
     /// R11 — war eine handgebaute Toggle-Zeile in derselben Datei, die daneben
     /// dreimal `HLSettingsToggleRow` benutzt. Jetzt überall dieselbe Geometrie.
+    ///
+    /// 1.4 B4 — a card with one row has one heading. "Coach" stood over
+    /// "Coach aktivieren", "Rhythmus-Vorschläge" over a switch of the same
+    /// name; on this screen every single-row card is now just its row.
     private var coachToggleCard: some View {
-        HLSettingsCard(
-            icon: "bubble.left.and.bubble.right",
-            title: "Coach"
-        ) {
+        HLSettingsCard {
             // R15 — der Pauschal-Schwanz („Kein medizinischer Rat.") ist eine
             // von fünf Coach-Varianten desselben Satzes; sie reduzieren sich
             // auf die aktive Bestätigungszeile im Coach-Onboarding. Der
@@ -185,18 +197,42 @@ struct SettingsCoachScreen: View {
         return AskCoachSheet.coachRefusalCopy(AIRefusal.implied(by: state, for: .coach))
     }
 
-    private var killSwitchCaption: some View {
-        HStack(spacing: HLSpace.sm) {
-            Image(systemName: "switch.2")
-                .foregroundStyle(HLText.tertiary)
+    /// 1.4 B2-c — the reason sits in the Coach card it replaces, not as a
+    /// loose caption between cards.
+    private var killSwitchCard: some View {
+        HLSettingsCard(
+            icon: "bubble.left.and.bubble.right",
+            title: "Coach"
+        ) {
             Text(killSwitchText)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .font(.hlSubhead)
+                .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+                .accessibilityIdentifier("settings.coach.killswitch")
         }
-        .padding(.horizontal, HLSpace.xs)
-        .accessibilityIdentifier("settings.coach.killswitch")
+    }
+
+    /// What the (i) explains: the cadence suggestions (the card keeps the
+    /// one sentence that is a promise: nothing without your tap) and where a
+    /// conversation is kept per coach mode, which used to stand under three
+    /// cards. Only the parts this screen can show.
+    private var info: HLInfoContent {
+        var sections: [HLInfoContent.Section] = []
+        if backend.hasServer, appContainer.offersCoach {
+            sections.append(HLInfoContent.Section(
+                title: String(localized: "Cadence suggestions"),
+                paragraphs: [String(localized: "settings.coach.info.cadence")]
+            ))
+        }
+        sections.append(HLInfoContent.Section(
+            title: String(localized: "settings.coach.info.storage.title"),
+            paragraphs: [String(localized: "settings.coach.info.storage")]
+        ))
+        return HLInfoContent(
+            title: String(localized: "Coach"),
+            identifier: "settings.coach.info.sheet",
+            sections: sections
+        )
     }
 
     /// SET-V2-C — server-parity v1.16 coach self-context editor
@@ -204,11 +240,8 @@ struct SettingsCoachScreen: View {
     /// (works for every arm that can reach the server Coach), hence the
     /// `backend.hasServer` gate at the call-site.
     private var aboutMeCard: some View {
-        HLSettingsCard(
-            icon: "person.text.rectangle",
-            title: "coachContext.title"
-        ) {
-            HLSettingsActionRow(title: "coachContext.open", presents: .push) {
+        HLSettingsCard {
+            HLSettingsActionRow(title: "coachContext.title", presents: .push) {
                 SettingsAboutMeScreen()
             }
             .accessibilityIdentifier("settings.coach.aboutMeRow")
@@ -223,10 +256,7 @@ struct SettingsCoachScreen: View {
     /// tap. Uses the shared `HLSettingsToggleRow` so the row geometry matches every
     /// other settings toggle.
     private func cadenceSuggestionsCard(store: AICoachSettingsStore) -> some View {
-        HLSettingsCard(
-            icon: "bell.badge",
-            title: "Cadence suggestions"
-        ) {
+        HLSettingsCard {
             HLSettingsToggleRow(
                 title: "Cadence suggestions",
                 description: "settings.coach.cadenceSuggestions.description",
@@ -247,10 +277,7 @@ struct SettingsCoachScreen: View {
     /// module surface. Only rendered once `coachDisabled` has resolved from the
     /// server (guard 1 — never write the iOS-default up).
     private func serverCoachToggleCard(store: AICoachSettingsStore) -> some View {
-        HLSettingsCard(
-            icon: "bubble.left.and.bubble.right",
-            title: "Coach"
-        ) {
+        HLSettingsCard {
             HLSettingsToggleRow(
                 title: "settings.coach.enable.title",
                 description: "settings.coach.enable.description",
@@ -266,25 +293,18 @@ struct SettingsCoachScreen: View {
     }
 
     /// COACH-COIN (v0.5.5.7) — reset affordance for the Hero-card dismiss
-    /// flag. Disabled when the Hero is already visible (`dismissed == false`)
-    /// so the row never looks tappable in a no-op state.
+    /// flag. 1.4 B2-c: the card shows only while the Hero is dismissed (it
+    /// used to sit there greyed out); the row says it ("show again"), the
+    /// footer and the word "hero" are gone.
     private var heroVisibilityCard: some View {
-        HLSettingsCard(
-            icon: "sparkles",
-            title: "Coach card",
-            // R5 — eine Folge der Aktion gehört in den Footer, nicht in den
-            // Subtitle („was die Karte ist").
-            footer: "The hero card reappears on Insights."
-        ) {
+        HLSettingsCard {
             HLSettingsActionRow(
                 icon: "arrow.uturn.backward.circle",
-                title: "Restore hero card",
-                labelTintOverride: settingsStore.coachHeroDismissed ? HLText.primary : HLText.tertiary,
+                title: "settings.coach.heroCard.restore",
                 presents: .confirm
             ) {
                 settingsStore.coachHeroDismissed = false
             }
-            .disabled(!settingsStore.coachHeroDismissed)
             .accessibilityIdentifier("settings.coach.restoreHeroRow")
         }
     }
@@ -294,11 +314,8 @@ struct SettingsCoachScreen: View {
     /// swipe-to-forget + "Forget everything". Server-only; the sub-screen degrades
     /// to the calm placeholder in standalone or when the Coach surface is disabled.
     private var memoryCard: some View {
-        HLSettingsCard(
-            icon: "brain.head.profile",
-            title: "What the assistant knows"
-        ) {
-            HLSettingsActionRow(title: "Open coach memory", presents: .push) {
+        HLSettingsCard {
+            HLSettingsActionRow(title: "What the assistant knows", presents: .push) {
                 CoachMemoryScreen()
             }
             .accessibilityIdentifier("settings.coach.memoryRow")
@@ -313,12 +330,8 @@ struct SettingsCoachScreen: View {
     /// surface is disabled. Distinct from the destructive local "Clear history"
     /// below (which wipes the on-device transcript only).
     private var conversationsCard: some View {
-        HLSettingsCard(
-            icon: "clock.arrow.circlepath",
-            title: "Past conversations",
-            subtitle: "Stored on your server by the server coach."
-        ) {
-            HLSettingsActionRow(title: "Open past conversations", presents: .push) {
+        HLSettingsCard {
+            HLSettingsActionRow(title: "Past conversations", presents: .push) {
                 CoachConversationsScreen()
             }
             .accessibilityIdentifier("settings.coach.conversationsRow")
@@ -349,11 +362,9 @@ struct SettingsCoachScreen: View {
     /// `persistence.clear(userID:)`) ausschließlich die Fassung auf diesem
     /// iPhone. Der Bestätigungsdialog sagt das jetzt am Ort der Handlung (R19).
     private var historyCard: some View {
-        HLSettingsCard(
-            icon: "bubble.left.and.bubble.right.fill",
-            title: "History",
-            footer: "With the server coach your conversations are also kept on your server. With the on-device coach (Apple Intelligence) and with your own key they stay on this iPhone only."
-        ) {
+        // 1.4 B2-c — where conversations are kept per mode is in the (i);
+        // the confirmation dialog still names what the wipe reaches (R19).
+        HLSettingsCard {
             HLSettingsActionRow(
                 icon: "trash",
                 title: "Clear history",
@@ -399,10 +410,7 @@ private struct CoachDocumentsAutoAICard: View {
     let store: AICoachSettingsStore
 
     var body: some View {
-        HLSettingsCard(
-            icon: "doc.text.magnifyingglass",
-            title: "settings.coach.docsAutoAi.title"
-        ) {
+        HLSettingsCard {
             HLSettingsToggleRow(
                 title: "settings.coach.docsAutoAi.toggle",
                 description: "settings.coach.docsAutoAi.description",
@@ -426,10 +434,7 @@ private struct CoachInsightsPrivacyCard: View {
     let store: AICoachSettingsStore
 
     var body: some View {
-        HLSettingsCard(
-            icon: "lock.doc",
-            title: "settings.coach.insightsPrivacy.title"
-        ) {
+        HLSettingsCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HStack(spacing: HLSpace.md) {
                     Text("settings.coach.insightsPrivacy.pickerLabel")

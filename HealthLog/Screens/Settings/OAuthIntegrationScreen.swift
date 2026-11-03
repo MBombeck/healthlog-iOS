@@ -62,10 +62,13 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
     }
 
     private var liveBody: some View {
+        // 1.4 B2-c — no sync footer: the card's "Last sync" line is the
+        // provider's sync, the app's own sync state has no bearing here.
         HLSettingsPage(title: LocalizedStringKey(displayName)) {
             connectionCard
-            credentialsCard
-            HLSyncStatusFooter(screenLoading: store.isWorking)
+            if showsCredentialsCard {
+                credentialsCard
+            }
         }
         .navigationTitle(Text(displayName))
         .navigationBarTitleDisplayMode(.inline)
@@ -85,16 +88,26 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
 
     /// Status + Aktionen in einer Karte: der Kartenkopf trägt den Provider, die
     /// `HLStatusPill` den Zustand (vorher ein handgebauter 17-pt-Titel
-    /// „Verbunden" / „Nicht verbunden"), der Footer die Datenschutz-Aussage
-    /// `integration.oauth.howItWorks` (Klasse D — unverändert).
+    /// „Verbunden" / „Nicht verbunden"), der Footer die Datenschutz-Aussage.
+    /// 1.4 B2-c: die Aussage ist ein Satz (Anmeldung im Browser, das Passwort
+    /// sieht HealthLog nie) und steht nur, solange noch nicht verbunden ist;
+    /// Token und Server sind aus dem Text.
     private var connectionCard: some View {
         HLSettingsCard(
             icon: "link.circle.fill",
             title: LocalizedStringKey(displayName),
-            footer: "integration.oauth.howItWorks",
+            footer: store.isConnected == true ? nil : "integration.oauth.howItWorks",
             trailing: { statusPill },
             content: { connectionBody }
         )
+    }
+
+    /// 1.4 B2-c — the own-credentials card is an instance-admin tool: it shows
+    /// while the provider is not connected (the instance may need its own app)
+    /// or while own credentials are stored (so they can be removed), never
+    /// beside a connection that already works without them.
+    private var showsCredentialsCard: Bool {
+        store.isConnected != true || store.hasOwnCredentials == true
     }
 
     @ViewBuilder
@@ -111,7 +124,10 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
         case .some(false):
             HLStatusPill(.disconnected(label: String(localized: "Not connected")))
         case .none:
-            HLStatusPill(.unknown(label: String(localized: "Checking")))
+            // 1.4 B4 — "Checking" only while it is, not after a failed read.
+            if store.error == nil {
+                HLStatusPill(.unknown(label: String(localized: "Checking")))
+            }
         }
     }
 
@@ -140,7 +156,12 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                 testResultRow(result)
             }
             if let error = store.error {
-                Text(error.localizedDescription).foregroundStyle(HLColor.statusBad)
+                // 1.4 B4 — a sentence for people, never the decoder's text; the
+                // route and error id are in "Support-Info kopieren".
+                Text(error.userFacingDescription)
+                    .font(.hlCaption)
+                    .foregroundStyle(HLColor.statusBad)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -154,8 +175,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
         HLSettingsCard(
             icon: "key.horizontal.fill",
             title: "integration.byo.title",
-            subtitle: "integration.byo.subtitle",
-            subtitleWraps: true
+            subtitle: "integration.byo.subtitle"
         ) {
             if store.hasOwnCredentials == true {
                 HStack(spacing: HLSpace.md) {

@@ -114,8 +114,8 @@ struct AppReview141MedicalCopyTests {
             ("HealthLog/Screens/Insights/Sub/SleepHypnogramScreen.swift", ".sleepRhythm"),
             ("HealthLog/Screens/Illness/IllnessInsightsScreen.swift", ".illnessRecovery"),
             // The sleep-debt claim is already cited in the block's own
-            // rhythm section, directly under `sleep.debt.computedInfo`. Asserted
-            // here so a later refactor of that section cannot quietly drop it.
+            // rhythm section. Asserted here so a later refactor of that section
+            // cannot quietly drop it.
             ("HealthLog/Screens/Insights/Sub/SleepRhythmSection.swift", ".sleepRhythm")
         ]
         for (path, topic) in expected {
@@ -123,14 +123,14 @@ struct AppReview141MedicalCopyTests {
             #expect(src.contains("HLSourcesLink(topic: \(topic))"), "\(path) must cite \(topic).")
         }
         // The sleep-debt claim itself — `sleep.debt.computedInfo`, the figure
-        // audit row 17 names — must still be the thing being cited, not merely
-        // a link somewhere in the same file.
-        let rhythm = try Self.source("HealthLog/Screens/Insights/Sub/SleepRhythmSection.swift")
-        #expect(rhythm.contains("Text(\"sleep.debt.computedInfo\")"))
-        #expect(
-            rhythm.contains("computedNote"),
-            "The debt card renders its computed-figure note, which the citation sits under."
-        )
+        // audit row 17 names — must still sit with the references that back
+        // it. 1.4 B2 moved the sentence from under the debt card into the sleep
+        // page's info sheet, as the "Schlafschuld" section directly above the
+        // `.sleepRhythm` references; the card itself keeps its Sources link.
+        let info = try Self.source("HealthLog/Screens/Insights/InsightsMetricInfo.swift")
+        #expect(info.contains("String(localized: \"sleep.debt.computedInfo\")"))
+        #expect(info.contains(".method(topic: .sleepRhythm"), "The sleep info sheet lists the rhythm references.")
+        // The rendered content is pinned in `HLInfoContentTests.sleepInfoFollowsTheCards`.
     }
 
     // MARK: - Helpers

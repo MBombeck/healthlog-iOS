@@ -169,8 +169,10 @@ public extension MetricKindDescriptor {
                 emptyStateCopy: LocalizedStringResource(
                     "Wear your Apple Watch at night",
                     comment: "Empty state — sleep"
-                ),
-                secondaryHint: LocalizedStringResource("Last night", comment: "Sleep secondary — last night")
+                )
+                // #146 (v1.43.7) — no "Last night" beside the title any more:
+                // the tile's value is the day's whole sleep, night plus naps, so
+                // the tile is just "Sleep"; the detail page names the parts.
             ),
             .init(
                 kind: .steps,

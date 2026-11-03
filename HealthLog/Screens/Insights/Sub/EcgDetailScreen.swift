@@ -35,7 +35,6 @@ struct EcgDetailScreen: View {
                 if EcgPresentation.showsClinicianNote(for: recording.verdict) {
                     clinicianNote
                 }
-                EcgDisclaimerBlock()
             }
             .padding(.horizontal, HLSpace.lg)
             .padding(.top, HLSpace.lg)
@@ -50,17 +49,17 @@ struct EcgDetailScreen: View {
 
     // MARK: - Sections
 
-    /// The device's result, explicitly attributed to the device that produced it.
+    /// The device's result, explicitly attributed to the device that produced
+    /// it. 1.4 B2 — the attribution footer is that statement; the line that
+    /// repeated the result "as reported by the recording device" between the
+    /// title and the old separate disclaimer card is gone.
     private var resultLine: some View {
         HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            VStack(alignment: .leading, spacing: HLSpace.xs) {
                 Text(EcgPresentation.resultLabel(for: recording.verdict))
                     .font(.hlTitle3)
                     .foregroundStyle(HLText.primary)
-                Text(EcgPresentation.attribution(for: recording.verdict))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                EcgAttributionFooter()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -152,15 +151,11 @@ struct EcgDetailScreen: View {
                     .font(.hlFootnote)
                     .foregroundStyle(HLText.secondary)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    Text("insights.ecg.clinicianNote")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    // 1.0.3 (App Review 1.4.1) — the device maker's own ECG /
-                    // irregular-rhythm documentation behind the verdict.
-                    HLSourcesLink(topic: .ecgRhythm)
-                }
+                // 1.4 B2 — the references sit once, with the result above.
+                Text("insights.ecg.clinicianNote")
+                    .font(.hlSubhead)
+                    .foregroundStyle(HLText.primary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityIdentifier("insights.ecg.detail.clinicianNote")

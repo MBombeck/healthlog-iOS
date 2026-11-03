@@ -113,7 +113,7 @@
         /// durable form of "this page was not accepted" is an owner-bound outbox
         /// row, which survives a restart and carries its own derived idempotency
         /// key, so that is what this slot now holds.
-        private var retryQueue: (any HealthSyncBatchRetryEnqueuing)?
+        var retryQueue: (any HealthSyncBatchRetryEnqueuing)?
 
         /// #113 — where a row the server refused (`value_out_of_range`, …) is
         /// remembered before the cursor passes it. nil until ``attachUploader``
@@ -127,7 +127,7 @@
         /// delete-by-external-id so the HK→server triangle is closed for
         /// deletes too (it was previously one-way → orphaned server rows).
         /// `internal` (not `private`) so the `+Deletions` extension file owns
-        /// the `handleDeletedObjects` witness + setter (file_length split).
+        /// the deletion seam + setter (file_length split).
         var deletionReconciler: (any MeasurementDeletionReconciler)?
 
         /// Setter-injection from the composition root. Idempotent — re-
@@ -226,10 +226,13 @@
         /// Shared by the Spezi witness above and — through
         /// ``HealthSamplePageConsuming`` — by ``AnchoredHealthSampleCollector``,
         /// which supplies the admission and then decides the cursor itself.
+        ///
+        /// A2 (1.4, R-A7) — `backfill` marks a page of the history walk.
         func consumePage(
             _ samples: [HKSample],
             ofType typeID: String,
-            admitted lease: HealthSyncAuthenticatedLease?
+            admitted lease: HealthSyncAuthenticatedLease?,
+            backfill: Bool = false
         ) async -> HealthSyncPageOutcome {
             let gate = wireGate
             let mapping = gate.map(samples)
@@ -293,10 +296,10 @@
             // window or a pass binding is not overwritten.
             let (outcome, tally) = if backgrounded {
                 await SyncTriggerContext.shared.withTrigger(.background) {
-                    await consumption.transmitReporting(mapping, admitted: lease)
+                    await consumption.transmitReporting(mapping, admitted: lease, asBackfill: backfill)
                 }
             } else {
-                await consumption.transmitReporting(mapping, admitted: lease)
+                await consumption.transmitReporting(mapping, admitted: lease, asBackfill: backfill)
             }
 
             // The single decision point. `installed` is the rule production runs;
@@ -404,6 +407,14 @@
             requiring lease: HealthSyncAuthenticatedLease
         ) async -> HealthSyncPageOutcome {
             await consumePage(samples, ofType: typeIdentifier, admitted: lease)
+        }
+
+        func consumeHistory(
+            _ samples: [HKSample],
+            ofType typeIdentifier: String,
+            requiring lease: HealthSyncAuthenticatedLease
+        ) async -> HealthSyncPageOutcome {
+            await consumePage(samples, ofType: typeIdentifier, admitted: lease, backfill: true)
         }
     }
 

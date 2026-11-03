@@ -48,19 +48,20 @@ struct ComparisonBand: View {
 
     // MARK: - Subviews
 
+    /// 1.4 B2 — the metric names the card; the "Vergleichsbereich" eyebrow
+    /// repeated the section heading right above it.
     private var header: some View {
         HStack(spacing: HLSpace.xs) {
             Image(systemName: "chart.bar.xaxis")
                 .font(.hlIcon(HLIconSize.rowAction))
                 .foregroundStyle(HLText.secondary)
                 .accessibilityHidden(true)
-            HLSectionLabel(LocalizedStringKey(Layout.eyebrow))
-            Spacer(minLength: 0)
             Text(metricLabel)
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
+                .font(.hlSubhead.weight(.semibold))
+                .foregroundStyle(HLText.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
         }
     }
 
@@ -97,30 +98,48 @@ struct ComparisonBand: View {
         .accessibilityHidden(true)
     }
 
+    /// The position, then one line with the band and its source. The source
+    /// stays visible on the card (App Review 1.4.1) and carries the citation
+    /// glyph, because the card itself opens the references; the decorative
+    /// `info.circle` that sat beside it opened nothing of its own.
     private var summary: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(band.summary)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(String(localized: "records.comparison.range \(band.formattedRange)"))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .monospacedDigit()
-                    .fixedSize(horizontal: false, vertical: true)
-                if !band.sourceLabel.isEmpty {
-                    Text(band.sourceLabel)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            Text(band.summary)
+                .font(.hlSubhead)
+                .foregroundStyle(HLText.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: HLSpace.sm) {
+                    rangeText
+                    Spacer(minLength: 0)
+                    sourceText
+                }
+                VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                    rangeText
+                    sourceText
                 }
             }
-            Spacer(minLength: 0)
-            Image(systemName: "info.circle")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityHidden(true)
+        }
+    }
+
+    private var rangeText: some View {
+        Text(String(localized: "records.comparison.range \(band.formattedRange)"))
+            .font(.hlCaption)
+            .foregroundStyle(HLText.secondary)
+            .monospacedDigit()
+    }
+
+    @ViewBuilder
+    private var sourceText: some View {
+        if !band.sourceLabel.isEmpty {
+            HStack(spacing: HLSpace.xxs) {
+                Text(band.sourceLabel)
+                Image(systemName: "text.book.closed")
+                    .font(.hlCaption2)
+                    .accessibilityHidden(true)
+            }
+            .font(.hlCaption)
+            .foregroundStyle(HLText.tertiary)
         }
     }
 
@@ -152,8 +171,7 @@ extension ComparisonBand {
         static let trackHeight: CGFloat = 10
         static let tickWidth: CGFloat = 6
 
-        // L1 — catalog keys, never German literals rendered verbatim.
-        static let eyebrow = "benchmark.source.eyebrow"
+        /// L1 — catalog keys, never German literals rendered verbatim.
         static let accessibilityHint = "records.comparison.a11yHint"
     }
 }

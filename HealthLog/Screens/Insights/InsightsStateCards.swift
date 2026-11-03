@@ -16,49 +16,38 @@ import SwiftUI
 ///
 /// F1 (1.1.0) — the card says WHY it is empty. It used to ask for more
 /// measurements whenever the insights store held nothing, also when the store
-/// had simply not loaded (no AI set up, 1.0.4) and the overview above it was
-/// full of scores. ``InsightsEmptyState/resolve(hasServer:hasDeliveredCards:cardsEmpty:isLoading:hasError:hasRecordedData:briefing:)``
-/// decides whether it shows and with which sentence.
+/// had simply not loaded and the overview above it was full of scores.
+/// ``InsightsEmptyState/resolve(hasServer:hasDeliveredCards:cardsEmpty:isLoading:hasError:hasRecordedData:)``
+/// decides whether it shows.
 struct InsightsEmptyStateCard: View {
     let state: InsightsEmptyState
 
     var body: some View {
-        HLCard {
-            switch state {
-            case .needsData:
-                HLEmptyState(
-                    icon: "sparkles",
-                    title: "No insights yet",
-                    message: "Insights appear once enough data is logged — capture more measurements."
-                )
-                .accessibilityIdentifier("insights.empty")
-            case let .aiUnavailable(reason):
-                HLEmptyState(
-                    icon: "sparkles",
-                    title: Text(String(localized: "insights.empty.ai.title")),
-                    message: Text(verbatim: InsightsEmptyState.message(for: reason))
-                )
-                .accessibilityIdentifier("insights.empty.ai")
-            }
+        // 1.4 B4 — the lockup stands on the page, never in a card.
+        switch state {
+        case .needsData:
+            HLEmptyState(
+                icon: "sparkles",
+                title: "No insights yet",
+                message: "Insights appear once enough data is logged — capture more measurements."
+            )
+            .accessibilityIdentifier("insights.empty")
         }
     }
 }
 
-/// F1 (1.1.0) — when the Insights overview shows its empty card, and what it
-/// says.
+/// F1 (1.1.0) — when the Insights overview shows its empty card.
 ///
 /// Since server v1.39 `insights/cards` is rule-based (`provider: "rules"`) and
 /// loads with or without AI, so an empty list is the server's own answer only
-/// once it has actually answered. The sentence then follows the real reason:
-/// - no recorded data at all → ask for measurements (the one case where that
-///   is true);
-/// - data, but the AI summary layer (`ai.capabilities.briefing`) is off → name
-///   the reason the server gives, never "capture more";
-/// - data and AI available → no card: the sections above carry the data and
-///   there is nothing to excuse.
+/// once it has actually answered. The card shows only when there is no recorded
+/// data at all — the one case where "capture more measurements" is true.
+///
+/// 1.4 B2 — the second case ("Gerade keine KI-Zusammenfassung" plus the reason,
+/// under an overview full of data) is gone: it reminded people of their own
+/// choice on every visit, and the consent case has `CoachReengageCard`.
 enum InsightsEmptyState: Equatable {
     case needsData
-    case aiUnavailable(AIUnavailableReason)
 
     static func resolve(
         hasServer: Bool,
@@ -66,36 +55,10 @@ enum InsightsEmptyState: Equatable {
         cardsEmpty: Bool,
         isLoading: Bool,
         hasError: Bool,
-        hasRecordedData: Bool,
-        briefing: AICapabilityState
+        hasRecordedData: Bool
     ) -> InsightsEmptyState? {
         guard hasServer, hasDeliveredCards, cardsEmpty, !isLoading, !hasError else { return nil }
-        guard hasRecordedData else { return .needsData }
-        guard !briefing.isAvailable else { return nil }
-        return .aiUnavailable(briefing.reason ?? .unknown)
-    }
-
-    /// The reason sentence plus the note that the values above are the
-    /// server's. `nonisolated` + `String` so tests pin both languages without
-    /// a render pass.
-    nonisolated static func message(for reason: AIUnavailableReason) -> String {
-        let why = switch reason {
-        case .operatorDisabled:
-            String(localized: "insights.empty.ai.reason.operator")
-        case .moduleDisabled, .userDisabled:
-            String(localized: "insights.empty.ai.reason.switchedOff")
-        case .noProvider:
-            String(localized: "insights.empty.ai.reason.noProvider")
-        case .consentRequired:
-            String(localized: "insights.empty.ai.reason.consent")
-        case .notPermittedForRecord:
-            String(localized: "insights.empty.ai.reason.record")
-        case .usageLevel:
-            String(localized: "ai.reason.usageLevel")
-        case .checkFailed, .unknown:
-            String(localized: "insights.empty.ai.reason.unknown")
-        }
-        return why + " " + String(localized: "insights.empty.ai.dataNote")
+        return hasRecordedData ? nil : .needsData
     }
 }
 

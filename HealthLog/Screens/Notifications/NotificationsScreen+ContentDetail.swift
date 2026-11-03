@@ -8,14 +8,11 @@ extension NotificationsScreen {
     @ViewBuilder
     var notificationContentCard: some View {
         if let detailed = store?.notificationContentDetailed {
-            HLSettingsCard(
-                icon: "text.bubble",
-                title: "notifications.content.title",
-                footer: "notifications.content.footer"
-            ) {
+            // 1.4 B2 — what the switch does sits under its title; no footer.
+            HLSettingsCard(icon: "text.bubble", title: "notifications.content.title") {
                 HLSettingsToggleRow(
                     title: "notifications.content.toggle",
-                    description: nil,
+                    description: "notifications.content.footer",
                     isOn: Binding(
                         get: { detailed },
                         set: { newValue in Task { await store?.setNotificationContentDetailed(newValue) } }

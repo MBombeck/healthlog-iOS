@@ -26,6 +26,7 @@ final class SWRDecodeGate: @unchecked Sendable {
 
     private let lock = NSLock()
     private var hasEntered = false
+    private var hasLeftStorage = false
     private let released = DispatchSemaphore(value: 0)
 
     /// Called from `Decodable.init`. Announces arrival, then blocks until
@@ -37,6 +38,18 @@ final class SWRDecodeGate: @unchecked Sendable {
         hasEntered = true
         lock.unlock()
         _ = released.wait(timeout: .now() + 10)
+        lock.lock()
+        hasLeftStorage = true
+        lock.unlock()
+    }
+
+    /// Whether the parked decode has stopped waiting, by ``open()`` or by the
+    /// 10-second ceiling. Monotonic, so `false` read after an event proves the
+    /// decode was still parked when that event happened.
+    var hasLeft: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return hasLeftStorage
     }
 
     private var entered: Bool {
@@ -166,9 +179,8 @@ struct SWRCacheContentionTests {
         )
 
         // Key B: a different key, a small payload, and no gate on its task at
-        // all. Nothing about B's own work can take 750 ms — a cached read of a
-        // ~20-byte row is microseconds — so if B has not painted by then, it
-        // is waiting on A and on nothing else.
+        // all. B's own work is a cached read of a ~20-byte row, so if B only
+        // paints once A has let go, it was waiting on A and on nothing else.
         let witness = FirstPaintWitness()
         let fast = Task {
             let stream = await coordinator.observe(.userProfile, decoding: UngatedPayload.self) {
@@ -181,8 +193,13 @@ struct SWRCacheContentionTests {
                 }
             }
         }
-        try await Task.sleep(for: .milliseconds(750))
-        let paintedWhileTheOtherKeyWasBlocked = await witness.landed
+        // T1 (1.4) — awaited, not slept: a fixed 750 ms window read "not
+        // painted" on a loaded machine where B's own work was merely slow. The
+        // claim is unchanged: B must paint while A is still parked, which is
+        // what `!gate.hasLeft` after the paint proves. If B only paints once A
+        // let go (by the test or by the gate's 10 s ceiling), it stays red.
+        await phase09AwaitCondition { await witness.landed }
+        let paintedWhileTheOtherKeyWasBlocked = await witness.landed && !gate.hasLeft
 
         gate.open()
         _ = await fast.value

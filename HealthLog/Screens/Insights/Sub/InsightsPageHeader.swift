@@ -57,14 +57,20 @@ struct InsightsPageHeader<Actions: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(alignment: .center, spacing: HLSpace.md) {
+            // 1.4 B4 — one rule for long titles next to the circles
+            // ("Pulswellengeschwindigkeit", "Durchschnittliche Herzfrequenz"):
+            // the title takes the room the circles leave, breaks (with
+            // hyphenation) onto at most two lines and only then steps down in
+            // size; the circles keep their size and sit with the first line.
+            HStack(alignment: .top, spacing: HLSpace.md) {
                 Text(title)
                     .font(.hlLargeTitle)
                     .foregroundStyle(HLText.primary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
                     .modifier(OptionalHeaderIdentifier(suffix: accessibilityIdentifierSuffix))
-
-                Spacer(minLength: 0)
 
                 actions()
             }

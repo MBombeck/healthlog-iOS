@@ -36,14 +36,24 @@ extension HLDashboardTile {
     /// property; only the call site (memoized `.task`) changed. The explicit
     /// `now` keeps the rendered line consistent with the `dayAnchor` baked into
     /// `contextLineKey` (BH-final-diff M2).
+    ///
+    /// 1.4 B2 — an empty tile's dash already says "no data", so the line only
+    /// paints when it gives a reason: an old last reading or a source filter.
+    /// VoiceOver keeps "No data yet" through the tile's own label.
     func computeContextLine() -> String? {
-        MetricDisplay(
+        let display = MetricDisplay(
             metric: metric,
             dataState: dataState,
             now: .now,
             liveTodayStepsOverride: liveTodayStepsOverride,
             units: unitPreferences
-        ).secondaryLine
+        )
+        switch dataState {
+        case .empty(.outsideRange), .empty(.sourceFiltered):
+            return display.secondaryLine
+        default:
+            return display.isEmptyForDisplay ? nil : display.secondaryLine
+        }
     }
 }
 

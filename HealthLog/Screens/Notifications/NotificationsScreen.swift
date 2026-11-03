@@ -96,7 +96,6 @@ struct NotificationsScreen: View {
             measurementReminderCard
             outOfRangeNudgeCard
             preferencesCards
-            focusFilterInfoCard
             lockScreenPrivacyCard
             notificationContentCard
             testPushCard
@@ -108,6 +107,13 @@ struct NotificationsScreen: View {
         .navigationTitle("Notifications")
         // SET-V2-C (C-5) — pushed from the Settings hub; sub-screen canon is `.inline`.
         .navigationBarTitleDisplayMode(.inline)
+        // 1.4 B2 — the one (i): the Focus filter (a card of text before) and
+        // the webhook body formats.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HLInfoButton(content: info, accessibilityIdentifier: "notifications.info")
+            }
+        }
         .task { await initializeStore() }
         .refreshable {
             await store?.load()
@@ -183,9 +189,10 @@ enum NotificationsSystemStatus: Equatable {
         }
     }
 
-    var subtitle: String {
+    /// 1.4 B2 — `nil` when the title says it all ("Push aktiv").
+    var subtitle: String? {
         switch self {
-        case .authorized: String(localized: "You receive banners, sounds + badges.")
+        case .authorized: nil
         case .provisional: String(localized: "Silent delivery to Notification Center.")
         case .denied: String(localized: "iOS is not showing banners right now. Re-enable them below.")
         case .notDetermined: String(localized: "iOS will ask you the first time.")

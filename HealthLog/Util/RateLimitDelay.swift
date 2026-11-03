@@ -62,3 +62,27 @@ enum RateLimitDelay {
         return nil
     }
 }
+
+/// T1 (1.4), test seam: where `APIClient`'s retry loop reads the time and
+/// waits out a retry delay. ``live`` is the wall clock and `Task.sleep`, the
+/// behaviour from before the seam existed. A test injects a clock that records
+/// the requested wait and returns at once, so a retry-timing contract is
+/// asserted on the delay the client chose, not on how long a loaded machine
+/// took to serve it.
+public struct APIRetryClock: Sendable {
+    public let now: @Sendable () -> Date
+    public let sleep: @Sendable (_ nanoseconds: UInt64) async throws -> Void
+
+    public init(
+        now: @escaping @Sendable () -> Date,
+        sleep: @escaping @Sendable (_ nanoseconds: UInt64) async throws -> Void
+    ) {
+        self.now = now
+        self.sleep = sleep
+    }
+
+    public static let live = APIRetryClock(
+        now: { Date() },
+        sleep: { try await Task.sleep(nanoseconds: $0) }
+    )
+}

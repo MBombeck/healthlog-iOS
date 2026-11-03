@@ -35,8 +35,9 @@ struct ComplianceKPISection: View {
     /// **W-COMPLIANCE-INV** — the tile renders a paint STATE, not a bare
     /// summary: `.pending` paints an em-dash placeholder until the server
     /// round-trip settles (kills the 100→60→50 value-jump), `.server` paints
-    /// the server's `compliance30` verbatim; `.notApplicable` / `.unavailable`
-    /// say why there is no number (#115 · 1.3 — no local estimate any more).
+    /// the server's `compliance30` verbatim; `.unavailable` says the number is
+    /// missing (#115 · 1.3 — no local estimate any more). `.notApplicable` and
+    /// `.notTracked` draw no section (1.4 B2).
     let state: MedicationDetailStore.ComplianceKPIState
 
     /// v0.8.5 WFIX-COMPLIANCE fix 1 — when non-nil the tile becomes a
@@ -46,64 +47,83 @@ struct ComplianceKPISection: View {
     var isHistoryExpanded: Bool?
     var onToggleHistory: (() -> Void)?
 
+    /// 1.4 B4 — the tile opens the history behind its number only when there
+    /// is a number. While the figure loads or cannot be read there is nothing
+    /// behind the dash, so no chevron promises a fold-out.
     private var isTappable: Bool {
-        onToggleHistory != nil
+        onToggleHistory != nil && Self.discloses(state)
+    }
+
+    static func discloses(_ state: MedicationDetailStore.ComplianceKPIState) -> Bool {
+        if case .server = state { return true }
+        return false
+    }
+
+    /// 1.4 B2 — a medication kept as a record, or one without a HealthLog
+    /// schedule, has no adherence and no history to open. The section is then
+    /// not there at all instead of a dash and a sentence saying why.
+    static func hasContent(_ state: MedicationDetailStore.ComplianceKPIState) -> Bool {
+        switch state {
+        case .notTracked, .notApplicable: false
+        case .pending, .server, .unavailable: true
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel("med.compliance.section.header")
-            if isTappable {
-                Button {
-                    onToggleHistory?()
-                } label: {
-                    card
+        if Self.hasContent(state) {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                HLSectionLabel("med.compliance.section.header")
+                HLCard {
+                    VStack(alignment: .leading, spacing: HLSpace.xs) {
+                        if isTappable {
+                            Button {
+                                onToggleHistory?()
+                            } label: {
+                                kpiRow
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint(Text(String(localized: "med.compliance.history_hint")))
+                        } else {
+                            kpiRow
+                        }
+                        // 1.0.3 (App Review 1.4.1) — the band that colours this
+                        // number is a clinical convention, not a HealthLog
+                        // invention. 1.4 B2: at the card's foot, outside the
+                        // disclosure Button so VoiceOver (and a tap) reach it as
+                        // its own control.
+                        HLSourcesLink(topic: .medicationCompliance)
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint(Text(String(localized: "med.compliance.history_hint")))
-            } else {
-                card
             }
-            // 1.0.3 (App Review 1.4.1) — the band that colours this number is
-            // a clinical convention, not a HealthLog invention. The link sits
-            // outside the disclosure Button so VoiceOver (and a tap) reach it
-            // as its own control rather than as part of the card.
-            HLSourcesLink(topic: .medicationCompliance)
         }
     }
 
-    /// The KPI card body. Hosts the percentage + caption and, when the
-    /// section is acting as a history disclosure, a trailing chevron that
-    /// flips with the expanded state.
-    private var card: some View {
-        HLCard {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(percentageLabel)
-                        .font(.hlMetric(.title))
-                        .foregroundStyle(bandColor)
-                        .monospacedDigit()
-                        .accessibilityLabel(Text(accessibilityLabel))
-                    Text(captionLabel)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .monospacedDigit()
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: HLSpace.sm)
-                Text(String(localized: "med.compliance.window.taken"))
+    /// The KPI row. Hosts the percentage + caption and, when the section is
+    /// acting as a history disclosure, a trailing chevron that flips with the
+    /// expanded state. The header already names the 30-day window.
+    private var kpiRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
+            VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                Text(percentageLabel)
+                    .font(.hlMetric(.title))
+                    .foregroundStyle(bandColor)
+                    .monospacedDigit()
+                    .accessibilityLabel(Text(accessibilityLabel))
+                Text(captionLabel)
                     .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .multilineTextAlignment(.trailing)
-                if let expanded = isHistoryExpanded {
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .foregroundStyle(HLText.tertiary)
-                        .accessibilityHidden(true)
-                }
+                    .foregroundStyle(HLText.secondary)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .contentShape(Rectangle())
+            Spacer(minLength: HLSpace.sm)
+            if isTappable, let expanded = isHistoryExpanded {
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    .font(.hlIcon(HLIconSize.sm))
+                    .foregroundStyle(HLText.tertiary)
+                    .accessibilityHidden(true)
+            }
         }
+        .contentShape(Rectangle())
     }
 
     /// The server figures backing the painted number — `nil` unless `.server`.
@@ -125,10 +145,9 @@ struct ComplianceKPISection: View {
             String(localized: "med.compliance.loading")
         case let .server(adherence):
             String(format: String(localized: "med.compliance.caption.taken"), adherence.taken, adherence.expected)
-        case .notApplicable:
-            String(localized: "med.compliance.notApplicable")
-        case .notTracked:
-            String(localized: "med.compliance.notTracked")
+        case .notApplicable, .notTracked:
+            // Not drawn: `hasContent` hides the section in both states.
+            ""
         case .unavailable:
             String(localized: "med.compliance.unavailable")
         }

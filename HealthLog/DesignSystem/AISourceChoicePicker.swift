@@ -165,18 +165,13 @@ private struct AISourceCard: View {
     /// Reason + optional recovery affordance for a disabled card.
     private func reasonRow(reason: String, recovery: AISourceRecovery?) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(alignment: .top, spacing: HLSpace.xs) {
-                Image(systemName: "info.circle")
-                    // swiftlint:disable:next dynamic_type_bypass
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
-                Text(reason)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // 1.4 B4 — the reason alone; the info symbol beside it looked
+            // tappable and did nothing (R2 1.7, one (i) per screen).
+            Text(reason)
+                .font(.hlCaption)
+                .foregroundStyle(HLText.secondary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
             if let recovery, let onRecover {
                 Button {
                     onRecover(recovery)

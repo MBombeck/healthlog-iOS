@@ -154,25 +154,24 @@ struct MedicationCard: View {
                     header
                     categoryStatusRow(windowStatus: status)
                     scheduleBlock(windowStatus: status, nextDose: nextDose)
-                    // MED-11 — the compliance slot is ALWAYS rendered so every
-                    // card keeps the same vertical anatomy regardless of values:
+                    // MED-11 — the compliance slot keeps the card's anatomy:
                     //  • snapshot pending → redacted skeleton (2 reserved bars)
                     //  • scheduled / rolling med (rate present) → the 2 bars
                     //  • PRN / as-needed (no schedule → rate nil) → a quiet
-                    //    "as needed" note in the SAME slot instead of dropping
-                    //    the section, so a PRN card and a scheduled card no
-                    //    longer differ structurally (recurring operator
-                    //    complaint: "die Kacheln sehen unterschiedlich aus").
+                    //    "as needed" note in the SAME slot, so a PRN card and a
+                    //    scheduled card do not differ structurally.
+                    // 1.4 B2 — a medication kept as a record shows no slot: its
+                    // "Nur dokumentiert" mark and the "Nicht erfasst" schedule
+                    // value already say there is no adherence. Without a server
+                    // answer the slot is empty too; one line per card saying so
+                    // repeated the same state down the whole list.
                     if !medication.tracksIntake || compliance?.notApplicableReason == .intakeNotTracked {
-                        // v1.39.1 (#1033) — a medication kept as a record has no
-                        // adherence at all; the slot says so instead of waiting
-                        // for, or painting, a server placeholder.
-                        ComplianceSlotNote(medicationId: medication.id, kind: .notTracked)
+                        EmptyView()
                     } else if let compliance {
                         if compliance.rate30 != nil {
                             complianceBlock(compliance)
-                        } else {
-                            complianceNote(unknown: compliance.serverUnavailable)
+                        } else if !compliance.serverUnavailable {
+                            complianceNote
                         }
                     } else {
                         // W-COMPLIANCE-INV — server fetch pending → skeleton.
@@ -245,15 +244,12 @@ struct MedicationCard: View {
                 Text(titleLine)
                     .font(.hlTitle3)
                     .foregroundStyle(HLText.primary)
-                    // v0.14.7 — keep EVERY med-card name on ONE line and shrink to
-                    // fit instead of wrapping. A longer "Trulicity 7,5 mg" wrapped
-                    // to two `.title3` lines while "Lisinopril 5mg" stayed on one,
-                    // which read as a different/bigger font per card (operator:
-                    // "die Kacheln sehen unterschiedlich aus"). The card chrome +
-                    // font token are already identical across med types; this kills
-                    // the wrap-height divergence so all names render uniformly.
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    // v0.14.7 kept every name on one line by shrinking it to 70 %,
+                    // so a long name read as a smaller font than its neighbours
+                    // (operator: "die Kacheln sehen unterschiedlich aus"). 1.4 B4:
+                    // every card keeps the same type size and a long name takes
+                    // a second line instead.
+                    .lineLimit(2)
                     .truncationMode(.tail)
                 // GH #47 — provenance mark for an Apple-Health-mirrored med so
                 // the user knows the doses (and the missing manual controls)
@@ -300,14 +296,20 @@ struct MedicationCard: View {
         MedicationCategoryStatusRow(categoryLabel: categoryLabel, windowStatus: windowStatus)
     }
 
-    /// iOS port of the web `getMedicationCategoryLabel(category, t)`
-    /// lookup. Falls back to `med.card.category.fallback` when the
-    /// server-emitted `category` field is missing.
-    private var categoryLabel: String {
-        guard let raw = medication.category, !raw.isEmpty else {
-            return String(localized: "med.card.category.fallback")
-        }
-        return Self.localizedCategory(raw, label: medication.categoryLabel)
+    /// iOS port of the web `getMedicationCategoryLabel(category, t)` lookup.
+    private var categoryLabel: String? {
+        Self.categoryPillLabel(category: medication.category, label: medication.categoryLabel)
+    }
+
+    /// **1.4 B4 — the pill only when it tells something.** In a list of
+    /// medications a pill reading "Medikament" (no category) or "Sonstige"
+    /// (`OTHER`, the add form's default) said nothing on every card. A real
+    /// kind (Nahrungsergänzung, Vitamin, Blutdruck, a custom category) keeps
+    /// its pill. Shared with the detail hero.
+    nonisolated static func categoryPillLabel(category: String?, label: String?) -> String? {
+        guard let raw = category?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty, raw != "OTHER" else { return nil }
+        return localizedCategory(raw, label: label)
     }
 
     // MARK: - Schedule block
@@ -367,7 +369,21 @@ struct MedicationCard: View {
     /// open catch-up band spans days) — composed BEHIND the local reducer so
     /// today's finer in-window/late/very-late grading keeps priority.
     private var windowStatus: MedicationWindowStatus? {
-        MedicationWindowStatus.reduce(medication: medication, now: now)
+        Self.resolveWindowStatus(medication: medication, timeZone: profileTimeZone, now: now)
+    }
+
+    /// **1.4 B4 — the verdict reads the zone the next-dose line reads.** The
+    /// window arithmetic used to run on the device zone while `nextDoseDate`
+    /// projects in the account zone (`profileTimeZone`, the server's). Where
+    /// the two differ (travel, an account zone set on the web) the card said
+    /// "Jetzt fällig" at the device's 08:00 and, in the line below, named the
+    /// account's 08:00 hours later. Pure and `nonisolated` for the tests.
+    nonisolated static func resolveWindowStatus(
+        medication: Medication,
+        timeZone: TimeZone,
+        now: Date
+    ) -> MedicationWindowStatus? {
+        MedicationWindowStatus.reduce(medication: medication, now: now, timeZone: timeZone)
             ?? MedicationWindowStatus.serverOverdueFallback(medication: medication, now: now)
     }
 
@@ -456,12 +472,12 @@ struct MedicationCard: View {
     private func complianceBlock(_ compliance: MedicationsStore.ComplianceCardSnapshot) -> some View {
         Button(action: onComplianceTap) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                // v0.14.1 #127 — render the two rows from the server's
-                // cadence-scaled `complianceDisplay` windows (daily med → 7/30,
-                // weekly med like Trulicity → 30/90) using the server-supplied
-                // day count as the LABEL, reading the server rate verbatim. Falls
-                // back to fixed 7/30 on offline-fallback / pre-2026-06-01 server.
-                ForEach(compliance.displayRows, id: \.days) { row in
+                // v0.14.1 #127 — the server's cadence-scaled `complianceDisplay`
+                // windows, the server-supplied day count as the LABEL, the
+                // server rate verbatim. 1.4 B4 — one bar per card: the 30-day
+                // window both cadences carry (`listRow`); the detail page this
+                // block opens shows every window.
+                if let row = compliance.listRow {
                     HLComplianceBar(
                         label: String(
                             format: String(localized: "med.card.compliance.window.label"),
@@ -480,21 +496,20 @@ struct MedicationCard: View {
         .accessibilityIdentifier("medications.card.compliance.\(medication.id)")
     }
 
-    /// **W-COMPLIANCE-INV** — redacted two-bar placeholder painted while the
+    /// **W-COMPLIANCE-INV** — redacted placeholder painted while the
     /// server-canonical snapshot is in flight. Reserves the same vertical
-    /// rhythm as the real `complianceBlock` so the card doesn't reflow when
-    /// the value lands; never shows a number, so nothing can jump.
+    /// rhythm as the real `complianceBlock` (1.4 B4: one bar) so the card
+    /// doesn't reflow when the value lands; never shows a number, so nothing
+    /// can jump.
     private var complianceSkeleton: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            ForEach([7, 30], id: \.self) { days in
-                HLComplianceBar(
-                    label: String(
-                        format: String(localized: "med.card.compliance.window.label"),
-                        days
-                    ),
-                    rate: 0
-                )
-            }
+            HLComplianceBar(
+                label: String(
+                    format: String(localized: "med.card.compliance.window.label"),
+                    30
+                ),
+                rate: 0
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .redacted(reason: .placeholder)
@@ -509,10 +524,8 @@ struct MedicationCard: View {
     /// Compliance has no meaning for an on-demand med, so this never shows a
     /// fabricated number. A file-scope subview (like `ScheduleLine`) so it keeps
     /// the card's type-body lean.
-    /// #115 B7 — the same slot says "adherence unknown" when the server gave
-    /// no answer for a scheduled medication.
-    private func complianceNote(unknown: Bool) -> some View {
-        ComplianceSlotNote(medicationId: medication.id, kind: unknown ? .unknown : .asNeeded)
+    private var complianceNote: some View {
+        ComplianceSlotNote(medicationId: medication.id)
     }
 
     // MARK: - Action buttons
@@ -610,17 +623,17 @@ struct MedicationCard: View {
         if !medication.tracksIntake { parts.append(String(localized: "medications.recordOnly.badge")) }
         if let course = MedicationCourseBadge.resolve(medication) { parts.append(course.title) }
         if !scheduleSummary.isEmpty { parts.append(scheduleSummary) }
-        if medication.tracksIntake, let longRow = compliance?.displayRows.last {
+        if medication.tracksIntake, let listRow = compliance?.listRow {
             parts.append(
                 String(
                     format: String(localized: "med.card.compliance.a11y"),
-                    String(format: String(localized: "med.card.compliance.window.label"), longRow.days),
-                    longRow.rate
+                    String(format: String(localized: "med.card.compliance.window.label"), listRow.days),
+                    listRow.rate
                 )
             )
         }
         if let chip = displayState.badgeTitle { parts.append(chip) }
-        return parts.joined(separator: ". ")
+        return parts.filter { !$0.isEmpty }.joined(separator: ". ")
     }
 
     // MARK: - Static helpers
@@ -698,56 +711,22 @@ struct MedicationCard: View {
 /// view (mirroring `ScheduleLine`) so a PRN card occupies the SAME compliance
 /// slot a scheduled card does, keeping the two cards structurally identical.
 struct ComplianceSlotNote: View {
-    enum Kind: Equatable {
-        /// Scheduled medication, server gave no answer (#115 B7).
-        case unknown
-        /// PRN / as-needed medication, no adherence to show.
-        case asNeeded
-        /// v1.39.1 (#1033) — intake tracking is off; the medication is a record.
-        case notTracked
-
-        var symbol: String {
-            switch self {
-            case .unknown: "questionmark.circle"
-            case .asNeeded: "hand.tap"
-            case .notTracked: "doc.text"
-            }
-        }
-
-        var text: String {
-            switch self {
-            case .unknown: String(localized: "med.compliance.unavailable")
-            case .asNeeded: String(localized: "med.card.compliance.as_needed")
-            case .notTracked: String(localized: "med.card.compliance.not_tracked")
-            }
-        }
-
-        var identifierStem: String {
-            switch self {
-            case .unknown: "unknown"
-            case .asNeeded: "asneeded"
-            case .notTracked: "nottracked"
-            }
-        }
-    }
-
     let medicationId: String
-    let kind: Kind
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            Image(systemName: kind.symbol)
+            Image(systemName: "hand.tap")
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLText.tertiary)
                 .accessibilityHidden(true)
-            Text(kind.text)
+            Text("med.card.compliance.as_needed")
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
             Spacer(minLength: HLSpace.sm)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("medications.card.compliance.\(kind.identifierStem).\(medicationId)")
+        .accessibilityIdentifier("medications.card.compliance.asneeded.\(medicationId)")
     }
 }
 
@@ -780,7 +759,9 @@ struct RecordOnlyMedicationBadge: View {
 /// sizes fall back to a vertical wrap without truncating either capsule; the
 /// outer card announces the same category-before-status order as one label.
 private struct MedicationCategoryStatusRow: View {
-    let categoryLabel: String
+    /// `nil` when the category says nothing (1.4 B4); the row then shows only
+    /// an overdue state, or is absent.
+    let categoryLabel: String?
     let windowStatus: MedicationWindowStatus?
 
     private var overdue: MedicationWindowStatus? {
@@ -788,45 +769,49 @@ private struct MedicationCategoryStatusRow: View {
     }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
-                categoryPill
-                if let overdue { MedicationStatusPill(status: overdue) }
-                Spacer(minLength: 0)
+        if categoryLabel != nil || overdue != nil {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
+                    categoryPill
+                    if let overdue { MedicationStatusPill(status: overdue) }
+                    Spacer(minLength: 0)
+                }
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    categoryPill
+                    if let overdue { MedicationStatusPill(status: overdue) }
+                }
             }
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                categoryPill
-                if let overdue { MedicationStatusPill(status: overdue) }
-            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(Self.accessibilityCategoryStatusLabel(
+                category: categoryLabel,
+                windowStatus: windowStatus
+            )))
+            .accessibilityHidden(true)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(Self.accessibilityCategoryStatusLabel(
-            category: categoryLabel,
-            windowStatus: windowStatus
-        )))
-        .accessibilityHidden(true)
     }
 
+    @ViewBuilder
     private var categoryPill: some View {
-        Text(categoryLabel)
-            .font(.hlCaption.weight(.semibold))
-            .foregroundStyle(HLText.secondary)
-            .padding(.horizontal, HLSpace.sm)
-            .padding(.vertical, HLSpace.xs)
-            .background(HLSurface.tertiary, in: Capsule())
+        if let categoryLabel {
+            Text(categoryLabel)
+                .font(.hlCaption.weight(.semibold))
+                .foregroundStyle(HLText.secondary)
+                .padding(.horizontal, HLSpace.sm)
+                .padding(.vertical, HLSpace.xs)
+                .background(HLSurface.tertiary, in: Capsule())
+        }
     }
 
     static func accessibilityCategoryStatusLabel(
-        category: String,
+        category: String?,
         windowStatus: MedicationWindowStatus?
     ) -> String {
-        guard let windowStatus, windowStatus != .inWindow else { return category }
-        let status = switch windowStatus {
-        case .inWindow: ""
+        let status: String? = switch windowStatus {
         case .late: String(localized: "med.card.status.overdue")
         case .veryLate: String(localized: "med.card.status.very_overdue")
+        case .inWindow, nil: nil
         }
-        return "\(category). \(status)"
+        return [category, status].compactMap(\.self).joined(separator: ". ")
     }
 }
 
@@ -1047,20 +1032,18 @@ struct MedicationCardSchedule: Equatable {
                 value: lastValue(lastTakenAt: lastTakenAt, isAsNeeded: isAsNeeded, now: now)
             ),
             // B4, the operator's own rule: a next intake is meaningless for an
-            // as-needed medication, so the card does not claim one. Every
-            // scheduled medication keeps the line it always had.
-            next: isAsNeeded ? nil : Line(
+            // as-needed medication, so the card does not claim one. v1.39.1
+            // (#1033): nothing is due on a record either, and 1.4 B2 lets the
+            // "Nur dokumentiert" badge say so instead of a second line that
+            // repeated it. Every scheduled medication keeps its line.
+            next: isAsNeeded || !medication.tracksIntake ? nil : Line(
                 label: String(localized: "med.card.schedule.daily.next.label"),
-                // v1.39.1 (#1033) — nothing is due on a record; the line says
-                // so instead of reading the stored schedule as a plan.
-                value: medication.tracksIntake
-                    ? nextValue(
-                        windowStatus: windowStatus,
-                        nextDose: nextDose,
-                        scheduleSummary: scheduleSummary,
-                        now: now
-                    )
-                    : String(localized: "med.card.schedule.not_tracked")
+                value: nextValue(
+                    windowStatus: windowStatus,
+                    nextDose: nextDose,
+                    scheduleSummary: scheduleSummary,
+                    now: now
+                )
             )
         )
     }

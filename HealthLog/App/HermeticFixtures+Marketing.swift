@@ -63,8 +63,26 @@
         /// `MarketingScreenshotsTest` passes it.
         static let avatarPathArgument = "-uitest-marketing-avatar"
 
-        static func response(forPath path: String, method: String) -> (status: Int, body: Data)? {
+        static func response(
+            forPath path: String,
+            method: String,
+            query: [URLQueryItem] = []
+        ) -> (status: Int, body: Data)? {
+            // iOS 1.4 B2-b — the medications-and-mood overlay of the sweep
+            // (`-uitest-area-meds`) rides on this world and outranks it.
+            if HermeticUITestSupport.isAreaMedsOverlayActive,
+               let area = AreaMedsFixtures.response(forPath: path, method: method, query: query)
+            {
+                return area
+            }
             guard method == "GET" else { return nil }
+            // 1.4 B3 — the recovery and HRV pages' wearable readings, only
+            // under `-uitest-recovery` (never during the App Store motifs).
+            if HermeticUITestSupport.isRecoveryOverlayActive,
+               let recovery = RecoveryFixtures.response(forPath: path, method: method, query: query)
+            {
+                return recovery
+            }
             // #115 P2 — the imperial-account overlay (`-uitest-imperial`) outranks
             // this table's `/me`.
             if HermeticUITestSupport.isImperialOverlayActive,
@@ -115,7 +133,7 @@
         /// instead of showing an em-dash next to 100%. `todayEventCount` mirrors
         /// the taken 08:00 rows so `MedicationWindowStatus.reduce` does not read
         /// a taken morning dose as "very overdue" on a late-morning capture.
-        private static var medicationsJSON: String {
+        static var medicationsJSON: String {
             let takenAt = ISO8601DateFormatter().string(from: morningSlot(hour: 8).addingTimeInterval(300))
             return """
             [

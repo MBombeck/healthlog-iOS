@@ -229,7 +229,7 @@ struct WorkoutDetailView: View {
                         .font(.hlTitle3)
                         .foregroundStyle(HLText.primary)
                     HRChart(samples: series, avg: resolved.avgHr, max: resolved.maxHr)
-                        .frame(height: 180)
+                        .frame(height: HLChartStyle.heightRegular)
                         .accessibilityLabel(Self.hrAccessibilityLabel(samples: series))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -258,7 +258,7 @@ struct WorkoutDetailView: View {
                         .font(.hlTitle3)
                         .foregroundStyle(HLText.primary)
                     RouteMap(coordinates: coords)
-                        .frame(height: 220)
+                        .frame(height: HLChartStyle.heightRegular)
                         .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
                         .accessibilityLabel(Self.routeAccessibilityLabel(count: coords.count))
                 }
@@ -294,29 +294,16 @@ struct WorkoutDetailView: View {
             icon: "antenna.radiowaves.left.and.right",
             title: "workouts.detail.source.title"
         ) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack {
-                    Text("Data source")
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                    Spacer()
-                    Text(WorkoutDetailView.sourceLabel(resolved.source))
-                        .font(.hlBody.weight(.medium))
-                        .foregroundStyle(HLText.primary)
-                }
-                if let external = resolved.externalId {
-                    HStack(alignment: .top) {
-                        Text("External ID")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                        Spacer()
-                        Text(external)
-                            .font(.hlCaption.monospacedDigit())
-                            .foregroundStyle(HLText.tertiary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
+            // 1.4 B2 — the source only; the raw external ID was developer
+            // information.
+            HStack {
+                Text("Data source")
+                    .font(.hlBody)
+                    .foregroundStyle(HLText.secondary)
+                Spacer()
+                Text(WorkoutDetailView.sourceLabel(resolved.source))
+                    .font(.hlBody.weight(.medium))
+                    .foregroundStyle(HLText.primary)
             }
         }
     }
@@ -447,15 +434,8 @@ struct HRChart: View {
                     .foregroundStyle(HLText.secondary)
             }
         }
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                AxisGridLine()
-                    .foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                AxisValueLabel(format: .dateTime.hour().minute(), centered: false)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-            }
-        }
+        // 1.4 B4 — the app's one date-axis rule (time of day for a session).
+        .chartXAxis { ChartDateAxis.marks(for: samples.map(\.timestamp)) }
         .hlChartScrub($selectedDate) { date in
             guard let nearest = HLChartScrubber.nearest(to: date, in: samples, date: \.timestamp) else { return nil }
             return String(localized: "\(nearest.timestamp.formatted(.dateTime.hour().minute())): \(Int(nearest.bpm.rounded())) bpm")

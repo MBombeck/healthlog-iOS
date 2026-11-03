@@ -102,8 +102,6 @@ struct BiomarkerDetailScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
                 header
-                aliasesLine
-                explainerSlot
                 lastMeasurementSection
                 statsSection
                 chartSection
@@ -137,21 +135,60 @@ struct BiomarkerDetailScreen: View {
 
     // MARK: - Sections
 
+    /// 1.4 B2-c — the header carries the page's one (i) (the explainer, the
+    /// other spellings, the references and the guide, which used to stand as
+    /// two loose blocks under the title) and the gear. Where the server can
+    /// edit spellings and merge markers, those two sit in the gear's menu
+    /// beside the range editor instead of as caption buttons on the page.
     private var header: some View {
         InsightsPageHeader(
             LocalizedStringKey(displayName),
             accessibilityIdentifierSuffix: "biomarker"
         ) {
+            HLInfoButton(content: info, style: .circle, accessibilityIdentifier: "biomarker.detail.info")
             if marker != nil {
-                InsightsHeaderActionCircle(
-                    systemImage: "slider.horizontal.3",
-                    accessibilityLabelText: String(localized: "biomarker.detail.editRange"),
-                    accessibilityIdentifier: "biomarker.detail.gear"
-                ) {
-                    markerSheet = .editor
+                if ServerFeatureMirror.shared.current?.biomarkerMerge == true {
+                    Menu {
+                        Button("biomarker.detail.editRange") { markerSheet = .editor }
+                        Button("labs.aliases.edit") { markerSheet = .aliases }
+                        Button("labs.merge.open") { markerSheet = .merge }
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .hlHeaderCircle()
+                    }
+                    .accessibilityLabel(Text("biomarker.detail.editRange"))
+                    .accessibilityIdentifier("biomarker.detail.gear")
+                } else {
+                    InsightsHeaderActionCircle(
+                        systemImage: "slider.horizontal.3",
+                        accessibilityLabelText: String(localized: "biomarker.detail.editRange"),
+                        accessibilityIdentifier: "biomarker.detail.gear"
+                    ) {
+                        markerSheet = .editor
+                    }
                 }
             }
         }
+    }
+
+    /// What the (i) explains. The citations of the explainer travel with it;
+    /// the reading's range verdict keeps its own visible link in the card.
+    private var info: HLInfoContent {
+        var sections: [HLInfoContent.Section] = []
+        if let aliases = marker?.aliases, !aliases.isEmpty {
+            sections.append(HLInfoContent.Section(
+                title: String(localized: "biomarker.detail.info.aliases"),
+                paragraphs: [String(localized: "labs.biomarker.aliases \(aliases.formatted(.list(type: .and)))")]
+            ))
+        }
+        return HLInfoContent(
+            title: displayName,
+            identifier: "biomarker.detail.info.sheet",
+            about: explainer,
+            topic: sourcesTopic,
+            sections: sections,
+            learnMoreConcept: "LAB_BIOMARKER"
+        )
     }
 
     /// The biomarker title. A linked marker shows its catalog name; an unlinked
@@ -159,56 +196,6 @@ struct BiomarkerDetailScreen: View {
     private var displayName: String {
         if let name = marker?.name, !name.isEmpty { return name }
         return analyte
-    }
-
-    @ViewBuilder
-    private var explainerSlot: some View {
-        if let explainer {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text(verbatim: explainer)
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityLabel(Text("biomarker.detail.explainer.a11y"))
-                // A360-1 M2 — discreet pointer to the generic lab-biomarker
-                // /learn guide (mirrors the server's LearnMoreLink on Labs detail).
-                // 1.0.3 (1.4.1) — beside it, the citations for THIS marker; an
-                // analyte the catalogue cannot resolve falls back to the shared
-                // reference-range sources.
-                HStack(spacing: HLSpace.lg) {
-                    HLLearnMoreLink(concept: "LAB_BIOMARKER")
-                    HLSourcesLink(topic: sourcesTopic)
-                }
-            }
-        }
-    }
-
-    /// #130 — the other spellings the server maps to this marker (v1.43), as
-    /// delivered. Nothing on a server that sends none.
-    /// #130 (v1.43) — editing them and merging other markers into this one
-    /// are offered only where the server has the routes
-    /// (`features.biomarkerMerge`).
-    @ViewBuilder
-    private var aliasesLine: some View {
-        if let aliases = marker?.aliases, !aliases.isEmpty {
-            Text(verbatim: String(localized: "labs.biomarker.aliases \(aliases.formatted(.list(type: .and)))"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("biomarker.detail.aliases")
-        }
-        if marker != nil, ServerFeatureMirror.shared.current?.biomarkerMerge == true {
-            HStack(spacing: HLSpace.lg) {
-                Button("labs.aliases.edit") { markerSheet = .aliases }
-                    .accessibilityIdentifier("biomarker.detail.editAliases")
-                Button("labs.merge.open") { markerSheet = .merge }
-                    .accessibilityIdentifier("biomarker.detail.merge")
-            }
-            .font(.hlCaption)
-            .buttonStyle(.plain)
-            .foregroundStyle(.tint)
-        }
     }
 
     /// The citation topic for this marker: the resolved catalogue slug when the
@@ -225,7 +212,7 @@ struct BiomarkerDetailScreen: View {
         if let latest {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 InsightsSectionHeader("biomarker.detail.lastMeasurement")
-                BiomarkerLastMeasurementCard(latest: latest)
+                BiomarkerLastMeasurementCard(latest: latest, sourcesTopic: sourcesTopic)
             }
         }
     }

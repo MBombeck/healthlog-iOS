@@ -9,15 +9,25 @@ import SwiftUI
 public struct SideEffectsLogbookSection: View {
     @State private var store: SideEffectsLogbookStore
     @State private var showingAdd: Bool = false
+    /// 1.4 B2 — with nothing logged the section is one row in the GLP-1
+    /// stack's shared "add" card (``GLP1DetailStack``).
+    private let showsAddRowOnly: Bool
 
-    public init(store: SideEffectsLogbookStore) {
+    public init(store: SideEffectsLogbookStore, showsAddRowOnly: Bool = false) {
         _store = State(initialValue: store)
+        self.showsAddRowOnly = showsAddRowOnly
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            header
-            content
+        Group {
+            if showsAddRowOnly {
+                GLP1AddRow(title: "Log side effect", systemImage: "list.bullet.rectangle") { showingAdd = true }
+            } else {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    header
+                    content
+                }
+            }
         }
         .sheet(isPresented: $showingAdd) {
             SideEffectLogSheet { loggedAt, kind, severity, note in
@@ -57,34 +67,10 @@ public struct SideEffectsLogbookSection: View {
         }
     }
 
-    @ViewBuilder
     private var content: some View {
-        if store.entries.isEmpty {
-            emptyState
-        } else {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                summaryChips
-                logbookList
-            }
-        }
-    }
-
-    private var emptyState: some View {
-        HLCard(style: .ghost) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Label(
-                    String(localized: "No entries yet"),
-                    systemImage: "list.bullet.rectangle"
-                )
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                Text(String(
-                    localized: "Log the side effects you notice to keep a record of tolerability over time."
-                ))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
+        VStack(alignment: .leading, spacing: HLSpace.md) {
+            summaryChips
+            logbookList
         }
     }
 
@@ -295,7 +281,9 @@ struct SideEffectLogSheet: View {
                         .lineLimit(3 ... 6)
                 }
             }
-            .navigationTitle(String(localized: "Log side effect"))
+            // 1.4 B4 — its own key: between "Abbrechen" and "Speichern" the
+            // German "Nebenwirkung erfassen" was cut.
+            .navigationTitle(String(localized: "glp1.sideEffect.sheet.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

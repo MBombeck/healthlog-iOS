@@ -161,6 +161,12 @@ public protocol AppleHealthMedicationReading: Sendable {
     /// first sync). Auto-granted with the parent med's per-object auth.
     func readDoseEvents(since: Date?) async throws -> [AppleHealthDoseRecord]
 
+    /// **1.4 / iOS 27** — how far back dose events are readable. A person who
+    /// grants a recent window hides older doses; the importer clamps its read
+    /// to the window and the ledger keeps older pending doses instead of
+    /// dropping them as deleted.
+    func doseReadWindow() async -> HealthReadWindow
+
     /// **W3 (1.3, #126 1.5)** — subscribe to new dose events: an
     /// `HKObserverQuery` on the dose-event type plus background delivery, so a
     /// dose logged in Health wakes the app instead of waiting for the next app
@@ -185,5 +191,11 @@ public extension AppleHealthMedicationReading {
         _: @escaping @Sendable () async -> Void
     ) async -> (any AppleHealthDoseEventObservation)? {
         nil
+    }
+
+    /// Readers that cannot ask HealthKit (test doubles, the inert reader)
+    /// read the whole history.
+    func doseReadWindow() async -> HealthReadWindow {
+        .unlimited
     }
 }

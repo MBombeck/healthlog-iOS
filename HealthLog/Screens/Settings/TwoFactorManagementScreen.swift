@@ -249,9 +249,9 @@ struct StepUpArmPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            Text("settings.security.twoFactor.stepUp.prompt")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+            // 1.4 B2-c — no "Confirm your identity" line: every button below
+            // says "Confirm with …", and the sheets around the picker carry
+            // their own title or lead.
 
             // Passkey is always offered — a 409 (no passkey on the account) is
             // the honest discovery path and points the user at another arm.

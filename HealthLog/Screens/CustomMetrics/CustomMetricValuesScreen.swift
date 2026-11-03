@@ -73,13 +73,12 @@ struct CustomMetricValuesScreen: View {
 
             if entries.isEmpty, !store.isLoadingEntries {
                 Section {
+                    // 1.4 B2-c — the title only; a call to log without a
+                    // button on this screen was a dead end.
                     HLEmptyState(
                         icon: "list.bullet",
-                        title: "customMetric.values.empty.title",
-                        message: "customMetric.values.empty.message"
-                    ) {
-                        EmptyView()
-                    }
+                        title: "customMetric.values.empty.title"
+                    )
                 }
             }
 

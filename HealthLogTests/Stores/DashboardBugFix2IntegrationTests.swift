@@ -11,8 +11,8 @@ import Testing
 ///    populated series synthesizes `.ready` → tile renders the data.
 ///
 /// 2. Briefing input: `MeasurementsStore.load()` populates `recent`,
-///    downstream consumers (`OnDeviceBriefingHero`) filter by kind and
-///    see real numbers, NOT the empty digest copy.
+///    downstream consumers filter by kind and see real numbers, NOT the
+///    empty digest copy.
 ///
 /// These tests stitch together the unit-level fixes from
 /// `DashboardStoreSeriesFallbackTests` + `MeasurementsStoreBriefingInputTests`

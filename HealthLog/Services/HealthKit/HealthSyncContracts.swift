@@ -110,35 +110,6 @@ enum HealthSyncTrigger: String, CaseIterable, Sendable {
     case accountTeardown
 }
 
-extension SyncTrigger {
-    /// **V1** — the wire word a `HealthSyncTrigger` stands for, or `nil` when the
-    /// pass does not know whether the app is in front (cold activation, a fresh
-    /// authorization, account teardown) and the context's own fallback decides.
-    init?(pass trigger: HealthSyncTrigger) {
-        switch trigger {
-        case .manual: self = .manual
-        case .foreground: self = .foreground
-        case .processing, .appRefresh, .observer: self = .background
-        case .silentPush: self = .push
-        case .coldActivation, .postAuthentication, .accountTeardown: return nil
-        }
-    }
-}
-
-extension SyncTriggerContext {
-    /// **V1** — runs one pass with the wire trigger it stands for bound to its
-    /// task tree (``SyncTrigger/init(pass:)``); a pass without one runs
-    /// unbound and the context's fallback decides.
-    func runningPass<T>(
-        _ trigger: HealthSyncTrigger,
-        isolation: isolated (any Actor)? = #isolation,
-        _ body: () async -> T
-    ) async -> T {
-        guard let wire = SyncTrigger(pass: trigger) else { return await body() }
-        return await bind(wire, body)
-    }
-}
-
 /// Bounded work allowance for one trigger. `incrementalOnly` forbids a first
 /// history walk inside a short wake.
 ///
@@ -370,6 +341,10 @@ struct HealthSyncPageOutcome: Sendable, Equatable {
     let durableRetryFailed: Bool
     let leaseIsCurrent: Bool
     let wasCancelled: Bool
+    /// A2 (1.4, R3 S6) — no answer could come: offline or in backoff.
+    var serverUnreachable = false
+    /// A2 (1.4, R3 3.2) — rows the server answered `duplicate`/`folded_window`.
+    var foldedWindowDuplicates = 0
 
     var hasNonterminalEntry: Bool {
         entries.contains { $0.classification != .terminalAccepted }
@@ -387,6 +362,8 @@ enum HealthSyncHoldReason: String, Sendable, Equatable {
     case retryPersistenceFailed
     case leaseLost
     case cancelled
+    /// A2 (1.4, R3 S6) — offline or in backoff: held, never parked.
+    case serverUnreachable
 }
 
 enum HealthSyncCommitDecision: Sendable, Equatable {
@@ -406,6 +383,7 @@ struct DurableHealthSyncCursorCommitPolicy: HealthSyncCursorCommitPolicy {
     func decide(_ outcome: HealthSyncPageOutcome) -> HealthSyncCommitDecision {
         if outcome.wasCancelled { return .hold(reason: .cancelled) }
         if !outcome.leaseIsCurrent { return .hold(reason: .leaseLost) }
+        if outcome.serverUnreachable { return .hold(reason: .serverUnreachable) }
         if outcome.durableRetryFailed { return .hold(reason: .retryPersistenceFailed) }
         if !outcome.coversEveryPostedIndex { return .hold(reason: .incompleteIndexCoverage) }
         if outcome.hasNonterminalEntry, !outcome.durableRetryPersisted {

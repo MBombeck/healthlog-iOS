@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Section blocks + target-band helpers backing `InsightsMetricScreen` — the
-/// header, description, 30-day status card, correlation, Letzte-Messung,
+/// header with its (i), 30-day status card, correlation, Letzte-Messung,
 /// sleep-hypnogram row, chart block, range delta and the target-item plumbing,
 /// moved verbatim out of `InsightsMetricScreen.swift` so the screen file stays
 /// under SwiftLint's `file_length` ceiling (pure code movement, no behavior
@@ -12,8 +12,8 @@ extension InsightsMetricScreen {
 
     /// In-content per-metric header that mirrors the Übersicht header pattern
     /// EXACTLY: the metric title left-aligned, the two EQUAL-sized trailing
-    /// circles (gear when an editable target band exists, then the `✦` Coach
-    /// action), with the description rendered BELOW in the parent `VStack`.
+    /// circles (the (i), the gear when an editable target band exists, then the
+    /// `✦` Coach action).
     ///
     /// Both circles are the SAME `InsightsHeaderActionCircle` primitive — the
     /// monochrome, STATIC glass circle (the operator wanted the Coach to carry
@@ -24,12 +24,25 @@ extension InsightsMetricScreen {
     var metricHeader: some View {
         // DRIFT-2 — route through the canonical `InsightsPageHeader` so the
         // metric page shares ONE header primitive with the Mood / Medications /
-        // Workouts pages (and the overview). The description renders BELOW via the
-        // sibling `descriptionSlot`, so the subtitle slot stays nil here.
+        // Workouts pages (and the overview). 1.4 B2: the explainer that stood
+        // below the title lives behind the (i) now.
         InsightsPageHeader(
             LocalizedStringKey(kind.displayName),
             accessibilityIdentifierSuffix: kind.rawValue
         ) {
+            // 1.4 B2 — the page's one (i): the explainer, the method of every
+            // card that has one, the references and the guide. Leading, so the
+            // Coach keeps the trailing edge.
+            HLInfoButton(
+                content: InsightsMetricInfo.content(
+                    for: kind,
+                    canShowCloudInsights: backend.canShowCloudInsights,
+                    showsCorrelation: correlationPanel != nil
+                ),
+                style: .circle,
+                accessibilityIdentifier: "insights.metric.info.\(kind.rawValue)"
+            )
+
             // Gear — the shared equal-sized glass circle. Shown ONLY when this
             // metric carries an editable target band (no dead button).
             if canEditTargetBand {
@@ -68,70 +81,6 @@ extension InsightsMetricScreen {
                 .hlPressable()
             }
         }
-    }
-
-    // MARK: - Description slot (static web copy — self-suppresses)
-
-    /// Renders the static web explainer paragraph for this metric. W2 ships only
-    /// the slot: when `insights.metric.<rawvalue>.description` is absent or empty
-    /// (the W5 copy hasn't landed), the slot renders nothing. We detect "key
-    /// absent" by comparing the resolved string back to the key — a missing
-    /// catalog entry resolves to the key verbatim.
-    @ViewBuilder
-    var descriptionSlot: some View {
-        let resolved = descriptionText
-        if let resolved, !resolved.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text(resolved)
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("insights.metric.description.\(kind.rawValue)")
-                // A360-1 M2 — discreet "Learn more" pointer to the metric's
-                // public /learn guide (mirrors the server's LearnMoreLink on the
-                // Vitals / Glucose / metric detail). Self-suppresses for any
-                // `MetricKind` the registry doesn't map (fail-closed).
-                //
-                // 1.4.1 — the explainer paragraph IS a medical statement, so the
-                // citation rides next to the guide pointer. Both self-suppress
-                // independently; a row with neither renders as nothing.
-                HStack(spacing: HLSpace.lg) {
-                    HLLearnMoreLink(concept: kind.rawValue)
-                    HLSourcesLink(topic: .metric(kind))
-                }
-            }
-        } else {
-            // Even when there's no static explainer copy yet, still surface the
-            // learn pointer for the mapped metrics so the guide is reachable.
-            HStack(spacing: HLSpace.lg) {
-                HLLearnMoreLink(concept: kind.rawValue)
-                HLSourcesLink(topic: .metric(kind))
-            }
-        }
-    }
-
-    private var descriptionText: String? {
-        // I-0 Item 4 — prefer the ported web explainer body
-        // (`insights.subPage.explainer.<slug>Body`, the canonical "Grundlage /
-        // Was ist das?" copy) so the intro reads identically to the web sub-page.
-        // It maps `MetricKind` → web slug (which differs from `rawValue`). Falls
-        // back to the legacy `insights.metric.<rawvalue>.description` key for the
-        // few kinds the web has no explainer for (`bodyFat`, `steps`).
-        if let explainer = InsightsExplainer.resolve(for: kind) {
-            return explainer.body
-        }
-        let key = "insights.metric.\(kind.rawValue).description"
-        let resolved = String(localized: String.LocalizationValue(key))
-        // No catalog entry → `String(localized:)` echoes the key back; treat
-        // that (and an empty placeholder) as "no copy yet" → suppress.
-        //
-        // INVARIANT (W22-audit Finding #7): a `insights.metric.<rawvalue>.description`
-        // key MUST carry real plain copy (no `%@` arguments) in BOTH EN+DE, or
-        // omit the key entirely. The echo test below detects an absent key; the
-        // `!resolved.isEmpty` guard in `descriptionSlot` catches an empty value.
-        // Adding a key with an argument placeholder would break the echo test —
-        // when wiring a new metric's description, add a plain string only.
-        return resolved == key ? nil : resolved
     }
 
     // MARK: - 30 Tage Durchschnitt status card (C4 — ONE canonical card)
@@ -177,66 +126,9 @@ extension InsightsMetricScreen {
             sparklineValues: store.chartPoints.map(\.value),
             // #115 P2 — the headline, its unit and the target band read in the
             // account's unit, with glucose pinned to the series' unit.
-            units: store.effectiveUnits(settingsStore.unitPreferences)
+            units: store.effectiveUnits(settingsStore.unitPreferences),
+            serverAverage30: serverAverage30
         )
-    }
-
-    // MARK: - BP derived context — pulse pressure + MAP (web v1.18.6 parity)
-
-    /// Blood-pressure-only calm caption deriving **pulse pressure** and **mean
-    /// arterial pressure** from the latest reading — the iOS mirror of the web
-    /// v1.18.6 BP-detail "free derived context" line. Pure arithmetic on the
-    /// systolic/diastolic the app already has (`latestPoint.value` /
-    /// `latestPoint.secondary`); not a measurement, never written back.
-    ///
-    /// Self-suppresses for every non-BP metric and whenever the latest reading
-    /// is missing or physiologically inverted (`BPDerivedReadout.derive` → nil),
-    /// matching the web guard.
-    @ViewBuilder
-    var bpDerivedBlock: some View {
-        if kind == .bloodPressure,
-           let latest = store.latestPoint,
-           let readout = BPDerivedReadout.derive(
-               systolic: latest.value,
-               diastolic: latest.secondary
-           )
-        {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    Text(String(
-                        format: String(localized: "insights.bp.derived.pulsePressure"),
-                        readout.pulsePressure
-                    ))
-                    Text(String(
-                        format: String(localized: "insights.bp.derived.meanArterialPressure"),
-                        readout.meanArterialPressure
-                    ))
-                    // UI-Standard R17 (U1) — Zuschreibung, kein Hinweis: dass
-                    // Pulsdruck und MAP aus der letzten Messung ABGELEITET und
-                    // nicht gemessen sind, ist eine Tatsache über die zwei Zahlen
-                    // darüber. Der „nicht als Diagnose"-Schwanz ist gefallen, und
-                    // mit ihm das Ack-Gate — eine Zuschreibung unterdrückt sich
-                    // nicht selbst.
-                    Text(String(localized: "insights.bp.derived.caveat"))
-                        .foregroundStyle(HLText.tertiary)
-                }
-                // I1 — match the canonical metric-page explainer style (intro
-                // `descriptionSlot` + Einschätzung `AssessmentBody` both use `.hlBody`).
-                // The Pulsdruck/MAP caption previously rode `.hlSubhead`, a smaller
-                // ramp that read as a different size/weight next to the prose.
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
-                // 1.4.1 — Pulsdruck and MAP are derived clinical quantities, so
-                // they name their references. The link is a SIBLING of the
-                // combined element above, never inside it: VoiceOver must reach
-                // it as its own control.
-                HLSourcesLink(topic: .pulsePressureMAP)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 
     // MARK: - Labelled stats row (I4 — BP systolic/diastolic)
@@ -299,43 +191,49 @@ extension InsightsMetricScreen {
         )
     }
 
+    /// The correlation panel this page shows, `nil` when it owns no pairing
+    /// with a signal. The (i) asks too: it explains the card only when it is
+    /// on the page.
+    var correlationPanel: CorrelationsPanel? {
+        let pairs = correlationPairs
+        guard !pairs.isEmpty, backend.canShowCloudInsights, let digest = insightsStore.digest else { return nil }
+        // A360 H2 — each correlation card carries an "Ask the coach about
+        // this" link that opens the canonical AskCoachSheet pre-scoped to both
+        // metrics in the pair (same sheet the per-page coach circle opens; it
+        // self-gates the arm / placeholder per user).
+        let panel = CorrelationsPanel(
+            digest: digest,
+            pairs: pairs,
+            onAskCoach: { pair in
+                coachSeedOverride = pair.coachSeed
+                coachScopeOverride = pair.coachLaunchScope
+                presentAskCoach = true
+            }
+        )
+        return panel.hasAnyCard ? panel : nil
+    }
+
     @ViewBuilder
     var correlationBlock: some View {
-        let pairs = correlationPairs
-        if !pairs.isEmpty, backend.canShowCloudInsights, let digest = insightsStore.digest {
+        if let panel = correlationPanel {
             // 1.0.3 (App Review 1.4.1 / ruling R12) — the panel's own
             // "Associations, not causes." reading instruction and its Sources
             // link now render unconditionally whenever a correlation card does.
             // They used to hang off a `showsDisclaimer` flag that this call site
             // and both others passed `false`, so neither reached a screen; the
             // flag is gone, and there is nothing here to opt into any more.
-            // A360 H2 — each correlation card carries an "Ask the coach about
-            // this" link that opens the canonical AskCoachSheet pre-scoped to both
-            // metrics in the pair (same sheet the per-page coach circle opens; it
-            // self-gates the arm / placeholder per user).
-            let panel = CorrelationsPanel(
-                digest: digest,
-                pairs: pairs,
-                onAskCoach: { pair in
-                    coachSeedOverride = pair.coachSeed
-                    coachScopeOverride = pair.coachLaunchScope
-                    presentAskCoach = true
-                }
-            )
-            if panel.hasAnyCard {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    // v0.14.3 D2 — the right-aligned "How your metrics relate …"
-                    // subtext was removed (declutter).
-                    // v0.14.3 D4 — `flush: true` drops the header's `HLSpace.xs`
-                    // inset so its leading edge sits flush with the unpadded
-                    // correlation prose below — matching the Einschätzung /
-                    // Letzte-Messung left edge (symmetry).
-                    InsightsSectionHeader("Relationships", flush: true)
-                    panel
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .contain)
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                // v0.14.3 D2 — the right-aligned "How your metrics relate …"
+                // subtext was removed (declutter).
+                // v0.14.3 D4 — `flush: true` drops the header's `HLSpace.xs`
+                // inset so its leading edge sits flush with the unpadded
+                // correlation prose below — matching the Einschätzung /
+                // Letzte-Messung left edge (symmetry).
+                InsightsSectionHeader("Relationships", flush: true)
+                panel
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
         }
     }
 
@@ -525,7 +423,8 @@ extension InsightsMetricScreen {
                 emphasisTint: HLColor.inkGraphite,
                 zoomNamespace: fullscreenZoomNamespace,
                 zoomSourceID: Self.zoomSourceID,
-                onTapChart: { presentFullscreenChart = true }
+                onTapChart: { presentFullscreenChart = true },
+                rangeDelta: rangeDelta
             )
         }
     }
@@ -533,19 +432,18 @@ extension InsightsMetricScreen {
     // MARK: - Period-over-period delta (W5-3, self-suppresses)
 
     /// W5-3 — "vs prior <range>" caption from the already-loaded series (no new
-    /// server contract). Self-suppresses when `MetricRangeDelta.resolve` finds no
-    /// coherent prior window. #115 · 1.3 / #135 — colour only from a server
-    /// verdict: the series' own `direction` (v1.43), else for weight the
-    /// snapshot's `tiles.weightTrend`; without either the caption stays neutral.
-    @ViewBuilder
-    var rangeDeltaSlot: some View {
-        if let points = store.displaySeries?.points, !points.isEmpty {
-            MetricRangeDelta(
-                points: points,
-                sentiment: store.rangeDeltaSentiment(weightTrend: briefingStore.snapshotBriefing?.weightTrend),
-                range: store.range
-            )
-        }
+    /// server contract), the chart card's one caption line since 1.4 B2.
+    /// Self-suppresses when `MetricRangeDelta.resolve` finds no coherent prior
+    /// window. #115 · 1.3 / #135 — colour only from a server verdict: the
+    /// series' own `direction` (v1.43), else for weight the snapshot's
+    /// `tiles.weightTrend`; without either the caption stays neutral.
+    private var rangeDelta: MetricRangeDelta? {
+        guard let points = store.displaySeries?.points, !points.isEmpty else { return nil }
+        return MetricRangeDelta(
+            points: points,
+            sentiment: store.rangeDeltaSentiment(weightTrend: briefingStore.snapshotBriefing?.weightTrend),
+            range: store.range
+        )
     }
 
     // MARK: - Target item (drives the header gear + range-delta polarity)

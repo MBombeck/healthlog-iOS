@@ -22,7 +22,7 @@ import SwiftUI
     ///   action that matches it.
     /// - The medication numbers the in-app surfaces consume.
     /// - How many local reminders iOS currently holds.
-    /// - "Trigger test banner" gated behind a 3-second long-press.
+    /// - A test banner gated behind a 3-second long-press.
     ///
     /// **08-15 — what this screen deliberately no longer shows.** The APNs
     /// registration audit, the registered banner categories with their raw
@@ -58,6 +58,18 @@ import SwiftUI
                 pendingRequestsCard
                 testNotificationCard
                 supportDiagnosticsCard
+            }
+            // 1.4 B4 — the only settings page without a title in its bar.
+            .navigationTitle("Advanced diagnostics")
+            .navigationBarTitleDisplayMode(.inline)
+            // 1.4 B2 — the one (i) carries what two card footers explained.
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    HLInfoButton(
+                        content: NotificationDiagnosticsInfo.content,
+                        accessibilityIdentifier: "notifications.diagnostics.info"
+                    )
+                }
             }
             .task { await refresh() }
             .refreshable {
@@ -175,11 +187,7 @@ import SwiftUI
         /// role. Both now say what the reader sees: the app added them,
         /// and this is the total the app shows.
         private var medsDataCard: some View {
-            HLSettingsCard(
-                icon: "pills.fill",
-                title: "Medication data",
-                footer: "Doses the server has already created for today. The app fills in the remaining ones from your schedule."
-            ) {
+            HLSettingsCard(icon: "pills.fill", title: "Medication data") {
                 LabeledRow(
                     title: "Active medications",
                     value: "\(activeMedsCount)",
@@ -220,14 +228,7 @@ import SwiftUI
         /// through it, what was scheduled. They are now redacted support detail
         /// behind ``SupportDiagnosticsSession``.
         private var pendingRequestsCard: some View {
-            HLSettingsCard(
-                icon: "calendar",
-                title: "Scheduled notifications",
-                // R18 (U6) — war ein deutsches Quell-Literal ohne Katalog-Eintrag
-                // (PROJECT_GUIDE.md: keine hardcodierten UI-Strings); jetzt englischer
-                // Quellschlüssel mit de/en im Katalog.
-                footer: "Local reminders iOS has already scheduled. Server pushes do not appear here."
-            ) {
+            HLSettingsCard(icon: "calendar", title: "Scheduled notifications") {
                 LabeledRow(
                     title: "Count",
                     value: "\(snapshot.pendingCount)",
@@ -242,25 +243,22 @@ import SwiftUI
             // „Benachrichtigungen", von der aus diese Seite geöffnet wird.
             // Hier bleibt nur die Bedienbesonderheit, die es sonst nirgends
             // gibt: der Knopf reagiert auf langes Drücken, nicht auf Tippen.
-            HLSettingsCard(
-                icon: "paperplane.fill",
-                title: "Test banner",
-                footer: "Long-press (3 sec), then the banner fires in 5 seconds."
-            ) {
-                Button {
-                    // Long-press is the trigger — plain tap is a no-op.
-                } label: {
-                    Label("Trigger test banner", systemImage: "paperplane.fill")
-                        .font(.hlSubhead)
-                }
-                .hlGlassButtonStyle()
-                .accessibilityIdentifier("meds.diagnostics.testTrigger")
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 3.0)
-                        .onEnded { _ in
-                            Task { await sendTestNotification() }
-                        }
-                )
+            // 1.4 B2 — the button says how it works ("Hold 3 seconds …"); no
+            // footer under it.
+            HLSettingsCard(icon: "paperplane.fill", title: "Test banner") {
+                // 1.4 B4 — the app's secondary button. The prominent glass
+                // style filled the capsule with the app tint (near white) and
+                // set the label in white on it, which read as switched off.
+                // The card title names the banner, so the label only says how:
+                // the long-press is the trigger, a plain tap is a no-op.
+                HLButton("notifications.diagnostics.test.hold", icon: "paperplane.fill", variant: .secondary) {}
+                    .accessibilityIdentifier("meds.diagnostics.testTrigger")
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 3.0)
+                            .onEnded { _ in
+                                Task { await sendTestNotification() }
+                            }
+                    )
                 if let sentAt = testSentAt {
                     Text(
                         String(

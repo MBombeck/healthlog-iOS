@@ -38,10 +38,13 @@ struct MoodBetterDaysCard: View {
         } else {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    // v0.14.7 B6 — the in-card title is removed: the section
-                    // heading above this region ("Was deine Stimmung prägt" /
-                    // "What shapes your mood", `InsightsMoodPage.relationsBlock`)
-                    // already names it, so an in-card title duplicated the label.
+                    // 1.4 B4 — the title is back. The region heading above
+                    // ("Was deine Stimmung prägt") names all three cards, and the
+                    // two beside this one carry their own title; without one this
+                    // card read as a stray list between them.
+                    Text("mood.betterDays.title")
+                        .font(.hlTitle3)
+                        .foregroundStyle(HLText.primary)
                     VStack(spacing: HLSpace.sm) {
                         ForEach(visibleFactors) { factor in
                             MoodBetterDayRowView(
@@ -117,16 +120,12 @@ struct MoodBetterDayRowView: View {
                 .foregroundStyle(HLText.secondary)
                 .frame(width: 22, alignment: .center)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(resolvedLabel)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .lineLimit(1)
-                Text(Self.directionCaption(for: factor))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .lineLimit(1)
-            }
+            // 1.4 B2 — the arrow says the direction; the caption that spelled
+            // it out under every row is VoiceOver's alone now.
+            Text(resolvedLabel)
+                .font(.hlSubhead)
+                .foregroundStyle(HLText.primary)
+                .lineLimit(1)
 
             Spacer(minLength: HLSpace.sm)
 

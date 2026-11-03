@@ -45,8 +45,13 @@ extension EditMedicationSheet {
         } header: {
             Text("med.lifecycle.section")
         } footer: {
-            Text(medication.active ? "med.lifecycle.footer.active" : "med.lifecycle.footer.paused")
-                .font(.hlCaption)
+            // 1.4 B2 — one consequence the buttons do not show: a pause does not
+            // count as missed. "Beenden" states its own in the confirmation;
+            // "Reaktivieren" needs no sentence.
+            if medication.active {
+                Text("med.lifecycle.footer.active")
+                    .font(.hlCaption)
+            }
         }
         .disabled(isProcessingLifecycle || isSaving)
         .hlConfirmDestructive(

@@ -256,14 +256,16 @@ struct DocumentsScreen: View {
             HLEmptyState(
                 icon: filtered ? "line.3.horizontal.decrease.circle" : "folder",
                 title: LocalizedStringKey(filtered ? "documents.empty.noMatchesTitle" : "documents.empty.title"),
-                message: LocalizedStringKey(filtered ? "documents.empty.noMatchesDescription" : "documents.empty.description")
+                // 1.4 B2-c — a filtered empty list says its title and offers
+                // the reset; the sentence that repeated the title is gone.
+                message: filtered ? nil : LocalizedStringKey("documents.empty.description")
             ) {
                 if filtered {
                     HLButton("documents.filter.clear", icon: "xmark", variant: .secondary) {
                         Task { await store?.clearFilter() }
                     }
                 } else {
-                    HLButton("documents.empty.action", icon: "arrow.up.doc", variant: .primary) {
+                    HLButton("documents.empty.action", icon: "arrow.up.doc", variant: .secondary) {
                         showUpload = true
                     }
                 }
@@ -415,7 +417,7 @@ struct DocumentsOptInView: View {
             title: "documents.optIn.title",
             message: "documents.optIn.description"
         ) {
-            HLButton("documents.optIn.action", icon: "checkmark.circle", variant: .primary, isLoading: isEnabling) {
+            HLButton("documents.optIn.action", icon: "checkmark.circle", variant: .secondary, isLoading: isEnabling) {
                 Task {
                     isEnabling = true
                     await onEnable()

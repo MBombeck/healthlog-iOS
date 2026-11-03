@@ -57,8 +57,7 @@ struct SettingsAppleHealthImportScreenTests {
             "settings.applehealth_import.privacy_upload",
             "settings.applehealth_import.privacy_parse",
             "settings.applehealth_import.privacy_stats",
-            "settings.applehealth_import.privacy_delete",
-            "settings.applehealth_import.privacy_footer"
+            "settings.applehealth_import.privacy_delete"
         ]
 
         for key in keys {
@@ -73,18 +72,21 @@ struct SettingsAppleHealthImportScreenTests {
         }
     }
 
-    @Test("Privacy footer carries the verbatim server contract")
-    func privacyFooterCopyContract() {
-        // Operator-grade: the disclaimer copy is the operative privacy
-        // contract the server-side endpoint promises. Drift in either copy
-        // or impl would break the trust contract — lock the substring here.
-        let footer = String(
-            localized: "settings.applehealth_import.privacy_footer",
-            bundle: .main
-        )
-        #expect(footer.contains("einmalig"))
-        #expect(footer.contains("parsing-only") || footer.contains("Parse"))
-        #expect(footer.contains("ZIP"))
+    /// 1.4 B2-c — the footer that repeated the four rows ("parsing-only",
+    /// "Stats") is gone; the contract lives in the rows and is pinned there:
+    /// uploaded once, only read, never stored, the ZIP deleted afterwards.
+    @Test("Privacy rows carry the verbatim server contract")
+    func privacyRowsCopyContract() {
+        func text(_ key: String) -> String {
+            String(localized: String.LocalizationValue(key), bundle: .main)
+        }
+        let upload = text("settings.applehealth_import.privacy_upload")
+        let parse = text("settings.applehealth_import.privacy_parse")
+        let delete = text("settings.applehealth_import.privacy_delete")
+        #expect(upload.contains("einmalig") || upload.contains("once"))
+        #expect(parse.contains("nicht abgelegt") || parse.contains("not stored"))
+        #expect(delete.contains("ZIP"))
+        #expect(delete.contains("gelöscht") || delete.contains("deleted"))
     }
 
     @Test("CTA caption explicitly names v0.6 / Server v1.4.34")

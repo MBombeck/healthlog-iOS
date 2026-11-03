@@ -191,8 +191,11 @@ public extension MeasurementsStore {
         // condition for the run-once flip.
         do {
             try lease.requireCurrent()
-            await healthKit.mirrorServerMeasurements(history)
+            let decided = await healthKit.mirrorServerMeasurements(history)
             try lease.requireCurrent()
+            // B5 (1.4) — the person's direction was not known, so the pass
+            // wrote nothing: stay due.
+            guard decided else { return false }
         } catch {
             return false
         }

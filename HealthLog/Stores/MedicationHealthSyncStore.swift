@@ -51,6 +51,12 @@ public final class MedicationHealthSyncStore {
 
     /// **W3 (1.3)** — the running dose-event observer, while the toggle is on.
     private var observation: (any AppleHealthDoseEventObservation)?
+    /// **R-A2 (1.4)** — true while an observer is being armed. Launch and the
+    /// admission of the account both ask, and arming suspends, so without this
+    /// the second caller would arm a second observer. Stopping the loser would
+    /// switch off background delivery for the dose type altogether, which is
+    /// one setting per app, not per query.
+    private var isArmingObservation = false
     /// **W3** — one sweep at a time. A dose observer, the foreground pass and a
     /// background wake can all ask at once; the actor's reentrancy would
     /// otherwise interleave two sweeps over the same dose ledger. A request
@@ -111,10 +117,14 @@ public final class MedicationHealthSyncStore {
     }
 
     /// **W3 (1.3, #126 1.5)** — arms the dose-event observer when the
-    /// toggle is on. Called on every authenticated launch (the observer does
-    /// not survive process death) and when the toggle is switched on. Idempotent.
+    /// toggle is on. Called on every launch with a signed-in account (the
+    /// observer does not survive process death; R-A2 moved the call from
+    /// `RootView` to the launch path) and when the toggle is switched on.
+    /// Idempotent, also for two callers at once.
     public func startObservingIfEnabled() async {
-        guard enabled, isAvailable, observation == nil, let reader else { return }
+        guard enabled, isAvailable, observation == nil, !isArmingObservation, let reader else { return }
+        isArmingObservation = true
+        defer { isArmingObservation = false }
         let started = await reader.observeDoseEvents { [weak self] in
             await self?.handleObservedDoseChange()
         }

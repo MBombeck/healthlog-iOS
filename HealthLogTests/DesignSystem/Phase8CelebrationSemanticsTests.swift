@@ -59,7 +59,9 @@
             let fractional = CelebrationOverlay.valueText(for: Self.dto(value: 78.2, unit: "kg"))
 
             #expect(!whole.contains(separator), "a whole number must not print a decimal separator")
-            #expect(whole.hasSuffix(" Steps"))
+            // 1.4 B4 — a step record's unit reads in the app's own word
+            // ("Schritte" on the German gate), still after the figure.
+            #expect(whole.hasSuffix(" \(PersonalRecordDTO.localizedUnit("Steps"))"))
             #expect(fractional.contains(separator), "a fractional value must keep its digit")
             #expect(fractional.hasSuffix(" kg"))
         }

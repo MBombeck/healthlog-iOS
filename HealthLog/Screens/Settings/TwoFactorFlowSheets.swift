@@ -63,7 +63,7 @@ struct TotpEnableSheet: View {
                 }
                 .padding(HLSpace.lg)
             }
-            .navigationTitle("settings.security.twoFactor.enable")
+            .navigationTitle("settings.security.twoFactor.enable.sheetTitle")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -219,7 +219,7 @@ struct DisableTotpSheet: View {
                 }
                 .padding(HLSpace.lg)
             }
-            .navigationTitle("settings.security.twoFactor.disable")
+            .navigationTitle("settings.security.twoFactor.disable.sheetTitle")
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: code) { _, _ in store.clearActionError() }
             .toolbar {
@@ -278,7 +278,7 @@ struct RegenerateRecoveryCodesSheet: View {
                 }
                 .padding(HLSpace.lg)
             }
-            .navigationTitle("settings.security.twoFactor.recovery.regenerate")
+            .navigationTitle("settings.security.twoFactor.recovery.sheetTitle")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

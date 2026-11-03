@@ -99,7 +99,7 @@ struct FamilyHistoryListScreen: View {
                 title: "familyHistory.empty.title",
                 message: "familyHistory.empty.subtitle"
             ) {
-                HLButton("familyHistory.add.title", icon: "plus", variant: .primary) {
+                HLButton("familyHistory.add.title", icon: "plus", variant: .secondary) {
                     showAddSheet = true
                 }
             }

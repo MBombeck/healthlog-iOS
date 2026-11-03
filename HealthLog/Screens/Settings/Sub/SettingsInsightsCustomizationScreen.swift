@@ -90,7 +90,7 @@ struct SettingsInsightsCustomizationScreen: View {
             // present but cannot hide it or move it off the leading edge.
             overviewPinnedRow
             if orderedTiles.isEmpty {
-                Text(String(localized: "No targets loaded yet. Tap Refresh on the Insights page."))
+                Text(String(localized: "No tabs loaded yet."))
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
             } else {
@@ -125,14 +125,10 @@ struct SettingsInsightsCustomizationScreen: View {
     /// leads the strip.
     private var overviewPinnedRow: some View {
         HStack {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(label(for: InsightsLayoutTileId.overview))
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                Text(String(localized: "Always shown first."))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-            }
+            // 1.4 B2-c — the pin says it; "always shown first" is gone.
+            Text(label(for: InsightsLayoutTileId.overview))
+                .font(.hlSubhead.weight(.semibold))
+                .foregroundStyle(HLText.primary)
             Spacer()
             Image(systemName: "pin.fill")
                 .font(.hlCaption)
@@ -195,9 +191,9 @@ struct SettingsInsightsCustomizationScreen: View {
 
     private func scoreToggleRow(for id: String) -> some View {
         Toggle(isOn: scoreCardBinding(for: id)) {
-            // `InsightsDerivedBlock.title(for:)` returns an already-localized
+            // `InsightsDerivedCopy.title(for:)` returns an already-localized
             // String, so `Text(_: String)` renders it verbatim (no re-lookup).
-            Text(InsightsDerivedBlock.title(for: id))
+            Text(InsightsDerivedCopy.title(for: id))
                 .font(.hlSubhead.weight(.semibold))
                 .foregroundStyle(HLText.primary)
         }

@@ -3,16 +3,18 @@ import Foundation
 import SwiftUI
 import Testing
 
-/// W5b screenshot generator — renders the two server-derived overview surfaces
-/// (RhythmEvents card + derived re-frames block) with representative fixture
-/// data via `ImageRenderer`, in light + dark, and writes PNGs to
-/// `.planning/v012-megamarathon/W5b-screens/`.
+/// W5b screenshot generator — renders the RhythmEvents overview card with
+/// representative fixture data via `ImageRenderer`, in light + dark, and writes
+/// PNGs to `.planning/v012-megamarathon/W5b-screens/`.
 ///
-/// **Why render-to-PNG instead of a live demo-tenant capture.** Both surfaces
-/// self-suppress without data, and the demo tenant's rhythm-events / derived
-/// envelopes are not guaranteed to be populated. Rendering the actual SwiftUI
-/// cards with the exact fixture shapes the DTO decodes produces a deterministic
-/// pixel artefact of the shipped surfaces (mono, no glass, disclaimer present).
+/// 1.4 B4 — the derived re-frames block ("More from your data") it also
+/// rendered was deleted; every derived score is a ring tile now.
+///
+/// **Why render-to-PNG instead of a live demo-tenant capture.** The card
+/// self-suppresses without data, and the demo tenant's rhythm events are not
+/// guaranteed to be populated. Rendering the actual SwiftUI card with the exact
+/// fixture shapes the DTO decodes produces a deterministic pixel artefact of
+/// the shipped surface (mono, no glass, disclaimer present).
 @MainActor
 @Suite("W5b screenshot generator")
 struct W5bScreenshotGenerator {
@@ -62,38 +64,14 @@ struct W5bScreenshotGenerator {
         ]
     }
 
-    private func derived() -> [DerivedMetricDTO] {
-        func env(_ metric: String, value: DerivedMetricDTO.Value, band: String, missing: [String] = []) -> DerivedMetricDTO {
-            DerivedMetricDTO(
-                metric: metric, status: "ok", value: value,
-                coverage: .init(requiredInputs: 5, presentInputs: missing.isEmpty ? 5 : 4, historyDays: 28, missing: missing),
-                confidence: .init(score: 80, band: band),
-                provenance: .init(
-                    inputs: ["RESTING_HEART_RATE", "HEART_RATE_VARIABILITY"],
-                    source: "DAY", windowDays: 30, computedAt: .now
-                ),
-                reason: nil
-            )
-        }
-        return [
-            env("READINESS", value: .init(score: 78, band: "green"), band: "high", missing: ["RESPIRATORY_RATE"]),
-            env("RECOVERY_SCORE", value: .init(score: 64, band: "yellow"), band: "medium"),
-            env("STRESS_SCORE", value: .init(score: 42, band: "green"), band: "medium"),
-            env("FITNESS_AGE", value: .init(score: nil, band: "high", fitnessAgeDeltaYears: -6, vo2Max: 44.2), band: "high"),
-            env("HRV_BALANCE", value: .init(score: nil, band: "balanced"), band: "high")
-        ]
-    }
-
-    @Test("generate W5b overview screenshots (rhythm + derived, light + dark)")
+    @Test("generate W5b overview screenshots (rhythm events, light + dark)")
     func generate() {
         let stack = VStack(alignment: .leading, spacing: HLSpace.lg) {
             InsightsRhythmEventsCard(events: rhythmEvents)
-            InsightsDerivedBlock(metrics: derived())
         }
         for scheme in [ColorScheme.light, .dark] {
             write(stack, name: "w5b-overview", scheme: scheme)
             write(InsightsRhythmEventsCard(events: rhythmEvents), name: "w5b-rhythm-events", scheme: scheme)
-            write(InsightsDerivedBlock(metrics: derived()), name: "w5b-derived-block", scheme: scheme)
         }
         // Confirm at least the combined light shot landed; print the dir so the
         // host copies the PNGs to `.planning/v012-megamarathon/W5b-screens/`.

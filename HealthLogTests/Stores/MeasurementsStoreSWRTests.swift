@@ -169,32 +169,23 @@ struct MeasurementsStoreSWRTests {
     }
 }
 
-/// Pins the prefetch contract that v0.6.2.3 F2-CHARTLAG sources its kind
-/// list from `TrendsOverlayStore.defaultSelection` — single source of
-/// truth for "which series get warmed at bootstrap".
-@Suite("TrendsOverlayStore.defaultSelection — prefetch single source of truth")
-struct TrendsOverlayDefaultSelectionTests {
-    @Test("defaultSelection equals the three vital-sign kinds {BP, Weight, Pulse}")
-    func defaultSelectionVitalSigns() {
-        let expected: Set<MetricKind> = [.bloodPressure, .weight, .pulse]
-        #expect(TrendsOverlayStore.defaultSelection == expected)
+/// Pins the bootstrap warm-up list. v0.6.2.3 F2-CHARTLAG sourced it from
+/// `TrendsOverlayStore.defaultSelection`; 1.4 B4 deleted the overlay store and
+/// gave the warm-up its own list, which the live Insights metric page reads.
+@Suite("AppContainer.prefetchSeriesKinds — bootstrap series warm-up")
+struct PrefetchSeriesKindsTests {
+    @Test("the warm-up covers the three vital-sign kinds {BP, Weight, Pulse} at 30 days")
+    func warmsVitalSignsAtThirtyDays() {
+        #expect(Set(AppContainer.prefetchSeriesKinds) == [.bloodPressure, .weight, .pulse])
+        #expect(AppContainer.prefetchSeriesKinds.count == 3)
+        // The Insights metric page opens on its 30-day range (`ChartDetailStore.Range.month`).
+        #expect(AppContainer.prefetchSeriesDays == 30)
     }
 
-    @Test("defaultSelection is a subset of availableMetrics (server-supported)")
-    func defaultSelectionWithinAvailable() {
-        let available = Set(TrendsOverlayStore.availableMetrics)
-        for kind in TrendsOverlayStore.defaultSelection {
-            #expect(available.contains(kind), "default \(kind.rawValue) must be in availableMetrics")
+    @Test("every warmed kind is one the series endpoint accepts")
+    func warmedKindsSupportSeries() {
+        for kind in AppContainer.prefetchSeriesKinds {
+            #expect(ChartDetailStore.kindSupportsSeries(kind), "warm-up kind \(kind.rawValue) must support series")
         }
-    }
-
-    @Test("new TrendsOverlayStore opens with selectedMetrics == defaultSelection")
-    @MainActor
-    func storeOpensWithDefaultSelection() throws {
-        let api = StubAPIClient()
-        let outbox = try OutboxQueue(inMemory: true)
-        let repo = MeasurementsRepository(api: api, outbox: outbox)
-        let store = TrendsOverlayStore(repo: repo)
-        #expect(store.selectedMetrics == TrendsOverlayStore.defaultSelection)
     }
 }

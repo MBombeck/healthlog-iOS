@@ -24,7 +24,7 @@ struct PluralVariationGuardTests {
     static let requiredPluralKeys: [String] = [
         "%lld entries",
         "%lld entries in the period",
-        "briefing.entries %lld",
+        // 1.4 B4 removed "briefing.entries %lld" with StatistikModeBriefingService.
         "Show all measurements, %lld entries",
         "%lld measurements this minute",
         "%lld values",

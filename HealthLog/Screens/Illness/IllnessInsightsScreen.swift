@@ -14,11 +14,6 @@ struct IllnessInsightsScreen: View {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
                 if let insights = store.insights, insights.episodeCount > 0 {
                     summaryCard(insights)
-                    // 1.0.3 (App Review 1.4.1, audit row 17) — the typical
-                    // recovery gap is the screen's one medical-shaped figure,
-                    // so the method behind it is cited directly under the card
-                    // that states it rather than at the foot of the tallies.
-                    HLSourcesLink(topic: .illnessRecovery)
                     if !insights.byType.isEmpty {
                         byTypeCard(insights)
                     }
@@ -64,15 +59,18 @@ struct IllnessInsightsScreen: View {
                             .foregroundStyle(HLText.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                } else {
-                    Text("illness.insights.gapWithheld")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
                 }
+                // 1.4 B2 — below the server's floor the gap is simply absent;
+                // no line says it is withheld.
                 let resolvedTemplate = String(localized: "illness.insights.resolvedCount")
                 Text(String(format: resolvedTemplate, insights.resolvedCount, insights.episodeCount))
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
+                // 1.0.3 (App Review 1.4.1, audit row 17) — the typical recovery
+                // gap is the screen's one medical-shaped figure, so the method
+                // behind it is cited in the card that states it (1.4 B2: at
+                // its foot, not between the cards).
+                HLSourcesLink(topic: .illnessRecovery)
             }
         }
     }
@@ -80,9 +78,8 @@ struct IllnessInsightsScreen: View {
     private func byTypeCard(_ insights: IllnessInsightsDTO) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text("illness.insights.byType.title")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                // 1.4 B4 — the canonical label instead of a hand-set footnote.
+                HLSectionLabel("illness.insights.byType.title")
                 ForEach(sortedPairs(insights.byType), id: \.0) { key, count in
                     HStack {
                         Text(typeLabel(key))
@@ -101,12 +98,10 @@ struct IllnessInsightsScreen: View {
     private func byMonthCard(_ insights: IllnessInsightsDTO) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text("illness.insights.byMonth.title")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                HLSectionLabel("illness.insights.byMonth.title")
                 ForEach(sortedPairs(insights.byMonth, descending: true), id: \.0) { key, count in
                     HStack {
-                        Text(verbatim: key)
+                        Text(verbatim: Self.monthLabel(key))
                             .font(.hlSubhead)
                             .foregroundStyle(HLText.primary)
                         Spacer()
@@ -119,16 +114,11 @@ struct IllnessInsightsScreen: View {
         }
     }
 
+    /// 1.4 B2 — the lockup on the page itself, not in a ghost card, and
+    /// without the sentence promising a summary later.
     private var emptyState: some View {
-        HLCard(style: .ghost) {
-            // Audit-01 M6 — title/subtitle colour drift (secondary/tertiary vs the
-            // sibling primary/secondary) fixed by routing through `HLEmptyState`.
-            HLEmptyState(
-                icon: "chart.bar.xaxis",
-                title: "illness.insights.empty.title",
-                message: "illness.insights.empty.subtitle"
-            )
-        }
+        HLEmptyState(icon: "chart.bar.xaxis", title: "illness.insights.empty.title")
+            .padding(.top, HLSpace.xxl)
     }
 
     /// Sort `{key: count}` by count desc, then key asc; `descending` sorts by
@@ -142,8 +132,32 @@ struct IllnessInsightsScreen: View {
         }
     }
 
+    /// 1.4 B4 — the server keys the tally by month (`"2026-10"`); the row reads
+    /// it as a month in words ("Oktober 2026"). A key that is not a month keeps
+    /// itself rather than vanish.
+    static func monthLabel(_ key: String, locale: Locale = .autoupdatingCurrent) -> String {
+        let parser = DateFormatter()
+        parser.calendar = Calendar(identifier: .gregorian)
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = TimeZone(identifier: "UTC")
+        parser.dateFormat = "yyyy-MM"
+        guard let month = parser.date(from: key) else { return key }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = locale
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.setLocalizedDateFormatFromTemplate("MMMMyyyy")
+        return formatter.string(from: month)
+    }
+
     private func typeLabel(_ key: String) -> String {
         IllnessType(rawValue: key)?.localizedLabel ?? key.capitalized
+    }
+
+    /// The first letter in lower case, the rest as written: the English vital
+    /// labels are sentence case ("Resting heart rate", "Blood oxygen").
+    nonisolated static func midSentence(_ label: String) -> String {
+        label.prefix(1).lowercased() + label.dropFirst()
     }
 
     /// "Usually your resting heart rate is last to settle." — names the server's
@@ -154,6 +168,10 @@ struct IllnessInsightsScreen: View {
             return String(localized: "illness.insights.typicalGap.driver.symptom")
         }
         let template = String(localized: "illness.insights.typicalGap.driver")
-        return String(format: template, IllnessVitalLabel.label(for: type))
+        // 1.4 B4 — the name sits mid-sentence: English writes it in lower case
+        // ("Across episodes, resting heart rate tends..."), German keeps the noun.
+        let label = IllnessVitalLabel.label(for: type)
+        let german = Bundle.main.preferredLocalizations.first?.hasPrefix("de") == true
+        return String(format: template, german ? label : Self.midSentence(label))
     }
 }

@@ -54,12 +54,21 @@ enum WellnessTileMotion {
     /// (`InsightsTileSurface`, `WellnessGradientCard`).
     nonisolated static let frameInterval: Double = 1.0 / 20.0
 
+    /// **1.4 B4** — how long the rings move after the overview appears: two
+    /// full breaths. Then the motion eases to rest over ``settleSeconds`` and
+    /// the main thread goes quiet (`insightsRingMotionWindow()`).
+    nonisolated static let activeSeconds: Double = 2 * periodSeconds
+
+    /// The ease from the last moving frame to the still one.
+    nonisolated static let settleSeconds: Double = 1.2
+
     /// Whether the living-light breath should be PAUSED (rendered at its static
     /// `breath == 0` mid value). Pure predicate so the gate is unit-testable
     /// without a SwiftUI host: the breath pauses under Reduce Motion OR Low-Power,
-    /// matching every other animated driver in the app.
-    nonisolated static func isPaused(reduceMotion: Bool, lowPower: Bool) -> Bool {
-        reduceMotion || lowPower
+    /// matching every other animated driver in the app, and (1.4 B4) once the
+    /// overview's motion window has closed.
+    nonisolated static func isPaused(reduceMotion: Bool, lowPower: Bool, atRest: Bool = false) -> Bool {
+        reduceMotion || lowPower || atRest
     }
 
     /// A low-frequency sine in `[-1, 1]` for `seconds` at tile `index`. The

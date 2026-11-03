@@ -305,10 +305,10 @@ import Testing
             count: Int,
             in events: LifecycleEvents
         ) async {
-            for _ in 0 ..< 10000 {
-                if await events.count(event) >= count { return }
-                await Task.yield()
-            }
+            // T1 (1.4) — bounded by time, not by 10,000 yields: the importer
+            // runs on other executors, and the callers' own expectations
+            // report a count that never arrives.
+            await phase09AwaitCondition { await events.count(event) >= count }
         }
     }
 

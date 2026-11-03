@@ -11,14 +11,12 @@ extension SettingsHKSyncDiagnosticsScreen {
     @ViewBuilder
     var heldWritesCard: some View {
         if !heldGroups.isEmpty || rearmedCount != nil {
+            // 1.4 B2-c — why these rows wait is in the (i).
             HLSettingsCard(
                 icon: "tray.full",
-                title: "settings.hkdiag.held_title",
-                subtitle: "settings.hkdiag.held_subtitle",
-                subtitleWraps: true
+                title: "settings.hkdiag.held_title"
             ) {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    HKSyncDiagnosticsSourceTag(source: .deviceStored)
                     ForEach(heldGroups, id: \.self) { group in
                         heldRow(group)
                     }

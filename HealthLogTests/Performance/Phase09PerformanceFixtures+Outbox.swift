@@ -185,34 +185,66 @@
         }
     }
 
-    /// Waits for `condition` by yielding, never by sleeping.
+    /// **Positive probe:** waits until `condition` holds and returns whether it
+    /// did. Callers assert the result (`#expect(await phase09AwaitCondition {…})`).
     ///
-    /// A bounded yield loop is not a sleep pretending to be a synchronisation:
-    /// it makes no claim about elapsed time, it spends no wall clock when the
-    /// condition is already true, and when the condition never becomes true the
-    /// caller's own expectation is what reports it. Returns whether the
-    /// condition was observed.
-    /// 1.2 V5 — waits for `condition` with no budget at all: it yields until
-    /// the condition holds. For a positive condition whose producer runs on
-    /// another executor, where any budget is a race under load. A condition
-    /// that never comes true is reported by the suite's time limit. Negative
-    /// probes ("this does not happen") stay on ``phase09Settle(yields:until:)``.
-    func phase09AwaitCondition(_ condition: @Sendable () async -> Bool) async {
+    /// 1.2 V5 took the yield budget off this probe because any budget is a
+    /// race when the producer runs on another executor. T1 (1.4) gives it a
+    /// wall-clock bound back, as a hang guard and not as a budget: a condition
+    /// that is already true costs nothing, one that comes true late on a loaded
+    /// machine is still seen, and one that never comes true returns `false`
+    /// after `timeout`, so the caller's own expectation reports it instead of
+    /// a hang that only the job time limit would end.
+    @discardableResult
+    func phase09AwaitCondition(
+        timeout: Duration = .seconds(30),
+        _ condition: @Sendable () async -> Bool
+    ) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        var turn = 0
         while await !condition() {
-            await Task.yield()
+            guard ContinuousClock.now < deadline else { return false }
+            await phase09PollTurn(turn)
+            turn += 1
         }
+        return true
     }
 
+    /// **Negative probe only:** gives `condition` a window of wall time to
+    /// come true and returns whether it did. Callers expect `false` ("nothing
+    /// happened"). A positive probe belongs on ``phase09AwaitCondition(timeout:_:)``.
+    ///
+    /// T1 (1.4): the window is time, no longer 2,000 yields. Under load a yield
+    /// count runs out in microseconds, before the producer has been scheduled
+    /// at all. For a positive probe that read "not yet" as "never"
+    /// (`StoreLoadingTruthTests`, red after 0.057 s); for a negative probe it
+    /// made the check vacuous. A longer window can only turn a negative probe
+    /// red when the unwanted effect really happens.
     @discardableResult
     func phase09Settle(
-        yields: Int = 2000,
+        for window: Duration = .milliseconds(200),
         until condition: @Sendable () async -> Bool
     ) async -> Bool {
-        for _ in 0 ..< yields {
+        let deadline = ContinuousClock.now.advanced(by: window)
+        var turn = 0
+        while ContinuousClock.now < deadline {
             if await condition() { return true }
-            await Task.yield()
+            await phase09PollTurn(turn)
+            turn += 1
         }
         return await condition()
+    }
+
+    /// One polling turn of the two probes above: plain yields while the wait
+    /// is young, so a producer that is already scheduled is seen at no cost,
+    /// then 1 ms naps, so a long wait neither spins a core on a loaded machine
+    /// nor keeps the main queue permanently busy for a main-actor caller.
+    private func phase09PollTurn(_ turn: Int) async {
+        if turn < 100 {
+            await Task.yield()
+        } else {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
     }
 
 #endif // !SWIFT_PACKAGE

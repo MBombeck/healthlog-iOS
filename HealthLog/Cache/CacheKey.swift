@@ -145,12 +145,12 @@ public enum CacheKey: Hashable, Sendable {
     /// flips the row to a structural miss when the day rolls. `period` is the
     /// lowercase `NarrativeDTO.Period.rawValue`; `locale` keeps de/en prose apart.
     case insightsNarrative(period: String, locale: String, day: String)
-    /// W-B189 (#23) — the server-computed recovery family
-    /// (`GET /api/insights/recovery`, server v1.17.1): strain / training-load /
-    /// autonomic-charge + the daily heart-and-energy items. Recomputed ~once per
-    /// Berlin day server-side, so a Berlin-day-anchored key paints the recovery
-    /// sub-page cache-first on launch + revalidates; `day` flips the row to a
-    /// structural miss when the day rolls.
+    /// W-B189 (#23) — the recovery family, built from
+    /// `GET /api/analytics?slice=summaries`. 1.4 B3: it carries each type's
+    /// `latest` and `avg30`, which move during the day, so the row is fresh
+    /// for five minutes like the availability slice; `day` still flips it to
+    /// a structural miss at the Berlin-day rollover. The raw key carries `v2`
+    /// so a family cached by 1.3 (no averages) is never served to 1.4.
     case insightsRecovery(day: String)
     /// v1.25 (GH iOS #38) — the three read-only "clinical signals" awareness
     /// reads. Each is pure server compute recomputed ~once per Berlin day, so a
@@ -275,7 +275,7 @@ public extension CacheKey {
         case let .derivedMetric(metric, day): "derivedMetric:\(metric):\(day)"
         case let .derivedBatch(token, day): "derivedBatch:\(token):\(day)"
         case let .insightsNarrative(period, locale, day): "insightsNarrative:\(period):\(locale):\(day)"
-        case let .insightsRecovery(day): "insightsRecovery:\(day)"
+        case let .insightsRecovery(day): "insightsRecovery.v2:\(day)"
         case let .insightsEcg(day): "insightsEcg:\(day)"
         case let .insightsHealthStatus(day): "insightsHealthStatus:\(day)"
         case let .insightsBreathingScreening(day): "insightsBreathingScreening:\(day)"
@@ -380,10 +380,10 @@ public extension CacheKey {
         // + refetch on day rollover. A 24h ceiling keeps `staleAfter`
         // deterministic (same model as `.derivedMetric` / `.insightStatus`).
         case .insightsNarrative: 24 * 60 * 60
-        // W-B189 — recovery is recomputed ~once per Berlin day server-side; the
-        // Berlin-day discriminator baked into the key forces the structural miss
-        // + refetch on day rollover (same model as `.derivedMetric`).
-        case .insightsRecovery: 24 * 60 * 60
+        // 1.4 B3 — the recovery family carries `latest` / `avg30`, which move
+        // as readings arrive, so it is fresh for five minutes like
+        // `.measurementAvailability` (see the case doc).
+        case .insightsRecovery: 5 * 60
         // v1.25 clinical signals — recomputed ~once per Berlin day server-side;
         // the Berlin-day discriminator baked into each key forces the structural
         // miss + refetch on day rollover (same model as `.insightsRecovery`).

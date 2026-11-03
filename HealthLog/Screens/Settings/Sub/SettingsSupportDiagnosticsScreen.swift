@@ -62,6 +62,13 @@ import SwiftUI
             }
             .navigationTitle("settings.support.title")
             .navigationBarTitleDisplayMode(.inline)
+            // 1.4 B2-c — how to read the cards of this topic, behind the one
+            // (i) instead of under each card.
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    HLInfoButton(content: info, accessibilityIdentifier: "settings.support.info")
+                }
+            }
             .task { await loadLocalSnapshot() }
             .onDisappear { endSession() }
         }
@@ -75,8 +82,7 @@ import SwiftUI
             HLSettingsCard(
                 icon: "lifepreserver",
                 title: "settings.support.gate_title",
-                subtitle: "settings.support.gate_body",
-                subtitleWraps: true
+                subtitle: "settings.support.gate_body"
             ) {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     if supportSession.isAwaitingConfirmation {
@@ -120,8 +126,7 @@ import SwiftUI
         private var registrationCard: some View {
             HLSettingsCard(
                 icon: "antenna.radiowaves.left.and.right",
-                title: "APNs registration",
-                footer: "Shows the last POST /api/devices. Token prefix + suffix are enough to find the server log entry — the full token is never stored."
+                title: "APNs registration"
             ) {
                 let snap = lastRegistration
                 SupportDetailRow(
@@ -195,8 +200,7 @@ import SwiftUI
         private var categoriesCard: some View {
             HLSettingsCard(
                 icon: "rectangle.stack.fill",
-                title: "Buttons on the banner",
-                footer: "Actions iOS renders on a banner. If MEDICATION_REMINDER is missing, the Taken / Snooze / Skipped buttons are missing too."
+                title: "Buttons on the banner"
             ) {
                 if categoryRows.isEmpty {
                     Text("No banner actions registered — restart the app.")
@@ -224,10 +228,11 @@ import SwiftUI
         }
 
         private var pendingIdentifiersCard: some View {
+            // 1.4 B2-c — no footer: why the list is cut short is a reason
+            // for the developer, not for the reader.
             HLSettingsCard(
                 icon: "number",
-                title: "settings.support.pending_title",
-                footer: "settings.support.pending_footer"
+                title: "settings.support.pending_title"
             ) {
                 if pendingIdentifiers.isEmpty {
                     Text("settings.support.pending_empty")
@@ -289,8 +294,7 @@ import SwiftUI
         private var anchorsCard: some View {
             HLSettingsCard(
                 icon: "arrow.trianglehead.2.clockwise",
-                title: "settings.support.anchors_title",
-                footer: "settings.support.anchors_footer"
+                title: "settings.support.anchors_title"
             ) {
                 let rows = anchorRows
                 if rows.isEmpty {
@@ -442,6 +446,39 @@ import SwiftUI
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier(accessibilityIdentifier)
+        }
+    }
+
+    // MARK: - Info (1.4 B2-c)
+
+    extension SettingsSupportDiagnosticsScreen {
+        /// The glossary of the topic's cards.
+        var info: HLInfoContent {
+            let sections: [HLInfoContent.Section] = switch topic {
+            case .notifications:
+                [
+                    HLInfoContent.Section(
+                        title: String(localized: "APNs registration"),
+                        paragraphs: [String(localized: "settings.support.info.registration")]
+                    ),
+                    HLInfoContent.Section(
+                        title: String(localized: "Buttons on the banner"),
+                        paragraphs: [String(localized: "settings.support.info.categories")]
+                    )
+                ]
+            case .appleHealth:
+                [
+                    HLInfoContent.Section(
+                        title: String(localized: "settings.support.anchors_title"),
+                        paragraphs: [String(localized: "settings.support.anchors_footer")]
+                    )
+                ]
+            }
+            return HLInfoContent(
+                title: String(localized: "settings.support.title"),
+                identifier: "settings.support.info.sheet",
+                sections: sections
+            )
         }
     }
 #endif

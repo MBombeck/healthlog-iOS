@@ -1,158 +1,50 @@
 import SwiftUI
 
-/// W-B189 (#23) — the Insights **Recovery** special page (web `/insights/recovery`,
-/// server v1.17.1).
+/// The Insights **Recovery** page (web `/insights/recovery`).
 ///
-/// Surfaces the SERVER-COMPUTED recovery family — strain, training-load
-/// (`CARDIO_LOAD`), autonomic-charge (`ANS_CHARGE`), and the daily
-/// heart-and-energy items. **Server-authoritative:** every value is decoded and
-/// displayed verbatim; strain / load are NEVER recomputed on-device.
+/// **1.4 B3 — a course, not five numbers.** Two trend cards in the style of
+/// the overview's trend row (the recovery score, then the day strain or the
+/// training load), each with its last 30 days as a line, and one calm list for
+/// everything else with its latest reading and 30-day average. Every card and
+/// row opens the detail the rest of the app already shows for that value: the
+/// score detail for the recovery score, the metric screen for the others.
 ///
-/// **Data-gated + HONEST-ONLY.** The page renders only the family items the
-/// server returns with a value: 0–100 composites (strain / charge) as canonical
-/// `HLScoreRing` ring tiles, raw readings (training-load points, kJ, bpm) as
-/// stat rows. An absent / insufficient family is a calm empty state, never a
-/// fabricated reading.
+/// **Server-authoritative.** Values, averages and the empty reason are the
+/// server's (`RecoveryInsightsStore`, from `?slice=summaries`); the lines are
+/// the readings the metric screen reads. Only types with a reading in the last
+/// 30 days appear (`RecoveryPageLayout`). Energy reads in kcal (plan decision
+/// 4), a unit choice on a server value.
 ///
-/// **Lives inside the Insights pager.** Owns no `NavigationStack` (the container
-/// does). Its inner `ScrollView` reports its offset to `InsightsStripVisibility`;
-/// the page wrapper pins it `.containerRelativeFrame(.horizontal)` ONLY (W44).
-/// Header anatomy is the shared `InsightsPageHeader`, identical to the other
-/// special + metric pages so the top region never jumps across the pager.
-///
-/// **Self-suppress:** the pill/page only appears when the operator HAS a
-/// renderable family (gated upstream by `availableSpecials` +
-/// `RecoveryInsightsStore.hasContent`); the defensive empty branch is calm.
+/// **Lives inside the Insights pager.** Owns no `NavigationStack` (the
+/// container does); its `ScrollView` reports its offset to
+/// `InsightsStripVisibility`. Header anatomy is the shared `InsightsPageHeader`.
 struct InsightsRecoveryPage: View {
     @Environment(RecoveryInsightsStore.self) private var store
     @Environment(InsightsStripVisibility.self) private var stripVisibility
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// v1.18.3 — Rest Mode source. The server-authoritative `restMode` rides on
-    /// the Health Score; when active (+ illness enabled) the recovery surface
-    /// softens its framing into a rest-aware tone (annotate-never-mutate — the
-    /// server composites are still rendered verbatim).
+    /// Rest Mode rides on the Health Score; while it is active (and the illness
+    /// module is on) the page subtitle softens the framing. Values untouched.
     @Environment(HealthScoreStore.self) private var healthScoreStore
-
-    /// 08-11 — the recovery grid falls back to one column at accessibility text
-    /// sizes through the same ``InsightsTileGrid`` policy the score block uses,
-    /// so the two Insights surfaces cannot disagree about where that begins.
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    /// Two-per-row grid for the half-width ring tiles (matches the score block).
-    private let columns = [
-        GridItem(.flexible(), spacing: HLSpace.md),
-        GridItem(.flexible(), spacing: HLSpace.md)
-    ]
-
-    /// The grid actually rendered — ``columns`` at standard text sizes, one
-    /// column at an accessibility one.
-    private var gridColumns: [GridItem] {
-        InsightsTileGrid.columns(standard: columns, isAccessibilitySize: dynamicTypeSize.isAccessibilitySize)
-    }
+    @Environment(ModuleGate.self) private var moduleGate: ModuleGate?
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
-        Group {
-            if store.hasContent {
-                content
-            } else {
-                emptyState
-            }
-        }
-        .background(HLSurface.primary.ignoresSafeArea())
-        .task {
-            if store.family == nil { await store.load() }
-        }
-    }
-
-    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
                 InsightsPageHeader(
                     "Recovery",
-                    subtitle: "insights.recovery.subtitle",
+                    subtitle: restModeActive ? "illness.restMode.caption" : nil,
                     accessibilityIdentifierSuffix: "recovery"
-                )
-
-                // Server-mirrored intro paragraph (self-suppresses when the
-                // server has no `recovery` explainer copy), identical to the
-                // other special pages.
-                InsightsExplainerIntro(slug: InsightsLayoutTileId.recovery)
-
-                // A360-1 M2 — discreet pointer to the "Stress and Recovery"
-                // /learn guide (mirrors the server's LearnMoreLink on the
-                // Resilience surface).
-                // 1.0.3 (App Review 1.4.1) — the guide pointer keeps company
-                // with the literature behind the recovery score itself.
-                HStack(spacing: HLSpace.lg) {
-                    HLLearnMoreLink(concept: "RESILIENCE")
-                    HLSourcesLink(topic: .derivedScore("RECOVERY_SCORE"))
+                ) {
+                    // 1.4 B4 — the page's one (i): what the page shows, the
+                    // method and references behind the recovery score and the
+                    // guide, which stood as a loose line under the title.
+                    HLInfoButton(
+                        content: InsightsSpecialPageInfo.recovery(),
+                        style: .circle,
+                        accessibilityIdentifier: "insights.recovery.info"
+                    )
                 }
-
-                // v1.18.3 — when the server flags Rest Mode active (+ illness
-                // enabled), soften the recovery framing into a rest-aware tone:
-                // a calm "be gentle while you recover" note rather than a
-                // push-harder cue. Self-suppresses otherwise; values untouched.
-                RestModeGate(score: healthScoreStore.score) { restMode in
-                    HLCard(style: .ghost) {
-                        RestModeAnnotationPill(restMode: restMode, style: .caption)
-                    }
-                }
-
-                let scoreItems = store.presentableItems.filter(\.isScore)
-                let statItems = store.presentableItems.filter { !$0.isScore }
-
-                if !scoreItems.isEmpty {
-                    LazyVGrid(columns: gridColumns, spacing: HLSpace.md) {
-                        ForEach(scoreItems) { item in
-                            RecoveryRingTile(item: item)
-                        }
-                    }
-                }
-
-                // C3 — the stat archetype now speaks the family's vocabulary.
-                // `InsightsMetricStatusCard` is the shape `InsightsMetricScreen`
-                // uses for „what is this number and how am I doing", and it is
-                // REUSED here rather than forked: the canonical card already
-                // self-suppresses per slot, so recovery fills the slots its
-                // payload can back (latest reading, unit, the band's on-target
-                // chip) and stays silent on the ones it cannot (no in-target
-                // share, no window label, no target band, no series). See
-                // `RecoverySchema` for the field-by-field reasoning.
-                if !statItems.isEmpty {
-                    VStack(spacing: HLSpace.md) {
-                        ForEach(statItems) { item in
-                            if let descriptor = RecoverySchema.descriptor(for: item) {
-                                InsightsMetricStatusCard(descriptor: descriptor)
-                            }
-                        }
-                    }
-                }
-
-                // C3's honesty half. The gap is stated rather than left to be
-                // read as an oversight — „no 30-day figure here, and here is
-                // why". It renders off `RecoverySchema.publishesWindowedAggregate`,
-                // so the day the C3/C4 server ask is answered and the DTO grows
-                // the field, this line disappears by itself instead of having to
-                // be remembered.
-                if !RecoverySchema.publishesWindowedAggregate, !store.presentableItems.isEmpty {
-                    Text("insights.recovery.noAggregate")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, HLSpace.xs)
-                        .accessibilityIdentifier("insights.recovery.noAggregate")
-                }
-
-                if let asOf = store.family?.asOf {
-                    Text("insights.recovery.asOf \(HLDateFormat.dateTime(asOf, style: .abbreviated))")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .padding(.horizontal, HLSpace.xs)
-                        .accessibilityIdentifier("insights.recovery.asOf")
-                }
-
-                // Canonical sync-status footer (self-suppressing).
-                HLSyncStatusFooter(screenLoading: store.isLoading)
+                pageBody
             }
             .padding(.horizontal, HLSpace.lg)
             .padding(.top, HLSpace.lg)
@@ -165,143 +57,213 @@ struct InsightsRecoveryPage: View {
         }
         .hlScrollEdgeSoft()
         .hlPullToRefresh { await store.refresh() }
+        .background(HLSurface.primary.ignoresSafeArea())
+        .task {
+            if store.family == nil { await store.load() }
+        }
     }
 
-    /// Calm honest empty / unavailable state. Shown only once a load has settled
-    /// with no renderable family (route absent, or below the server data gate) —
-    /// never a dead box, never a fabricated value.
-    private var emptyState: some View {
-        ScrollView {
-            VStack(spacing: HLSpace.lg) {
-                HLEmptyState(
-                    icon: "bolt.heart",
-                    title: "insights.recovery.empty.title",
-                    message: "insights.recovery.empty.body"
-                )
+    @ViewBuilder
+    private var pageBody: some View {
+        let layout = store.layout
+        if store.family == nil, store.isLoading || !store.hasSettledOnce {
+            loadingCards
+        } else if store.family == nil, store.loadFailed {
+            HLRetryUnavailableView { await store.refresh() }
+        } else if let empty = layout.empty {
+            emptyState(empty)
+        } else {
+            ForEach(layout.trends) { reading in
+                RecoveryTrendLink(reading: reading, readings: store.trendReadings[reading.kind], isLoading: store.isLoading)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, HLSpace.xxxl)
-            .padding(.bottom, HLSpace.xxxl)
+            if !layout.rows.isEmpty {
+                RecoveryReadingsCard(rows: layout.rows)
+            }
+            HLSyncStatusFooter(screenLoading: store.isLoading)
         }
-        .refreshable { await store.refresh() }
+    }
+
+    private var restModeActive: Bool {
+        healthScoreStore.score?.activeRestMode != nil && moduleGate?.isEnabled(.illness) == true
+    }
+
+    /// Two quiet placeholders in the trend cards' shape while the first load
+    /// runs, so the page never flashes its empty note.
+    private var loadingCards: some View {
+        VStack(spacing: HLSpace.lg) {
+            ForEach(0 ..< 2, id: \.self) { _ in
+                HLCard {
+                    VStack(alignment: .leading, spacing: HLSpace.sm) {
+                        HLSkeleton(.capsule, width: 140, height: 16)
+                        HLSkeleton(.rect, height: HLChartStyle.heightCompact, cornerRadius: 10)
+                    }
+                }
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(Text("Loading"))
+    }
+
+    /// The calm empty note. Its reason is the server's (`recoveryEmpty`):
+    /// no wearable reading at all, or nothing from the last 30 days.
+    private func emptyState(_ empty: RecoveryPageLayout.Empty) -> some View {
+        HLEmptyState(
+            icon: "bolt.heart",
+            title: empty == .noWearable ? "insights.recovery.empty.title" : "insights.recovery.empty.recentTitle",
+            message: empty == .noWearable ? "insights.recovery.empty.body" : nil
+        ) {
+            HLButton("insights.recovery.empty.action", variant: .secondary) {
+                router.requestSettingsIntegrations()
+            }
+            .accessibilityIdentifier("insights.recovery.empty.action")
+        }
+        .padding(.top, HLSpace.xl)
         .accessibilityIdentifier("insights.recovery.empty")
     }
 }
 
-// MARK: - Ring tile (score archetype: strain / autonomic-charge)
+// MARK: - Trend card
 
-/// A half-width canonical `HLScoreRing` tile for a 0–100 recovery composite
-/// (strain / autonomic-charge). Server-authoritative: the ring fraction + value
-/// are the server `score`; the single signal cap dot is the server `band`.
-private struct RecoveryRingTile: View {
-    let item: RecoveryInsightsDTO.Item
-
-    /// 08-11 — the tile's own caps are a standard-size density decision. At an
-    /// accessibility size the tile has the full row to itself, so the label is
-    /// allowed as many lines as it needs and is never shrunk below the size the
-    /// user asked for.
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    private var fraction: Double {
-        guard let score = item.score else { return 0 }
-        return max(0, min(1, score / 100))
-    }
-
-    private var valueText: String {
-        item.score.map { "\(Int($0.rounded()))" } ?? "—"
-    }
-
-    private var signal: HLScoreRing.HLSignal? {
-        HLScoreRing.ScorePresentation.signal(forBand: item.band)
-    }
+/// One recovery trend card: the overview's `InsightsTrendCard` with a dated
+/// 30-day line at the compact chart height, opening the value's detail.
+private struct RecoveryTrendLink: View {
+    let reading: RecoveryPageLayout.Reading
+    /// The metric screen's page of readings for this kind; `nil` until read.
+    let readings: [Measurement]?
+    let isLoading: Bool
 
     var body: some View {
-        HLCard {
-            VStack(spacing: HLSpace.sm) {
-                HLScoreRing(
-                    fraction: fraction,
-                    value: valueText,
-                    signal: signal,
-                    accessibilityLabel: accessibilityLabel
-                )
-                .frame(width: 96, height: 96)
-
-                Text(RecoveryFamilyLabels.label(for: item))
-                    .font(.hlSubhead.weight(.medium))
-                    .foregroundStyle(HLText.primary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                    .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.85)
-
-                if let trend = trendLine {
-                    Text(trend)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .multilineTextAlignment(.center)
+        let kind = reading.kind
+        let points = RecoveryPageLayout.trendPoints(from: readings ?? [], kind: kind)
+        let title = kind.displayName
+        let value = RecoveryValueText.value(reading.latest, kind: kind)
+        let link = NavigationLink {
+            RecoveryDetailDestination(kind: kind)
+        } label: {
+            InsightsTrendCard(symbol: kind.descriptor.sfSymbol, title: title, valueText: value) {
+                if points.count >= 2 {
+                    HLTileMetricChart(kind: kind, points: points)
+                        .frame(height: HLChartStyle.heightCompact)
+                } else if readings == nil, isLoading {
+                    HLSkeleton(.rect, height: HLChartStyle.heightCompact, cornerRadius: 10)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, HLSpace.xs)
         }
+        .hlPressable()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(accessibilityLabel))
-        .accessibilityIdentifier("insights.recovery.ring.\(item.id)")
-    }
-
-    /// Server-computed trend delta, rendered honestly (no fabrication). `nil`
-    /// when the server returned no baseline delta.
-    private var trendLine: String? {
-        guard let delta = item.trendDelta, delta != 0, let rounded = Int(safeServer: delta) else { return nil }
-        let signed = rounded > 0 ? "+\(rounded)" : "\(rounded)"
-        return String(localized: "insights.recovery.trend \(signed)")
-    }
-
-    private var accessibilityLabel: String {
-        let title = RecoveryFamilyLabels.label(for: item)
-        guard let score = item.score, let safeScore = Int(safeServer: score) else {
-            return String(localized: "\(title): not enough data yet")
+        .accessibilityLabel(Text(verbatim: "\(title), \(value)"))
+        .accessibilityValue(Text(verbatim: RecoveryValueText.average(reading.average30, kind: kind)))
+        .accessibilityHint(Text("Double-tap to open detail view"))
+        .accessibilityIdentifier("insights.recovery.trend.\(kind.rawValue)")
+        // The card speaks as one element; the line keeps its audio graph on it.
+        if points.count >= 2 {
+            link.accessibilityChartDescriptor(HLTileMetricChart.chartDescriptor(
+                kind: kind,
+                points: points,
+                unit: String(localized: kind.descriptor.unitLabel)
+            ))
+        } else {
+            link
         }
-        let scoreText = "\(safeScore)"
-        return String(localized: "\(title) \(scoreText) of 100")
     }
 }
 
-// MARK: - Stat row — REPLACED by the canonical family card (C3, 2026-08-23)
+// MARK: - List
 
-// `RecoveryStatRow` rendered one raw reading per line: a label, the server value
-// and a signal dot. Nothing about it was wrong; it simply was not the shape the
-// rest of the app uses to say „what is this number and how am I doing", and that
-// difference is the whole of C3. The stat archetype now renders through
-// `InsightsMetricStatusCard` via `RecoverySchema.descriptor(for:)`, which is the
-// SAME component the curated metric pages use — reused, not forked, because the
-// canonical shape exists precisely because of an earlier complaint of this kind.
-//
-// The formatting rules the row carried are not lost: whole-vs-fractional
-// rendering and the `Int(safeServer:)` crash-guard (W-CRASHGUARD — `+infinity`
-// and `1e30` both equal their own `rounded()` and would trap a bare `Int(value)`)
-// moved into `RecoverySchema.headlineValue(for:)` with their reasoning.
+/// The calm list: one row per remaining current type, latest reading on the
+/// right, the 30-day average under the name, each row opening its metric
+/// screen.
+private struct RecoveryReadingsCard: View {
+    let rows: [RecoveryPageLayout.Reading]
 
-// MARK: - Localized family labels
-
-/// Resolves a localized display label for a recovery-family item. The server
-/// may emit its own `label` (used verbatim when present); otherwise a known id
-/// maps to a localized `insights.recovery.*` string, and an UNKNOWN id falls
-/// back to its raw id so a server addition still renders (never a blank row).
-enum RecoveryFamilyLabels {
-    static func label(for item: RecoveryInsightsDTO.Item) -> String {
-        if let serverLabel = item.label, !serverLabel.isEmpty {
-            return serverLabel
+    var body: some View {
+        HLCard {
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, reading in
+                    NavigationLink {
+                        RecoveryDetailDestination(kind: reading.kind)
+                    } label: {
+                        HLListRow(
+                            title: reading.kind.displayName,
+                            subtitle: RecoveryValueText.average(reading.average30, kind: reading.kind),
+                            value: RecoveryValueText.value(reading.latest, kind: reading.kind)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(Text("Double-tap to open detail view"))
+                    .accessibilityIdentifier("insights.recovery.row.\(reading.kind.rawValue)")
+                    if index < rows.count - 1 {
+                        Divider()
+                    }
+                }
+            }
         }
-        switch item.id.uppercased() {
-        case "STRAIN", "STRAIN_SCORE": return String(localized: "insights.recovery.label.strain")
-        case "CARDIO_LOAD", "TRAINING_LOAD": return String(localized: "insights.recovery.label.trainingLoad")
-        case "ANS_CHARGE", "AUTONOMIC_CHARGE": return String(localized: "insights.recovery.label.autonomicCharge")
-        case "RECOVERY", "RECOVERY_SCORE": return String(localized: "insights.recovery.label.recovery")
-        case "HEART_RATE", "RESTING_HEART_RATE": return String(localized: "insights.recovery.label.heartRate")
-        case "ACTIVE_ENERGY", "ENERGY": return String(localized: "insights.recovery.label.energy")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("insights.recovery.list")
+    }
+}
+
+// MARK: - Destination
+
+/// What a card or row opens: the detail the app already shows for that value.
+/// The recovery score opens the score detail (the overview ring's detail,
+/// pushed here); without a score envelope, and for every other type, the
+/// metric screen with its full chart. Built only when pushed.
+private struct RecoveryDetailDestination: View {
+    let kind: MetricKind
+
+    @Environment(\.appContainer) private var appContainer
+    @Environment(DerivedInsightsStore.self) private var derivedStore
+    @Environment(AppRouter.self) private var router
+
+    var body: some View {
+        if kind == .recoveryScore,
+           let dto = derivedStore.presentable.first(where: { $0.metric == "RECOVERY_SCORE" })
+        {
+            WellnessScoreDetailSheet(
+                dto: dto,
+                onSelectMetric: { router.selectInsightsMetric($0) },
+                onSelectMood: { router.selectInsightsSpecial(.mood) },
+                embedsNavigationStack: false
+            )
+        } else if let appContainer {
+            // The pager hides the bar for its pages; pushed, the screen needs
+            // it for the way back.
+            InsightsMetricScreen(kind: kind, store: appContainer.makeChartDetailStore(kind: kind))
+                .toolbar(.visible, for: .navigationBar)
+        }
+    }
+}
+
+// MARK: - Value text
+
+/// How the page writes a recovery value. The number is the server's; only the
+/// unit is chosen here: day and workout strain on their 0 to 21 scale, energy
+/// in kcal (plan decision 4; the server reports kJ, the conversion is the
+/// app-wide `MetricKind.UnitFamily.energy`), everything else in the
+/// descriptor's own style and unit.
+enum RecoveryValueText {
+    static func value(_ value: Double, kind: MetricKind) -> String {
+        switch kind {
+        case .recoveryScore:
+            // DIN 5008 in German ("83 %" with a narrow space), "83%" in English.
+            guard let whole = Int(safeServer: value.rounded()) else { return Double.emDashPlaceholder }
+            return HLNumberFormat.percent(whole)
+        case .dayStrain, .workoutStrain:
+            return String(localized: "insights.recovery.ofTwentyOne \(MetricValueFormatter.styled(value, style: .decimal1))")
+        case .energyExpenditureKJ:
+            let units = UnitPreferences.standard
+            let number = MetricValueFormatter.account(value, kind: kind, units: units) { $0.safeServerGroupedIntString }
+            return "\(number) \(units.unitLabel(for: kind))"
         default:
-            // Unknown server id — render its raw token rather than a blank row.
-            return item.id
+            let number = MetricValueFormatter.styled(value, style: kind.descriptor.formatStyle)
+            let unit = String(localized: kind.descriptor.unitLabel)
+            return unit.isEmpty ? number : "\(number) \(unit)"
         }
+    }
+
+    /// "Ø 30 Tage 64 bpm".
+    static func average(_ value: Double, kind: MetricKind) -> String {
+        String(localized: "30-day avg \(Self.value(value, kind: kind))")
     }
 }

@@ -88,14 +88,9 @@ extension DocumentDetailScreen {
                 Image(systemName: "sparkles")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("documents.assist.reviewTitle")
-                        .font(.hlFootnote.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                    Text("documents.assist.reviewHint")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
+                // 1.4 B2-c — the title says the suggestions are AI's; the
+                // hint line under it is gone.
+                HLSectionLabel("documents.assist.reviewTitle")
                 Spacer()
                 Button {
                     self.suggestion = nil
@@ -215,11 +210,7 @@ extension DocumentDetailScreen {
             } else if let prose = summary?.prose {
                 HLInsightProse(text: prose)
             }
-
-            Text("documents.summary.notSaved")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .padding(.top, HLSpace.xxs)
+            // 1.4 B2-c — "made for this view only, not saved" is gone.
         }
         .padding(HLSpace.sm)
         .frame(maxWidth: .infinity, alignment: .leading)

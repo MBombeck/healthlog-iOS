@@ -15,30 +15,42 @@ import Foundation
 ///     from `digest.bmi` (BMI's summary key is `WEIGHT`, a *weight* average, so
 ///     we MUST NOT surface `summaries["WEIGHT"].avg30` as a BMI mean — the BMI
 ///     headline is the latest computed BMI only). No in-target pct / band today.
-///   • **every other metric** — value from `summaries[key].avg30` (honest
-///     fallback to the latest reading), chip + Zielband + in-target pct from the
-///     **targets payload** (`TargetItem.classification.category` / `.range` /
-///     `daysInRange30d`). A metric with no target carries none of those → the
-///     card degrades to value-only, or suppresses entirely when even the value
-///     is absent.
+///   • **every other metric** — value from the server's 30-day mean
+///     (`summaries[key].avg30` of the digest, else of the summaries slice),
+///     chip + Zielband + in-target pct from the **targets payload**
+///     (`TargetItem.classification.category` / `.range` / `daysInRange30d`). A
+///     metric with no target carries none of those → the card degrades to
+///     value-only, or suppresses entirely when even the value is absent.
+///
+/// **1.4 B4 — the average is an average.** The card sits under the heading
+/// "30 Tage Durchschnitt". It used to fall back to the latest reading when the
+/// digest had no `avg30`, which is every account without a configured AI
+/// provider (the digest is consent-gated) and every type the digest did not
+/// summarise: day strain and RMSSD showed today's value, a stopped SDNN its
+/// June reading. The latest reading has its own card right above ("Letzte
+/// Messung"); without a server mean this card has no headline.
 enum InsightsMetricStatusDescriptor {
     /// Builds the descriptor for `kind` from the available server signal.
     /// - Parameters:
     ///   - kind: the metric whose page is rendering.
     ///   - digest: the `GET /api/insights/comprehensive` envelope (or `nil`).
     ///   - target: the matching `GET /api/insights/targets` row (or `nil`).
-    ///   - latestValue: the latest charted reading (honest headline fallback).
+    ///   - latestValue: the latest charted reading (BMI's headline fallback
+    ///     only; a generic metric never shows it as its 30-day average).
     ///   - sparklineValues: the chronological chart values (`store.chartPoints`)
     ///     used to draw the target-less **Verlauf** for non-targeted kinds
     ///     (v0.14.4 D1). `nil`/<2 points → no sparkline. BP keeps its full anatomy
     ///     and ignores this.
+    ///   - serverAverage30: the summaries slice's `avg30` for this kind, used
+    ///     when the digest carries none (1.4 B4).
     static func build(
         kind: MetricKind,
         digest: ComprehensiveDigest?,
         target: InsightsTargetsResponseDTO.TargetItem?,
         latestValue: Double?,
         sparklineValues: [Double]? = nil,
-        units: UnitPreferences = .standard
+        units: UnitPreferences = .standard,
+        serverAverage30: Double? = nil
     ) -> InsightsMetricStatusCard.Descriptor {
         switch kind {
         case .bloodPressure:
@@ -53,7 +65,7 @@ enum InsightsMetricStatusDescriptor {
                 // server `PULSE` row is the resting-pulse band: it may sit on the
                 // resting card, never on the raw pulse card (HealthLog#584).
                 target: target.flatMap { $0.type == MetricChartMath.bandTargetType(for: kind) ? $0 : nil },
-                latestValue: latestValue,
+                serverAverage30: serverAverage30,
                 sparklineValues: sparklineValues,
                 units: units
             )
@@ -228,15 +240,15 @@ enum InsightsMetricStatusDescriptor {
         kind: MetricKind,
         digest: ComprehensiveDigest?,
         target: InsightsTargetsResponseDTO.TargetItem?,
-        latestValue: Double?,
+        serverAverage30: Double?,
         sparklineValues: [Double]?,
         units: UnitPreferences
     ) -> InsightsMetricStatusCard.Descriptor {
-        // Honest headline: the 30-day average from the digest summaries, falling
-        // back to the latest charted reading so a fresh metric still shows a
-        // number rather than an empty card.
-        let avg30 = kind.availabilitySummaryKey.flatMap { digest?.summaries?[$0]?.avg30 }
-        let headline = headlineText(kind: kind, avg30: avg30, latestValue: latestValue, units: units)
+        // 1.4 B4 — the headline is the server's 30-day mean and nothing else:
+        // the digest's, else the summaries slice's. No fallback to the latest
+        // reading (see the type doc).
+        let avg30 = kind.availabilitySummaryKey.flatMap { digest?.summaries?[$0]?.avg30 } ?? serverAverage30
+        let headline = avg30.map { headlineText(kind: kind, avg30: $0, units: units) }
 
         // Chip + Zielband + in-target pct from the TARGETS payload — the only
         // honest per-metric classification source for non-BP/BMI metrics. All
@@ -249,7 +261,9 @@ enum InsightsMetricStatusDescriptor {
         // **Verlauf** sparkline so it reads like Gewicht/Puls minus the band. We do
         // NOT fabricate a Zielband or an "Im Zielbereich" bar — honest trend only.
         // Targeted kinds (pct/band populated) keep their richer anatomy and skip it.
-        let trend: [Double]? = (pct == nil && band == nil) ? sparklineValues : nil
+        // 1.4 B4 — the line rides with the average: without one there is no
+        // card to carry it (the chart below draws the same points).
+        let trend: [Double]? = (pct == nil && band == nil && headline != nil) ? sparklineValues : nil
         return InsightsMetricStatusCard.Descriptor(
             title: kind.displayName,
             guidelineCaption: nil,
@@ -271,7 +285,6 @@ enum InsightsMetricStatusDescriptor {
     /// The classification chip from the target row's server-emitted category.
     /// Tone follows the most-recent consistency bucket (the most honest
     /// "where are we now" signal); neutral when the window is sparse.
-    /// Mirrors `InsightsTargetReferencePanel.classificationPill` verbatim.
     private static func classificationChip(
         from target: InsightsTargetsResponseDTO.TargetItem?
     ) -> (label: String, tone: HLBadge.Tone)? {
@@ -306,25 +319,13 @@ enum InsightsMetricStatusDescriptor {
         return Int(share.rounded())
     }
 
-    /// **#115 P2** — the card's headline in the account's unit. The digest's
-    /// 30-day average is canonical SI (glucose too); the fallback is the latest
-    /// CHART point, which the series endpoint already converted for glucose.
-    /// A kind whose transform is the identity keeps the prior 0…1-dp text.
-    private static func headlineText(
-        kind: MetricKind,
-        avg30: Double?,
-        latestValue: Double?,
-        units: UnitPreferences
-    ) -> String? {
+    /// **#115 P2** — the card's headline in the account's unit. The server's
+    /// 30-day average is canonical SI (glucose too). A kind whose transform
+    /// leaves precision open keeps the prior 0…1-dp text.
+    private static func headlineText(kind: MetricKind, avg30: Double, units: UnitPreferences) -> String {
         let identity: (Double) -> String = { $0.formatted(.number.precision(.fractionLength(0 ... 1))) }
-        let rescales = units.transform(for: kind).rescales
-        if let avg30 {
-            return rescales ? MetricValueFormatter.account(avg30, kind: kind, units: units, identity: identity) : identity(avg30)
-        }
-        guard let latestValue else { return nil }
-        return rescales
-            ? MetricValueFormatter.account(latestValue, kind: kind, units: units, glucose: .seriesPreConvertedGlucose, identity: identity)
-            : identity(latestValue)
+        guard units.transform(for: kind).rescales else { return identity(avg30) }
+        return MetricValueFormatter.account(avg30, kind: kind, units: units, identity: identity)
     }
 
     /// The Zielband caption from the target row's range. `nil` when the user has

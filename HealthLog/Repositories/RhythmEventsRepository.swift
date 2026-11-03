@@ -39,7 +39,11 @@ public actor RhythmEventsRepository {
         let api = api
         @Sendable func networkFetch() async throws -> RhythmEventsDTO {
             let req: APIRequest<RhythmEventsDTO> = .get("/api/insights/rhythm-events")
-            return try await api.send(req)
+            // #147 (v1.43.7) — the newest 200 events, no `limit` or
+            // `offset` to read further: a cut list is only noted.
+            let page = try await api.listPage(req)
+            if page.cap?.truncated == true { CappedListReader.logCut("/api/insights/rhythm-events") }
+            return page.data
         }
         do {
             if let swr {

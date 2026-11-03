@@ -504,3 +504,37 @@ struct DashboardMetricNonFiniteGuardTests {
         }
     }
 }
+
+/// **1.4 B4 — a cached tile reads in the current language.** The SWR layer
+/// re-encodes the summary before it writes it to disk; the catalogue keys ride
+/// along so the read-back resolves them again.
+@Suite("1.4 B4: dashboard tiles keep their catalogue keys through the cache")
+struct DashboardMetricCacheLanguageTests {
+    @Test("1.4 B4: a cached tile keeps the key, so it reads in today's language when read back")
+    func cacheRoundTripKeepsTheKey() throws {
+        let json = Data(#"""
+        {
+            "id": "m-weight",
+            "kind": "weight",
+            "titleKey": "dashboard.metric.title.weight",
+            "latestValue": 78.2,
+            "secondaryValue": null,
+            "unitKey": "dashboard.metric.unit.weight",
+            "trend": "down",
+            "sparkline": [],
+            "updatedAt": null
+        }
+        """#.utf8)
+        let fetched = try JSONDecoder().decode(DashboardMetric.self, from: json)
+        // What the SWR layer writes to disk and reads back.
+        let stored = try JSONEncoder().encode(fetched)
+        let object = try #require(JSONSerialization.jsonObject(with: stored) as? [String: Any])
+        #expect(object["titleKey"] as? String == "dashboard.metric.title.weight")
+        #expect(object["unitKey"] as? String == "dashboard.metric.unit.weight")
+        // Make the stored text stale, as after a language switch: the key wins.
+        var stale = object
+        stale["title"] = "Stale title from yesterday"
+        let reread = try JSONDecoder().decode(DashboardMetric.self, from: JSONSerialization.data(withJSONObject: stale))
+        #expect(reread.title == String(localized: "dashboard.metric.title.weight"))
+    }
+}

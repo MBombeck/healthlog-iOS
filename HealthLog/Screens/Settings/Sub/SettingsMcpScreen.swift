@@ -97,11 +97,11 @@ struct SettingsMcpScreen: View {
             icon: "powerplug",
             title: "Connector status"
         ) {
+            // 1.4 B2-c — one description for both states: what turning the
+            // switch on does. The off-state "answers 404" line is gone.
             HLSettingsToggleRow(
                 title: "Enable MCP connector",
-                description: isModuleOn
-                    ? "External assistants can connect with a valid credential."
-                    : "The endpoint answers 404 and no assistant can connect.",
+                description: "External assistants can connect with a valid credential.",
                 isOn: Binding(
                     get: { isModuleOn },
                     set: { setModule(enabled: $0) }
@@ -161,14 +161,12 @@ struct SettingsMcpScreen: View {
     // MARK: - Live connections (the revocation-critical card)
 
     private func connectionsCard(store: McpStore) -> some View {
+        // R19 — der Widerrufs-Hinweis steht im Bestätigungsdialog der
+        // Revoke-Zeile (siehe `McpConnectionRow`). 1.4 B2-c: der Untertitel,
+        // der den Titel umschrieb, ist weg.
         HLSettingsCard(
             icon: "link",
-            title: "Connected assistants",
-            // R19 — der Widerrufs-Hinweis ist nicht gestrichen, sondern an seine
-            // Heimat gezogen: den Bestätigungsdialog der Revoke-Zeile (siehe
-            // `McpConnectionRow`), der die Refresh-Rechte jetzt ausdrücklich
-            // mitnennt. Am Ort der Handlung, in voller Stärke.
-            subtitle: "Every assistant that can read your record right now."
+            title: "Connected assistants"
         ) {
             if store.isLoading, store.connections.isEmpty {
                 loadingRow
@@ -226,29 +224,15 @@ struct SettingsMcpScreen: View {
                 }
             }
 
-            Button {
-                showMintSheet = true
-            } label: {
-                HStack(spacing: HLSpace.md) {
-                    Text("Create token")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                    Spacer()
-                    Image(systemName: "plus.circle.fill")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .foregroundStyle(HLText.tertiary)
+            // 1.4 B2-c — the canonical create row, and only while the
+            // connector is on: a dimmed row plus "switch the module on first"
+            // under it is gone; the switch is the card above.
+            if isModuleOn {
+                HLSettingsActionRow(title: "Create token", presents: .create) {
+                    showMintSheet = true
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(store.isMinting || !isModuleOn)
-            .accessibilityIdentifier("settings.mcp.tokens.create")
-
-            if !isModuleOn {
-                Text("Switch the MCP module on before creating a token.")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .disabled(store.isMinting)
+                .accessibilityIdentifier("settings.mcp.tokens.create")
             }
         }
         .sheet(isPresented: $showMintSheet) {
@@ -270,33 +254,17 @@ struct SettingsMcpScreen: View {
         }
     }
 
-    /// R19 — Entdopplung, keine Streichung. Die Karte behält die Aussage, die
-    /// nirgendwo sonst steht (was ein Lese-Token sehen kann) und die
-    /// Grundzusage. Die beiden anderen Zeilen sind an ihre Heimat gezogen:
-    /// der Schreibzugriffs-Umfang an den Scope-Picker im Mint-Sheet (dort wird
-    /// er gewählt), die Sofortwirkung des Widerrufs in die beiden
-    /// Bestätigungsdialoge (dort wird er ausgelöst).
-    ///
-    /// Die Grundzusage steht als Footer statt als Subtitle: Subtitle ist auf
-    /// eine Zeile beschnitten und hätte sie abgeschnitten (R5).
+    /// What a connected assistant can read, and that it is read-only unless
+    /// more is granted. 1.4 B2-c: the row and the footer that said this in two
+    /// sentences (one with "Lese-Token") are one sentence; the write scope is
+    /// chosen in the mint sheet, the revoke effect lives in its dialogs (R19).
     private var infoCard: some View {
         HLSettingsCard(
             icon: "lock.shield",
-            title: "What an assistant can see",
-            footer: "MCP access is read-only unless you explicitly grant more."
+            title: "What an assistant can see"
         ) {
-            infoRow(icon: "eye", text: "A read token can read your measurements, labs and medications.")
-        }
-    }
-
-    private func infoRow(icon: String, text: LocalizedStringKey) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: icon)
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(HLText.tertiary)
-                .frame(width: 20)
-            Text(text)
-                .font(.hlFootnote)
+            Text("settings.mcp.scope.body")
+                .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
