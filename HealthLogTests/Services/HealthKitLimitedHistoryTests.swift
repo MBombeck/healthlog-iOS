@@ -71,45 +71,61 @@
             #expect(dates == [:])
         }
 
-        @Test("the runtime call reaches the method and types its answer")
-        func runtimeCallIsTyped() async throws {
-            let weight = HKQuantityType(.bodyMass)
-            let store = EarliestDateAnsweringStore(answer: [weight: Self.boundary], error: nil)
-            let dates = try #require(
-                await HealthKitAuthorizedHistory(store: store, usesRuntimeCall: true).earliestAuthorizedSampleDates(for: [weight])
-            )
-            #expect(dates[weight] == Self.boundary)
-            #expect(store.askedTypes == [weight])
-        }
+        // The iOS 27 SDK (Swift 6.3) declares this selector as typed API on
+        // HKHealthStore, so the fake below no longer compiles there. The
+        // runtime call is off in shipping builds (`shipsRuntimeCall = false`);
+        // the typed path with its own tests replaces it.
+        #if !compiler(>=6.3)
+            @Test("the runtime call reaches the method and types its answer")
+            func runtimeCallIsTyped() async throws {
+                let weight = HKQuantityType(.bodyMass)
+                let store = EarliestDateAnsweringStore(answer: [weight: Self.boundary], error: nil)
+                let dates = try #require(
+                    await HealthKitAuthorizedHistory(store: store, usesRuntimeCall: true).earliestAuthorizedSampleDates(for: [weight])
+                )
+                #expect(dates[weight] == Self.boundary)
+                #expect(store.askedTypes == [weight])
+            }
 
-        @Test("an error from HealthKit is unknown, never unlimited")
-        func errorIsUnknown() async {
-            let store = EarliestDateAnsweringStore(answer: [:], error: NSError(domain: HKErrorDomain, code: 6))
-            let dates = await HealthKitAuthorizedHistory(store: store, usesRuntimeCall: true)
-                .earliestAuthorizedSampleDates(for: [HKQuantityType(.bodyMass)])
-            #expect(dates == nil)
-            #expect(await HealthKitAuthorizedHistory(store: store, usesRuntimeCall: true)
-                .window(for: HKQuantityType(.bodyMass)) == .unknown)
-        }
+            @Test("an error from HealthKit is unknown, never unlimited")
+            func errorIsUnknown() async {
+                let store = EarliestDateAnsweringStore(answer: [:], error: NSError(domain: HKErrorDomain, code: 6))
+                let dates = await HealthKitAuthorizedHistory(store: store, usesRuntimeCall: true)
+                    .earliestAuthorizedSampleDates(for: [HKQuantityType(.bodyMass)])
+                #expect(dates == nil)
+                #expect(await HealthKitAuthorizedHistory(store: store, usesRuntimeCall: true)
+                    .window(for: HKQuantityType(.bodyMass)) == .unknown)
+            }
 
-        @Test("the shipped app never makes the runtime call, even where the method exists")
-        func shippedAppNeverCalls() async {
-            let weight = HKQuantityType(.bodyMass)
-            let store = EarliestDateAnsweringStore(answer: [weight: Self.boundary], error: nil)
-            #expect(HealthKitAuthorizedHistory.shipsRuntimeCall == false)
-            let dates = await HealthKitAuthorizedHistory(store: store).earliestAuthorizedSampleDates(for: [weight])
-            #expect(dates == [:])
-            #expect(store.askedTypes == nil)
-            #expect(await HealthKitAuthorizedHistory(store: store).window(for: weight) == .unlimited)
-        }
+            @Test("the shipped app never makes the runtime call, even where the method exists")
+            func shippedAppNeverCalls() async {
+                let weight = HKQuantityType(.bodyMass)
+                let store = EarliestDateAnsweringStore(answer: [weight: Self.boundary], error: nil)
+                #expect(HealthKitAuthorizedHistory.shipsRuntimeCall == false)
+                let dates = await HealthKitAuthorizedHistory(store: store).earliestAuthorizedSampleDates(for: [weight])
+                #expect(dates == [:])
+                #expect(store.askedTypes == nil)
+                #expect(await HealthKitAuthorizedHistory(store: store).window(for: weight) == .unlimited)
+            }
 
-        @Test("an empty question is not sent")
-        func emptyQuestionIsNotSent() async {
-            let store = EarliestDateAnsweringStore(answer: [:], error: nil)
-            let dates = await HealthKitAuthorizedHistory(store: store, usesRuntimeCall: true).earliestAuthorizedSampleDates(for: [])
-            #expect(dates == [:])
-            #expect(store.askedTypes == nil)
-        }
+            @Test("an empty question is not sent")
+            func emptyQuestionIsNotSent() async {
+                let store = EarliestDateAnsweringStore(answer: [:], error: nil)
+                let dates = await HealthKitAuthorizedHistory(store: store, usesRuntimeCall: true).earliestAuthorizedSampleDates(for: [])
+                #expect(dates == [:])
+                #expect(store.askedTypes == nil)
+            }
+        #else
+            @Test("the shipped app never makes the runtime call, even where the method exists")
+            func shippedAppNeverCalls() async {
+                let weight = HKQuantityType(.bodyMass)
+                let store = HKHealthStore()
+                #expect(HealthKitAuthorizedHistory.shipsRuntimeCall == false)
+                let dates = await HealthKitAuthorizedHistory(store: store).earliestAuthorizedSampleDates(for: [weight])
+                #expect(dates == [:])
+                #expect(await HealthKitAuthorizedHistory(store: store).window(for: weight) == .unlimited)
+            }
+        #endif
 
         // MARK: - The server → Apple Health mirror
 
@@ -188,29 +204,31 @@
         }
     }
 
-    /// An `HKHealthStore` that answers the iOS 27 selector itself, so the
-    /// runtime path (`responds(to:)`, `method(for:)`, the block, the typed
-    /// dictionary) runs end to end on an iOS 26 simulator.
-    private final class EarliestDateAnsweringStore: HKHealthStore, @unchecked Sendable {
-        private let answer: NSDictionary
-        private let error: NSError?
-        private let asked = OSAllocatedUnfairLock<Set<HKObjectType>?>(initialState: nil)
+    #if !compiler(>=6.3)
+        /// An `HKHealthStore` that answers the iOS 27 selector itself, so the
+        /// runtime path (`responds(to:)`, `method(for:)`, the block, the typed
+        /// dictionary) runs end to end on an iOS 26 simulator.
+        private final class EarliestDateAnsweringStore: HKHealthStore, @unchecked Sendable {
+            private let answer: NSDictionary
+            private let error: NSError?
+            private let asked = OSAllocatedUnfairLock<Set<HKObjectType>?>(initialState: nil)
 
-        init(answer: [HKObjectType: Date], error: NSError?) {
-            self.answer = answer as NSDictionary
-            self.error = error
-            super.init()
-        }
+            init(answer: [HKObjectType: Date], error: NSError?) {
+                self.answer = answer as NSDictionary
+                self.error = error
+                super.init()
+            }
 
-        var askedTypes: Set<HKObjectType>? {
-            asked.withLock { $0 }
-        }
+            var askedTypes: Set<HKObjectType>? {
+                asked.withLock { $0 }
+            }
 
-        @objc(getEarliestAuthorizedSampleDateForTypes:completion:)
-        func earliestDates(_ types: NSSet, completion: @escaping @Sendable (NSDictionary?, NSError?) -> Void) {
-            let typed = Set(types.compactMap { $0 as? HKObjectType })
-            asked.withLock { $0 = typed }
-            completion(error == nil ? answer : nil, error)
+            @objc(getEarliestAuthorizedSampleDateForTypes:completion:)
+            func earliestDates(_ types: NSSet, completion: @escaping @Sendable (NSDictionary?, NSError?) -> Void) {
+                let typed = Set(types.compactMap { $0 as? HKObjectType })
+                asked.withLock { $0 = typed }
+                completion(error == nil ? answer : nil, error)
+            }
         }
-    }
+    #endif
 #endif

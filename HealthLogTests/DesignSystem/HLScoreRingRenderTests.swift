@@ -110,9 +110,14 @@ struct HLScoreRingRenderTests {
         ))
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
 
+        // Red-dominant rather than near-pure red: the iOS 27 runtime draws the
+        // centre text with lighter antialiasing, so few pixels reach full
+        // saturation. The default ink is grey and never red-dominant.
         var red = 0
         for index in stride(from: 0, to: pixels.count, by: 4) where pixels[index] > 180
-            && pixels[index + 1] < 80 && pixels[index + 2] < 80 && pixels[index + 3] > 200
+            && Int(pixels[index]) - Int(pixels[index + 1]) > 80
+            && Int(pixels[index]) - Int(pixels[index + 2]) > 80
+            && pixels[index + 3] > 200
         {
             red += 1
         }

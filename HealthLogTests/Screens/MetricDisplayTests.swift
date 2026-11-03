@@ -132,9 +132,11 @@ struct MetricDisplayTests {
     }
 
     @Test("empty .outsideRange → em-dash + Letzte Messung vor X Tagen")
-    func emptyOutsideRange() {
+    func emptyOutsideRange() throws {
         let metric = makeMetric(kind: .weight)
-        let latestAt = Date.now.addingTimeInterval(-86400 * 60) // 60 days ago
+        // 60 calendar days, not 60 × 24 h: across a DST change the latter is
+        // 59 days and 23 hours, which reads as "vor 59 Tagen".
+        let latestAt = try #require(Calendar.current.date(byAdding: .day, value: -60, to: .now))
         let display = MetricDisplay(metric: metric, dataState: .empty(reason: .outsideRange(latestAt: latestAt)))
         #expect(display.valueText == "—")
         #expect(
