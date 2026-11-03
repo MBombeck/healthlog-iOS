@@ -513,7 +513,7 @@ extension AppReviewConfigurationTests {
             "HealthLog/Services/AI/CoachChatStore.swift",
             "HealthLog/Services/HealthKitDailyStatsCache.swift",
             "HealthLog/Standalone/LocalStore.swift",
-            "HealthLog/Screens/Insights/DailyBriefingHero+OnDevice.swift",
+            "HealthLog/Services/AI/OnDeviceBriefingCache.swift",
             "HealthLog/Screens/Insights/TrendObservationCard+OnDevice.swift"
         ]
         for path in directoryStores {

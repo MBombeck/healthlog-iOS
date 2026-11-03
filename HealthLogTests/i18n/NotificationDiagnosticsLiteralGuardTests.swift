@@ -53,7 +53,11 @@ struct NotificationDiagnosticsLiteralGuardTests {
     /// Every file the diagnostics surface is spread across. Scanned one file at
     /// a time — `LiteralScanner` carries block-comment state, so concatenating
     /// sources would be correct only by accident.
-    private static let surfacePaths = [screenPath, supportPath]
+    /// 1.4 B2 — the two card footers that explain the medication numbers and
+    /// the scheduled count moved into the screen's (i); the info content lives
+    /// in `NotificationsScreen+Info.swift`, so the guard reads it too.
+    private static let infoPath = "HealthLog/Screens/Notifications/NotificationsScreen+Info.swift"
+    private static let surfacePaths = [screenPath, supportPath, infoPath]
 
     /// Der Schlüssel, den die Einstiegszeile und der Seitentitel teilen (R3 —
     /// eine Aussage, ein Ort: die Zeile verspricht, was die Seite heißt).
@@ -425,7 +429,9 @@ struct NotificationDiagnosticsLiteralGuardTests {
     func labeledRowTitleIstLokalisiert() throws {
         // 08-15: `SupportDetailRow` is the same primitive on the other half of
         // the surface and inherits the same defect if its `title` regresses.
-        for path in Self.surfacePaths {
+        // 1.4 B2: the info content file holds no row primitive, so it is not
+        // asked for one.
+        for path in [Self.screenPath, Self.supportPath] {
             let text = try Self.source(path)
             #expect(
                 text.contains("let title: LocalizedStringKey"),

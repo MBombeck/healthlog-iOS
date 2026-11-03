@@ -58,6 +58,11 @@ import Foundation
             read: Set<HKObjectType>
         ) async -> HKAuthorizationRequestStatus
 
+        /// **1.4 / iOS 27** — the earliest date Apple Health lets the app read,
+        /// when the person granted a limited window; `nil` otherwise. Defaulted
+        /// below so existing test doubles compile unchanged.
+        func limitedHistoryStart() async -> Date?
+
         // MARK: Default type-sets (instance accessors)
 
         /// Default HK Read-Types covered by the service. Instance-level
@@ -87,6 +92,11 @@ import Foundation
             read _: Set<HKObjectType>
         ) async -> HKAuthorizationRequestStatus {
             .unknown
+        }
+
+        /// Seams that cannot ask the system report no limit.
+        func limitedHistoryStart() async -> Date? {
+            nil
         }
     }
 

@@ -39,14 +39,18 @@ struct DashboardQuickActionsFooter: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: HLSpace.md) {
+                // 1.4 B4 — a pixel-locked glyph in its column: the body-sized
+                // symbol outgrew the 28 pt frame at the accessibility sizes
+                // and ran into the title.
                 Image(systemName: icon)
-                    .font(.hlBody.weight(.semibold))
+                    .font(.hlIcon(HLIconSize.lg))
                     .foregroundStyle(HLText.secondary)
                     .frame(width: 28)
                     .accessibilityHidden(true)
                 Text(title)
                     .font(.hlSubhead.weight(.semibold))
                     .foregroundStyle(HLText.primary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: HLSpace.sm)
                 Image(systemName: "chevron.right")
                     .font(.hlFootnote.weight(.semibold))

@@ -12,9 +12,9 @@ import SwiftUI
 /// **Theme-2.0 (T2-3, 2026-05-16) — Tonal-Mono recolor:**
 /// every primary LineMark defaults to `HLChartTints.series` (the single
 /// Dracula-Purple accent). BP's secondary (diastolic) line is the only
-/// per-metric variant, and it routes through `HLChartTints.seriesMid`
-/// (same hue, 70% opacity) so the dual-line visual stays parseable without
-/// introducing a second hue. Per-metric routing (`HLColor.metric*` defaults,
+/// per-metric variant, and it routes through `HLChartTints.seriesLow`
+/// (same hue, 40% opacity; 1.4 B4 — at 70% it read as the same line) so
+/// the dual-line visual stays parseable without introducing a second hue. Per-metric routing (`HLColor.metric*` defaults,
 /// the pink body-temp default, the cyan SpO2 default, the green steps line)
 /// is gone — the dashboard reads as a single calm material across every
 /// metric.
@@ -44,8 +44,8 @@ enum MetricChartContent {
     ///
     /// **T2-3 (2026-05-16) single-accent collapse:** per Theme-2.0 spec the
     /// per-metric tints collapse onto `HLChartTints.series`. BP's secondary
-    /// (diastolic) line is the one exception — it uses `HLChartTints.seriesMid`
-    /// (single accent at 70% opacity) so the dual-line visual stays parseable.
+    /// (diastolic) line is the one exception — it uses `HLChartTints.seriesLow`
+    /// (single accent at 40% opacity) so the dual-line visual stays parseable.
     /// All clinical threshold overlays are dashed `RuleMark`s using
     /// `HLChartTints.thresholdHigh` / `.thresholdLow` with `HLChartGrid`
     /// stroke style. When `emphasisTint == nil` the primary line resolves to
@@ -272,10 +272,10 @@ enum MetricChartContent {
                         y: .value("Diastolic", diastolic),
                         series: .value("series", "dia")
                     )
-                    // T2-3: secondary (diastolic) line uses `seriesMid`
-                    // (same single accent at 70% opacity) so the dual-line
-                    // visual stays parseable without a second hue.
-                    .foregroundStyle(HLChartTints.seriesMid)
+                    // 1.4 B4 — the diastolic line is the light step of the
+                    // same ink (`seriesLow`, 40%). At `seriesMid` (70%) it read
+                    // as the same colour as systolic; the palette keeps one hue.
+                    .foregroundStyle(HLChartTints.seriesLow)
                     .interpolationMethod(.catmullRom)
                     .hlTileSymbol(showsPoints)
                     .hlSeriesLineWidth(lineWidth)

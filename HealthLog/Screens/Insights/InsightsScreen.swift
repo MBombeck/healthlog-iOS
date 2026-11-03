@@ -139,10 +139,14 @@ struct InsightsScreen: View {
 
     private var scrollBody: some View {
         ScrollView {
-            // v0.11 perf: LazyVStack so the long Insights card column
-            // builds incrementally instead of all up-front — cuts the
-            // cold-launch + scroll cost on this scroll surface.
-            LazyVStack(alignment: .leading, spacing: HLSpace.lg) {
+            // 1.4 B4 — a plain VStack. The LazyVStack (v0.11 perf) kept
+            // re-phasing its items while a scroll ran into sections that load
+            // themselves and change height (zero-height loaders, self-
+            // suppressing cards): under XCUITest the main thread stayed in
+            // `LazyLayoutViewCache.updateItemPhases` for over 30 s ("main
+            // thread busy"). The column is about ten sections since the
+            // Trends row went, so building it at once is cheap.
+            VStack(alignment: .leading, spacing: HLSpace.lg) {
                 // v0.14.6 N6 — zero-height top anchor for the re-tap reset.
                 Color.clear.frame(height: 0).id(Self.topAnchorID)
                 // v0.6.1.8 Y7.1 — inline header (handbook §3.1 Flavour B). The
@@ -154,10 +158,8 @@ struct InsightsScreen: View {
                     onCustomize: { showCustomize = true },
                     onAskCoach: { presentAskCoach = true }
                 )
-                // v0.11 W35 — web-parity description line under the header,
-                // mirroring `InsightsMetricScreen.descriptionSlot`. Self-
-                // suppresses when the catalog key is absent/empty (echo test).
-                overviewDescriptionSlot
+                // 1.4 B2 — no onboarding paragraph under the header on every
+                // visit; the sections below name themselves.
 
                 // W-PERF-INSIGHTS — the skeleton gate + the four-zone loaded
                 // composition + the sync footer all live in `InsightsOverviewBody`,
@@ -173,6 +175,9 @@ struct InsightsScreen: View {
             }
             .padding(.horizontal, HLSpace.lg)
             .padding(.top, HLSpace.lg)
+            // 1.4 B4 — the score rings move for a few seconds after the
+            // overview appears, then rest.
+            .insightsRingMotionWindow()
             // Native iOS-18 `TabView` already supplies the bottom inset;
             // the legacy 96pt was a pre-native-`TabView` leftover (M2-A2).
             .padding(.bottom, HLSpace.lg)
@@ -396,33 +401,6 @@ struct InsightsScreen: View {
             && narrativeStore.narrative(for: .week) == nil
         await narrativeStore.load(period: .week, locale: locale, force: needsCorrectiveRetry)
     }
-
-    // MARK: - Overview description slot (web copy — self-suppresses)
-
-    /// Renders the static overview explainer paragraph under the header,
-    /// mirroring `InsightsMetricScreen.descriptionSlot`. Self-suppresses when
-    /// `insights.overview.description` is absent (echo test) or empty. (v0.11 W35
-    /// moved `bpTile`/`hasBPSignal` to `InsightsMetricScreen`.)
-    @ViewBuilder
-    private var overviewDescriptionSlot: some View {
-        if let resolved = overviewDescriptionText, !resolved.isEmpty {
-            Text(resolved)
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("insights.overview.description")
-        }
-    }
-
-    /// The overview description copy. A missing catalog entry resolves to the
-    /// key verbatim → suppress. INVARIANT: `insights.overview.description` MUST
-    /// carry plain copy (no `%@`) in BOTH EN+DE — see
-    /// `InsightsMetricScreen.descriptionText`.
-    private var overviewDescriptionText: String? {
-        let key = "insights.overview.description"
-        let resolved = String(localized: String.LocalizationValue(key))
-        return resolved == key ? nil : resolved
-    }
 }
 
 // W52 extractions: the `hasCorrelationSignal(_:)` gate retired in I-1 D when the
@@ -430,5 +408,5 @@ struct InsightsScreen: View {
 // and the per-tile `✦` explainer sheet (`MetricAIExplainerSheet`,
 // `AIExplainerMetric`) went with the never-mounted target grid and long-tail
 // block in #115 B7 — nothing on the overview could present the sheet.
-// `InsightsBriefingHero` (the on-device Daily-Briefing wrapper, v0.9.0 W2) lives
-// in `Sub/InsightsBriefingHero.swift` (extracted v0.11 W-C to cap this file).
+// The on-device Daily-Briefing wrapper (v0.9.0 W2, extracted v0.11 W-C) had no
+// caller left and was deleted with its hero in 1.4 B4.

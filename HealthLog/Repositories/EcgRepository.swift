@@ -80,7 +80,11 @@ public actor EcgRepository {
         let api = api
         @Sendable func networkFetch() async throws -> EcgListDTO {
             let request: APIRequest<EcgListDTO> = .get(HealthIngestRoute.ecgList)
-            return try await api.send(request)
+            // #147 (v1.43.7) — the newest 200 recordings, no `limit` or
+            // `offset` to read further: a cut list is only noted.
+            let page = try await api.listPage(request)
+            if page.cap?.truncated == true { CappedListReader.logCut(HealthIngestRoute.ecgList) }
+            return page.data
         }
         do {
             if let swr {

@@ -160,9 +160,11 @@ struct CycleStatsCard: View {
     let cyclesObserved: Int
 
     var body: some View {
-        HLSettingsCard(icon: "chart.bar", title: "cycle.stats.title") {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                if let stats, cyclesObserved >= 2 {
+        // 1.4 B2 — before two confirmed cycles there are no averages, and the
+        // card is absent instead of asking for more cycles.
+        if let stats, cyclesObserved >= 2 {
+            HLSettingsCard(icon: "chart.bar", title: "cycle.stats.title") {
+                VStack(alignment: .leading, spacing: HLSpace.md) {
                     if let avg = stats.avgLengthDays {
                         row("cycle.stats.avgLength", value: daysValue(avg))
                     }
@@ -173,11 +175,6 @@ struct CycleStatsCard: View {
                         row("cycle.stats.avgPeriod", value: daysValue(period))
                     }
                     regularityRow(stats.regularityValue ?? .learning)
-                } else {
-                    Text("cycle.stats.learning")
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -218,7 +215,8 @@ struct CycleStatsCard: View {
 
 struct CycleLearningCard: View {
     var body: some View {
-        HLSettingsCard(icon: "sparkles", title: "cycle.learning.title", footer: "cycle.learning.footer") {
+        // 1.4 B2 — no privacy footer here; the opt-in says it once.
+        HLSettingsCard(icon: "sparkles", title: "cycle.learning.title") {
             Text("cycle.learning.body")
                 .font(.hlBody)
                 .foregroundStyle(HLText.secondary)
@@ -297,9 +295,16 @@ struct CycleCalendarLegend: View {
         return items
     }
 
+    /// **1.4 B4 — two columns.** In three columns the German labels broke
+    /// inside the word („Geschlechts-verkehr“, „Periode (Prognose)“, „Weitere
+    /// Einträge“) once the legend stopped shrinking them. Two columns give every
+    /// label one line at the standard text sizes, and the pairs read together:
+    /// period and forecast, fertile and ovulation, symptoms and intercourse,
+    /// other entries and today.
+    nonisolated static let columnCount = 2
+
     var body: some View {
-        // Two tidy rows of three: never wraps awkwardly, every marker explained.
-        let columns = Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3)
+        let columns = Array(repeating: GridItem(.flexible(), alignment: .leading), count: Self.columnCount)
         LazyVGrid(columns: columns, alignment: .leading, spacing: HLSpace.sm) {
             ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
                 legendItem(kind: entry.swatch, key: entry.key)
@@ -313,11 +318,11 @@ struct CycleCalendarLegend: View {
         HStack(spacing: HLSpace.xs) {
             CycleMarkerSwatch(kind: kind, scheme: colorScheme)
                 .frame(width: 16, height: 16)
+            // 1.4 B4 — the legend wraps instead of shrinking.
             Text(key)
                 .font(.hlCaption)
                 .foregroundStyle(HLText.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

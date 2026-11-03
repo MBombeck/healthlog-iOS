@@ -141,7 +141,7 @@ struct AllergyEditorSheet: View {
                     Section { HLFormErrorText(saveError) }
                 }
             }
-            .navigationTitle(Text(isEditing ? "allergies.edit.title" : "allergies.add.title"))
+            .navigationTitle(Text(isEditing ? "allergies.edit.title" : "allergies.add.sheetTitle"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

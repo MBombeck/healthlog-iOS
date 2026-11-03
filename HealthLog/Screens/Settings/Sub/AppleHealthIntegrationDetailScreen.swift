@@ -28,7 +28,7 @@ import SwiftUI
 /// priority-only).
 struct AppleHealthIntegrationDetailScreen: View {
     @Environment(SettingsStore.self) var store
-    @Environment(HKReadinessStore.self) private var hkReadiness
+    @Environment(HKReadinessStore.self) var hkReadiness
     /// v0.14.8 W2 — container access for the relocated cycle-opt-in + mood-sync
     /// toggles (feature flag, cycle store lifecycle, mood sync store).
     /// `internal` (not `private`) so the `+Cycle` extension file can read it.
@@ -62,7 +62,11 @@ struct AppleHealthIntegrationDetailScreen: View {
             if backend.hasServer {
                 historyCard
             }
-            dataTypesCard
+            // 1.4 B2-c — a loaded list without a single type rendered a
+            // titled card with nothing in it.
+            if store.hkConfig?.entries.isEmpty != true {
+                dataTypesCard
+            }
             specialSyncsCard
             // W-B187 (Settings consolidation §A.3) — the one-shot export.zip
             // bulk import folded IN here as a card, so the Integrations list
@@ -115,9 +119,10 @@ struct AppleHealthIntegrationDetailScreen: View {
             Text(syncStateCaption)
                 .font(.hlCaption)
                 .foregroundStyle(HLText.tertiary)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
 
             writeBackNoticeRow
+            limitedHistoryRow
             serverHealthLine
             if !hkReadiness.state.isFullyGranted {
                 HLButton(
@@ -176,28 +181,27 @@ struct AppleHealthIntegrationDetailScreen: View {
 
     /// **P2 (R2-status)** — the WRITE-back status, kept strictly separate from
     /// the receive pill. When receiving demonstrably works (`isConnected`) but
-    /// not every WRITE type is authorized, we say so honestly — "write-back
-    /// limited / off" — instead of letting the connection surface claim it
-    /// "can't receive". Silent when writes are fully granted (nothing to warn
-    /// about) or when the user isn't connected at all (the Connect CTA + pill
-    /// already own that case).
+    /// not every WRITE type is authorized, we say so honestly ("write-back
+    /// limited / off") instead of letting the connection surface claim it
+    /// "can't receive". Silent when writes are fully granted or when the user
+    /// isn't connected at all (the Connect CTA + pill already own that case).
     @ViewBuilder
     private var writeBackNoticeRow: some View {
         if hkReadiness.isConnected {
             switch hkReadiness.state {
             case .denied:
-                writeBackNotice(text: "settings.applehealth.writeback.blocked")
+                noticeRow("settings.applehealth.writeback.blocked")
             case .partiallyGranted:
-                writeBackNotice(text: "settings.applehealth.writeback.limited")
+                noticeRow("settings.applehealth.writeback.limited")
             case .unknown, .notRequested, .fullyGranted:
                 EmptyView()
             }
         }
     }
 
-    private func writeBackNotice(text: LocalizedStringKey) -> some View {
+    func noticeRow(_ text: LocalizedStringKey, icon: String = "arrow.up.forward.circle") -> some View {
         HStack(alignment: .top, spacing: HLSpace.xs) {
-            Image(systemName: "arrow.up.forward.circle")
+            Image(systemName: icon)
                 .font(.hlCaption)
                 .foregroundStyle(HLText.tertiary)
                 .accessibilityHidden(true)

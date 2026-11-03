@@ -49,20 +49,34 @@ import SwiftUI
 struct HLTileMetricChart: View {
     /// The metric whose `MetricChartContent` vocabulary drives the marks.
     let kind: MetricKind
-    /// The projected series (index-based). Fewer than 2 points collapses to the
+    /// The points the line draws, oldest first. Fewer than 2 collapse to the
     /// shared `HLSparkline` hairline so an empty tile reads the same as before.
-    let values: [Double]
+    private let points: [SeriesPoint]
+
+    /// The projected series (index-based), spaced one synthetic day apart.
+    init(kind: MetricKind, values: [Double]) {
+        self.kind = kind
+        points = Self.syntheticPoints(kind: kind, values: values)
+    }
+
+    /// 1.4 B3 — a dated line (the recovery trend cards): the x positions and
+    /// the audio graph's dates are the readings' own, so a gap in the data
+    /// stays a gap instead of being closed up.
+    init(kind: MetricKind, points: [SeriesPoint]) {
+        self.kind = kind
+        self.points = points
+    }
 
     var body: some View {
-        if values.count < 2 {
+        if points.count < 2 {
             // Single-point / empty: reuse the canonical hairline so the
             // empty-vs-chart threshold stays identical to the legacy path.
-            HLSparkline(values: values, tint: HLChartTints.series)
+            HLSparkline(values: points.map(\.value), tint: HLChartTints.series)
         } else {
             Chart {
                 MetricChartContent.marks(
                     for: kind,
-                    points: syntheticPoints,
+                    points: points,
                     // v0.14.7 A1 (recurring 4×): pin the tile line to the SAME
                     // quiet grey as the medication-compliance sparkline
                     // (`HLSparkline(tint: HLText.tertiary)` in
@@ -104,18 +118,20 @@ struct HLTileMetricChart: View {
             // detail uses — VoiceOver users get a real audio-graph + rotor over
             // the series, not just a flat label. The descriptor's own
             // title/summary carry the trend, so the chart is fully accessible
-            // at tile scale (mirrors `ChartDetailComponents` / `TrendsOverlayCard`).
-            .accessibilityChartDescriptor(
-                ChartDescriptor(descriptor: ChartsAccessibility.makeDescriptor(
-                    for: MeasurementSeries(
-                        kind: kind,
-                        points: syntheticPoints,
-                        stats: Self.statsFor(syntheticPoints)
-                    ),
-                    kind: kind
-                ))
-            )
+            // at tile scale (mirrors `ChartDetailComponents`).
+            .accessibilityChartDescriptor(Self.chartDescriptor(kind: kind, points: points))
         }
+    }
+
+    /// The audio-graph descriptor for a tile line, the same builder the detail
+    /// chart uses. Shared so a card that combines its children into one
+    /// accessibility element (the recovery trend cards) keeps the audio graph.
+    static func chartDescriptor(kind: MetricKind, points: [SeriesPoint], unit: String? = nil) -> ChartDescriptor {
+        ChartDescriptor(descriptor: ChartsAccessibility.makeDescriptor(
+            for: MeasurementSeries(kind: kind, points: points, stats: statsFor(points)),
+            kind: kind,
+            unit: unit
+        ))
     }
 
     /// Evenly-spaced `SeriesPoint`s from the projected values. The x dates are
@@ -125,7 +141,7 @@ struct HLTileMetricChart: View {
     /// `MetricSeriesProjection.systolicOnly`), so `secondary` stays `nil` and
     /// the BP builder renders its single systolic line — same ink, same
     /// thresholds as the detail's systolic series.
-    private var syntheticPoints: [SeriesPoint] {
+    private static func syntheticPoints(kind: MetricKind, values: [Double]) -> [SeriesPoint] {
         let now = Date()
         let count = values.count
         return values.enumerated().map { index, value in
@@ -144,6 +160,7 @@ struct HLTileMetricChart: View {
     /// Snug y-domain with 5 % padding — identical contract to `HLSparkline`
     /// so the compact chart frames the same way the legacy sparkline did.
     private var yDomain: ClosedRange<Double> {
+        let values = points.map(\.value)
         guard let lo = values.min(), let hi = values.max() else { return 0 ... 1 }
         guard hi > lo else { return lo - 0.5 ... lo + 0.5 }
         let pad = (hi - lo) * 0.05
@@ -175,16 +192,16 @@ struct HLTileMetricChart: View {
     VStack(spacing: HLSpace.lg) {
         // Weight — single line + personal-baseline rule (when ≥5 points).
         HLTileMetricChart(kind: .weight, values: [73.6, 73.4, 73.0, 72.9, 72.7, 72.5, 72.4])
-            .frame(height: 36)
+            .frame(height: HLChartStyle.heightCompact)
         // Glucose — line + points over hypo/hyper threshold rules.
         HLTileMetricChart(kind: .glucose, values: [95, 110, 130, 105, 90, 120, 100])
-            .frame(height: 36)
+            .frame(height: HLChartStyle.heightCompact)
         // BP — systolic line over the 140/60 threshold rules.
         HLTileMetricChart(kind: .bloodPressure, values: [120, 122, 124, 125, 122, 123, 124])
-            .frame(height: 36)
+            .frame(height: HLChartStyle.heightCompact)
         // Single value → hairline (same as HLSparkline).
         HLTileMetricChart(kind: .spo2, values: [97])
-            .frame(height: 36)
+            .frame(height: HLChartStyle.heightCompact)
     }
     .padding()
     .background(HLSurface.primary)

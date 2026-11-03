@@ -295,16 +295,13 @@ private struct EmptyCategoryState: View {
     var onLog: (() -> Void)?
 
     var body: some View {
-        HLEmptyState(
-            icon: "tray",
-            title: "No measurements yet",
-            message: "No measurements in this category yet."
-        ) {
+        // 1.4 B2 — the title says it; the sentence under it said it again.
+        HLEmptyState(icon: "tray", title: "No measurements yet") {
             if let onLog {
                 HLButton(
                     String(localized: "Log a measurement"),
                     icon: "plus",
-                    variant: .restrained,
+                    variant: .secondary,
                     action: onLog
                 )
                 .accessibilityIdentifier("measurements.chrono.empty.log")

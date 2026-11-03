@@ -33,9 +33,6 @@ struct DocumentUploadSheet: View {
                         DocumentUsageBar(usage: usage)
                     }
                     sourceButtons
-                    if let usage = store.usage {
-                        acceptedTypesCaption(usage)
-                    }
                     if isUploading {
                         ProgressView("documents.upload.uploading")
                             .frame(maxWidth: .infinity)
@@ -139,16 +136,18 @@ struct DocumentUploadSheet: View {
 
     // MARK: - Header
 
-    /// The add-sheet convention shared with the app's other create sheets: a clear
-    /// heading and a short explanatory line, above the action buttons.
+    /// The add-sheet convention shared with the app's other create sheets: a
+    /// clear heading above the action buttons. 1.4 B2-c: the line under it
+    /// names the file types (it stood loose under the buttons); the sentence
+    /// that listed the three buttons is gone.
     private var header: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             Text("documents.upload.heading")
                 .font(.hlTitle3)
                 .foregroundStyle(HLText.primary)
-            Text("documents.upload.subtitle")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+            if let usage = store.usage {
+                acceptedTypesCaption(usage)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -185,8 +184,8 @@ struct DocumentUploadSheet: View {
     private func acceptedTypesCaption(_ usage: DocumentUsage) -> some View {
         let extensions = usage.acceptedExtensions.isEmpty ? Self.fallbackExtensions : usage.acceptedExtensions
         return Text(verbatim: extensions.joined(separator: ", "))
-            .font(.hlCaption2)
-            .foregroundStyle(HLText.tertiary)
+            .font(.hlSubhead)
+            .foregroundStyle(HLText.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 

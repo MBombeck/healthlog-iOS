@@ -137,6 +137,13 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
     /// type. A backfill moves only this, never the live stamps above. Absent
     /// on older servers.
     public let lastBackfillAt: Date?
+    /// **#146 / server #1247 (v1.43.7)** — only on a type the server also
+    /// writes back to Apple Health (weight, blood pressure, glucose): when the
+    /// newest reading of the type was entered in HealthLog rather than arriving
+    /// from Apple Health. `stale` already counts it, and since v1.43.9
+    /// `lastSeenAt` is the newer of the two, so the app shows it beside them
+    /// and recomputes neither. Absent on every other type and on older servers.
+    public let lastEnteredHereAt: Date?
 
     public var id: String {
         type
@@ -150,7 +157,8 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
         lastTrigger: String? = nil,
         lastNewSampleAt: Date? = nil,
         lastBackgroundAt: Date? = nil,
-        lastBackfillAt: Date? = nil
+        lastBackfillAt: Date? = nil,
+        lastEnteredHereAt: Date? = nil
     ) {
         self.type = type
         self.lastSeenAt = lastSeenAt
@@ -160,10 +168,12 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
         self.lastNewSampleAt = lastNewSampleAt
         self.lastBackgroundAt = lastBackgroundAt
         self.lastBackfillAt = lastBackfillAt
+        self.lastEnteredHereAt = lastEnteredHereAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case type, lastSeenAt, stale, lastReceivedAt, lastTrigger, lastNewSampleAt, lastBackgroundAt, lastBackfillAt
+        case lastEnteredHereAt
     }
 
     public init(from decoder: any Decoder) throws {
@@ -178,5 +188,6 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
         lastNewSampleAt = try? c.decodeIfPresent(Date.self, forKey: .lastNewSampleAt)
         lastBackgroundAt = try? c.decodeIfPresent(Date.self, forKey: .lastBackgroundAt)
         lastBackfillAt = try? c.decodeIfPresent(Date.self, forKey: .lastBackfillAt)
+        lastEnteredHereAt = try? c.decodeIfPresent(Date.self, forKey: .lastEnteredHereAt)
     }
 }

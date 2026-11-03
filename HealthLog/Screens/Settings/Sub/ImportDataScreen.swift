@@ -38,7 +38,6 @@ struct ImportDataScreen: View {
     @ViewBuilder private var content: some View {
         if backend.hasServer {
             HLSettingsPage(title: "import.title") {
-                formatCard
                 actionCard
             }
         } else {
@@ -54,27 +53,14 @@ struct ImportDataScreen: View {
         }
     }
 
-    private var formatCard: some View {
-        HLSettingsCard(
-            icon: "tablecells",
-            title: "import.format.title"
-        ) {
-            // Audit-Gruppe 15 — der Untertitel fragte „Welche Spalten deine
-            // Datei enthalten sollte." und der Karteninhalt direkt darunter
-            // antwortete. Die Antwort ist die Heimat.
-            Text("import.format.footer")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
+    /// 1.4 B2-c — one card: the subtitle names the rows a file needs (the
+    /// text-only "CSV format" card above it is gone), and "we show a preview
+    /// first" went, because the preview step shows itself.
     private var actionCard: some View {
         HLSettingsCard(
             icon: "square.and.arrow.down.on.square",
             title: "import.action.title",
-            subtitle: "import.action.subtitle",
-            subtitleWraps: true
+            subtitle: "import.action.subtitle"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 switch phase {

@@ -293,7 +293,7 @@ final class MarketingScreenshotsTest: XCTestCase {
     /// app is dark-first — `SettingsStore` defaults to `.dark` and re-asserts
     /// dark once per install (v0.14.7) — so the captures let the app be what
     /// it is and set no appearance override at all.
-    private func bootMarketingApp() -> XCUIApplication {
+    func bootMarketingApp(extraArguments overlays: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         var extraArguments = [
             "-AppleLanguages", "(\(Self.language))",
@@ -302,7 +302,12 @@ final class MarketingScreenshotsTest: XCTestCase {
             "-uitest-marketing",
             "-hl.healthkit.requestedAt.hermetic-user", "true",
             "-hl.healthkit.workoutReadMigrated.hermetic-user", "true"
-        ]
+        ] + overlays
+        // 1.4 B4-z — `TEST_RUNNER_HL_MARKETING_APPEARANCE=light` for the light
+        // review set; the App Store motifs keep the app's dark default.
+        if ProcessInfo.processInfo.environment["HL_MARKETING_APPEARANCE"] == "light" {
+            extraArguments += HermeticAppearance.lightArguments
+        }
         // Third pass — the synthetic portrait for the header avatar. Soft by
         // design: a missing resource logs, the overlay answers 404, and the
         // avatar honestly falls back to the initials monogram.
@@ -394,7 +399,7 @@ final class MarketingScreenshotsTest: XCTestCase {
 
     /// A deep-link `insights` jump can settle one page short mid-layout — align
     /// the pager onto the target page by its frame before capturing.
-    private func alignInsightsPage(app: XCUIApplication, identifier: String) {
+    func alignInsightsPage(app: XCUIApplication, identifier: String) {
         let page = app.scrollViews.matching(identifier: identifier).firstMatch
         for _ in 0 ..< 12 where page.exists {
             let minX = page.frame.minX
@@ -404,7 +409,7 @@ final class MarketingScreenshotsTest: XCTestCase {
         }
     }
 
-    private func openDeepLink(_ string: String) {
+    func openDeepLink(_ string: String) {
         dismissSystemHealthSheet()
         guard let url = URL(string: string) else { return }
         XCUIDevice.shared.system.open(url)
@@ -453,13 +458,13 @@ final class MarketingScreenshotsTest: XCTestCase {
 
     // MARK: - Capture primitives
 
-    private func settle(_ seconds: TimeInterval) {
+    func settle(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }
 
     /// Writes a full-resolution PNG to `/tmp/marketing-shots/<name>.png` and
     /// attaches it to the result bundle as a backup.
-    private func capture(name: String) {
+    func capture(name: String) {
         // Defensive: a stray tap may have raised the modal system HealthKit auth
         // sheet, which would otherwise sit on top of the surface we want.
         dismissSystemHealthSheet()
@@ -497,7 +502,7 @@ final class MarketingScreenshotsTest: XCTestCase {
         }
     }
 
-    private func logSkip(_ reason: String) {
+    func logSkip(_ reason: String) {
         let note = XCTAttachment(string: reason)
         note.name = "skip-note"
         note.lifetime = .keepAlways

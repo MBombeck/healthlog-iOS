@@ -4,9 +4,10 @@ import SwiftUI
 /// The single screen behind every charted metric, standardised to ONE card stack
 /// (Blutdruck reference), top→bottom:
 ///
-///   1. **Heading** — metric title + gear (editable target) + `✦` Coach.
-///   2. **Description** — the static web explainer copy (`descriptionSlot`).
-///      **Self-suppresses** when absent.
+///   1. **Heading** — metric title + (i) + gear (editable target) + `✦` Coach.
+///   2. *(1.4 B2: the explainer paragraph, its "Mehr erfahren / Quellen" row,
+///      the pulse-pressure sentences and the card captions moved behind the
+///      (i), see `InsightsMetricInfo`.)*
 ///   3. **Letzte Messung** — a dedicated "Letzte Messung" heading above the
 ///      EXISTING `HeroStrip` tile (latest value + unit + delta chip, weekday +
 ///      day + time, and the server 7/30/90-day trend slopes), DIRECTLY under the
@@ -30,11 +31,10 @@ import SwiftUI
 ///      owns (`correlationBlock`), relocated off the overview (I-1 D), rendered
 ///      v0.14.1 §5 as grey flowing prose + inline scatter (no loud card).
 ///
-/// **I-1 C:** the legacy duplicate "Zielbereich" card
-/// (`InsightsTargetReferencePanel`) was removed from this stack — its range +
-/// 30-day avg now live in the primary tile, and the editable band stays
-/// reachable via the header gear. (The panel itself survives, still rendered by
-/// the legacy `ChartDetailScreen`.)
+/// **I-1 C:** the legacy duplicate "Zielbereich" card was removed from this
+/// stack — its range + 30-day avg now live in the primary tile, and the
+/// editable band stays reachable via the header gear. (The panel outlived its
+/// last host, the legacy `ChartDetailScreen`, and was deleted in 1.4 B4.)
 ///
 /// **Adaptive (doctrine §6):** every block self-suppresses when its data is
 /// absent, so a sparse metric reads as a clean heading + chart, not a wall of
@@ -66,7 +66,6 @@ struct InsightsMetricScreen: View {
     /// data-gated cross-link into the ECG surface (`ecgCrossLinkRow`); app-root
     /// injected, so it resolves on the drill-down path too.
     @Environment(EcgStore.self) var ecgStore
-    @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) var appContainer
     /// v0.14.1 — re-trigger the assessment warm-poll on app-foreground. The
     /// per-metric assessment poll (`pollUntilReady`) is bounded (~48s); a server
@@ -114,6 +113,9 @@ struct InsightsMetricScreen: View {
     /// every `loadAssessment` so a pull-to-refresh / foreground retry clears it.
     /// Internal so the extension file can set it.
     @State var assessmentFailed = false
+    /// 1.4 B4 — the summaries slice's 30-day mean for this kind, the "30 Tage
+    /// Durchschnitt" card's source when the (consent-gated) digest has none.
+    @State var serverAverage30: Double?
     @State var selectedDate: Date?
     @State var presentFullscreenChart = false
     /// v0152 C4 — drives the inline `AskCoachSheet` from the per-page coach button.
@@ -233,14 +235,15 @@ struct InsightsMetricScreen: View {
                 Color.clear.frame(height: 0).id(Self.topAnchorID)
                 // #33 — in-content header mirroring the Übersicht
                 // (`InsightsScreen.insightsHeader`): metric title LEFT-aligned,
-                // the two EQUAL-sized trailing circles (gear + `✦` Coach), and
-                // the description BELOW. Replaces the prior nav-title +
-                // differently-sized toolbar buttons the operator flagged.
+                // the EQUAL-sized trailing circles ((i), gear, `✦` Coach).
+                // 1.4 B2 — no paragraph below it any more: the explainer is
+                // the first section of the info sheet.
                 metricHeader
-                descriptionSlot
                 // v0.14.3 C1/C5 — canonical order: the **"Letzte Messung"** block
-                // (heading + `HeroStrip` tile) sits DIRECTLY under the intro, above
-                // the 30-day status card. Self-suppresses with no latest point.
+                // (heading + `HeroStrip` tile) sits DIRECTLY under the header,
+                // above the 30-day status card. Self-suppresses with no latest
+                // point. 1.4 B2: the BP-derived pulse pressure and mean pressure
+                // are one line inside this card.
                 lastMeasurementBlock
                 // v0.14.3 C4 — the ONE canonical **"30 Tage Durchschnitt"** status
                 // card, used by EVERY metric (BP, Puls, Gewicht, BMI, Ruhepuls, …).
@@ -250,11 +253,6 @@ struct InsightsMetricScreen: View {
                 // Honest-only: every slot self-suppresses without server signal, so
                 // a sparse metric reads as a clean reduced card.
                 statusBlock
-                // v1.18.6 parity — BP-only calm derived context (pulse pressure
-                // + mean arterial pressure) from the latest reading, mirroring the
-                // web BP sub-page caption that sits between the target summary and
-                // the assessment. Self-suppresses for every non-BP metric.
-                bpDerivedBlock
                 // v0.14.1 (#135) — **Einschätzung** sits after the 30-day card,
                 // BEFORE the Min/Ø/Max/Median tiles + the chart. New canonical
                 // order: Header → Intro → Letzte Messung → 30 Tage Durchschnitt →
@@ -262,26 +260,18 @@ struct InsightsMetricScreen: View {
                 // flowing styling from FB5 (`AssessmentBody` → `HLText.secondary`)
                 // is kept.
                 //
-                // I-1 C — the duplicate "Zielbereich" card
-                // (`InsightsTargetReferencePanel`) was removed here: the target
-                // range + 30-day avg now live in the primary tile / `BPStatusCard`
-                // at the top, and the editable band stays reachable via the header
-                // gear (`canEditTargetBand` → `presentTargetEditor`). No second
+                // I-1 C — the duplicate "Zielbereich" card (the target reference
+                // panel, deleted in 1.4 B4) was removed here: the target range +
+                // 30-day avg now live in the primary tile / `BPStatusCard` at the
+                // top, and the editable band stays reachable via the header gear
+                // (`canEditTargetBand` → `presentTargetEditor`). No second
                 // divergent "% in target" card.
                 AssessmentCard(
                     assessment: assessment,
                     isLoading: assessmentLoading && assessment == nil,
                     // QoS-3 — terminal failure caption when the poll gave up
                     // while preparing (never while a fetch is still in flight).
-                    failed: assessmentFailed && !assessmentLoading,
-                    // W46 — this read path is NOT consent-gated (read-only GET,
-                    // no new transmission). The consent CTA arm never fires
-                    // here; gating is server-driven (`hasProvider`) + standalone
-                    // (`hasServer`), matching the web exactly.
-                    consentClosed: false,
-                    hasServer: backend.hasServer,
-                    onRequestConsent: { appContainer?.aiConsentStore.requestExplicitPrompt() },
-                    onConnectServer: backend.hasServer ? nil : { authStore.beginServerPairing() }
+                    failed: assessmentFailed && !assessmentLoading
                 )
                 // b146 M4 — suppress the Min/Ø/Max strip for event-count kinds
                 // (falls / breathing-disturbances) where a sparse single point
@@ -341,7 +331,6 @@ struct InsightsMetricScreen: View {
                 // downward: one night → recent nights → standing rhythm.
                 // Self-suppresses for every non-sleep metric.
                 sleepDerivedBlock
-                rangeDeltaSlot
                 // v0.14.1 §5 (canonical order 8) — **Zusammenhänge** under the
                 // Einschätzung. The relocated cross-metric correlation pair(s)
                 // this metric owns (BP, Puls, Gewicht here; Stimmung/Medikamente on
@@ -465,6 +454,9 @@ struct InsightsMetricScreen: View {
                 didRewarmTargets = true
                 await insightsTargetsStore.load()
             }
+        }
+        .task(id: kind) {
+            serverAverage30 = await appContainer?.measurementsRepo.average30(for: kind)
         }
         // K1 — the banner below still presents as this overlay; this
         // reserves its height at the top so it covers nothing (H2).

@@ -197,12 +197,12 @@
             #expect(plan.samples.count == 1)
         }
 
-        @Test("tombstones keep the newest ids, drop empties, and only take app-minted deletions")
+        @Test("tombstones keep the newest ids and drop empties")
         func tombstones() throws {
             let suite = "hl.test.mirror.tombstones.\(UUID().uuidString)"
             let defaults = try #require(UserDefaults(suiteName: suite))
             defer { defaults.removePersistentDomain(forName: suite) }
-            let tombstones = HealthKitMirrorTombstones(defaults: defaults)
+            let tombstones = HealthKitMirrorTombstones(ownerID: "account-a", defaults: defaults)
 
             tombstones.record(["a", "", "b"])
             tombstones.record(["a"])
@@ -211,13 +211,6 @@
             tombstones.record((0 ..< HealthKitMirrorTombstones.capacity).map { "n\($0)" })
             #expect(tombstones.ids.count == HealthKitMirrorTombstones.capacity)
             #expect(!tombstones.ids.contains("b"))
-
-            let minted: [String: Any] = [
-                HKMetadataKeyExternalUUID: "srv-1",
-                HealthKitSampleOwnership.appOriginMetadataKey: HealthKitSampleOwnership.appOriginMetadataValue
-            ]
-            let foreign: [String: Any] = [HKMetadataKeyExternalUUID: "foreign-1"]
-            #expect(HealthKitMirrorTombstones.mintedIDs(fromDeletedMetadata: [minted, foreign, nil]) == ["srv-1"])
         }
 
         // MARK: - Echo
@@ -230,9 +223,9 @@
             // The import path drops it (our id + our source), so it is never
             // uploaded again as a new APPLE_HEALTH reading.
             #expect(HealthKitSampleOwnership.isOwnEcho(externalUUID: externalUUID, isFromThisApp: true))
-            // The delete path can prove ownership, so a deletion in Apple
-            // Health lands in the tombstones.
-            #expect(HealthKitSampleOwnership.isAppMintedDeletion(metadata: first.metadata))
+            // A6 — its sync identifier, the one key a deletion keeps, names the
+            // row, so a deletion in Apple Health lands in the tombstones.
+            #expect(HealthKitCopySyncIdentity.serverID(fromSyncIdentifier: first.metadata?[HKMetadataKeySyncIdentifier]) == "srv-sys-1")
         }
     }
 

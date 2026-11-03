@@ -122,9 +122,9 @@ struct MedicationLoggingEmptyStateTests {
         #expect(descriptor.primaryAction == .addMedication)
         // Manual logging here would be the second dead end the reporter hit.
         #expect(!descriptor.offersManualLog)
-        // And the "nothing due right now" copy must not be reachable from here.
-        #expect(descriptor.messageKey == "meds.empty.noMeds.logging.message")
-        #expect(descriptor.messageKey != "meds.quick.empty.subtitle")
+        // And the "nothing due right now" title must not be reachable from here.
+        #expect(descriptor.titleKey == "No medications yet")
+        #expect(descriptor.titleKey != "meds.quick.empty.title")
     }
 
     @Test("Nicht-leere Liste + leere heutige Einnahmen → nothingDue (Copy bleibt)")
@@ -140,9 +140,9 @@ struct MedicationLoggingEmptyStateTests {
         #expect(state == .nothingDue)
 
         let descriptor = try #require(state.presentationDescriptor())
-        // The pre-existing copy is correct in this branch and is kept verbatim.
+        // The pre-existing title is correct in this branch and is kept. 1.4 B4:
+        // the sentence under it said the title again and is gone.
         #expect(descriptor.titleKey == "meds.quick.empty.title")
-        #expect(descriptor.messageKey == "meds.quick.empty.subtitle")
         // Logging manually against an active medication is the useful secondary.
         #expect(descriptor.offersManualLog)
         #expect(descriptor.primaryAction == nil, "an account that already has medications must not be nagged to create one")

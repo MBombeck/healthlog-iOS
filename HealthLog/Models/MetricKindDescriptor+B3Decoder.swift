@@ -198,7 +198,7 @@ extension MetricKindDescriptor {
             sfSymbol: "flame",
             tint: HLSurface.secondary,
             title: LocalizedStringResource("Day strain", comment: "Metric title — WHOOP day strain (0–21)"),
-            unitLabel: LocalizedStringResource("/ 21", comment: "Unit — strain on a 0–21 scale"),
+            unitLabel: LocalizedStringResource("metric.strain.ofTwentyOne", comment: "Unit — strain on a 0–21 scale"),
             trendPolarity: .neutral,
             renderHint: .scalar,
             supportsDrillDown: true,
@@ -213,7 +213,7 @@ extension MetricKindDescriptor {
             sfSymbol: "figure.run",
             tint: HLSurface.secondary,
             title: LocalizedStringResource("Workout strain", comment: "Metric title — WHOOP per-workout strain"),
-            unitLabel: LocalizedStringResource("/ 21", comment: "Unit — strain on a 0–21 scale"),
+            unitLabel: LocalizedStringResource("metric.strain.ofTwentyOne", comment: "Unit — strain on a 0–21 scale"),
             trendPolarity: .neutral,
             renderHint: .scalar,
             supportsDrillDown: true,
@@ -228,8 +228,10 @@ extension MetricKindDescriptor {
             sfSymbol: "bolt",
             tint: HLSurface.secondary,
             title: LocalizedStringResource("Energy expenditure", comment: "Metric title — energy expenditure in kJ"),
-            titleCompact: LocalizedStringResource("Energy (kJ)", comment: "Compact title — energy expenditure kJ"),
-            unitLabel: LocalizedStringResource("kJ", comment: "Unit — kilojoules"),
+            // 1.4 B4 (plan decision 4) — the server's kJ read in kcal on every
+            // surface (`MetricKind.UnitFamily.energy`), so the label, the
+            // compact title and the old "in kilojoules" hint follow.
+            unitLabel: LocalizedStringResource("kcal", comment: "Unit — kilocalories"),
             trendPolarity: .neutral,
             renderHint: .scalar,
             supportsDrillDown: true,
@@ -237,10 +239,6 @@ extension MetricKindDescriptor {
             emptyStateCopy: LocalizedStringResource(
                 "Connect a wearable to see your energy expenditure",
                 comment: "Empty state — energy expenditure kJ"
-            ),
-            secondaryHint: LocalizedStringResource(
-                "In kilojoules, not calories",
-                comment: "Secondary hint — kJ is a different unit than the kcal active-energy tile"
             )
         ),
         .init(

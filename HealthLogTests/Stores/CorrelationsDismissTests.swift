@@ -231,8 +231,8 @@ struct CorrelationsDismissTests {
         let all = [
             InsightsCorrelationsDiscoveryBlock.dismissLabel,
             InsightsCorrelationsDiscoveryBlock.restoreLabel,
-            InsightsCorrelationsDiscoveryBlock.dismissedNote,
-            InsightsCorrelationsDiscoveryBlock.resurfacedNote,
+            // 1.4 B2 — the card no longer restates "set aside" / "came back"
+            // in a note of its own; the group and the button say it.
             InsightsCorrelationsDiscoveryBlock.dismissedToggleLabel(count: 2)
         ]
         for text in all {

@@ -29,14 +29,18 @@ struct WebhookChannelCard: View {
     @State private var testTick = 0
 
     var body: some View {
-        HLSettingsCard(
-            icon: "link",
-            title: "notifications.webhook.title",
-            footer: "notifications.webhook.footer"
-        ) {
+        // 1.4 B2 — the services a webhook reaches sit under the switch; the
+        // footer is gone.
+        HLSettingsCard(icon: "link", title: "notifications.webhook.title") {
             Toggle(isOn: $enabled) {
-                Text("notifications.webhook.enable")
-                    .font(.hlSubhead.weight(.semibold))
+                VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                    Text("notifications.webhook.enable")
+                        .font(.hlSubhead.weight(.semibold))
+                    Text("notifications.webhook.services")
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .accessibilityIdentifier("notifications.webhook.enableToggle")
 
@@ -144,15 +148,8 @@ struct WebhookChannelCard: View {
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("notifications.webhook.formatPicker")
-
-            Text(
-                format == .gotify
-                    ? "notifications.webhook.format.gotify.footer"
-                    : "notifications.webhook.format.generic.footer"
-            )
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            // 1.4 B2 — what each format sends, and the Gotify setup, stand in
+            // the screen's (i).
         }
     }
 

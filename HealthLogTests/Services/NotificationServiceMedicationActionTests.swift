@@ -88,14 +88,13 @@ import Testing
         // MARK: - Category registration
 
         @Test("registerCategories installs 3 actions on MEDICATION_REMINDER with correct identifiers")
-        func categoryRegistersThreeActions() async throws {
+        func categoryRegistersThreeActions() async {
             let appRouter = AppRouter()
             _ = makeService(repo: nil, appRouter: appRouter)
-            // Wait a tick — setNotificationCategories is dispatched
-            // through UNUserNotificationCenter which serialises on its
-            // own queue. A 50 ms yield is plenty in the host-app-less
-            // test runner.
-            try await Task.sleep(nanoseconds: 50_000_000)
+            // setNotificationCategories is dispatched through
+            // UNUserNotificationCenter, which serialises on its own queue.
+            // T1 (1.4) — awaited, not a 50 ms sleep (see the helper).
+            await awaitNotificationCategory(NotificationService.categoryMedication)
             let categories = await UNUserNotificationCenter.current().notificationCategories()
             guard let med = categories.first(where: { $0.identifier == NotificationService.categoryMedication }) else {
                 Issue.record("MEDICATION_REMINDER category not registered")

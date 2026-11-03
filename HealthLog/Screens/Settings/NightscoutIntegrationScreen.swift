@@ -42,8 +42,9 @@ struct NightscoutIntegrationScreen: View {
     /// Seitenrand). Liegt jetzt auf `HLSettingsPage` + `HLSettingsCard`.
     private var liveBody: some View {
         HLSettingsPage(title: "Nightscout") {
+            // 1.4 B2-c — no app sync footer; the card says when this
+            // provider last synced.
             connectionCard
-            HLSyncStatusFooter(screenLoading: store.isWorking)
         }
         .navigationTitle("Nightscout")
         .navigationBarTitleDisplayMode(.inline)
@@ -91,7 +92,10 @@ struct NightscoutIntegrationScreen: View {
         case .some(false):
             HLStatusPill(.disconnected(label: String(localized: "Not connected")))
         case .none:
-            HLStatusPill(.unknown(label: String(localized: "Checking")))
+            // 1.4 B4 — "Checking" only while it is, not after a failed read.
+            if store.error == nil {
+                HLStatusPill(.unknown(label: String(localized: "Checking")))
+            }
         }
     }
 
@@ -135,7 +139,12 @@ struct NightscoutIntegrationScreen: View {
             connectForm
         }
         if let error = store.error {
-            Text(error.localizedDescription).foregroundStyle(HLColor.statusBad)
+            // 1.4 B4 — a sentence for people, never the decoder's text; the
+            // route and error id are in "Support-Info kopieren".
+            Text(error.userFacingDescription)
+                .font(.hlCaption)
+                .foregroundStyle(HLColor.statusBad)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

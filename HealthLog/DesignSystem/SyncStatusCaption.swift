@@ -39,17 +39,36 @@ struct SyncStatusCaption: View {
     /// (`settings.profile == nil && store.summary == nil`). Drives the
     /// "Deine Daten werden vorbereitet…" one-shot hint.
     var firstLoginPreparing: Bool = false
+    /// 1.4 decision 3 — every screen but Today shows the line only while a
+    /// real state holds: the last sync failed or is more than a day old, or
+    /// writes wait for a connection. No settled time, no in-flight beat.
+    var realStateOnly: Bool = false
 
     var body: some View {
-        let resolved = Self.resolve(
-            firstLoginPreparing: firstLoginPreparing,
-            phase: syncState.phase,
-            isInFlight: screenLoading || syncState.isLoading,
-            activeSyncCount: syncState.pendingSyncCount,
-            queuedWriteCount: syncState.pendingOutboxCount,
-            showsDrainConfirmation: syncState.showsDrainConfirmation,
-            lastSyncAt: syncState.lastSync?.at
-        )
+        if realStateOnly {
+            // "Stale" and "waiting" depend on the clock, so the state is
+            // re-read once a minute rather than only on store changes.
+            TimelineView(.everyMinute) { context in
+                caption(for: Self.resolveRealStateOnly(
+                    firstLoginPreparing: firstLoginPreparing,
+                    attention: syncState.attention(now: context.date),
+                    lastSyncAt: syncState.lastSync?.at
+                ))
+            }
+        } else {
+            caption(for: Self.resolve(
+                firstLoginPreparing: firstLoginPreparing,
+                phase: syncState.phase,
+                isInFlight: screenLoading || syncState.isLoading,
+                activeSyncCount: syncState.pendingSyncCount,
+                queuedWriteCount: syncState.pendingOutboxCount,
+                showsDrainConfirmation: syncState.showsDrainConfirmation,
+                lastSyncAt: syncState.lastSync?.at
+            ))
+        }
+    }
+
+    private func caption(for resolved: CaptionState) -> some View {
         Group {
             switch resolved {
             case .preparing:
@@ -79,6 +98,16 @@ struct SyncStatusCaption: View {
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
                     .accessibilityIdentifier("sync.status.lastSynced")
+            case let .failedSince(at):
+                stateLine(String(localized: "sync.status.failedSince \(syncTimeText(at))"))
+            case let .staleSince(at):
+                stateLine(String(localized: "sync.status.staleSince \(syncTimeText(at))"))
+            case let .attention(attention):
+                Text(SyncActivityCopy.attention(attention, now: .now))
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("sync.status.attention")
             case .hidden:
                 EmptyView()
             }
@@ -113,6 +142,13 @@ struct SyncStatusCaption: View {
         /// The outbox just drained — short "Daten übermittelt ✓" beat.
         case transmitted
         case lastSynced(Date)
+        /// 1.4 — writes that wait or were given up on, as one calm sentence.
+        case attention(SyncAttention)
+        /// 1.4 B4 — outside Today: a failed or day-old sync, said as that
+        /// state with the time of the last good one, so it never reads as the
+        /// plain "Zuletzt synchronisiert" line that Today alone shows.
+        case failedSince(Date)
+        case staleSince(Date)
         case hidden
     }
 
@@ -138,10 +174,50 @@ struct SyncStatusCaption: View {
         return .hidden
     }
 
-    /// The settled timestamp string in the user's locale short time style.
+    /// **1.4 decision 3** — the footer outside Today. A failed or day-old
+    /// sync names the time of the last one, writes waiting for a connection or
+    /// given up on say so, and a healthy state shows nothing at all.
+    ///
+    /// 1.4 B4 — the failed and the day-old sync say what they are
+    /// ("Synchronisierung fehlgeschlagen, zuletzt erfolgreich 13:28", "Seit
+    /// 21. Okt., 13:28 nicht synchronisiert"). Rendered as "Zuletzt
+    /// synchronisiert 13:28" they looked like Today's settled line, the one
+    /// rule 6 keeps on Today.
+    nonisolated static func resolveRealStateOnly(
+        firstLoginPreparing: Bool,
+        attention: SyncAttention?,
+        lastSyncAt: Date?
+    ) -> CaptionState {
+        if firstLoginPreparing { return .preparing }
+        guard let attention else { return .hidden }
+        switch attention {
+        case .failed:
+            return lastSyncAt.map(CaptionState.failedSince) ?? .attention(attention)
+        case .stale:
+            return lastSyncAt.map(CaptionState.staleSince) ?? .attention(attention)
+        case .queued, .failedWrites:
+            return .attention(attention)
+        }
+    }
+
+    /// The settled timestamp in the user's locale: the time alone today, the
+    /// day and the time before today, so a day-old sync never reads as fresh.
     private func lastSyncedText(_ at: Date) -> String {
-        let time = at.formatted(date: .omitted, time: .shortened)
-        return String(localized: "sync.status.lastSynced \(time)")
+        String(localized: "sync.status.lastSynced \(syncTimeText(at))")
+    }
+
+    private func syncTimeText(_ at: Date) -> String {
+        Calendar.current.isDateInToday(at)
+            ? at.formatted(date: .omitted, time: .shortened)
+            : at.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+    }
+
+    private func stateLine(_ text: String) -> some View {
+        Text(text)
+            .font(.hlCaption)
+            .foregroundStyle(HLText.tertiary)
+            .multilineTextAlignment(.center)
+            .accessibilityIdentifier("sync.status.attention")
     }
 
     /// W2-SYNCUX — the in-flight states now carry stable accessibility

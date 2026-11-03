@@ -3,10 +3,10 @@ import SwiftUI
 /// v0.11 W-B — contextual, single-metric target-band editor.
 ///
 /// Replaces the retired multi-metric `TargetEditorSheet` (W-A). The editor
-/// now opens from the metric it belongs to — the "Adjust target range" button
-/// on the `InsightsTargetReferencePanel` inside `ChartDetailScreen` — mirroring
-/// the web, where the `/targets` page was dropped and `MetricTargetSummary`
-/// mounts a per-metric `TargetEditSheet` inline.
+/// now opens from the metric it belongs to — the header gear on
+/// `InsightsMetricScreen` — mirroring the web, where the `/targets` page was
+/// dropped and `MetricTargetSummary` mounts a per-metric `TargetEditSheet`
+/// inline.
 ///
 /// **Scope:** one editable band per sheet (BP carries the systolic + diastolic
 /// pair). Seeded from `UserThresholdsStore`, validated against the metric's
@@ -40,10 +40,6 @@ struct InsightsTargetBandEditorSheet: View {
     /// them; the save inverts to canonical (``ThresholdUnitAdapter``).
     @Environment(\.unitPreferences) private var unitPreferences
     @Environment(\.dismiss) private var dismiss
-    /// QoL-4 (A360-4) — routes the empty-state CTA to the capture picker so the
-    /// "no editable targets yet" state has a next step (log a value) instead of
-    /// a dead-end. App-root injected, available on this sheet.
-    @Environment(AppRouter.self) private var router
 
     @State private var drafts: [String: Draft] = [:]
     /// FORM-1 (Audit v0162) — the seeded draft snapshot; `drafts != seededDrafts`
@@ -63,57 +59,50 @@ struct InsightsTargetBandEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if metrics.isEmpty {
-                    emptyState
-                } else {
-                    form
-                }
-            }
-            .hlScrollEdgeSoft()
-            // #51 — the metric title + the full description now render in an
-            // in-content header block (`headerBlock`, `metricHeader` style)
-            // inside the Form, NOT as an inline `.navigationTitle`. The old
-            // inline title forced the description into a truncating footer
-            // caption ("…ppp" — the operator could not read it); the header
-            // block paints the large localized title with the full description
-            // paragraph below it, never clipped (`.fixedSize`).
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Done")) {
-                        if isDirty { showDiscardConfirm = true } else { dismiss() }
+            // 1.4 B2 — the sheet opens only from a gear that exists when a
+            // metric has an editable band, so the "no editable targets yet"
+            // state could never show and is gone.
+            form
+                .hlScrollEdgeSoft()
+                // #51 — the metric title renders in an in-content header block
+                // (`headerBlock`, `metricHeader` style) inside the Form, NOT as
+                // an inline `.navigationTitle`.
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(String(localized: "Done")) {
+                            if isDirty { showDiscardConfirm = true } else { dismiss() }
+                        }
+                    }
+                    ToolbarItem(placement: .topBarLeading) {
+                        if store.isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                                .accessibilityLabel(Text("Saving"))
+                        }
                     }
                 }
-                ToolbarItem(placement: .topBarLeading) {
-                    if store.isSaving {
-                        ProgressView()
-                            .controlSize(.small)
-                            .accessibilityLabel(Text("Saving"))
+                // K1 — the banner below still presents as this overlay; this
+                // reserves its height at the top so it covers nothing (H2).
+                .hlReserveErrorBannerSpace(store.error)
+                .overlay(alignment: .top) {
+                    ErrorBanner(error: store.error) {
+                        Task {
+                            await store.refresh()
+                            seedDrafts()
+                        }
                     }
                 }
-            }
-            // K1 — the banner below still presents as this overlay; this
-            // reserves its height at the top so it covers nothing (H2).
-            .hlReserveErrorBannerSpace(store.error)
-            .overlay(alignment: .top) {
-                ErrorBanner(error: store.error) {
-                    Task {
-                        await store.refresh()
-                        seedDrafts()
+                .sensoryFeedback(.success, trigger: saveTick)
+                .task {
+                    if store.lastLoadedAt == nil { await store.load() }
+                    seedDrafts()
+                    // FORM-2 — focus the first metric's Min field once seeded.
+                    try? await Task.sleep(for: HLSheet.focusDelay)
+                    if let first = metrics.first {
+                        focusedField = "target-editor.\(first.rawValue).min"
                     }
                 }
-            }
-            .sensoryFeedback(.success, trigger: saveTick)
-            .task {
-                if store.lastLoadedAt == nil { await store.load() }
-                seedDrafts()
-                // FORM-2 — focus the first metric's Min field once seeded.
-                try? await Task.sleep(for: HLSheet.focusDelay)
-                if let first = metrics.first {
-                    focusedField = "target-editor.\(first.rawValue).min"
-                }
-            }
         }
         // FORM-1 — guard against a swipe-down (or Done) discarding an unsaved
         // draft band; keep the existing in-flight save lock.
@@ -126,12 +115,8 @@ struct InsightsTargetBandEditorSheet: View {
 
     private var form: some View {
         Form {
-            // #51 — the heading + full description live in a borderless Section
-            // at the top of the Form (no row chrome), mirroring the metric
-            // page's `metricHeader` + description: large localized title, then
-            // the full description paragraph below it. The description was
-            // formerly a truncating footer caption ("…ppp"); here it is promoted
-            // to the description slot and never clipped (`.fixedSize`).
+            // #51 — the heading lives in a borderless Section at the top of
+            // the Form (no row chrome), mirroring the metric page's header.
             Section {
                 EmptyView()
             } header: {
@@ -144,23 +129,16 @@ struct InsightsTargetBandEditorSheet: View {
     }
 
     /// #51 — in-content header mirroring the metric page (`metricHeader`):
-    /// large localized title at top, the full description paragraph below in
-    /// `.hlBody` / `HLText.secondary`, never truncated (`.fixedSize`).
+    /// the large localized title. 1.4 B2 — no description under it: the fields
+    /// and their "Speichern" say what the sheet does.
     private var headerBlock: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text(verbatim: titleText)
-                .font(.hlLargeTitle)
-                .foregroundStyle(HLText.primary)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("target-editor.title")
-            Text("Set your personal target range per value. Changes are saved and synced immediately.")
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("target-editor.description")
-        }
-        .textCase(nil)
-        .padding(.bottom, HLSpace.sm)
+        Text(verbatim: titleText)
+            .font(.hlLargeTitle)
+            .foregroundStyle(HLText.primary)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("target-editor.title")
+            .textCase(nil)
+            .padding(.bottom, HLSpace.sm)
     }
 
     private func metricSection(_ metric: ThresholdMetric) -> some View {
@@ -188,18 +166,24 @@ struct InsightsTargetBandEditorSheet: View {
             }
             saveRow(metric: metric, draft: draft)
         } header: {
-            Text(LocalizedStringKey(metric.displayNameKey))
-                .textCase(nil)
-        } footer: {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            // 1.4 B2 — where the value stands now sits with the fields it
+            // helps to fill, not in a faint footer under them.
+            HStack(alignment: .firstTextBaseline) {
+                Text(LocalizedStringKey(metric.displayNameKey))
+                Spacer(minLength: HLSpace.sm)
                 if let currentHint = currentValueHint(metric) {
                     Text(currentHint)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary.opacity(0.7))
+                        .monospacedDigit()
                 }
+            }
+            .textCase(nil)
+        } footer: {
+            // The allowed range only once an entry falls outside it.
+            if isOutOfBounds(draft, metric: metric) {
                 Text(boundsHint(metric))
                     .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .foregroundStyle(HLColor.statusBad)
+                    .accessibilityIdentifier("target-editor.\(metric.rawValue).bounds")
             }
         }
     }
@@ -259,31 +243,6 @@ struct InsightsTargetBandEditorSheet: View {
         .accessibilityIdentifier("target-editor.\(metric.rawValue).save")
     }
 
-    private var emptyState: some View {
-        // Audit-01 C1/H4 — the canonical `HLEmptyState` lockup (the bespoke
-        // stack used a raw `.system(.largeTitle)` glyph + its own type recipe).
-        HLEmptyState(
-            icon: "slider.horizontal.3",
-            title: "No editable targets yet",
-            message: "Once you log values, you can set your personal target ranges here."
-        ) {
-            // QoL-4 — a next-step CTA: dismiss + open the capture picker so the
-            // user can log the first value the target band needs.
-            HLButton(
-                String(localized: "Log a measurement"),
-                icon: "plus",
-                variant: .restrained
-            ) {
-                dismiss()
-                router.requestCapture()
-            }
-            .accessibilityIdentifier("target-editor.empty.log")
-        }
-        .padding(.horizontal, HLSpace.xl)
-        .containerCentered()
-        .hlScreenBackground()
-    }
-
     // MARK: - Drafts + parsing
 
     private struct Draft: Equatable {
@@ -333,6 +292,14 @@ struct InsightsTargetBandEditorSheet: View {
         }
     }
 
+    /// A filled-in draft that does not parse into a band the store accepts.
+    /// An empty or half-typed field is not an error yet.
+    private func isOutOfBounds(_ draft: Draft, metric: ThresholdMetric) -> Bool {
+        guard !draft.min.isEmpty, !draft.max.isEmpty else { return false }
+        let adapter = metric.unitAdapter(unitPreferences)
+        return parsedBand(draft, adapter: adapter).flatMap { UserThresholdsStore.validate($0, for: metric) } == nil
+    }
+
     private func boundsHint(_ metric: ThresholdMetric) -> String {
         let adapter = metric.unitAdapter(unitPreferences)
         let window = adapter.bounds(metric.bounds)
@@ -371,26 +338,6 @@ extension InsightsTargetBandEditorSheet {
         case "ACTIVITY_STEPS": [.activitySteps]
         case "BLOOD_PRESSURE": [.bloodPressureSys, .bloodPressureDia]
         default: []
-        }
-    }
-
-    /// #51 — the `MetricKind` whose LOCALIZED `displayName` titles the editor
-    /// sheet for a given server target `type`. The server `TargetItem.label` is
-    /// an English wire string (`InsightsTargetsDTO.swift:46`), so hosts that
-    /// only hold a `type` (the inline `InsightsTargetReferencePanel`) map it back
-    /// to its kind and use `kind.displayName` for the heading. `nil` for target
-    /// types with no single owning kind — the caller then falls back to the
-    /// server label.
-    nonisolated static func titleKind(forTargetType type: String) -> MetricKind? {
-        switch type {
-        case "WEIGHT": .weight
-        case "PULSE": .pulse
-        case "RESTING_HR": .restingHeartRate
-        case "ACTIVITY_STEPS": .steps
-        case "BODY_FAT": .bodyFat
-        case "SLEEP_DURATION": .sleep
-        case "BLOOD_PRESSURE": .bloodPressure
-        default: nil
         }
     }
 }

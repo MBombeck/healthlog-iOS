@@ -83,9 +83,11 @@ import Foundation
                 if await retry.hasPendingHealthKitRetry(idempotencyKey: envelope.idempotencyKey) {
                     return true
                 }
+                // A2 (1.4) — the row keeps the word the chunk went out under.
                 try await retry.enqueueHealthKitRetry(
                     entries,
                     idempotencyKey: envelope.idempotencyKey,
+                    syncTrigger: uploader.wireSyncTrigger,
                     requiringCurrentOwner: lease.ownerID
                 )
                 try lease.requireCurrent()

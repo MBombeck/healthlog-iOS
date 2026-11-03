@@ -24,9 +24,7 @@ struct AssessmentCardStateTests {
         let state = AssessmentCard.resolveState(
             assessment: preparing(),
             isLoading: false,
-            failed: true,
-            consentClosed: false,
-            hasServer: true
+            failed: true
         )
         #expect(state == .failed)
     }
@@ -36,9 +34,7 @@ struct AssessmentCardStateTests {
         let state = AssessmentCard.resolveState(
             assessment: preparing(),
             isLoading: false,
-            failed: false,
-            consentClosed: false,
-            hasServer: true
+            failed: false
         )
         #expect(state == .loading)
     }
@@ -48,9 +44,7 @@ struct AssessmentCardStateTests {
         let state = AssessmentCard.resolveState(
             assessment: nil,
             isLoading: false,
-            failed: true,
-            consentClosed: false,
-            hasServer: true
+            failed: true
         )
         #expect(state == .failed)
     }
@@ -60,37 +54,32 @@ struct AssessmentCardStateTests {
         let state = AssessmentCard.resolveState(
             assessment: ready(),
             isLoading: false,
-            failed: true,
-            consentClosed: false,
-            hasServer: true
+            failed: true
         )
         #expect(state == .ready(text: "All good.", cached: false, updatedAt: nil))
     }
 
     // MARK: - Pre-existing arms must not regress
 
-    @Test("no server → .standalone regardless of failed")
-    func standaloneWins() {
+    @Test("1.4 B2 — no provider → .suppressed, the metric page prints no standing hint")
+    func noProviderIsQuiet() {
+        let dto = MetricStatusDTO(hasProvider: false, text: "Assistent-Befund nicht aktiviert", cached: false, updatedAt: nil)
         let state = AssessmentCard.resolveState(
-            assessment: preparing(),
+            assessment: dto,
             isLoading: false,
-            failed: true,
-            consentClosed: false,
-            hasServer: false
+            failed: false
         )
-        #expect(state == .standalone)
+        #expect(state == .suppressed)
     }
 
-    @Test("consent closed → .consentRequired wins over a preparing body")
-    func consentWins() {
+    @Test("1.4 B2 — no envelope and nothing in flight (no server never fetches) → .suppressed")
+    func noEnvelopeIsQuiet() {
         let state = AssessmentCard.resolveState(
-            assessment: preparing(),
+            assessment: nil,
             isLoading: false,
-            failed: false,
-            consentClosed: true,
-            hasServer: true
+            failed: false
         )
-        #expect(state == .consentRequired)
+        #expect(state == .suppressed)
     }
 
     @Test("insufficient body → .suppressed (sparse metric, never a failure caption)")
@@ -101,9 +90,7 @@ struct AssessmentCardStateTests {
         let state = AssessmentCard.resolveState(
             assessment: dto,
             isLoading: false,
-            failed: true,
-            consentClosed: false,
-            hasServer: true
+            failed: true
         )
         #expect(state == .suppressed)
     }
@@ -113,9 +100,7 @@ struct AssessmentCardStateTests {
         let state = AssessmentCard.resolveState(
             assessment: nil,
             isLoading: true,
-            failed: true,
-            consentClosed: false,
-            hasServer: true
+            failed: true
         )
         #expect(state == .loading)
     }

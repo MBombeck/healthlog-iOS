@@ -43,11 +43,13 @@ public actor MedicationTherapyLogRepository {
             let from = Calendar.current.date(byAdding: .day, value: -sinceDays, to: .now) ?? .now
             query.append(("from", ISO8601DateFormatter().string(from: from)))
         }
-        let req: APIRequest<MedicationSideEffectListDTO> = .get(
-            "/api/medications/\(medicationID)/side-effects",
-            query: query
+        // #147 (v1.43.7) — a cut answer is asked once more at the route's
+        // ceiling (200); the route takes no `offset`.
+        let list: MedicationSideEffectListDTO = try await CappedListReader.readUpToCeiling(
+            api: api, path: "/api/medications/\(medicationID)/side-effects", query: query,
+            limit: limit, ceiling: CappedListReader.sideEffectsCeiling
         )
-        return try await api.send(req).items
+        return list.items
     }
 
     /// POST a new side-effect log. Optimistic-write + Outbox-on-retriable.

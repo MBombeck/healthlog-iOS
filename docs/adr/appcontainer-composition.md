@@ -241,11 +241,6 @@ have to preserve it across type boundaries (interleaved, not layered):
   in-memory episode + day-log PHI is purged on logout (`clearOnLogout`).
 - `aiConsentStore` — AI-consent gate (S7 / QA3 BLOCKER 2). Apple Guideline
   5.1.2(i).
-- `trendsOverlayStore` — v0.6.2.3 F2-CHARTLAG: hoisted from `ChartsScreen` so the
-  user's metric-toggle + range selection survives navigation pop / tab-switch /
-  view re-mount. Previously per-view `@State`, which dropped selection every
-  unmount. One instance per container; `selectedMetrics`, `range`, and the loaded
-  `normalisedSeries` persist for the session.
 - `doctorReportStore` — server-rendered.
 - `localDoctorReportStore` — T-7 local.
 - `disclaimerAckStore` — v1.18.6 (DISC-02) app-wide one-time medical-disclaimer

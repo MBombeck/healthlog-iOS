@@ -61,14 +61,7 @@ struct SettingsIntegrationsScreen: View {
             // "Apple Health" detail page), so the Integrations list shows ONE
             // "Apple Health" row instead of two confusing peers. The one-shot
             // export.zip importer is now reached from inside that detail page.
-            withingsCard
-            whoopCard
-            // v1.18.7 web-parity (❌-7) — Oura / Polar / Fitbit / Nightscout.
-            ouraCard
-            polarCard
-            fitbitCard
-            stravaCard
-            nightscoutCard
+            servicesCard
         }
         .navigationTitle("Integrations")
         .navigationBarTitleDisplayMode(.inline)
@@ -111,14 +104,12 @@ struct SettingsIntegrationsScreen: View {
     /// Liste liest jetzt uniform: jede Integration = eine Row → eigene
     /// Detailseite (wie Withings). Die Status-Pill bleibt hier als Trailing-
     /// Badge sichtbar, damit der Verbindungsstand auf einen Blick lesbar ist.
+    ///
+    /// 1.4 B4 — one row, one heading: "Apple Health" over "Apple Health
+    /// öffnen" said the name twice. The card is its row now, with the state
+    /// and the chevron like the services below.
     private var appleHealthCard: some View {
-        HLSettingsCard(
-            icon: "heart.text.square.fill",
-            title: "Apple Health",
-            subtitle: "Read and write access to vitals",
-            trailing: { appleHealthPill },
-            content: { appleHealthRow }
-        )
+        HLSettingsCard { appleHealthRow }
     }
 
     /// Eine Ableitung, ein Maler — siehe ``HealthKitStatusPill``. Diese Fläche
@@ -131,9 +122,14 @@ struct SettingsIntegrationsScreen: View {
     /// R8/R10 — war eine handgebaute Chevron-Zeile; das Trailing-Glyph gehört
     /// jetzt dem Primitive, und `.push` kapselt den `NavigationLink`.
     private var appleHealthRow: some View {
-        HLSettingsActionRow(title: "Open Apple Health", presents: .push) {
-            AppleHealthIntegrationDetailScreen()
-        }
+        HLSettingsActionRow(
+            icon: "heart.fill",
+            title: "Apple Health",
+            subtitle: "Read and write access to vitals",
+            presents: .push,
+            trailing: { appleHealthPill },
+            destination: { AppleHealthIntegrationDetailScreen() }
+        )
         .accessibilityIdentifier("settings.integrations.appleHealthRow")
     }
 
@@ -149,8 +145,11 @@ struct SettingsIntegrationsScreen: View {
     /// status loads (`isConnected == nil`) it stays in the calm `.unknown`
     /// state so no false "Connected" flashes. Standalone (no server) renders
     /// nothing.
+    ///
+    /// 1.4 B4 — `failed`: the status read failed. "Checking" would then stay
+    /// forever, so the row shows no state until a read succeeds.
     @ViewBuilder
-    private func connectedPill(isConnected: Bool?, health: ConnectionHealth? = nil) -> some View {
+    private func connectedPill(isConnected: Bool?, health: ConnectionHealth? = nil, failed: Bool = false) -> some View {
         if backend.hasServer {
             switch isConnected {
             case .some(true):
@@ -164,7 +163,9 @@ struct SettingsIntegrationsScreen: View {
             case .some(false):
                 HLStatusPill(.disconnected(label: String(localized: "Not connected")))
             case .none:
-                HLStatusPill(.unknown(label: String(localized: "Checking")))
+                if !failed {
+                    HLStatusPill(.unknown(label: String(localized: "Checking")))
+                }
             }
         }
     }
@@ -180,136 +181,75 @@ struct SettingsIntegrationsScreen: View {
         IntegrationConnectedState.whoop(whoop.status)
     }
 
-    // MARK: - Withings
+    // MARK: - Services
 
-    private var withingsCard: some View {
-        HLSettingsCard(
-            icon: "link.circle.fill",
-            title: "Withings",
-            subtitle: "Import vitals and activity from your Withings account.",
-            trailing: { connectedPill(isConnected: withingsConnected, health: withings.status?.health) },
-            content: { withingsRow }
-        )
-    }
-
-    private var withingsRow: some View {
-        HLSettingsActionRow(title: "Open Withings", presents: .push) {
-            WithingsIntegrationScreen()
+    /// **1.4 B2-c — one list instead of seven cards.** Withings, WHOOP (v0.12),
+    /// Oura, Polar, Fitbit, Nightscout (v1.18.7 web parity) and Strava
+    /// (v1.28.11, #46) each had a card of its own: title, an "Import … from
+    /// your … account" subtitle cut after one line, the status pill, and a
+    /// single "Open …" row. They are rows of one card now: the provider's
+    /// name, its pill, the chevron. The names say what they are.
+    private var servicesCard: some View {
+        HLSettingsCard(icon: "link.circle.fill", title: "settings.integrations.services") {
+            serviceRow("Withings", icon: "link.circle.fill", identifier: "settings.integrations.withingsRow") {
+                connectedPill(isConnected: withingsConnected, health: withings.status?.health, failed: withings.error != nil)
+            } destination: {
+                WithingsIntegrationScreen()
+            }
+            serviceRow("WHOOP", icon: "link.circle.fill", identifier: "settings.integrations.whoopRow") {
+                connectedPill(isConnected: whoopConnected, health: whoop.status?.health, failed: whoop.error != nil)
+            } destination: {
+                WhoopIntegrationScreen()
+            }
+            serviceRow("Oura", icon: "moon.fill", identifier: "settings.integrations.ouraRow") {
+                connectedPill(isConnected: oura.isConnected, health: oura.status?.health, failed: oura.error != nil)
+            } destination: {
+                OAuthIntegrationScreen<OuraIntegrationStore>(
+                    displayName: "Oura",
+                    placeholderSurface: String(localized: "cloud_derived.surface.oura")
+                )
+            }
+            serviceRow("Polar", icon: "figure.run", identifier: "settings.integrations.polarRow") {
+                connectedPill(isConnected: polar.isConnected, health: polar.status?.health, failed: polar.error != nil)
+            } destination: {
+                OAuthIntegrationScreen<PolarIntegrationStore>(
+                    displayName: "Polar",
+                    placeholderSurface: String(localized: "cloud_derived.surface.polar")
+                )
+            }
+            serviceRow("Fitbit", icon: "figure.walk", identifier: "settings.integrations.fitbitRow") {
+                connectedPill(isConnected: fitbit.isConnected, health: fitbit.status?.health, failed: fitbit.error != nil)
+            } destination: {
+                OAuthIntegrationScreen<FitbitIntegrationStore>(
+                    displayName: "Fitbit",
+                    placeholderSurface: String(localized: "cloud_derived.surface.fitbit")
+                )
+            }
+            serviceRow("Strava", icon: "figure.outdoor.cycle", identifier: "settings.integrations.stravaRow") {
+                connectedPill(isConnected: strava.isConnected, health: strava.status?.health, failed: strava.error != nil)
+            } destination: {
+                OAuthIntegrationScreen<StravaIntegrationStore>(
+                    displayName: "Strava",
+                    placeholderSurface: String(localized: "cloud_derived.surface.strava")
+                )
+            }
+            serviceRow("Nightscout", icon: "drop.circle.fill", identifier: "settings.integrations.nightscoutRow") {
+                connectedPill(isConnected: nightscout.isConnected, health: nightscout.status?.health, failed: nightscout.error != nil)
+            } destination: {
+                NightscoutIntegrationScreen()
+            }
         }
-        .accessibilityIdentifier("settings.integrations.withingsRow")
     }
 
-    // MARK: - WHOOP
-
-    private var whoopCard: some View {
-        HLSettingsCard(
-            icon: "link.circle.fill",
-            title: "WHOOP",
-            subtitle: "Import recovery, strain and sleep from your WHOOP account.",
-            trailing: { connectedPill(isConnected: whoopConnected, health: whoop.status?.health) },
-            content: { whoopRow }
-        )
-    }
-
-    private var whoopRow: some View {
-        HLSettingsActionRow(title: "Open WHOOP", presents: .push) {
-            WhoopIntegrationScreen()
-        }
-        .accessibilityIdentifier("settings.integrations.whoopRow")
-    }
-
-    // MARK: - v1.18.7 web-parity (❌-7): Oura / Polar / Fitbit / Nightscout
-
-    private var ouraCard: some View {
-        HLSettingsCard(
-            icon: "moon.fill",
-            title: "Oura",
-            subtitle: "Import sleep, readiness and activity from your Oura account.",
-            trailing: { connectedPill(isConnected: oura.isConnected, health: oura.status?.health) },
-            content: {
-                integrationRow(label: "Open Oura", identifier: "settings.integrations.ouraRow") {
-                    OAuthIntegrationScreen<OuraIntegrationStore>(
-                        displayName: "Oura",
-                        placeholderSurface: String(localized: "cloud_derived.surface.oura")
-                    )
-                }
-            }
-        )
-    }
-
-    private var polarCard: some View {
-        HLSettingsCard(
-            icon: "figure.run",
-            title: "Polar",
-            subtitle: "Import workouts, heart rate and recovery from your Polar account.",
-            trailing: { connectedPill(isConnected: polar.isConnected, health: polar.status?.health) },
-            content: {
-                integrationRow(label: "Open Polar", identifier: "settings.integrations.polarRow") {
-                    OAuthIntegrationScreen<PolarIntegrationStore>(
-                        displayName: "Polar",
-                        placeholderSurface: String(localized: "cloud_derived.surface.polar")
-                    )
-                }
-            }
-        )
-    }
-
-    private var fitbitCard: some View {
-        HLSettingsCard(
-            icon: "figure.walk",
-            title: "Fitbit",
-            subtitle: "Import steps, sleep and heart rate from your Fitbit account.",
-            trailing: { connectedPill(isConnected: fitbit.isConnected, health: fitbit.status?.health) },
-            content: {
-                integrationRow(label: "Open Fitbit", identifier: "settings.integrations.fitbitRow") {
-                    OAuthIntegrationScreen<FitbitIntegrationStore>(
-                        displayName: "Fitbit",
-                        placeholderSurface: String(localized: "cloud_derived.surface.fitbit")
-                    )
-                }
-            }
-        )
-    }
-
-    private var stravaCard: some View {
-        HLSettingsCard(
-            icon: "figure.outdoor.cycle",
-            title: "Strava",
-            subtitle: "Import workouts and activities from your Strava account.",
-            trailing: { connectedPill(isConnected: strava.isConnected, health: strava.status?.health) },
-            content: {
-                integrationRow(label: "Open Strava", identifier: "settings.integrations.stravaRow") {
-                    OAuthIntegrationScreen<StravaIntegrationStore>(
-                        displayName: "Strava",
-                        placeholderSurface: String(localized: "cloud_derived.surface.strava")
-                    )
-                }
-            }
-        )
-    }
-
-    private var nightscoutCard: some View {
-        HLSettingsCard(
-            icon: "drop.circle.fill",
-            title: "Nightscout",
-            subtitle: "Connect your own Nightscout instance for continuous glucose data.",
-            trailing: { connectedPill(isConnected: nightscout.isConnected, health: nightscout.status?.health) },
-            content: {
-                integrationRow(label: "Open Nightscout", identifier: "settings.integrations.nightscoutRow") {
-                    NightscoutIntegrationScreen()
-                }
-            }
-        )
-    }
-
-    /// Shared nav row used by the new integration cards (one label → its detail
-    /// screen), matching the Withings/WHOOP row shape.
-    private func integrationRow(
-        label: LocalizedStringKey,
+    /// One provider: chip, name, status pill, chevron into its detail screen.
+    private func serviceRow(
+        _ name: LocalizedStringKey,
+        icon: String,
         identifier: String,
+        @ViewBuilder pill: () -> some View,
         @ViewBuilder destination: @escaping () -> some View
     ) -> some View {
-        HLSettingsActionRow(title: label, presents: .push, destination: destination)
+        HLSettingsActionRow(icon: icon, title: name, presents: .push, trailing: pill, destination: destination)
             .accessibilityIdentifier(identifier)
     }
 

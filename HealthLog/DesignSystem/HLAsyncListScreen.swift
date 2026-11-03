@@ -58,6 +58,12 @@ struct HLAsyncListScreen<Loading: View, Empty: View, Content: View>: View {
 
     var body: some View {
         styledList
+            // 1.4 B4 — the app canvas under every list built on this primitive.
+            // Only Labs painted it; Illness, Documents, Nutrition, Environment,
+            // the coach's memory, Allergies and Family history stood on the
+            // system's pure black (light grey in light mode) instead.
+            .scrollContentBackground(.hidden)
+            .background(HLSurface.primary)
             .modifier(HLAsyncListRefresh(refresh: refresh))
     }
 
@@ -123,7 +129,7 @@ struct HLAsyncListErrorRow: View {
                 message: "async.list.error.subtitle"
             ) {
                 if let retry {
-                    HLButton("async.list.error.retry", icon: "arrow.clockwise", variant: .primary) {
+                    HLButton("async.list.error.retry", icon: "arrow.clockwise", variant: .secondary) {
                         Task { await retry() }
                     }
                     .accessibilityIdentifier("async.list.error.retry")
@@ -152,7 +158,7 @@ struct HLRetryUnavailableView: View {
             title: "async.list.error.title",
             message: "async.list.error.subtitle"
         ) {
-            HLButton("async.list.error.retry", icon: "arrow.clockwise", variant: .primary) {
+            HLButton("async.list.error.retry", icon: "arrow.clockwise", variant: .secondary) {
                 Task { await retry() }
             }
             .accessibilityIdentifier("async.list.error.retry")

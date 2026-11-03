@@ -135,10 +135,30 @@ final class WatchConnectivityClient: NSObject {
         super.init()
     }
 
+    /// Activates the session once. Called from the app's `init`, so a
+    /// background launch without UI is connected as well (1.4).
     func activate() {
-        guard let session else { return }
+        guard let session, session.delegate == nil else { return }
         session.delegate = self
         session.activate()
+    }
+
+    /// **1.4 — the `.watchConnectivity` background task.** watchOS wakes the
+    /// app to hand over what the phone sent while it was not running. The
+    /// session delivers it to the delegate after activation; the task has to
+    /// stay open until then, or the launch ends before the snapshot is written
+    /// and the complications are reloaded. Bounded, because the background
+    /// budget is a few seconds.
+    func receivePendingContent() async {
+        activate()
+        guard let session else { return }
+        for _ in 0 ..< 40 {
+            if session.activationState == .activated, !session.hasContentPending { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        // The delegate hands each payload to the main actor in a task of its
+        // own. One more turn lets the last of those run before the task ends.
+        try? await Task.sleep(for: .milliseconds(100))
     }
 
     /// `true` once the phone can accept writes (signed-in OR standalone — see

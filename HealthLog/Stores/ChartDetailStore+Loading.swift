@@ -33,7 +33,7 @@ extension ChartDetailStore {
     /// passes so the view can dim / skeleton the chart during a reload instead
     /// of showing a stale-but-static graph.
     public func load() async {
-        loadTask?.cancel()
+        let generation = supersedeLoad()
         let currentRange = range
         let currentKind = kind
         let localeTag = resolveLocale()
@@ -52,7 +52,7 @@ extension ChartDetailStore {
         let task = Task { [measurementsRepo, insightsRepo] in
             isLoading = true
             error = nil
-            defer { isLoading = false }
+            defer { if loadGeneration == generation { isLoading = false } }
             // First paint: fan out IMMEDIATELY (cache-first via SWR) — the
             // chart must never wait on HealthKit to show something.
             await self.runFanOut(
@@ -353,7 +353,7 @@ extension ChartDetailStore {
             )
             recentInRange = []
             latestRawMeasurement = nil
-            dataState = .empty(reason: .noData)
+            settleEmptyAfterFailedPage(error)
         }
     }
 
@@ -429,7 +429,7 @@ extension ChartDetailStore {
                 let detail = LogSanitizer.redact(String(describing: error))
                 HLLog.api.warning("ChartDetail: BMI weight-series fetch failed: \(detail)")
                 latestRawMeasurement = nil
-                collapseDataStateOnLoadFailure()
+                collapseDataStateOnLoadFailure(recording: error)
             }
         }
     }
@@ -455,7 +455,8 @@ extension ChartDetailStore {
     /// throws before any per-pass derivation could run. Preserves an
     /// already-resolved `.ready` / `.empty` state from a prior load so the
     /// next failed reload doesn't regress what the user already saw.
-    private func collapseDataStateOnLoadFailure() {
+    private func collapseDataStateOnLoadFailure(recording failure: Error? = nil) {
+        if let failure { recordLoadFailure(failure) }
         switch dataState {
         case .unknown, .loading:
             recentInRange = []
@@ -521,8 +522,7 @@ extension ChartDetailStore {
     /// `true` when the server's `/api/measurements/series` endpoint
     /// supports the kind. `bodyTemperature` is HK-write-only and the
     /// server returns 422 for it (canonical list lives in
-    /// `MeasurementsRepository.seriesKindKey` /
-    /// `TrendsOverlayStore.availableMetrics`).
+    /// `MeasurementsRepository.seriesKindKey`).
     public nonisolated static func kindSupportsSeries(_ kind: MetricKind) -> Bool {
         switch kind {
         case .bodyTemperature, .walkingSpeed, .walkingAsymmetry, .walkingStepLength, .walkingDoubleSupport,

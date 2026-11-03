@@ -115,6 +115,14 @@ final class InsightsPagerModel {
     /// + page.
     var seenSpecials: Set<InsightsSpecialPage> = []
 
+    /// 1.4 C1 — the data-gated special pages whose source has answered this
+    /// session (mood / medications / ECG). A deep link to one of them that is
+    /// still empty after its source answered opens the page with its own empty
+    /// state (`admitStagedSpecialIfSettled`) instead of waiting for data that
+    /// will not come. Before the answer the link stays staged, so an account
+    /// with data never sees a passing "no entries yet".
+    var settledSpecials: Set<InsightsSpecialPage> = []
+
     /// Q-insights-scroll — bumped each time the operator RE-TAPS the strip pill of
     /// the page that is ALREADY the active page. The active metric page observes
     /// this counter to animate its own vertical scroll back to the top.
@@ -327,6 +335,29 @@ final class InsightsPagerModel {
         }
     }
 
+    /// 1.4 C1 — record that `page`'s data source has answered (see
+    /// `settledSpecials`).
+    func markSpecialSettled(_ page: InsightsSpecialPage) {
+        if !settledSpecials.contains(page) {
+            settledSpecials.insert(page)
+        }
+    }
+
+    /// 1.4 C1 — a deep link asked for a special page the strip does not offer
+    /// because it has no data. Once that page's source has answered, admit the
+    /// page into the latched special set so the link lands on it and the page
+    /// shows its empty state. The pill then stays for the session, like any
+    /// other latched page. Returns `true` when it admitted the page; the caller
+    /// then re-applies the staged target against the grown live order.
+    @discardableResult
+    func admitStagedSpecialIfSettled() -> Bool {
+        guard case let .special(page) = pendingMetricTarget,
+              settledSpecials.contains(page),
+              !seenSpecials.contains(page) else { return false }
+        seenSpecials.insert(page)
+        return true
+    }
+
     /// v0152 I1 — the `selection` a SETTLED swipe to a page id should produce. The
     /// pager is flat (one page per metric), so each landed page id maps 1:1 to its
     /// own selection. `nil` if the landed page id isn't in the current flat list.
@@ -397,7 +428,13 @@ final class InsightsPagerModel {
         // V0150 — a deep link is an INSTANT jump, so a relayout under it is
         // invisible: force the frozen order to adopt the full live list now, so the
         // target page is guaranteed present before the jump.
-        if !ordered.contains(target) {
+        //
+        // 1.4 C1 — but only when the live list HAS the target. Without it the
+        // full adoption brings no target, and no jump follows to hide the
+        // relayout: pages inserted before the current one shift under the
+        // pager's scroll offset, which then rests on an unrealized metric
+        // placeholder, a blank page with no pill lit.
+        if !ordered.contains(target), liveOrderedSelections.contains(target) {
             reconcilePagerOrder(liveOrderedSelections: liveOrderedSelections, forceFull: true)
         }
         let resolvedOrder = pagerOrder.isEmpty ? liveOrderedSelections : pagerOrder

@@ -178,8 +178,9 @@ struct DashboardWidgetIdF2Tests {
 /// Series-endpoint gate: the three F2 server-backed kinds (RHR, HRV, VO₂ max)
 /// must route through `/api/measurements/series` while the four iOS-local
 /// kinds short-circuit. This locks the canonical list referenced by
-/// `DashboardStore.kindSupportsSeries`, `ChartDetailStore.kindSupportsSeries`,
-/// and `TrendsOverlayStore.availableMetrics`.
+/// `DashboardStore.kindSupportsSeries` and `ChartDetailStore.kindSupportsSeries`.
+/// (1.4 B4 — the Trends overlay's `availableMetrics` chip list went with
+/// `TrendsOverlayStore`, and so did the test that pinned it.)
 @Suite("Series-endpoint gating — F2")
 struct SeriesGateF2Tests {
     @Test("server-backed F2 kinds support series", arguments: [
@@ -205,31 +206,6 @@ struct SeriesGateF2Tests {
             !ChartDetailStore.kindSupportsSeries(kind),
             "\(kind) has no server enum yet — series gate must short-circuit"
         )
-    }
-
-    /// **v0.5.5.2 reconcile (W-DATA-FLOW-AUDIT BLOCKER #2, commit 877fb893):**
-    /// although `kindSupportsSeries` still flags RHR / HRV / VO₂ max as
-    /// server-backed, the server's `/api/measurements/series` zod `kindEnum`
-    /// rejects all three with HTTP 400/422 (still true as of server v1.5.5 —
-    /// the v0.8.0 server-sync did NOT add them to the series enum). Toggling
-    /// one in the Trends overlay threw inside `withThrowingTaskGroup` and
-    /// aborted every other in-flight fetch → operator-perceived "Trends
-    /// doesn't work". They were therefore deliberately trimmed out of
-    /// `availableMetrics` (canonical: `TrendsOverlayStoreTests`). This test
-    /// pins that exclusion so the F2 surface stays consistent with the
-    /// overlay's server-safe chip row.
-    @Test("server-rejected F2 kinds stay OUT of TrendsOverlayStore.availableMetrics")
-    func availableMetricsExcludesServerRejectedF2Kinds() {
-        let metrics = Set(TrendsOverlayStore.availableMetrics)
-        // RHR / HRV / VO₂ max: server series enum still rejects them (v1.5.5).
-        #expect(!metrics.contains(.restingHeartRate))
-        #expect(!metrics.contains(.hrv))
-        #expect(!metrics.contains(.vo2Max))
-        // iOS-local kinds stay out too — no series, no overlay coverage.
-        #expect(!metrics.contains(.walkingSpeed))
-        #expect(!metrics.contains(.walkingAsymmetry))
-        #expect(!metrics.contains(.walkingStepLength))
-        #expect(!metrics.contains(.bmi))
     }
 }
 

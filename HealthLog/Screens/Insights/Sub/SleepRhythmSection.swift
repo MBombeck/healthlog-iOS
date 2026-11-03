@@ -8,6 +8,13 @@ import SwiftUI
 /// grid would shrink each headline below the point where it reads as a
 /// headline. Same data, same order, same calm empty states.
 ///
+/// **1.4 B2 — calm by default.** Only ready cards show. While nothing is ready
+/// the section is one card with one line ("Dein Schlaf wird noch erfasst …")
+/// instead of three cards saying it three times. The citation sits once, in
+/// the first ready card that makes a claim (debt, else chronotype); what the
+/// figures mean and how they are worked out is in the page's info sheet
+/// (`InsightsMetricInfo`).
+///
 /// **Every card is server-rendered.** The balance, the band and the mean all
 /// arrive computed — iOS chooses layout and copy only. The debt figure in
 /// particular must never be recomputed here: the server owns the age-resolved
@@ -16,19 +23,59 @@ import SwiftUI
 struct SleepRhythmSection: View {
     let rhythm: SleepRhythmDTO
 
+    private var readyDebt: SleepDebtDTO? {
+        rhythm.sleepDebt.flatMap { $0.state == .ready ? $0 : nil }
+    }
+
+    private var readyAverage: AverageSleepDTO? {
+        rhythm.averagePerNight.flatMap { $0.state == .ready ? $0 : nil }
+    }
+
+    private var readyChronotype: ChronotypeDTO? {
+        rhythm.chronotype.flatMap { $0.state == .ready ? $0 : nil }
+    }
+
+    /// The one "still learning" line while no card is ready, most telling
+    /// first: the debt balance, then the average, then the chronotype.
+    private var learningLine: LocalizedStringKey? {
+        if let debt = rhythm.sleepDebt, debt.state == .partial {
+            return "sleep.debt.learning \(debt.nightsCounted) \(debt.nightsUntilReady)"
+        }
+        if let average = rhythm.averagePerNight, average.state == .partial {
+            return "sleep.average.learning \(average.nightsCounted) \(average.nightsUntilReady)"
+        }
+        if let chronotype = rhythm.chronotype, chronotype.state == .learning {
+            let total = chronotype.freeNightsCounted + chronotype.freeNightsUntilReady
+            return "sleep.chronotype.learning \(chronotype.freeNightsCounted) \(total)"
+        }
+        return nil
+    }
+
     var body: some View {
-        if !rhythm.isEmpty {
+        let anyReady = readyDebt != nil || readyAverage != nil || readyChronotype != nil
+        if anyReady || learningLine != nil {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 InsightsSectionHeader("sleep.rhythm.section")
                 VStack(spacing: HLSpace.md) {
-                    if let debt = rhythm.sleepDebt {
-                        SleepDebtCard(debt: debt)
-                    }
-                    if let average = rhythm.averagePerNight {
-                        AverageSleepCard(average: average)
-                    }
-                    if let chronotype = rhythm.chronotype {
-                        ChronotypeCard(chronotype: chronotype)
+                    if anyReady {
+                        if let debt = readyDebt {
+                            SleepDebtCard(debt: debt)
+                        }
+                        if let average = readyAverage {
+                            AverageSleepCard(average: average)
+                        }
+                        if let chronotype = readyChronotype {
+                            ChronotypeCard(chronotype: chronotype, citesSources: readyDebt == nil)
+                        }
+                    } else if let learningLine {
+                        HLCard {
+                            Text(learningLine)
+                                .font(.hlFootnote)
+                                .foregroundStyle(HLText.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .accessibilityIdentifier("sleep.rhythm.learning")
                     }
                 }
             }
@@ -49,28 +96,22 @@ private struct SleepDebtCard: View {
                 Text("sleep.debt.title")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                switch debt.state {
-                case .partial:
-                    // Below the night floor the card asserts NOTHING. A balance
-                    // off two thin nights would be a confident-looking guess.
-                    Text("sleep.debt.learning \(debt.nightsCounted) \(debt.nightsUntilReady)")
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                case .ready:
-                    Text(headline)
-                        .font(.hlMetric(.title2))
-                        .foregroundStyle(HLText.primary)
-                        .monospacedDigit()
-                    Text(caption)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    computedNote
-                    // 1.0.3 (App Review 1.4.1) — the sleep-need and
-                    // social-jetlag literature behind the balance.
-                    HLSourcesLink(topic: .sleepRhythm)
-                }
+                // Below the night floor the section shows its one learning
+                // line instead: a balance off two thin nights would be a
+                // confident-looking guess.
+                Text(headline)
+                    .font(.hlMetric(.title2))
+                    .foregroundStyle(HLText.primary)
+                    .monospacedDigit()
+                Text(caption)
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                // 1.0.3 (App Review 1.4.1) — the sleep-need and social-jetlag
+                // literature behind the balance. That the figure is HealthLog's
+                // own estimate (`sleep.debt.computedInfo`) is the first section
+                // of the page's info sheet, directly above these references.
+                HLSourcesLink(topic: .sleepRhythm)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -86,20 +127,6 @@ private struct SleepDebtCard: View {
         debt.isCaughtUp
             ? String(localized: "sleep.debt.clearCaption \(debt.windowNights)")
             : String(localized: "sleep.debt.caption \(debt.windowNights)")
-    }
-
-    /// Discloses that a `COMPUTED` figure is HealthLog's OWN estimate, so it is
-    /// never mistaken for a wearable's native sleep-debt number — those use a
-    /// different need model and will legitimately disagree. Suppressed when a
-    /// provider supplied the figure directly.
-    @ViewBuilder
-    private var computedNote: some View {
-        if debt.source == nil || debt.source?.uppercased() == "COMPUTED" {
-            Text("sleep.debt.computedInfo")
-                .font(.hlCaption2)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 }
 
@@ -117,22 +144,14 @@ private struct AverageSleepCard: View {
                 Text("sleep.average.title")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                switch average.state {
-                case .partial:
-                    Text("sleep.average.learning \(average.nightsCounted) \(average.nightsUntilReady)")
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                case .ready:
-                    Text(SleepDurationFormat.hoursMinutes(average.averageMinutes))
-                        .font(.hlMetric(.title2))
-                        .foregroundStyle(HLText.primary)
-                        .monospacedDigit()
-                    Text("sleep.average.caption \(average.nightsCounted)")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(SleepDurationFormat.hoursMinutes(average.averageMinutes))
+                    .font(.hlMetric(.title2))
+                    .foregroundStyle(HLText.primary)
+                    .monospacedDigit()
+                Text("sleep.average.caption \(average.nightsCounted)")
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -150,6 +169,8 @@ private struct AverageSleepCard: View {
 /// measured fact.
 private struct ChronotypeCard: View {
     let chronotype: ChronotypeDTO
+    /// The section cites once: here only when no debt card above does.
+    let citesSources: Bool
 
     var body: some View {
         HLCard {
@@ -157,24 +178,10 @@ private struct ChronotypeCard: View {
                 Text("sleep.chronotype.title")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                switch chronotype.state {
-                case .learning:
-                    Text("sleep.chronotype.learning \(chronotype.freeNightsCounted) \(totalFreeNights)")
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                case .ready:
-                    readyBody
-                }
+                readyBody
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    /// Free nights seen plus those still wanted — the denominator the
-    /// "N of M" learning copy needs, which the wire sends as two halves.
-    private var totalFreeNights: Int {
-        chronotype.freeNightsCounted + chronotype.freeNightsUntilReady
     }
 
     @ViewBuilder
@@ -190,39 +197,27 @@ private struct ChronotypeCard: View {
                 .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // 1.4 B2 — the values stay, their explanations (social jetlag, the
+        // weekend correction, weekends as free days) are in the info sheet.
         if let jetlag = chronotype.socialJetlagMinutes {
-            detailRow(
-                value: String(localized: "sleep.chronotype.socialJetlagValue \(SleepDurationFormat.hoursMinutes(jetlag))"),
-                caption: "sleep.chronotype.socialJetlagCaption"
-            )
+            detailRow(String(localized: "sleep.chronotype.socialJetlagValue \(SleepDurationFormat.hoursMinutes(jetlag))"))
         }
         if let msfSc = chronotype.msfScMinutes {
-            detailRow(
-                value: String(localized: "sleep.chronotype.msfScValue \(SleepDurationFormat.clockTime(minutesOfDay: msfSc))"),
-                caption: "sleep.chronotype.msfScCaption"
-            )
+            detailRow(String(localized: "sleep.chronotype.msfScValue \(SleepDurationFormat.clockTime(minutesOfDay: msfSc))"))
         }
-        Text("sleep.chronotype.dayTypeNote")
-            .font(.hlCaption2)
-            .foregroundStyle(HLText.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
         // 1.0.3 (App Review 1.4.1) — MCTQ / social-jetlag / SRI literature
-        // behind the band and the midpoint.
-        HLSourcesLink(topic: .sleepRhythm)
+        // behind the band and the midpoint, once per section.
+        if citesSources {
+            HLSourcesLink(topic: .sleepRhythm)
+        }
     }
 
-    private func detailRow(value: String, caption: LocalizedStringKey) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            Text(value)
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.primary)
-                .monospacedDigit()
-            Text(caption)
-                .font(.hlCaption2)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, HLSpace.xxs)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    private func detailRow(_ value: String) -> some View {
+        Text(value)
+            .font(.hlFootnote)
+            .foregroundStyle(HLText.primary)
+            .monospacedDigit()
+            .padding(.top, HLSpace.xxs)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

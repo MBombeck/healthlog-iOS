@@ -38,6 +38,7 @@
                     controller: controller,
                     medications: medicationsStore.medications,
                     intakes: medicationsStore.todayIntakes,
+                    timeZone: medicationsStore.profileTimeZone,
                     isLiveActivityEnabled: deliveryPreferences.enabledPredicate(for: .liveActivity)
                 )
             }
@@ -59,6 +60,7 @@
                     controller: controller,
                     medications: medicationsStore.medications,
                     intakes: medicationsStore.todayIntakes,
+                    timeZone: medicationsStore.profileTimeZone,
                     isLiveActivityEnabled: deliveryPreferences.enabledPredicate(for: .liveActivity)
                 )
             }
@@ -68,14 +70,21 @@
         /// intakes. Surfaces the soonest due dose, marks a taken/skipped
         /// dose's Activity as resolved (ending it shortly), and clears the
         /// Activity when nothing qualifies.
+        ///
+        /// **1.4 B4 — `timeZone` is the account zone** (`/me`, the store's
+        /// `profileTimeZone`), the zone the medication card grades its window
+        /// in. Read in the device zone, the Lock Screen could say "due" while
+        /// the card, after travel or with a zone set on the web, said late.
         static func reconcileMedicationLiveActivity(
             controller: any MedicationLiveActivityReconciling,
             medications: [Medication],
             intakes: [MedicationIntake],
             now: Date = .now,
+            timeZone: TimeZone = .current,
             isLiveActivityEnabled: (String) -> Bool = { _ in true }
         ) {
             guard controller.areActivitiesEnabled else { return }
+            let calendar = MedicationLiveActivityPlan.calendar(in: timeZone)
 
             // The pure plan decides; the ActivityKit mutations are async, so
             // we hop onto a MainActor task to await them off the synchronous
@@ -90,13 +99,15 @@
                 medications: medications,
                 intakes: intakes,
                 now: now,
+                calendar: calendar,
                 isLiveActivityEnabled: isLiveActivityEnabled
             )
             let resolved = dose.map {
                 MedicationLiveActivityPlan.isResolved(
                     medicationId: $0.medicationId,
                     scheduledFor: $0.scheduledFireDate,
-                    intakes: intakes
+                    intakes: intakes,
+                    calendar: calendar
                 )
             }
 
@@ -126,21 +137,25 @@
             medications: [Medication],
             intakes: [MedicationIntake],
             now: Date = .now,
+            timeZone: TimeZone = .current,
             isLiveActivityEnabled: (String) -> Bool = { _ in true }
         ) async {
             guard controller.areActivitiesEnabled else { return }
+            let calendar = MedicationLiveActivityPlan.calendar(in: timeZone)
 
             let dose = MedicationLiveActivityPlan.doseToSurface(
                 medications: medications,
                 intakes: intakes,
                 now: now,
+                calendar: calendar,
                 isLiveActivityEnabled: isLiveActivityEnabled
             )
             let resolved = dose.map {
                 MedicationLiveActivityPlan.isResolved(
                     medicationId: $0.medicationId,
                     scheduledFor: $0.scheduledFireDate,
-                    intakes: intakes
+                    intakes: intakes,
+                    calendar: calendar
                 )
             }
             await applyLiveActivityDecision(
@@ -239,6 +254,7 @@
                 controller: controller,
                 medications: medicationsStore.medications,
                 intakes: medicationsStore.todayIntakes,
+                timeZone: medicationsStore.profileTimeZone,
                 isLiveActivityEnabled: deliveryPreferences.enabledPredicate(for: .liveActivity)
             )
         }

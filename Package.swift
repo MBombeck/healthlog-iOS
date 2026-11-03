@@ -88,6 +88,8 @@ let package = Package(
                 // file-backed upload requirement; without it Core would
                 // fall back to the protocol's throwing default.
                 "Services/APIClient+FileUpload.swift",
+                // B5 (1.4) — which 401s surface instead of signing out.
+                "Services/APIClient+CredentialCheck.swift",
                 "Services/APIClient+HealthProbe.swift",
                 "Services/APIClient+Pinning.swift",
                 "Services/APIClient+ServerVersion.swift",
@@ -150,7 +152,6 @@ let package = Package(
                 // needed it yet.
                 "Services/WebLoginRouteProbe.swift",
                 "Services/OidcPKCE.swift",
-                "Services/StatistikModeBriefingService.swift",
                 // SWR + Outbox repositories — plattform-frei.
                 "Repositories",
                 // SwiftData/Keychain caches — plattform-frei.

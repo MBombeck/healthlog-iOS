@@ -176,9 +176,9 @@ struct EditLabResultSheet: View {
                 LabeledContent("labs.add.referenceHigh", value: upper.formatted())
             }
         } header: {
+            // 1.4 B2-c — the header says these rows belong to the linked
+            // marker; the footer that said they can't be edited is gone.
             Text("labs.edit.linked.section")
-        } footer: {
-            Text("labs.edit.linked.footer")
         }
     }
 
@@ -236,11 +236,8 @@ struct EditLabResultSheet: View {
                 displayedComponents: [.date, .hourAndMinute]
             )
         } header: {
+            // 1.4 B2-c — no standing footer about a switch nobody tried.
             Text("labs.add.value.section")
-        } footer: {
-            if resultType == .qualitative {
-                Text("labs.edit.qualitative.footer")
-            }
         }
     }
 

@@ -118,28 +118,20 @@ struct NutrientListScreen: View {
 
     private var emptyRows: some View {
         Section {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                NutrientEmptyStateView(state: emptyState) {
-                    await store?.enableModuleAndPrepare()
-                }
-                // 14-04 (F1) — name the window the reader is being told about.
-                //
-                // `GET /api/nutrients` omits every nutrient with no data inside
-                // the requested window, so "nothing here" is always a statement
-                // ABOUT A WINDOW and never about the account. Saying which one
-                // is the difference between an honest empty state and the one
-                // that sent the operator looking for a fault in Apple Health.
-                // The number is the server's own echo (`windowDays`), so a
-                // deployment that clamps the request corrects the sentence.
-                if emptyState == .noData, let store {
-                    Text("nutrients.list.empty.window \(store.windowDays)")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .accessibilityIdentifier("nutrients.empty.window")
-                }
+            // 14-04 (F1) — the window the reader is told about rides in the
+            // empty state's own sentence (1.4 B2: it was a loose caption under
+            // it). `GET /api/nutrients` omits every nutrient with no data in
+            // the requested window, so "nothing here" is always a statement
+            // about that window; the number is the server's own echo.
+            // A window of 0 days is no statement (the route echoed nothing).
+            NutrientEmptyStateView(
+                state: emptyState,
+                windowDays: emptyState == .noData ? store.flatMap { $0.windowDays > 0 ? $0.windowDays : nil } : nil
+            ) {
+                await store?.enableModuleAndPrepare()
             }
+            // 1.4 B4 — the lockup stands on the list, not on a row card.
+            .listRowBackground(Color.clear)
         }
     }
 

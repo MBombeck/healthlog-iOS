@@ -63,15 +63,13 @@ struct SettingsExportScreen: View {
     /// row chrome used across the Settings sub-screens (icon · title · subtitle ·
     /// "Open …" disclosure row) so it reads as a peer of the export cards below.
     private var shareWithDoctorCard: some View {
-        HLSettingsCard(
-            icon: "stethoscope",
-            title: "settings.export.share_with_doctor.title",
-            subtitle: "settings.export.share_with_doctor.subtitle"
-        ) {
+        // 1.4 B4 — one row, one heading: the row carries title and subtitle.
+        HLSettingsCard {
             // UI-Standard R8/R10 (U6) — handgebaute Chevron-Zeile → Primitive;
             // das Chevron gehört dem `presents:`-Vertrag, nicht dem Aufrufer.
             HLSettingsActionRow(
-                title: "settings.export.share_with_doctor.nav_row",
+                title: "settings.export.share_with_doctor.title",
+                subtitle: "settings.export.share_with_doctor.subtitle",
                 presents: .push
             ) {
                 UnifiedSharingScreen()
@@ -152,22 +150,13 @@ private struct FullBackupExportCard: View {
     }
 
     var body: some View {
+        // 1.4 B2-c — the title says it: no subtitle, and no paragraph number
+        // ("Art. 20") that gives nobody anything to do.
         HLSettingsCard(
             icon: "square.and.arrow.up.on.square.fill",
-            title: "Full backup (JSON / CSV)",
-            subtitle: "A single file containing all your data — same format as the weekly auto-backup."
+            title: "Full backup (JSON / CSV)"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                // R19 / privacy-review (U6, Audit-Gruppe G8) — der erste Satz
-                // war der Karten-Subtitle in anderen Worten („eine einzige
-                // Datei mit allen Daten"). Was bleibt, ist die rechtsrelevante
-                // Hälfte: die Auskunft, welches Betroffenenrecht dieser Export
-                // bedient. Die Zusage selbst ist unverändert.
-                Text("GDPR Art. 20 — data portability.")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
                 Picker("Format", selection: $format) {
                     ForEach(ExportFormat.allCases) { f in
                         Text(f.label).tag(f)
@@ -370,12 +359,9 @@ private struct EncryptedBackupExportCard: View {
 /// data out" and "bring my data in" are the two halves of data portability.
 private struct ImportDataCard: View {
     var body: some View {
-        HLSettingsCard(
-            icon: "square.and.arrow.down.on.square",
-            title: "import.card.title",
-            subtitle: "import.card.subtitle"
-        ) {
-            HLSettingsActionRow(title: "import.card.nav_row", presents: .push) {
+        // 1.4 B4 — one row, one heading.
+        HLSettingsCard {
+            HLSettingsActionRow(title: "import.card.title", subtitle: "import.card.subtitle", presents: .push) {
                 ImportDataScreen()
             }
             .accessibilityIdentifier("settings.export.importRow")

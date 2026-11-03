@@ -79,34 +79,8 @@ struct DerivedMetricsRepositoryTests {
         let dto = try #require(try await repo.fetch(metric: "RECOVERY_SCORE"))
         #expect(dto.value?.score == 64)
         #expect(dto.value?.trendDelta == 7)
-        // HONEST-ONLY: the trend line derives from the server delta only.
-        // Locale-resolved (host may run de).
-        #expect([
-            "+7 vs your recent baseline",
-            "+7 gegenüber deinem jüngsten Ausgangswert"
-        ].contains(InsightsDerivedBlock.trendLine(for: dto)))
-    }
-
-    @Test("trendLine — nil delta + non-score metric → no fabricated trend")
-    func trendLineHonestSuppression() {
-        let cov = DerivedMetricDTO.Coverage(requiredInputs: 1, presentInputs: 1, historyDays: 9, missing: [])
-        let prov = DerivedMetricDTO.Provenance(
-            inputs: ["RECOVERY_SCORE"], source: "DAY", windowDays: 14, computedAt: .now
-        )
-        // Wellness score but the server returned no prior window → no line.
-        let noDelta = DerivedMetricDTO(
-            metric: "STRESS_SCORE", status: "ok",
-            value: .init(score: 42, trendDelta: nil, band: "yellow"),
-            coverage: cov, confidence: .init(score: 90, band: "high"), provenance: prov, reason: nil
-        )
-        #expect(InsightsDerivedBlock.trendLine(for: noDelta) == nil)
-        // A re-frame metric never carries a trend line even with a value.
-        let reframe = DerivedMetricDTO(
-            metric: "FITNESS_AGE", status: "ok",
-            value: .init(score: nil, trendDelta: 5, band: nil, fitnessAgeDeltaYears: -6),
-            coverage: cov, confidence: .init(score: 70, band: "medium"), provenance: prov, reason: nil
-        )
-        #expect(InsightsDerivedBlock.trendLine(for: reframe) == nil)
+        // 1.4 B4 — the "vs your recent baseline" line belonged to the deleted
+        // "More from your data" text lane; only the decode is pinned here.
     }
 
     @Test("fetch — decodes the re-frame arm (fitness-age delta years)")
@@ -135,7 +109,7 @@ struct DerivedMetricsRepositoryTests {
         #expect([
             "Cardio fitness of someone ~6 yr younger",
             "Ausdauer wie ~6 J. jünger"
-        ].contains(InsightsDerivedBlock.headline(for: dto)))
+        ].contains(InsightsDerivedCopy.fitnessHeadline(dto.value?.fitnessAgeDeltaYears)))
     }
 
     @Test("fetch — insufficient arm decodes (no value, reason present)")
@@ -373,17 +347,27 @@ struct DerivedMetricsRepositoryTests {
         #expect(summary.contributing == ["RESTING_HEART_RATE", "RESPIRATORY_RATE"])
     }
 
-    @Test("derived block — provenance line uses server window + source (no fabrication)")
+    @Test("derived copy — provenance line uses server window + source (no fabrication)")
     func provenanceLineFromServer() {
         let prov = DerivedMetricDTO.Provenance(
             inputs: ["RESTING_HEART_RATE"], source: "DAY", windowDays: 30, computedAt: .now
         )
         // Catalog resolves to the host locale; the window (30) + source come
         // straight from the server provenance, never fabricated.
+        // 1.4 B2 — reads as a sentence now ("täglich-Daten" was a grammar slip).
         #expect([
-            "From your last 30 days, daily data",
-            "Aus deinen letzten 30 Tagen, täglich-Daten"
-        ].contains(InsightsDerivedBlock.provenanceLine(for: prov)))
+            "From daily values over the last 30 days",
+            "Aus Tageswerten der letzten 30 Tage"
+        ].contains(InsightsDerivedCopy.provenanceLine(for: prov)))
+    }
+
+    @Test("1.4 B4: a source token without words never reaches the line", arguments: ["none", "server", "HOUR"])
+    func provenanceLineWithoutRawToken(token: String) {
+        let prov = DerivedMetricDTO.Provenance(inputs: [], source: token, windowDays: 90, computedAt: .now)
+        let line = InsightsDerivedCopy.provenanceLine(for: prov)
+        #expect(!line.contains(token))
+        #expect(!line.contains(token.lowercased()))
+        #expect(line == String(localized: "insights.provenance.window \(90)"))
     }
 
     // MARK: - W-B187 #29: recovery source authority (WHOOP-native vs computed)
@@ -403,10 +387,9 @@ struct DerivedMetricsRepositoryTests {
 
     @Test("recovery — headline is the server value (no client recompute)")
     func recoveryHeadlineIsServerValue() {
-        // The headline read-out comes straight from the server `score`, whatever
-        // source the server resolved it from. 66 in → "66 / 100" out, verbatim.
+        // The ring read-out comes straight from the server `score`, whatever
+        // source the server resolved it from. 66 in → "66" out, verbatim.
         let dto = recoveryDTO(inputs: ["WHOOP_RECOVERY"], score: 66)
-        #expect(InsightsDerivedBlock.headline(for: dto) == "66 / 100")
         #expect(WellnessScorePresentation.scoreValueText(dto) == "66")
     }
 
@@ -443,13 +426,13 @@ struct DerivedMetricsRepositoryTests {
 
         // WHOOP-native caveat + explainer name WHOOP and do NOT call it a proxy
         // (locale-resolved EN-or-DE).
-        #expect(InsightsDerivedBlock.caveat(for: whoop)?.lowercased().contains("whoop") == true)
-        #expect(InsightsDerivedBlock.whatIs(for: whoop)?.lowercased().contains("whoop") == true)
+        #expect(InsightsDerivedCopy.caveat(for: whoop)?.lowercased().contains("whoop") == true)
+        #expect(InsightsDerivedCopy.whatIs(for: whoop)?.lowercased().contains("whoop") == true)
 
         // The computed proxy keeps the existing honest "proxy / heart-rate
         // variability" framing — unchanged from the string-keyed resolver.
-        #expect(InsightsDerivedBlock.caveat(for: computed) == InsightsDerivedBlock.caveat(for: "RECOVERY_SCORE"))
-        #expect(InsightsDerivedBlock.whatIs(for: computed) == InsightsDerivedBlock.whatIs(for: "RECOVERY_SCORE"))
+        #expect(InsightsDerivedCopy.caveat(for: computed) == InsightsDerivedCopy.caveat(for: "RECOVERY_SCORE"))
+        #expect(InsightsDerivedCopy.whatIs(for: computed) == InsightsDerivedCopy.whatIs(for: "RECOVERY_SCORE"))
 
         // A non-recovery metric delegates straight through unchanged.
         let readiness = DerivedMetricDTO(
@@ -459,7 +442,7 @@ struct DerivedMetricsRepositoryTests {
             provenance: .init(inputs: ["RESTING_HEART_RATE"], source: "DAY", windowDays: 14, computedAt: .now),
             reason: nil
         )
-        #expect(InsightsDerivedBlock.caveat(for: readiness) == InsightsDerivedBlock.caveat(for: "READINESS"))
+        #expect(InsightsDerivedCopy.caveat(for: readiness) == InsightsDerivedCopy.caveat(for: "READINESS"))
     }
 
     // MARK: - D1: per-score assessment (Einschätzung)

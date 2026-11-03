@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// **Why this exists (AUDIT-FINAL §H2):** before v0.11 there were FOUR bespoke
 /// period controls — `ChartDetailScreen.RangePicker`, `FullscreenRangePicker`,
-/// `TrendsOverlayCard.picker`, and the mood `MoodPeriodControl` — each with its
+/// the Trends overlay's picker, and the mood `MoodPeriodControl` — each with its
 /// own styling, a11y label, and placement. The operator wanted "one period
 /// control, same options, same look, same behaviour everywhere."
 ///
@@ -25,8 +25,8 @@ protocol HLRangeOption: CaseIterable, Identifiable, Hashable {
 ///   `ChartDetailScreen` / bottom of `FullscreenChartCover` (horizontal +
 ///   vertical padding + a translucent material backing so chart content can
 ///   scroll underneath).
-/// - `.inline` — bare segmented control for use inside a card's `VStack`
-///   (TrendsOverlayCard), no material backing.
+/// - `.inline` — bare segmented control for use inside a card's `VStack`,
+///   no material backing.
 struct HLRangePicker<Option: HLRangeOption>: View where Option.AllCases: RandomAccessCollection {
     enum Style {
         /// Sticky chrome: padded + material backing. For `safeAreaInset` hosts.

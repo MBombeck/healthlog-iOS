@@ -20,9 +20,11 @@ extension NotificationsScreen {
                 VStack(alignment: .leading, spacing: HLSpace.xxs) {
                     Text(systemAuthorizationStatus.title)
                         .font(.hlSubhead.weight(.semibold))
-                    Text(systemAuthorizationStatus.subtitle)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                    if let subtitle = systemAuthorizationStatus.subtitle {
+                        Text(subtitle)
+                            .font(.hlCaption)
+                            .foregroundStyle(HLText.secondary)
+                    }
                 }
                 Spacer(minLength: HLSpace.sm)
             }
@@ -96,11 +98,8 @@ extension NotificationsScreen {
         // Hinweis auch dann, wenn die Stimmung längst erfasst ist. Der Satz
         // war also in genau dem häufigen Fall falsch und ist gefallen; was
         // bleibt, ist die Uhrzeit, und die stellt der DatePicker unten ein.
-        HLSettingsCard(
-            icon: "face.smiling",
-            title: "Mood reminder",
-            footer: "A gentle nudge at the reminder time you set."
-        ) {
+        // 1.4 B2 — the switch and the time picker say it; no footer.
+        HLSettingsCard(icon: "face.smiling", title: "Mood reminder") {
             Toggle(
                 isOn: Binding(
                     get: { currentValue },
@@ -169,11 +168,8 @@ extension NotificationsScreen {
     @ViewBuilder
     var lowStockCard: some View {
         let isOn = store?.lowStockRunwayDays != nil
-        HLSettingsCard(
-            icon: "shippingbox",
-            title: LocalizedStringKey("med.lowstock.title"),
-            footer: LocalizedStringKey("med.lowstock.footer")
-        ) {
+        // 1.4 B2 — title, switch and threshold say it; no footer.
+        HLSettingsCard(icon: "shippingbox", title: LocalizedStringKey("med.lowstock.title")) {
             Toggle(
                 isOn: Binding(
                     get: { isOn },
@@ -341,11 +337,9 @@ extension NotificationsScreen {
     /// does, that it is NOT medical advice, and that it only uses the user's /
     /// their data's own ranges. Device-local opt-in (`ThresholdNudgePrefStore`).
     var outOfRangeNudgeCard: some View {
-        HLSettingsCard(
-            icon: "ruler",
-            title: LocalizedStringKey("threshold.nudge.settings.title"),
-            footer: LocalizedStringKey("threshold.nudge.settings.footer")
-        ) {
+        // 1.4 B2 — the footer repeated the switch; the disclaimer stays in the
+        // card (MDR posture).
+        HLSettingsCard(icon: "ruler", title: LocalizedStringKey("threshold.nudge.settings.title")) {
             Toggle(
                 isOn: Binding(
                     get: { outOfRangeNudgeEnabled },
@@ -367,24 +361,6 @@ extension NotificationsScreen {
                 .foregroundStyle(HLText.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("NotificationsScreen.outOfRangeNudgeDisclaimer")
-        }
-    }
-
-    /// **W-FOCUS-FILTER** — honest explanation of the HealthLog Focus filter.
-    /// The filter itself is configured in iOS Settings → Focus (not here); this
-    /// read-only card tells the user what attaching it does, and that urgent
-    /// health alerts are never held back.
-    var focusFilterInfoCard: some View {
-        HLSettingsCard(
-            icon: "moon.circle",
-            title: LocalizedStringKey("focus.filter.card.title"),
-            footer: LocalizedStringKey("focus.filter.card.footer")
-        ) {
-            Text(LocalizedStringKey("focus.filter.card.body"))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("NotificationsScreen.focusFilterInfo")
         }
     }
 }

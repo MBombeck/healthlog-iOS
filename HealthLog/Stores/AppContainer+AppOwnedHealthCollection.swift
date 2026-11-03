@@ -28,6 +28,7 @@
             registry: AuthenticatedSessionLeaseRegistry,
             uploader: MeasurementBatchUploader,
             skipRegister: HealthKitSkippedRowRegister = .shared,
+            featureFlags: (any FeatureFlagsServicing)? = nil,
             deliveryFollowUp: (@Sendable () async -> Void)? = nil,
             serverFreshness: (@Sendable () async -> [MetricFreshness]?)? = nil
         ) {
@@ -58,6 +59,15 @@
                     observer: HealthKitSampleChangeObserver(store: store),
                     // 1.3 (#127) — the backwards history walk.
                     history: HealthKitHistoryPageSource(store: store),
+                    // A2 (1.4, R-A8) — not for the summed types while the
+                    // statistics path sends them (the per-sample gate's own
+                    // fail-closed default: on until the flags say otherwise).
+                    historyOwnedElsewhere: { typeIdentifier in
+                        HealthSampleSplitPolicy.historyOwnedByStatistics(
+                            typeIdentifier,
+                            dailyStatsEnabled: featureFlags?.isEnabled(.enableDailyStats) ?? true
+                        )
+                    },
                     deliveryFollowUp: deliveryFollowUp
                 ),
                 cursors: cursors,
@@ -144,6 +154,35 @@
                 )
             }
             return await standard.consume(samples, ofType: typeIdentifier, requiring: lease)
+        }
+
+        /// A2 (1.4, R-A7) — a history page, posted as `backfill`.
+        func consumeHistory(
+            _ samples: [HKSample],
+            ofType typeIdentifier: String,
+            requiring lease: HealthSyncAuthenticatedLease
+        ) async -> HealthSyncPageOutcome {
+            guard let standard = await MainActor.run(body: { SpeziAppDelegate.spezi?.module(HealthLogStandard.self) }) else {
+                return await consume(samples, ofType: typeIdentifier, requiring: lease)
+            }
+            return await standard.consumeHistory(samples, ofType: typeIdentifier, requiring: lease)
+        }
+    }
+
+    /// A5 (1.4, R3 S4) — a page's deletions, to the running standard. Before the
+    /// Spezi graph is up there is nowhere to send or keep them, so the page
+    /// holds, exactly like its samples.
+    extension SpeziStandardPageConsumer: HealthSampleDeletionConsuming {
+        func consumeDeletions(
+            _ externalIDs: [String],
+            copiesOf serverIDs: [String],
+            ofType typeIdentifier: String,
+            requiring lease: HealthSyncAuthenticatedLease
+        ) async -> HealthSyncHoldReason? {
+            guard let standard = await MainActor.run(body: { SpeziAppDelegate.spezi?.module(HealthLogStandard.self) }) else {
+                return .leaseLost
+            }
+            return await standard.consumeDeletions(externalIDs, copiesOf: serverIDs, ofType: typeIdentifier, requiring: lease)
         }
     }
 #endif

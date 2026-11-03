@@ -29,17 +29,20 @@ import Foundation
                 guard let quantityType = HKObjectType.quantityType(
                     forIdentifier: HKQuantityTypeIdentifier(rawValue: config.identifier)
                 ) else { continue }
+                // B5 (1.4, R4 2.1) — no hour that is only partly readable.
+                let start = await readableStart(anchor, of: quantityType, bucket: .hour)
+                guard start < endExclusive else { continue }
                 do {
                     let collection = try await runStatisticsCollection(
                         quantityType: quantityType,
-                        predicate: HKQuery.predicateForSamples(withStart: anchor, end: endExclusive, options: []),
-                        anchor: anchor,
+                        predicate: HKQuery.predicateForSamples(withStart: start, end: endExclusive, options: []),
+                        anchor: start,
                         interval: DateComponents(hour: 1)
                     )
                     let buckets = Self.hourBuckets(
                         from: collection,
                         hkUnit: hkUnit(for: config.identifier),
-                        anchor: anchor,
+                        anchor: start,
                         endExclusive: endExclusive
                     )
                     rows += HealthKitHourlyStatRow.rows(

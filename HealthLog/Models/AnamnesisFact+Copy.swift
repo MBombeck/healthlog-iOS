@@ -72,8 +72,8 @@ public enum AnamnesisCopy {
     public static let validityRange = "anamnesis.validity.range"
 
     public static let historyTitle = "anamnesis.history.title"
-    public static let historyEmpty = "anamnesis.history.empty"
-    public static let historyFooter = "anamnesis.history.footer"
+    // 1.4 B2-c — `anamnesis.history.empty` and `.footer` left with the empty
+    // history fold-out and its "nothing is overwritten" line.
 
     public static let actionRemove = "anamnesis.action.remove"
     public static let errorDismiss = "anamnesis.error.dismiss"
@@ -92,7 +92,7 @@ public enum AnamnesisCopy {
         title, subtitle, footer,
         neverRecorded, neverRecordedHint, unreadable, unreadableHint, unknownValue,
         validitySince, validityRange,
-        historyTitle, historyEmpty, historyFooter,
+        historyTitle,
         actionRemove, errorDismiss,
         loadFailed, aboutMeSubtitle,
         errorConflict, errorStale, errorInvalidValue, errorCurrentExists, errorInFlight

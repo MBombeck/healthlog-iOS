@@ -113,7 +113,7 @@ struct FullscreenChartCover: View {
                         x: .value("chart.scrubber.selection", plottedPoint.at),
                         y: .value("Diastolic", secondary)
                     )
-                    .foregroundStyle(HLChartTints.seriesMid)
+                    .foregroundStyle(HLChartTints.seriesLow)
                     .symbolSize(160)
                 }
             }
@@ -139,19 +139,7 @@ struct FullscreenChartCover: View {
                 .font(.hlCaption.weight(.semibold))
                 .foregroundStyle(HLText.secondary)
         }
-        .chartXAxis {
-            AxisMarks(values: .automatic) { value in
-                if let date = value.as(Date.self) {
-                    AxisValueLabel {
-                        Text(date, format: .dateTime.day().month(.abbreviated))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                    AxisGridLine()
-                        .foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                }
-            }
-        }
+        .chartXAxis { ChartDateAxis.marks(for: plotted.map(\.at)) }
         .hlAnimation(.snappy(duration: 0.35), value: store.range)
         .accessibilityChartDescriptor(
             FullscreenChartDescriptor(
@@ -165,14 +153,12 @@ struct FullscreenChartCover: View {
     }
 
     /// Fullscreen-chart empty surface — the canonical `HLEmptyState` lockup
-    /// (audit-01 C1); the host `Group` already centers it full-bleed.
+    /// (audit-01 C1); the host `Group` already centers it full-bleed. The cover
+    /// opens only on a drawn chart, so it is empty only after a range change
+    /// inside it: the title names the range, not a missing history (1.4 B2).
     private var emptyState: some View {
-        HLEmptyState(
-            icon: "chart.line.flattrend.xyaxis",
-            title: "No data yet",
-            message: "Log measurements to see the trend in fullscreen."
-        )
-        .accessibilityIdentifier("chart.fullscreen.empty")
+        HLEmptyState(icon: "chart.line.flattrend.xyaxis", title: "No measurements in the selected range")
+            .accessibilityIdentifier("chart.fullscreen.empty")
     }
 }
 

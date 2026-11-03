@@ -30,9 +30,9 @@ struct IllnessDayLogTimeline: View {
                     }
                 }
             case .empty:
-                Text("illness.daylog.timeline.empty")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                // 1.4 B2 — "Heute eintragen" stands right above; the detail
+                // screen hides the timeline section while it is empty.
+                EmptyView()
             case let .loaded(dayLogs):
                 ForEach(dayLogs) { log in
                     IllnessDayLogRow(log: log)

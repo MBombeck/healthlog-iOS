@@ -10,9 +10,8 @@ import SwiftUI
 /// lived only in a code comment (and, for the local PDF, in the locked footer
 /// line). This card surfaces it to the user before they share.
 ///
-/// Reuses the existing `appstore.disclaimer.*` xcstrings keys for the title +
-/// the consult-a-doctor line; the focused export caveat carries the
-/// not-a-certified-document / not-for-diagnostic-use wording.
+/// Reuses the `appstore.disclaimer.card_title` key; the focused export caveat
+/// carries the not-a-certified-document / not-for-diagnostic-use wording.
 struct HealthExportDisclaimerCard: View {
     static let accessibilityIdentifier = "healthExport.disclaimer"
 
@@ -22,13 +21,11 @@ struct HealthExportDisclaimerCard: View {
             title: "appstore.disclaimer.card_title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
+                // 1.4 B2-c — the export caveat only; "do not decide on this app
+                // alone" is the onboarding acknowledgement, kept in About.
                 Text("export.disclaimer.not_certified")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("appstore.disclaimer.consult_doctor")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 // 1.0.3 (App Review 1.4.1) — the document leaves the app here,
                 // so the caveat now carries the way to every source behind the

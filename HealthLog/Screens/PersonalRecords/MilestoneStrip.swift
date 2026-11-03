@@ -113,7 +113,11 @@ private struct MilestoneSticker: View {
                 .foregroundStyle(HLText.secondary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 80)
+                // 1.4 B4 — a fixed column the label wraps in ("Erste" over
+                // "Bestleistung"); `maxWidth: 80` in the horizontal scroll
+                // cut it to "Erste Bestl…".
+                .frame(width: 96)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("records.milestone.a11y \(milestone.localizedTitle)"))

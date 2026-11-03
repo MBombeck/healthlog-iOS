@@ -45,7 +45,8 @@ struct HealthKitUpdateNoticeCard: View {
             if !dismissed, let sheetStatus, let variant = HealthKitUpdateNotice.visibleVariant(
                 state: readiness.state,
                 statuses: readiness.writeAuthorizationStatuses,
-                sheetStatus: sheetStatus
+                sheetStatus: sheetStatus,
+                bannerAsksToConnect: readiness.state.shouldShowBanner && !readiness.isConnected
             ) {
                 card(for: variant)
                     .transition(transition)

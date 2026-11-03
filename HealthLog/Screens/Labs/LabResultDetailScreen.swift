@@ -61,10 +61,6 @@ struct LabResultDetailScreen: View {
         detail?.source ?? summary.source
     }
 
-    private var isLinked: Bool {
-        (detail?.biomarkerId ?? summary.biomarkerId) != nil
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
@@ -129,11 +125,8 @@ struct LabResultDetailScreen: View {
                     Spacer()
                     LabRangeBadge(status: status)
                 }
-                if isLinked {
-                    Label("labs.detail.linkedMarker", systemImage: "link")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
+                // 1.4 B2-c — "linked to a catalog biomarker" was an
+                // implementation detail; the row is gone.
                 // #126 3.5 — converted from what was printed, and the printed range.
                 LabConversionNote(conversion: detail.map(LabConversion.init) ?? LabConversion(summary))
             }
@@ -148,9 +141,7 @@ struct LabResultDetailScreen: View {
         if let band, let value {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("labs.detail.reference")
-                        .font(.hlFootnote.weight(.semibold))
-                        .foregroundStyle(HLText.secondary)
+                    HLSectionLabel("labs.detail.reference")
                     LabReferenceRangeRow(
                         value: value,
                         unit: unit,
@@ -166,10 +157,16 @@ struct LabResultDetailScreen: View {
                     // the range came from and offers the sources behind it.
                     // Outside `LabReferenceRangeRow`'s combine group by
                     // construction: that group lives in the row's own body.
-                    Text("labs.detail.reference.caption")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                    HLSourcesLink(topic: .labReferenceRanges)
+                    // 1.4 B2-c — where the range comes from and its sources
+                    // share one line (the caption wraps, the link stays right).
+                    HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+                        Text("labs.detail.reference.caption")
+                            .font(.hlCaption)
+                            .foregroundStyle(HLText.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: HLSpace.sm)
+                        HLSourcesLink(topic: .labReferenceRanges)
+                    }
                 }
             }
         }
@@ -178,9 +175,7 @@ struct LabResultDetailScreen: View {
     private func noteCard(_ note: String) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text("labs.detail.note")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                HLSectionLabel("labs.detail.note")
                 Text(note)
                     .font(.hlBody)
                     .foregroundStyle(HLText.primary)

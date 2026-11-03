@@ -16,10 +16,12 @@ private struct HistoryCatchUpCard: View {
     let store: HealthHistoryCatchUpStore
 
     var body: some View {
+        // 1.4 B2-c — no subtitle: "new readings go first, the older history
+        // follows on its own" and the four sentences over the button are one
+        // short note now, shown only while there is something left to send.
         HLSettingsCard(
             icon: "clock.arrow.circlepath",
-            title: "settings.applehealth.history.title",
-            subtitle: "settings.applehealth.history.subtitle"
+            title: "settings.applehealth.history.title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 Text(statusText)

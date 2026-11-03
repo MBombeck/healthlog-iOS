@@ -78,8 +78,10 @@ struct SettingsAppleHealthImportScreen: View {
             // dem Absprung → toter Seiten-Untertitel → hier → Explainer).
             // Heimat sind die erste und die letzte: der Untertitel auf der
             // Apple-Health-Seite orientiert vor dem Tippen, der Explainer im
-            // Kartenkörper trägt als einziger die Begründung („der reguläre
-            // Sync deckt nur den Zeitraum ab jetzt ab").
+            // Kartenkörper trägt als einziger die Begründung. 1.4 B1: dessen
+            // letzter Satz („der reguläre Sync deckt nur den Zeitraum ab jetzt
+            // ab") ist gefallen; der reguläre Sync holt den älteren Verlauf
+            // längst selbst nach (Karte „Verlauf aus Apple Health").
             trailing: { statusPill },
             content: { heroBody }
         )
@@ -296,7 +298,7 @@ struct SettingsAppleHealthImportScreen: View {
             Image(systemName: icon)
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLText.secondary)
-                .frame(width: 18, alignment: .center)
+                .hlInfoIconColumn()
                 .accessibilityHidden(true)
             Text(label)
                 .font(.hlSubhead)
@@ -314,7 +316,7 @@ struct SettingsAppleHealthImportScreen: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLText.secondary)
-                .frame(width: 18, alignment: .center)
+                .hlInfoIconColumn()
                 .accessibilityHidden(true)
             Text(reason)
                 .font(.hlCaption)
@@ -326,31 +328,18 @@ struct SettingsAppleHealthImportScreen: View {
     // MARK: - Privacy card
 
     private var privacyCard: some View {
+        // 1.4 B2-c — the four rows carry the data flow; the footer that
+        // repeated them ("parsing-only", "Stats") is gone.
         HLSettingsCard(
             icon: "lock.shield",
-            title: "settings.applehealth_import.privacy_title",
-            footer: "settings.applehealth_import.privacy_footer"
+            title: "settings.applehealth_import.privacy_title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                privacyRow(icon: "arrow.up.doc.fill", text: "settings.applehealth_import.privacy_upload")
-                privacyRow(icon: "doc.text.magnifyingglass", text: "settings.applehealth_import.privacy_parse")
-                privacyRow(icon: "chart.bar.fill", text: "settings.applehealth_import.privacy_stats")
-                privacyRow(icon: "trash.fill", text: "settings.applehealth_import.privacy_delete")
+                HLIconTextRow(icon: "arrow.up.doc.fill", "settings.applehealth_import.privacy_upload")
+                HLIconTextRow(icon: "doc.text.magnifyingglass", "settings.applehealth_import.privacy_parse")
+                HLIconTextRow(icon: "chart.bar.fill", "settings.applehealth_import.privacy_stats")
+                HLIconTextRow(icon: "trash.fill", "settings.applehealth_import.privacy_delete")
             }
-        }
-    }
-
-    private func privacyRow(icon: String, text: LocalizedStringKey) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.md) {
-            Image(systemName: icon)
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 18, alignment: .center)
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.hlBody)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

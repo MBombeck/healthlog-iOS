@@ -119,8 +119,10 @@ struct BiomarkerEditorSheet: View {
                     Section { HLFormErrorText(inlineError) }
                 }
             }
-            .navigationTitle(Text(isEditing ? "biomarker.edit.title" : "biomarker.add.title"))
+            .navigationTitle(Text(isEditing ? "biomarker.edit.title" : "biomarker.add.sheetTitle"))
             .navigationBarTitleDisplayMode(.inline)
+            // 1.4 B2 — the reference-range citation pushes inside this sheet.
+            .hlSheetStack()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("labs.action.cancel") {

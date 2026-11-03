@@ -24,7 +24,7 @@ struct HLLearnMoreLink: View {
 
     var body: some View {
         if let guide = HLLearnLinks.guide(forConcept: concept) {
-            Link(destination: guide.url) {
+            Link(destination: guide.localizedURL) {
                 HStack(spacing: HLSpace.xxs) {
                     Text("common.learnMore")
                     Image(systemName: "arrow.up.right")
@@ -36,7 +36,7 @@ struct HLLearnMoreLink: View {
             }
             .accessibilityIdentifier("learnMore.\(guide.slug)")
             .accessibilityLabel(
-                Text("learnMore.a11y \(guide.title)")
+                Text("learnMore.a11y \(guide.localizedTitle)")
             )
         }
     }

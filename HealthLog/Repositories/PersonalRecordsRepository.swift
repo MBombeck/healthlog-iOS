@@ -50,8 +50,12 @@ public actor PersonalRecordsRepository {
             if let metricType {
                 query.append(("metricType", metricType))
             }
-            let req: APIRequest<[PersonalRecordDTO]> = .get("/api/personal-records", query: query)
-            let payload = try await api.send(req)
+            // #147 (v1.43.7) — a cut answer is asked once more at the
+            // route's ceiling (500); the route takes no `offset`.
+            let payload: [PersonalRecordDTO] = try await CappedListReader.readUpToCeiling(
+                api: api, path: "/api/personal-records", query: query,
+                limit: limit, ceiling: CappedListReader.personalRecordsCeiling
+            )
             cache[key] = CachedEntry(payload: payload, cachedAt: clock())
             return payload
         } catch {

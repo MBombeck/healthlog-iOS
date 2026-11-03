@@ -8,6 +8,10 @@ import SwiftUI
 
 struct HighlightInsightCard: View {
     let insight: Insight?
+    /// 1.4 B2 — the server's long `body` stays behind "Mehr anzeigen"; the
+    /// card opens with title and summary only.
+    @State private var showsBody = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// #115 B6 — the cards on this tile are rule-based since server v1.39
     /// (`insights/cards` answers `provider: "rules"`), so neither the title nor
@@ -21,36 +25,41 @@ struct HighlightInsightCard: View {
         if let insight {
             HLCard(style: .elevated) {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HStack(spacing: HLSpace.xs) {
-                        Image(systemName: Self.symbolName)
-                            .foregroundStyle(HLText.primary)
-                        Text(Self.title)
-                            .font(.hlCaption.weight(.semibold))
-                            .foregroundStyle(HLText.secondary)
-                        Spacer()
-                        // #115 · 0.2 — no provider badge: from server v1.39
-                        // `insights/cards` are rule-based (`provider: "rules"`).
-                    }
+                    // 1.4 B4 — Today's one card heading: the metric tiles'
+                    // glyph and title. #115 · 0.2 — no provider badge: from
+                    // server v1.39 `insights/cards` are rule-based.
+                    HLTileHeaderRow(icon: Self.symbolName, title: Text(Self.title)) { EmptyView() }
                     Text(insight.title)
                         .font(.hlTitle3)
                         .foregroundStyle(HLText.primary)
+                    // 1.4 B2 — never cut off: the summary used to stop after
+                    // three lines with the full body right under it.
                     Text(insight.summary)
                         .font(.hlBody)
                         .foregroundStyle(HLText.secondary)
-                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                     // v0.7.0 W-API-RENDER — the server sends a full `body`
                     // prose paragraph + structured `recommendations` (each
-                    // with an optional `actionURL`) that the card silently
-                    // dropped, showing only title + clamped summary. Render
-                    // the body verbatim (MDR: never paraphrase) + an action
-                    // button per recommendation that carries a deep-link.
+                    // with an optional `actionURL`). The body renders verbatim
+                    // (MDR: never paraphrase), on request.
                     if let body = insight.body,
                        !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     {
-                        Text(body)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if showsBody {
+                            Text(body)
+                                .font(.hlSubhead)
+                                .foregroundStyle(HLText.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Button {
+                            withAnimation(reduceMotion ? nil : HLMotion.spring) { showsBody.toggle() }
+                        } label: {
+                            Text(showsBody ? "Show fewer" : "Show more")
+                                .font(.hlSubhead.weight(.medium))
+                                .foregroundStyle(HLText.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("dashboard.highlight.toggle")
                     }
                     InsightRecommendationActions(recommendations: insight.recommendations)
                 }

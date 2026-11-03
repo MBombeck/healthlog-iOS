@@ -3,10 +3,9 @@ import SwiftUI
 /// W5b (v0.12) — the two server-derived overview surfaces, grouped so the
 /// `InsightsScreen` mounts them with a single line (file-length discipline).
 ///
-/// Renders the derived re-frames / WellnessScores block
-/// (`vitals-dashboard.tsx` derived tiles + `wellness-scores.tsx`:
-/// server-computed scores + age/HRV re-frames with the
-/// coverage/confidence/provenance transparency envelope — HONEST-ONLY).
+/// Renders the WellnessScores ring cards (`vitals-dashboard.tsx` derived tiles
+/// + `wellness-scores.tsx`: server-computed scores + age/HRV re-frames —
+/// HONEST-ONLY) and, unless hoisted out, the correlations discovery block.
 ///
 /// Pure server reads (paired-only). The host gates this whole group on
 /// `BackendAvailability.hasServer`; each child additionally self-suppresses to
@@ -21,9 +20,6 @@ import SwiftUI
 /// fed by the real `RhythmEventsStore` — which also lets it be independently
 /// ordered and hidden as the `rhythm-events` overview SECTION (4.5).
 struct InsightsServerDerivedOverview: View {
-    /// The `status:ok` derived envelopes (`DerivedInsightsStore.presentable`).
-    /// Empty → the derived block self-suppresses.
-    let derivedMetrics: [DerivedMetricDTO]
     /// I-2 — the FULL derived list (`DerivedInsightsStore.metrics`, both `ok` and
     /// `insufficient` arms) the score-ring cards consume, so the confidence gate
     /// can render the calm "not enough data yet" state for a core score.
@@ -51,9 +47,6 @@ struct InsightsServerDerivedOverview: View {
     var onSetCorrelationDismissed: ((DiscoveredCorrelation, Bool) -> Void)?
     /// **CU-33** — statements currently in flight (control disabled).
     var correlationsPendingIDs: Set<String> = []
-    /// **CU-33** — pairs the server brought back on its own after a material
-    /// evidence change. Rendered as a calm note, never as an error.
-    var correlationsResurfacedIDs: Set<String> = []
     /// **CU-33** — set when a statement could not be saved and the optimistic
     /// change was rolled back.
     var correlationsActionError: String?
@@ -79,14 +72,7 @@ struct InsightsServerDerivedOverview: View {
             onSelectMood: onSelectMood,
             showsSignals: showsSignals
         )
-        // v0.14.9 §2 — every tile-able derived score is now ring-promoted
-        // (Recovery / Stress + Vascular age + HRV balance joined the rings), so
-        // the "More from your data" text lane has nothing left and self-suppresses.
-        // The block stays mounted as the single-source-of-truth dedup partner +
-        // a safety-net for any FUTURE unpromoted derived metric (it filters out
-        // `ringPromotedIDs` and renders only what remains — today: nothing).
-        InsightsDerivedBlock(metrics: derivedMetrics)
-        // v0.12 — mounts BELOW the derived-insights block (descriptive,
+        // v0.12 — mounts BELOW the score cards (descriptive,
         // never causal; self-suppresses when empty / gated off). Hoisted OUT when
         // `showsCorrelations` is false — the overview then renders it right after
         // the Tagesbriefing instead.
@@ -97,7 +83,6 @@ struct InsightsServerDerivedOverview: View {
                 dismissedPairs: correlationsDismissed,
                 onSetDismissed: onSetCorrelationDismissed,
                 pendingIDs: correlationsPendingIDs,
-                resurfacedIDs: correlationsResurfacedIDs,
                 actionError: correlationsActionError
             )
         }

@@ -10,7 +10,7 @@ import SwiftUI
 /// DELEGATED modules (cycle / coach) are intentionally **not** offered here —
 /// the server `422 modules.invalid`s a PATCH naming them (their state is owned
 /// by other resolvers). The three CORE domains (weight / blood pressure /
-/// pulse) are noted read-only in a closing "always on" card; they are server
+/// pulse) are named in the card's subtitle; they are server
 /// `CORE_DOMAIN_KEYS`, not modules, so they have no toggle to offer.
 ///
 /// Server-first: the displayed value is ``ModuleGate.isEnabled(_:)`` (default-on
@@ -36,7 +36,6 @@ struct SettingsModulesScreen: View {
     var body: some View {
         HLSettingsPage(title: "Modules") {
             toggleableCard
-            coreCard
         }
         .navigationTitle("Modules")
         .navigationBarTitleDisplayMode(.inline)
@@ -53,9 +52,12 @@ struct SettingsModulesScreen: View {
     /// erzählte die Schalter darunter nach und stand außerdem wortgleich in
     /// der Hub-Zeile „Optionale Funktionen ein- oder ausschalten". Gefallen.
     private var toggleableCard: some View {
+        // 1.4 B2-c — which domains are always on is this card's subtitle; the
+        // "Always on" card held nothing but that sentence.
         HLSettingsCard(
             icon: "square.grid.2x2.fill",
-            title: "Optional features"
+            title: "Optional features",
+            subtitle: "Weight, blood pressure and pulse are always available."
         ) {
             ForEach(SettingsModulesScreen.offeredKeys) { key in
                 moduleToggleRow(key)
@@ -134,25 +136,6 @@ struct SettingsModulesScreen: View {
         let reasonKey: String?
         /// Whether the switch stays interactive.
         let isSwitchOffered: Bool
-    }
-
-    /// Build 2 / 2.6 — `medications` dropped from the copy. It is a real,
-    /// user-toggleable module server-side (registry D3 / web v1.18.1), so
-    /// naming it here told the user something false. What remains are the three
-    /// genuine `CORE_DOMAIN_KEYS`, which are not `ModuleKey`s at all.
-    ///
-    /// UI-Standard R5 — die Karte belegte beide Beitext-Slots mit derselben
-    /// Aussage. Der Subtitle („Kerndaten können nicht ausgeschaltet werden.")
-    /// formulierte den Kartentitel „Immer aktiv" um; der Footer bleibt, weil
-    /// er als einziger *nennt*, welche drei Domänen gemeint sind.
-    private var coreCard: some View {
-        HLSettingsCard(
-            icon: "lock.fill",
-            title: "Always on",
-            footer: "Weight, blood pressure and pulse are always available."
-        ) {
-            EmptyView()
-        }
     }
 
     private func toggle(_ key: ModuleKey, to newValue: Bool) {
@@ -236,10 +219,10 @@ extension ModuleKey {
         // carried until Build 2 / 2.6 was simply wrong. `nutrients` and `mcp`
         // are the genuinely opt-in ones (`optIn: true`).
         case .inboundDocuments: "Store doctor's letters, lab reports and scans — encrypted and searchable."
-        case .nutrients: "Vitamins, minerals, water and caffeine from Apple Health. Off by default."
+        case .nutrients: "Vitamins, minerals, water and caffeine from Apple Health."
         case .environment: "Weather and daylight context for your readings."
         case .mentalHealth: "WHO-5, PHQ-9 and GAD-7 check-ins."
-        case .mcp: "Let an external assistant read your record over the MCP endpoint. Off by default."
+        case .mcp: "settings.modules.mcp.subtitle"
         }
     }
 }

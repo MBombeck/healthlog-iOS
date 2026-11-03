@@ -26,12 +26,12 @@
     struct Phase8MaterialCallSiteTests {
         // MARK: - The audited family
 
-        /// The five Coach surfaces named in `08-14-PLAN.md`'s `files_modified`.
+        /// The Coach surfaces named in `08-14-PLAN.md`'s `files_modified`.
+        /// 1.4 B4: `AskCoachHeroCard.swift` left with the card (no caller).
         static let coachSurfaces = [
             "HealthLog/Screens/Coach/AskCoachSheet.swift",
             "HealthLog/Screens/Coach/AskCoachSheet+InputRow.swift",
             "HealthLog/Screens/Coach/AskCoachSheet+Transcript.swift",
-            "HealthLog/Screens/Coach/AskCoachHeroCard.swift",
             "HealthLog/Screens/Coach/MiniCoachOnboardingSheet.swift"
         ]
 

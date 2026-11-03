@@ -122,7 +122,7 @@ struct EcgStoreTests {
     // MARK: - Copy contract
 
     @Test("the device-result copy is present and attributed to the device")
-    func resultCopyIsAttributed() {
+    func resultCopyIsAttributed() throws {
         // The label is the DEVICE's result…
         let label = EcgPresentation.resultLabel(for: .notDetected)
         #expect([
@@ -130,12 +130,20 @@ struct EcgStoreTests {
             "Keine Anzeichen von Vorhofflimmern"
         ].contains(label))
         // …and it is never shown without naming the device as its author.
-        let attribution = EcgPresentation.attribution(for: .notDetected)
-        #expect(attribution.contains(label))
+        // 1.4 B2: the attribution is the footer under the result (the same
+        // sentence on the list and the detail), not a second line restating it.
+        let attribution = String(localized: "insights.ecg.disclaimer")
         #expect(
             attribution.contains("recording device") || attribution.contains("Aufzeichnungsgerät"),
             "the result must always be attributed to the recording device"
         )
+        let detail = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("HealthLog/Screens/Insights/Sub/EcgDetailScreen.swift"),
+            encoding: .utf8
+        )
+        #expect(detail.contains("EcgAttributionFooter()"), "the detail's result card carries the attribution")
     }
 
     @Test("an unknown device literal is shown VERBATIM, never reinterpreted")

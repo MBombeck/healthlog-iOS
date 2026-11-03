@@ -65,12 +65,12 @@ import Testing
         // MARK: - Category registration
 
         @Test("registerCategories installs the MEASUREMENT_REMINDER category with the Erledigt action")
-        func categoryRegistersDoneAction() async throws {
+        func categoryRegistersDoneAction() async {
             let appRouter = AppRouter()
             _ = makeService(appRouter: appRouter)
             // setNotificationCategories serialises on UNUserNotificationCenter's
-            // own queue — yield briefly (mirrors the medication-action test).
-            try await Task.sleep(nanoseconds: 50_000_000)
+            // own queue. T1 (1.4) — awaited, not a 50 ms sleep (see the helper).
+            await awaitNotificationCategory(NotificationService.categoryMeasurementReminder)
             let categories = await UNUserNotificationCenter.current().notificationCategories()
             guard let cat = categories.first(
                 where: { $0.identifier == NotificationService.categoryMeasurementReminder }

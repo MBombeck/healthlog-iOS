@@ -66,3 +66,26 @@ struct InsightsSkeletonContent: View {
         }
     }
 }
+
+/// 1.4 B2 — the score tiles while the server still computes them: two tiles in
+/// the grid's shape, a ring and a label each. VoiceOver hears the one sentence
+/// the loose caption used to show.
+struct InsightsScoreCardsSkeleton: View {
+    var body: some View {
+        HStack(spacing: HLSpace.md) {
+            ForEach(0 ..< 2, id: \.self) { _ in
+                HLCard {
+                    VStack(spacing: HLSpace.sm) {
+                        HLSkeleton(.circle, width: 96, height: 96)
+                        HLSkeleton(.capsule, width: 90, height: 12)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, HLSpace.xs)
+                }
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(Text("insights.overview.derived.preparing"))
+        .accessibilityIdentifier("insights.overview.derived.preparing")
+    }
+}

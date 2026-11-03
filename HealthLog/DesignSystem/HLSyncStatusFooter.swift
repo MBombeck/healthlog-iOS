@@ -48,7 +48,20 @@ import SwiftUI
 /// read-only pulls), so the footer is perceivable on fast networks too. The
 /// caption reads the phase from the environment store; call sites are
 /// unchanged.
+///
+/// **1.4 decision 3 (Alex, 21.10.):** "Zuletzt synchronisiert" stays on Today
+/// only. Everywhere else the footer is quiet and appears only for a real
+/// state: a failed or day-old sync (with the time of the last one) and writes
+/// that wait for a connection or were given up on. One switch for every call
+/// site: the default is ``Scope/realStateOnly``, Today passes ``Scope/today``.
 struct HLSyncStatusFooter: View {
+    enum Scope {
+        /// Today: the settled time, the in-flight beats and the confirmation.
+        case today
+        /// Every other screen: only a real state, else nothing.
+        case realStateOnly
+    }
+
     /// The screen's own in-flight flag (e.g. `store.isLoading`), OR'd inside
     /// the caption with `SyncStateStore.isLoading` so the footer reads
     /// "Wird synchronisiert…" during either a data refresh or the handshake.
@@ -58,11 +71,13 @@ struct HLSyncStatusFooter: View {
     /// Insights root pass their existing first-login predicate; every other
     /// screen keeps the default `false`).
     var firstLoginPreparing: Bool = false
+    var scope: Scope = .realStateOnly
 
     var body: some View {
         SyncStatusCaption(
             screenLoading: screenLoading,
-            firstLoginPreparing: firstLoginPreparing
+            firstLoginPreparing: firstLoginPreparing,
+            realStateOnly: scope == .realStateOnly
         )
         .padding(.top, HLSpace.sm)
     }

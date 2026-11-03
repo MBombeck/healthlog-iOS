@@ -10,6 +10,13 @@ extension OutboxStore {
     /// Clears the retry budget, the back-off stamp and the park marker, so the
     /// next pass sends the row again. Dead-lettered rows are not touched here
     /// (they have ``resubmit(id:)``). Returns `true` when a live row matched.
+    ///
+    /// 1.4 (S2) — an `unconfirmed:` marker stays, as in
+    /// ``requeueRetriableRowsOverBudget(maxAttempts:keepingMarkers:)``: the
+    /// row may already be on the server, and the marker dates the first
+    /// unconfirmed send. Cleared, the next unreadable answer restarted the
+    /// 23-hour window and a re-send could go out past the server's 24-hour
+    /// idempotency cache as a second record.
     @discardableResult
     func rearm(id: UUID) throws -> Bool {
         let descriptor = FetchDescriptor<OutboxOperation>(
@@ -18,7 +25,9 @@ extension OutboxStore {
         guard let op = try modelContext.fetch(descriptor).first else { return false }
         op.attempts = 0
         op.lastAttemptAt = nil
-        op.lastError = nil
+        if OutboxReplayService.unconfirmedSince(op.lastError) == nil {
+            op.lastError = nil
+        }
         try modelContext.save()
         return true
     }

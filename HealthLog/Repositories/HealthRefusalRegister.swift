@@ -96,6 +96,15 @@ enum HealthKitBatchRejection: Equatable {
         MeasurementBatchInvalid.code
     ]
 
+    /// INT-A — the skip-register reason of rows released after
+    /// `maxHeldSweeps`: the HTTP status the server kept answering without a
+    /// code (`unclassified_4xx:422`). A2 (1.4) — also the reason of a row the
+    /// replay's halving found refused on its own. Here rather than beside
+    /// `maxHeldSweeps` because the replay compiles into the core module.
+    static func unclassifiedReason(status: Int) -> String {
+        "unclassified_4xx:\(status)"
+    }
+
     static func classify(_ error: Error) -> Self {
         if let invalid = error as? MeasurementBatchInvalid { return .refused(reason: invalid.reason) }
         guard let error = error as? HLError, !error.shouldPersistToOutbox else { return .retry }

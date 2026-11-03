@@ -70,6 +70,48 @@ public enum HLCycleRingGlowMath {
     }
 }
 
+// MARK: - 1.4 B4 — the ring's motion comes to rest
+
+public extension HLCycleRing {
+    /// How long the ring moves after it appears: the window the Insights score
+    /// rings got in B4 (`WellnessTileMotion.activeSeconds`, two slow breaths),
+    /// so the overview's rings, this one included, settle together. Before,
+    /// the bloom clock ran with `paused: false` and the day marker pulsed with
+    /// `repeatForever` for as long as the ring was on screen.
+    nonisolated static let motionActiveSeconds: Double = 12
+
+    /// The ease from the last moving frame to the still one (the score rings'
+    /// `WellnessTileMotion.settleSeconds`).
+    nonisolated static let motionSettleSeconds: Double = 1.2
+
+    /// The one gate: Reduce Motion and Low Power keep the still frame from the
+    /// start, everything else moves until the window closes.
+    nonisolated static func movesNow(reduceMotion: Bool, lowPower: Bool, atRest: Bool) -> Bool {
+        !reduceMotion && !lowPower && !atRest
+    }
+}
+
+/// Opens the motion window each time the ring appears and eases it shut after
+/// ``HLCycleRing/motionActiveSeconds``.
+private struct HLCycleRingMotionWindow: ViewModifier {
+    @Binding var atRest: Bool
+
+    func body(content: Content) -> some View {
+        content.task {
+            atRest = false
+            try? await Task.sleep(for: .seconds(HLCycleRing.motionActiveSeconds))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: HLCycleRing.motionSettleSeconds)) { atRest = true }
+        }
+    }
+}
+
+extension View {
+    func cycleRingMotionWindow(atRest: Binding<Bool>) -> some View {
+        modifier(HLCycleRingMotionWindow(atRest: atRest))
+    }
+}
+
 // MARK: - Shared continuous-motion driver
 
 /// One `TimelineView(.animation)` clock shared by every continuous glow layer so
@@ -254,5 +296,46 @@ struct HLOvulationSparkle: View {
         }
         .blendMode(.plusLighter)
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Sheen layer
+
+/// The `.sheen` motion's soft rotating highlight (moved here from
+/// `HLCycleRing.swift` to keep that file inside its length budget).
+struct HLCycleRingSheenLayer: View {
+    let side: CGFloat
+    let scheme: ColorScheme
+
+    @State private var angle: Double = 0
+
+    var body: some View {
+        let stroke = HLRing.derivedStroke(forSide: side)
+        Circle()
+            .stroke(
+                AngularGradient(
+                    gradient: Gradient(colors: [
+                        HLText.primary.opacity(0),
+                        HLText.primary.opacity(scheme == .dark ? 0.10 : 0.07),
+                        HLText.primary.opacity(0)
+                    ]),
+                    center: .center
+                ),
+                style: StrokeStyle(lineWidth: stroke * 1.6, lineCap: .round)
+            )
+            .blur(radius: stroke * 0.6)
+            .rotationEffect(.degrees(angle))
+            .onAppear {
+                withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
+                    angle = 360
+                }
+            }
+            // W-PERF-SWR (High) — cancel the 12s `repeatForever` sheen rotation
+            // off-screen so it doesn't keep spinning (and redrawing) when the
+            // ring leaves the hierarchy. Reset to a static angle without
+            // animation; `onAppear` restarts the loop from 0 → 360.
+            .onDisappear {
+                withAnimation(.linear(duration: 0)) { angle = 0 }
+            }
     }
 }

@@ -68,6 +68,7 @@ public struct WidgetSnapshotWriter {
         medications: [Medication],
         derivedIntakes: [MedicationIntake],
         serverCompliancePercent: Int? = nil,
+        timeZone: TimeZone = .current,
         now: Date = .now
     ) {
         // **09-03 — the value is snapshotted here, the file is touched there.**
@@ -84,7 +85,10 @@ public struct WidgetSnapshotWriter {
             // W-B183 — the app's resolved time-format, so the widget renders
             // dose times with the same clock (the widget process can't see it).
             timeFormatRaw: HLTimeFormat.current().rawValue,
-            now: now
+            now: now,
+            // 1.4 B4 — the account zone, so the widget names the dose the Live
+            // Activity and the medication card name.
+            calendar: MedicationLiveActivityPlan.calendar(in: timeZone)
         )
         enqueueWrite(failureNote: "widget-snapshot write failed") { current in
             // v0.15 companion-#3 — the med path owns dose + compliance and

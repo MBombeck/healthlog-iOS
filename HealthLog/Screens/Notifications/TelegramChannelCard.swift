@@ -22,11 +22,8 @@ struct TelegramChannelCard: View {
     @State private var testTick = 0
 
     var body: some View {
-        HLSettingsCard(
-            icon: "paperplane.fill",
-            title: "notifications.telegram.title",
-            footer: "notifications.telegram.footer"
-        ) {
+        // 1.4 B2 — the fields name what to enter; no footer repeats them.
+        HLSettingsCard(icon: "paperplane.fill", title: "notifications.telegram.title") {
             Toggle(isOn: $enabled) {
                 Text("notifications.telegram.enable")
                     .font(.hlSubhead.weight(.semibold))

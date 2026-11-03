@@ -71,10 +71,12 @@ struct AnstehendeEinnahmenSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    subtitle(for: snapshot)
+                    // 1.4 B2 — the empty state carries its own title; the
+                    // subtitle above it repeated it word for word.
                     if snapshot.rows.isEmpty {
                         emptyState
                     } else {
+                        subtitle(for: snapshot)
                         rows(for: snapshot)
                     }
                 }
@@ -413,15 +415,12 @@ extension AnstehendeEinnahmenSheet {
         let pendingCount: Int
         let totalCount: Int
 
-        /// "Heute, X von Y noch offen" / "Heute keine Einnahmen geplant".
+        /// "Heute, X von Y noch offen" (an empty day shows the empty state).
         /// Returned as a `LocalizedStringKey`-compatible String so the
         /// view can render it directly via `LocalizedStringKey(_:)` —
         /// the dynamic interpolation goes through `Localizable.xcstrings`
         /// via the `String(format:)` bridge.
         var subtitleKey: String {
-            if totalCount == 0 {
-                return String(localized: "dashboard.intakesSheet.subtitle.empty")
-            }
             let fmt = NSLocalizedString("dashboard.intakesSheet.subtitle.count", comment: "")
             return String(format: fmt, pendingCount, totalCount)
         }

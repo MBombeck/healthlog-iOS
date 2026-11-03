@@ -4,11 +4,11 @@ import SwiftUI
 ///
 /// A **horizontal linear gauge** (NOT a ring — avoids the `HLRing` "progress
 /// toward a goal" read and the compliance-ring collision; stability is a
-/// *position on a calm↔volatile spectrum*) + one plain-language sentence, in a
-/// flat `HLCard`. Paired with a half-width entry-count tile. The two tiles
+/// *position on a calm↔volatile spectrum*) + one line naming the band and its
+/// window, in a flat `HLCard`. Paired with a half-width entry-count tile. The two tiles
 /// reflow to a single column at accessibility text sizes (DESIGN-A §5.3).
 ///
-/// Color = signal only: the track / fill / number / sentence are *always*
+/// Color = signal only: the track / fill / number / caption are *always*
 /// monochrome; the single 8-pt marker dot warms to `statusWarn` ONLY when the
 /// band is flagged (score < 40), never `statusBad` — volatility is not an error.
 struct MoodStabilitySection: View {
@@ -79,24 +79,13 @@ struct MoodStabilitySection: View {
                         .contentTransition(.numericText())
                 }
 
-                HStack {
-                    Text("unsettled")
-                        .font(.hlCaption2)
-                        .foregroundStyle(HLText.tertiary)
-                    Spacer()
-                    Text("very steady")
-                        .font(.hlCaption2)
-                        .foregroundStyle(HLText.tertiary)
-                }
-
-                Text(Self.sentence(for: stability.band))
+                // 1.4 B2 — one line under the gauge: the band in a word and the
+                // server's own window (#115 · 1.3, not the period control). It
+                // replaces the scale ends, the sentence and the day count.
+                Text(Self.caption(for: stability))
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                // #115 · 1.3 — the server's own window, not the period control.
-                Text(String(format: String(localized: "mood.stability.days"), stability.days))
-                    .font(.hlCaption2)
-                    .foregroundStyle(HLText.tertiary)
             }
             .frame(
                 maxWidth: .infinity,
@@ -106,9 +95,7 @@ struct MoodStabilitySection: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("Mood stability"))
-        .accessibilityValue(Text(
-            "\(stability.score) of 100, \(Self.bandLabel(for: stability.band)). \(Self.sentence(for: stability.band))"
-        ))
+        .accessibilityValue(Text("\(stability.score) of 100, \(Self.caption(for: stability))"))
     }
 
     /// The linear gauge: inert track + calm graphite fill + a single marker dot
@@ -187,13 +174,8 @@ struct MoodStabilitySection: View {
         }
     }
 
-    nonisolated static func sentence(for band: MoodStability.Band) -> String {
-        switch band {
-        case .verySteady: String(localized: "Your mood is very steady.")
-        case .steady: String(localized: "Your mood is mostly steady.")
-        case .variable: String(localized: "Your mood varies noticeably.")
-        case .veryVariable: String(localized: "Your mood swings a lot.")
-        case .unknown: String(localized: "mood.stability.sentence.unknown")
-        }
+    /// "Stabil über 30 Tage": the band in a word, then the server's window.
+    nonisolated static func caption(for stability: MoodStability) -> String {
+        String(format: String(localized: "mood.stability.caption"), bandLabel(for: stability.band), stability.days)
     }
 }

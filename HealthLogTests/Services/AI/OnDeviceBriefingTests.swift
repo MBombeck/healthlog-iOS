@@ -198,45 +198,4 @@ struct OnDeviceBriefingTests {
             #expect(outcome.fallbackReason == .frameworkUnavailable)
         }
     #endif
-
-    // MARK: - Server-shape isomorphism
-
-    @Test("OnDeviceBriefing — maps to server DailyBriefing shape isomorphically")
-    func mapsToServerShape() {
-        let on = OnDeviceBriefing(
-            summary: "Du hast 5 Messungen erfasst.",
-            keyFindings: ["Puls stabil", "Schlaf 7h"],
-            actionableNudges: [],
-            confidence: 0.6,
-            safetyApplied: true
-        )
-        let mapped = OnDeviceBriefingHero.mapToServerShape(on)
-        #expect(mapped.paragraph == "Du hast 5 Messungen erfasst.")
-        #expect(mapped.keyFindings.count == 2)
-        #expect(mapped.keyFindings.first?.headline == "Puls stabil")
-    }
-
-    // MARK: - Provenance honesty (RA2 §6)
-
-    @Test("DailyBriefingHero — provenance badge defaults OFF (no false privacy claim)")
-    func provenanceBadgeDefaultsOff() {
-        // The "On your device" badge must default OFF so the server /
-        // Statistik-Mode-floor arms never claim on-device provenance.
-        // OnDeviceBriefingHero opts it in ONLY on its .onDevice branch.
-        let hero = DailyBriefingHero(
-            briefing: DailyBriefing(paragraph: "x", keyFindings: []),
-            style: .full
-        )
-        #expect(hero.showsOnDeviceProvenance == false)
-    }
-
-    @Test("DailyBriefingHero — provenance badge surfaces when explicitly on-device")
-    func provenanceBadgeOptIn() {
-        let hero = DailyBriefingHero(
-            briefing: DailyBriefing(paragraph: "x", keyFindings: []),
-            style: .full,
-            showsOnDeviceProvenance: true
-        )
-        #expect(hero.showsOnDeviceProvenance == true)
-    }
 }

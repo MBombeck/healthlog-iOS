@@ -130,10 +130,17 @@ struct A360SecurityAppStoreFixTests {
 
     // MARK: - M1 — drop the "coming soon" forward-promise
 
-    @Test("Medication delivery-scope hint drops the 'coming soon' forward-promise")
-    func medScopeHintHasNoComingSoon() {
-        let value = String(localized: "med.edit.scope.sync_pending")
-        #expect(!value.lowercased().contains("coming soon"))
-        #expect(!value.lowercased().contains("folgt"))
+    /// 1.4 B2-b — the hint is gone altogether: it named a "server operator"
+    /// and claimed device-only delivery, while the medication row has carried
+    /// the roaming value since server v1.7.0. No forward-promise can return
+    /// through it.
+    @Test("Medication delivery-scope hint is gone, and no forward-promise came back")
+    func medScopeHintHasNoComingSoon() throws {
+        let sheet = try source("HealthLog/Screens/Medications/EditMedicationSheet.swift")
+        #expect(!sheet.contains("med.edit.scope.sync_pending"))
+        for key in ["med.edit.live_activity.footer", "med.edit.critical_alarm.footer"] {
+            let value = String(localized: String.LocalizationValue(key)).lowercased()
+            #expect(!value.contains("coming soon") && !value.contains("folgt"))
+        }
     }
 }

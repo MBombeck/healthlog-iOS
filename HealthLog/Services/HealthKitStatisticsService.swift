@@ -199,9 +199,10 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
                 return []
             }
 
-            let anchor = startOfDay(for: from)
+            let anchor = await readableStart(startOfDay(for: from), of: quantityType, bucket: .day)
             let interval = DateComponents(day: 1)
             let endExclusive = startOfDay(for: nextDay(after: to))
+            guard anchor < endExclusive else { return [] }
             let predicate = HKQuery.predicateForSamples(
                 withStart: anchor,
                 end: endExclusive,
@@ -308,9 +309,10 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
                 return []
             }
 
-            let anchor = startOfDay(for: from)
+            let anchor = await readableStart(startOfDay(for: from), of: quantityType, bucket: .day)
             let interval = DateComponents(day: 1)
             let endExclusive = startOfDay(for: nextDay(after: to))
+            guard anchor < endExclusive else { return [] }
             let predicate = HKQuery.predicateForSamples(
                 withStart: anchor,
                 end: endExclusive,
@@ -381,6 +383,15 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
 
         private func startOfDay(for date: Date) -> Date {
             dayAnchorCalendar.startOfDay(for: date)
+        }
+
+        /// B5 (1.4, R4 2.1) — `anchor`, moved past the bucket the readable
+        /// boundary falls into when Apple Health shares only a recent window
+        /// (``HealthReadWindow/wholeBucketStart(_:bucket:calendar:)``), asked
+        /// through A3's adapter.
+        func readableStart(_ anchor: Date, of type: HKQuantityType, bucket: Calendar.Component) async -> Date {
+            let window = await HealthKitAuthorizedHistory(store: store).window(for: type)
+            return window.wholeBucketStart(anchor, bucket: bucket, calendar: dayAnchorCalendar)
         }
 
         private func nextDay(after date: Date) -> Date {

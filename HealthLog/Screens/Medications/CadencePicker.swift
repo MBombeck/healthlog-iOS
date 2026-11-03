@@ -74,7 +74,8 @@ struct CadencePicker: View {
                 range: 1 ... 365,
                 unitKey: "med.schedule.cadence.rollingDays.suffix"
             )
-            explainer("med.schedule.cadence.rolling.explainer")
+            // 1.4 B2 — one line: the preview names the count from the last
+            // intake, which is what the explainer used to say beside it.
             preview(Text("med.schedule.cadence.rolling.preview \(sub.rollingDays)"))
         case .cyclic:
             // 09-14 — the anchor DatePicker that used to sit here is gone. It
@@ -94,10 +95,12 @@ struct CadencePicker: View {
                 range: 0 ... 52,
                 unitKey: "med.schedule.cadence.intervalWeeks.suffix"
             )
+            // 1.4 B2 — the steppers show the weeks; the one line left says
+            // what the choice does and where the cycle counts from.
             explainer("med.schedule.cadence.cyclic.explainer")
-            preview(Text("med.schedule.cadence.cyclic.preview \(sub.cyclicOnWeeks) \(sub.cyclicOffWeeks)"))
         case .oneShot:
-            explainer("med.schedule.course.oneShot.caption")
+            // The kind's own name says it; no caption repeats it.
+            EmptyView()
         case .asNeeded:
             explainer("med.schedule.cadence.asNeeded.explainer")
         }

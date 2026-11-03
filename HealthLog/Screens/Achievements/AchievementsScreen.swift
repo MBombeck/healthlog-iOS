@@ -30,10 +30,6 @@ import SwiftUI
 /// - `.hlScreenBackground()` for canonical color (A6 §4).
 struct AchievementsScreen: View {
     @Environment(AchievementsStore.self) private var store
-    /// v1.18.3 — Rest Mode source (server-authoritative via the Health Score).
-    /// When active (+ illness enabled) a calm note softens the streak-pressure
-    /// framing so a recovery gap never reads as a failure. Annotate-never-mutate.
-    @Environment(HealthScoreStore.self) private var healthScoreStore
     @State private var selectedAchievement: Achievement?
     private let columns = [
         GridItem(.flexible(), spacing: HLSpace.md),
@@ -143,12 +139,8 @@ struct AchievementsScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 progressStrip
-                // v1.18.3 — soften streak-pressure copy while resting. A calm,
-                // monochrome acknowledgement that a recovery gap is expected and
-                // doesn't undo progress. Self-suppresses when not in Rest Mode.
-                RestModeGate(score: healthScoreStore.score) { restMode in
-                    RestModeAnnotationPill(restMode: restMode, style: .caption)
-                }
+                // 1.4 B2 — no rest-mode paragraph between progress and grid; the
+                // note lives on Today and the recovery page.
                 LazyVGrid(columns: columns, spacing: HLSpace.lg) {
                     ForEach(store.achievements) { achievement in
                         AchievementMedallionButton(

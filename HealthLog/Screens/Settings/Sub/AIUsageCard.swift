@@ -20,8 +20,7 @@ struct AIUsageCard: View {
         HLSettingsCard(
             icon: "gauge.with.dots.needle.33percent",
             title: "settings.ai.usage.title",
-            subtitle: "settings.ai.usage.explainer",
-            subtitleWraps: true
+            subtitle: "settings.ai.usage.explainer"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 ForEach(usage.options, id: \.level) { option in

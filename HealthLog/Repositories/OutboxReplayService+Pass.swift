@@ -99,16 +99,17 @@ extension OutboxReplayService {
             if let key = op.clientEntityId, blockedEntities.contains(key) { continue }
 
             do {
-                lastCreatedServerId = nil
                 runPhase = "dispatch \(op.kind.rawValue)"
-                try await pausingOnRateLimit(op, passStartedAt: now) { try await dispatch(op) }
-                try await onReplaySuccess(op)
+                let createdServerId = try await pausingOnRateLimit(op, passStartedAt: now) { try await dispatch(op) }
+                try await onReplaySuccess(op, createdServerId: createdServerId, generation: generation)
             } catch let error where Self.isInterruption(error) {
                 return onInterrupted(op) // C4 — "stopped", not "no": row untouched, the pass ends.
+            } catch where !isCurrentRun(generation) {
+                return onSuperseded(op) // 1.4 (S5) — the pass that replaced this one owns the row.
             } catch let err as HLError where err.shouldPersistToOutbox {
                 // audit-v0162 M2 — block dependents of this entity for the pass.
                 if let key = op.clientEntityId { blockedEntities.insert(key) }
-                await onRetriableFailure(op, err: err, degraded: degraded)
+                await onRetriableFailure(op, err: err, degraded: degraded, now: now)
             } catch let err as DecodingError {
                 // Audit B-3 — our own stored payload no longer decodes: retained.
                 await onUndecodablePayload(op, error: err, now: now)

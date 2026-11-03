@@ -106,9 +106,8 @@ public struct CorrelationsPanel: View {
             {
                 CorrelationCard(
                     title: String(localized: "Blood pressure × medication compliance"),
-                    strengthLabel: strengthLabel(corr.strength),
+                    strength: strengthLabel(corr.strength),
                     interpretation: bpMedicationInterpretation(corr: corr),
-                    r: corr.r,
                     n: corr.n,
                     xAxisTitle: String(localized: "Intake rate (%)"),
                     yAxisTitle: String(localized: "Systolic (mmHg)"),
@@ -126,9 +125,8 @@ public struct CorrelationsPanel: View {
             {
                 CorrelationCard(
                     title: String(localized: "Weight × blood pressure"),
-                    strengthLabel: strengthLabel(corr.strength),
+                    strength: strengthLabel(corr.strength),
                     interpretation: "",
-                    r: corr.r,
                     n: corr.n,
                     xAxisTitle: weightAxisTitle,
                     yAxisTitle: String(localized: "Systolic (mmHg)"),
@@ -146,9 +144,8 @@ public struct CorrelationsPanel: View {
             {
                 CorrelationCard(
                     title: String(localized: "Mood × blood pressure"),
-                    strengthLabel: strengthLabel(corr.strength),
+                    strength: strengthLabel(corr.strength),
                     interpretation: "",
-                    r: corr.r,
                     n: corr.n,
                     xAxisTitle: String(localized: "Mood (1–5)"),
                     yAxisTitle: String(localized: "Systolic (mmHg)"),
@@ -166,9 +163,8 @@ public struct CorrelationsPanel: View {
             {
                 CorrelationCard(
                     title: String(localized: "Mood × heart rate"),
-                    strengthLabel: strengthLabel(corr.strength),
+                    strength: strengthLabel(corr.strength),
                     interpretation: "",
-                    r: corr.r,
                     n: corr.n,
                     xAxisTitle: String(localized: "Mood (1–5)"),
                     yAxisTitle: String(localized: "Pulse (bpm)"),
@@ -186,9 +182,8 @@ public struct CorrelationsPanel: View {
             {
                 CorrelationCard(
                     title: String(localized: "Mood × weight"),
-                    strengthLabel: strengthLabel(corr.strength),
+                    strength: strengthLabel(corr.strength),
                     interpretation: "",
-                    r: corr.r,
                     n: corr.n,
                     xAxisTitle: String(localized: "Mood (1–5)"),
                     yAxisTitle: weightAxisTitle,
@@ -199,16 +194,10 @@ public struct CorrelationsPanel: View {
                     onAskCoach: onAskCoach.map { handler in { handler(.moodWeight) } }
                 )
             }
-            // I-1 D — `EmptyCorrelationCard` is the FULL-set (overview) "no
-            // correlations yet" placeholder. A per-metric subset (relocated card)
-            // must show NOTHING when its one pairing has no signal — never an
-            // empty placeholder on a metric page. So the empty card only renders
-            // for the full overview set; the subset path renders nothing.
-            if !hasAnyCard {
-                if isFullSet {
-                    EmptyCorrelationCard()
-                }
-            } else {
+            // A panel without a card renders nothing (1.4 B2 removed the
+            // full-set "no correlations yet" card: since I-1 D every caller
+            // passes its own subset, so it could never show).
+            if hasAnyCard {
                 // v0.11 — causal-misread guard. A correlation card is the
                 // highest-risk surface for "X causes Y" misreading.
                 //
@@ -227,24 +216,31 @@ public struct CorrelationsPanel: View {
                 // reading instruction that no surface shows is not a guard. The
                 // flag is gone rather than flipped, so it cannot be switched off
                 // again by a fourth call site.
-                Text("correlations.disclaimer")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("insights.correlations.disclaimer")
+                //
                 // 1.4.1 — the reading instruction says what the number is not;
-                // this says where the method comes from. Both belong to the
-                // same correlation statement, so they sit together.
-                HLSourcesLink(topic: .correlations)
+                // the link says where the method comes from. Both belong to the
+                // same correlation statement, so they share one line (1.4 B2),
+                // stacked only when the line is too narrow for both.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: HLSpace.md) {
+                        disclaimer
+                        HLSourcesLink(topic: .correlations)
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        disclaimer
+                        HLSourcesLink(topic: .correlations)
+                    }
+                }
             }
         }
     }
 
-    /// True when this panel renders the complete correlation set (the overview
-    /// behaviour). A per-metric subset is NOT the full set, so it suppresses the
-    /// "no correlations yet" placeholder.
-    private var isFullSet: Bool {
-        pairs == Set(CorrelationPair.allCases)
+    private var disclaimer: some View {
+        Text("correlations.disclaimer")
+            .font(.hlCaption)
+            .foregroundStyle(HLText.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("insights.correlations.disclaimer")
     }
 
     /// Surface-level check — true if **any** correlation card in THIS panel's
@@ -323,11 +319,9 @@ public struct CorrelationsPanel: View {
 
 private struct CorrelationCard<Point: Sendable>: View {
     let title: String
-    /// Short strength word ("schwach"/"mittel"/"stark") shown as a trailing chip
-    /// on the SAME row as the pair label.
-    let strengthLabel: String
+    /// Short strength word ("schwach"/"mittel"/"stark").
+    let strength: String
     let interpretation: String
-    let r: Double
     let n: Int
     let xAxisTitle: String
     let yAxisTitle: String
@@ -340,12 +334,20 @@ private struct CorrelationCard<Point: Sendable>: View {
     var onAskCoach: (() -> Void)?
     @Environment(\.appContainer) private var appContainer
 
+    /// The trailing chip on the SAME row as the pair label: the strength and
+    /// the days it rests on ("Moderat, 23 Tage"). 1.4 B2 — this replaced the
+    /// "r = 0,42, basierend auf 23 Tagen" caption under the scatter; what r
+    /// means is in the method behind the Sources link and the page's (i).
+    private var strengthLabel: String {
+        String(localized: "correlations.chip \(strength) \(n)")
+    }
+
     var body: some View {
         // v0.14.1 §5/§8 — the Zusammenhänge block reads as grey flowing text in
-        // the SAME voice as the intro `descriptionSlot`, NOT a loud boxed `HLCard`.
+        // the SAME voice as the page's prose, NOT a loud boxed `HLCard`.
         // The title + plain-language interpretation flow as calm grey prose
         // (`HLText.secondary`), the scatter sits inline (no card chrome), and the
-        // r-value / sample size drop to a quiet caption. Matches the operator's
+        // sample size rides in the strength chip. Matches the operator's
         // "not loud cards, same grey flowing style as the intro" on every metric.
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             // C1 — pair label leading, strength as a trailing chip on the SAME
@@ -392,12 +394,8 @@ private struct CorrelationCard<Point: Sendable>: View {
             }
             .chartXAxisLabel(xAxisTitle)
             .chartYAxisLabel(yAxisTitle)
-            .frame(height: 160)
+            .frame(height: HLChartStyle.heightRegular)
             .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
-
-            Text(String(localized: "r = \(r.formatted(.number.precision(.fractionLength(2)))) · based on \(n) days"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
 
             // A360 H2 — discreet "Ask the coach about this" footer link, scoped to
             // both metrics in the pair. Monochrome, footnote-weight — a quiet
@@ -442,31 +440,5 @@ private struct CorrelationCard<Point: Sendable>: View {
             yRange: yLower ... yUpper,
             series: [(name: title, points: points.map { (x: xValue($0), y: yValue($0)) }, continuous: false)]
         )
-    }
-}
-
-// MARK: - EmptyCorrelationCard
-
-private struct EmptyCorrelationCard: View {
-    var body: some View {
-        HLCard(style: .ghost) {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                HStack(spacing: HLSpace.xs) {
-                    Image(systemName: "chart.dots.scatter")
-                        .foregroundStyle(HLText.tertiary)
-                    Text(String(localized: "No correlations yet"))
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                }
-                Text(
-                    String(
-                        localized: "Once there are enough measurement pairs (at least 5 days per metric), correlations will appear here."
-                    )
-                )
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
     }
 }

@@ -121,11 +121,48 @@
         /// re-planned on every foreground; without this check it was enqueued
         /// again each time under the same key.
         func hasPendingHealthKitRetry(idempotencyKey: String) async -> Bool
+
+        /// A2 (1.4) — the same durable write, keeping the `syncTrigger` the
+        /// page was posted under, so the replay sends it again.
+        func enqueueHealthKitRetry(
+            _ entries: [HealthKitBatchEntryDTO],
+            idempotencyKey: String,
+            syncTrigger: SyncTrigger?,
+            requiringCurrentOwner ownerUserID: String
+        ) async throws
+
+        /// A5 (1.4, R3 S4) — deleted sample UUIDs that could not be sent,
+        /// kept for the replay under the owner they were read for.
+        func enqueueHealthKitDeletion(
+            _ externalIDs: [String],
+            idempotencyKey: String,
+            requiringCurrentOwner ownerUserID: String
+        ) async throws
     }
 
     extension HealthSyncBatchRetryEnqueuing {
         func hasPendingHealthKitRetry(idempotencyKey _: String) async -> Bool {
             false
+        }
+
+        /// A queue that cannot keep deletions (test doubles of the page half)
+        /// refuses, so the page holds instead of losing them.
+        func enqueueHealthKitDeletion(
+            _: [String],
+            idempotencyKey _: String,
+            requiringCurrentOwner _: String
+        ) async throws {
+            throw HLError.notPersisted("this queue keeps no HealthKit deletions")
+        }
+
+        /// A queue that keeps no trigger (test doubles) writes the row without.
+        func enqueueHealthKitRetry(
+            _ entries: [HealthKitBatchEntryDTO],
+            idempotencyKey: String,
+            syncTrigger _: SyncTrigger?,
+            requiringCurrentOwner ownerUserID: String
+        ) async throws {
+            try await enqueueHealthKitRetry(entries, idempotencyKey: idempotencyKey, requiringCurrentOwner: ownerUserID)
         }
     }
 
@@ -142,10 +179,25 @@
             idempotencyKey: String,
             requiringCurrentOwner ownerUserID: String
         ) async throws {
+            try await enqueueHealthKitRetry(
+                entries,
+                idempotencyKey: idempotencyKey,
+                syncTrigger: nil,
+                requiringCurrentOwner: ownerUserID
+            )
+        }
+
+        func enqueueHealthKitRetry(
+            _ entries: [HealthKitBatchEntryDTO],
+            idempotencyKey: String,
+            syncTrigger: SyncTrigger?,
+            requiringCurrentOwner ownerUserID: String
+        ) async throws {
             try await enqueueHealthKitBatch(
                 entries,
                 encoder: .hlBatch,
                 idempotencyKey: idempotencyKey,
+                syncTrigger: syncTrigger,
                 requiringCurrentOwner: ownerUserID
             )
         }
@@ -198,9 +250,12 @@
         /// ``transmit(_:admitted:)`` plus the honest per-row tally the Sync
         /// Diagnostics surface counts (#113): only `inserted`, `updated` and
         /// `duplicate` are "uploaded".
+        ///
+        /// - Parameter asBackfill: A2 (1.4, R-A7) — a page of the history walk.
         func transmitReporting(
             _ mapping: HealthSampleMappingResult,
-            admitted lease: HealthSyncAuthenticatedLease?
+            admitted lease: HealthSyncAuthenticatedLease?,
+            asBackfill: Bool = false
         ) async -> (outcome: HealthSyncPageOutcome, tally: HealthSampleServerTally) {
             guard !mapping.entries.isEmpty else {
                 // Nothing to post. An empty page is terminally accounted for by
@@ -225,8 +280,10 @@
 
             var verdicts = PageVerdicts()
             do {
-                let outcomes = try await admitting(lease) {
-                    try await uploader.upload(posted, requiring: authenticationLease)
+                let outcomes = try await Self.marking(asBackfill) {
+                    try await admitting(lease) {
+                        try await uploader.upload(posted, requiring: authenticationLease)
+                    }
                 }
                 verdicts = PageVerdicts(outcomes)
             } catch let refusal as HealthSyncLeaseRefusal {
@@ -237,13 +294,19 @@
                 // page holds its cursor and the next run reads it again. It is
                 // not parked, so it never shows up as waiting.
                 return (Self.refusedOutcome(.cancelled, postedCount: posted.count), HealthSampleServerTally())
+            } catch let error where Self.isUnreachable(error) {
+                // A2 (1.4, R3 S6) — offline, or the uploader's backoff refused
+                // the POST before the wire. Nothing is parked: the cursor
+                // holds and the next run reads the page again. Until 1.3.0 both took the transport arm below, and the
+                // history walk filled the outbox page by page.
+                return (Self.unreachableOutcome(postedCount: posted.count), HealthSampleServerTally())
             } catch {
                 // A raised transport says nothing about individual rows: the batch
                 // may never have been seen at all. Every index is non-terminal.
                 verdicts.transportThrew = true
                 verdicts.nonterminalIndexes = Set(posted.indices)
             }
-            return await settle(posted, verdicts, admitted: lease)
+            return await settle(posted, verdicts, admitted: lease, asBackfill: asBackfill)
         }
 
         /// What one page's responses proved, index by index.
@@ -256,6 +319,8 @@
         /// register (#113).
         private struct PageVerdicts {
             var accepted = 0
+            /// A2 — stored rows the server answered `duplicate` / `folded_window`.
+            var foldedWindow = 0
             var nonterminalIndexes: Set<Int> = []
             var refused: [HealthKitSkippedEntry] = []
             var transportThrew = false
@@ -268,6 +333,9 @@
                     for verdict in outcome.rowVerdicts {
                         if verdict.isStored {
                             accepted += 1
+                            if verdict.status == .duplicate, verdict.reason == MeasurementBatchAcceptance.Reason.foldedWindow {
+                                foldedWindow += 1
+                            }
                         } else if verdict.status == .skipped {
                             if verdict.reason == HealthKitServerSupportConfig.reasonUnmappableIdentifier {
                                 nonterminalIndexes.insert(offset + verdict.index)
@@ -288,7 +356,8 @@
         private func settle(
             _ posted: [HealthKitBatchEntryDTO],
             _ verdicts: PageVerdicts,
-            admitted lease: HealthSyncAuthenticatedLease?
+            admitted lease: HealthSyncAuthenticatedLease?,
+            asBackfill: Bool
         ) async -> (outcome: HealthSyncPageOutcome, tally: HealthSampleServerTally) {
             let entries = posted.indices.map { index in
                 HealthSyncEntryOutcome(
@@ -311,7 +380,7 @@
             // unaccounted for and the caller holds.
             let pending = verdicts.nonterminalIndexes.sorted().map { posted[$0] }
             let attempted = !pending.isEmpty && lease != nil && retry != nil
-            let persisted = attempted ? await persistRetry(pending, requiring: lease) : false
+            let persisted = attempted ? await persistRetry(pending, requiring: lease, asBackfill: asBackfill) : false
             if persisted {
                 tally.parked = pending.count
             }
@@ -322,7 +391,8 @@
                 durableRetryPersisted: persisted,
                 durableRetryFailed: (attempted && !persisted) || !registered,
                 leaseIsCurrent: lease?.isCurrent ?? true,
-                wasCancelled: pending.isEmpty ? false : Task.isCancelled
+                wasCancelled: pending.isEmpty ? false : Task.isCancelled,
+                foldedWindowDuplicates: verdicts.foldedWindow
             )
             return (outcome, tally)
         }
@@ -366,9 +436,12 @@
         /// key on relaunch instead of minting a second server row.
         private func persistRetry(
             _ entries: [HealthKitBatchEntryDTO],
-            requiring lease: HealthSyncAuthenticatedLease?
+            requiring lease: HealthSyncAuthenticatedLease?,
+            asBackfill: Bool
         ) async -> Bool {
             guard let retry, let lease else { return false }
+            // A2 (1.4) — the word this page went out under, kept for its replay.
+            let trigger = await Self.marking(asBackfill) { uploader.wireSyncTrigger }
             guard let envelope = HealthSyncRetryEnvelope(
                 ownerID: lease.ownerID,
                 source: lease.source,
@@ -381,6 +454,7 @@
                     try await retry.enqueueHealthKitRetry(
                         entries,
                         idempotencyKey: envelope.idempotencyKey,
+                        syncTrigger: trigger,
                         requiringCurrentOwner: lease.ownerID
                     )
                 }
@@ -413,6 +487,43 @@
             case .canceled?, .network(.writeCancelled)?: return true
             default: return false
             }
+        }
+
+        /// A2 (1.4, R3 S6) — no answer could come: no network
+        /// (`URLError.notConnectedToInternet`, `HLError.offline`), a connection
+        /// lost on the wire (`.networkConnectionLost`, `.network(.connectionLost)`
+        /// since B5) or the uploader's own backoff (`BatchBackoffError.throttled`,
+        /// thrown before the wire). A lost connection may have delivered the
+        /// batch. Holding is safe either way, because the page is read again and
+        /// the server answers a stored row `duplicate`.
+        static func isUnreachable(_ error: Error) -> Bool {
+            if error is BatchBackoffError { return true }
+            let hlError = error as? HLError
+            return hlError == .offline || hlError == .network(.connectionLost)
+        }
+
+        /// A2 (1.4, R-A7) — runs `body` under the backfill mark when the page
+        /// belongs to the history walk. Only the POST and its durable retry
+        /// carry it; the sweeps a page kicks keep their own trigger.
+        private static func marking<T: Sendable>(
+            _ asBackfill: Bool,
+            _ body: () async throws -> T
+        ) async rethrows -> T {
+            guard asBackfill else { return try await body() }
+            return try await SyncTriggerContext.bindingBackfill { try await body() }
+        }
+
+        private static func unreachableOutcome(postedCount: Int) -> HealthSyncPageOutcome {
+            HealthSyncPageOutcome(
+                postedCount: postedCount,
+                entries: [],
+                transportThrew: true,
+                durableRetryPersisted: false,
+                durableRetryFailed: false,
+                leaseIsCurrent: true,
+                wasCancelled: false,
+                serverUnreachable: true
+            )
         }
 
         private static var emptyOutcome: HealthSyncPageOutcome {

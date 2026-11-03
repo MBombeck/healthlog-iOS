@@ -30,27 +30,27 @@ struct BYOConsentSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: HLSpace.md) {
-                        bulletRow(
-                            symbol: "iphone.gen3",
-                            text: String(
+                        HLIconTextRow(
+                            icon: "iphone.gen3",
+                            verbatim: String(
                                 localized: "Requests go directly from this device to your provider — not through HealthLog's servers."
                             )
                         )
-                        bulletRow(
-                            symbol: "lock.shield",
-                            text: String(
+                        HLIconTextRow(
+                            icon: "lock.shield",
+                            verbatim: String(
                                 localized: "Your name, email, and device ID are never sent."
                             )
                         )
-                        bulletRow(
-                            symbol: "building.2",
-                            text: String(
+                        HLIconTextRow(
+                            icon: "building.2",
+                            verbatim: String(
                                 localized: "Your provider receives this data and handles it under their own privacy policy."
                             )
                         )
-                        bulletRow(
-                            symbol: "arrow.uturn.backward",
-                            text: String(localized: "You can remove your key at any time in Settings → Assistant.")
+                        HLIconTextRow(
+                            icon: "arrow.uturn.backward",
+                            verbatim: String(localized: "You can remove your key at any time in Settings → Assistant.")
                         )
                     }
                     .padding(HLSpace.md)
@@ -82,10 +82,8 @@ struct BYOConsentSheet: View {
                         action: onAccept
                     )
                     .tint(HLAccent.primary)
-                    Text(String(localized: "You can change this choice at any time in Settings."))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .multilineTextAlignment(.center)
+                    // 1.4 B2-c — no third "change it anytime" line: the
+                    // last bullet above already says how to take it back.
                 }
                 .padding(HLSpace.lg)
                 .background(HLMaterialBackground(.regularMaterial))
@@ -99,18 +97,5 @@ struct BYOConsentSheet: View {
             // swiftlint:disable:next line_length
             localized: "HealthLog sends excerpts of your health data — recent measurements, medications, sleep, and mood — directly to \(provider.displayName), using the API key you provided, to generate personal insights."
         )
-    }
-
-    private func bulletRow(symbol: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: symbol)
-                .font(.hlCallout.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 24)
-            Text(text)
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 }

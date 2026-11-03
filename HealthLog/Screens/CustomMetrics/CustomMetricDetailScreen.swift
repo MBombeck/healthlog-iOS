@@ -49,7 +49,6 @@ struct CustomMetricDetailScreen: View {
                     descriptionSlot(metric)
                     latestSlot(metric)
                     statsSlot
-                    inBandSlot(metric)
                     chartSlot(metric)
                     recentValuesSlot(metric)
                     HLSyncStatusFooter(screenLoading: store.isLoading || store.isLoadingEntries)
@@ -159,13 +158,11 @@ struct CustomMetricDetailScreen: View {
     }
 
     /// "N von M im Zielbereich" — a plain count, never a score or a grade.
-    @ViewBuilder
-    private func inBandSlot(_ metric: CustomMetricDTO) -> some View {
-        if let counts = CustomMetricSeries.inBandCount(windowedEntries, metric: metric) {
-            Text("customMetric.detail.inBandCount \(counts.inBand) \(counts.total)")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+    /// 1.4 B2-c: the chart card's one line, under the band it counts against,
+    /// instead of a loose line between the stats and the chart.
+    private func inBandCaption(_ metric: CustomMetricDTO) -> String? {
+        CustomMetricSeries.inBandCount(windowedEntries, metric: metric).map { counts in
+            String(localized: "customMetric.detail.inBandCount \(counts.inBand) \(counts.total)")
         }
     }
 
@@ -178,7 +175,8 @@ struct CustomMetricDetailScreen: View {
             points: CustomMetricSeries.chartPoints(windowedEntries),
             unit: metric.unit,
             referenceLow: metric.targetLow,
-            referenceHigh: metric.targetHigh
+            referenceHigh: metric.targetHigh,
+            caption: inBandCaption(metric)
         )
     }
 

@@ -33,6 +33,17 @@ struct CycleBBTChartModel: Equatable {
         points.count >= 2
     }
 
+    /// **1.4 B4** — the y range the readings need. Without one Swift Charts
+    /// starts the axis at 0, so a cycle between 36.4 and 36.9 °C lay flat at
+    /// the top of a 0 to 40 °C chart. A quarter of the spread (at least 0.2 in
+    /// the plotted unit) above and below, on tenths.
+    var yDomain: ClosedRange<Double> {
+        let values = points.map(\.value)
+        guard let low = values.min(), let high = values.max() else { return 0 ... 1 }
+        let pad = max((high - low) * 0.25, 0.2)
+        return ((low - pad) * 10).rounded(.down) / 10 ... ((high + pad) * 10).rounded(.up) / 10
+    }
+
     static func build(
         days: [CalendarDayDTO],
         cycles: [MenstrualCycleDTO],
@@ -125,14 +136,11 @@ struct CycleBBTChart: View {
     }
 
     var body: some View {
-        HLSettingsCard(icon: "chart.xyaxis.line", title: "cycle.bbt.title") {
-            if model.hasEnoughData {
+        // 1.4 B2 — fewer than two readings in this cycle: no card, rather than
+        // one saying two are needed.
+        if model.hasEnoughData {
+            HLSettingsCard(icon: "chart.xyaxis.line", title: "cycle.bbt.title") {
                 chart
-            } else {
-                Text("cycle.bbt.empty")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -173,7 +181,9 @@ struct CycleBBTChart: View {
                     }
             }
         }
-        .frame(minHeight: 220)
+        .frame(height: HLChartStyle.heightRegular)
+        .chartYScale(domain: model.yDomain)
+        .chartXAxis { ChartDateAxis.marks(for: model.points.map(\.date)) }
         .chartYAxisLabel { axisUnitLabel }
         .accessibilityChartDescriptor(ChartDescriptor(descriptor: descriptor))
     }

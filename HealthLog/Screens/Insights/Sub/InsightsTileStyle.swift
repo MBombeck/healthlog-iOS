@@ -11,7 +11,7 @@ import SwiftUI
 /// user pref, no dev surface, nothing to gate before submit.
 ///
 /// The style ONLY changes the leaf-tile *surface* + how the ring is coloured —
-/// the data plumbing (`tiles`/`Tile`, `ringPromotedIDs`, gates, a11y) and the
+/// the data plumbing (`tiles`/`Tile`, gates, a11y) and the
 /// `HLScoreRing` internals are untouched. The single case resolves to an
 /// ``InsightsTileAppearance`` that the surface helper + the ring cards consume.
 ///

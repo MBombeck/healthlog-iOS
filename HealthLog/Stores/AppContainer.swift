@@ -184,7 +184,6 @@ public final class AppContainer {
     public let aiProviderStore: AIProviderStore
     public let aiConsentStore: AIConsentStore // S7 / Apple Guideline 5.1.2(i)
     public let chartsStore: ChartsStore
-    public let trendsOverlayStore: TrendsOverlayStore // F2-CHARTLAG — survives re-mount
     public let doctorReportStore: DoctorReportStore // server-rendered
     public let localDoctorReportStore: LocalDoctorReportStore // T-7 local
     public let disclaimerAckStore: DisclaimerAckStore // DISC-02
@@ -666,7 +665,6 @@ public final class AppContainer {
             settingsStore: settingsStore
         )
         chartsStore = secondary.charts
-        trendsOverlayStore = secondary.trendsOverlay
         doctorReportStore = secondary.doctorReport
         localDoctorReportStore = secondary.localDoctorReport
         disclaimerAckStore = secondary.disclaimerAck

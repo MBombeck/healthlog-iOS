@@ -39,6 +39,17 @@ enum MedicationLiveActivityPlan {
     /// 3 h mirrors the missed-dose grace the reminder pipeline uses.
     static let overdueGrace: TimeInterval = 3 * 60 * 60
 
+    /// **1.4 B4 — one zone for the card and the Lock Screen.** The calendar the
+    /// plan reads its occurrences, its "resolved" minute and its overdue
+    /// verdict in: the account zone the server keeps (`/me`), which is the
+    /// zone `MedicationCard` grades the same dose window in. The device zone
+    /// only stands in until the account zone is known.
+    static func calendar(in timeZone: TimeZone) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar
+    }
+
     /// Pick the single dose (if any) that should currently own a Live
     /// Activity: the soonest dose whose scheduled fire time falls inside
     /// `[now - overdueGrace, now + leadWindow]`, that is not already

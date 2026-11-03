@@ -55,6 +55,15 @@ public enum CyclePhasePalette {
     /// luteal — dusty mauve, lifted but kept the most muted
     private static let lutealDark = Color(hex: 0xBBA0B5)
 
+    // MARK: - Fertile window on light paper
+
+    /// Honey deepened for the edge of the fertile-window mark in light
+    /// appearance. The soft honey wash alone sat at 1.2:1 on the light card
+    /// (`#FAF8F5`) and all but vanished; this edge clears 3:1 (3.75:1) so the
+    /// window reads as clearly as the clay period days. Dark keeps the plain
+    /// wash, which already lifts off charcoal.
+    public static let fertileEdgeLight = Color(hex: 0xA87623)
+
     /// The phase's warm tint for the given appearance. Light + dark are tuned
     /// separately so the arc reads harmoniously on either canvas.
     public static func tint(for phase: Phase, scheme: ColorScheme) -> Color {

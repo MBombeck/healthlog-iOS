@@ -43,10 +43,10 @@ extension OutboxReplayService {
     static let unconfirmedPrefix = "unconfirmed:since="
 
     /// Kinds whose server side folds a repeat by `externalId` (measurement and
-    /// workout batches upsert), so a re-send is harmless at any age and the
-    /// window does not apply.
+    /// workout batches upsert, A5: a delete by `externalId` touches a row once),
+    /// so a re-send is harmless at any age and the window does not apply.
     static let externalIdDedupedKinds: Set<OutboxQueue.Operation.Kind> = [
-        .syncHealthKitSample, .uploadWorkoutBatch
+        .syncHealthKitSample, .uploadWorkoutBatch, .deleteHealthKitSamples
     ]
 
     /// Kinds that carry nothing a refusal could lose: the record is either gone
@@ -55,7 +55,7 @@ extension OutboxReplayService {
         .deleteMeasurement, .bulkDeleteMeasurements, .deleteMood, .deleteMedication, .deleteIntake,
         .deleteMedicationSideEffect, .deleteMedicationInventory, .deleteCycleDayLog, .deleteLab,
         .deleteBiomarker, .deleteIllnessEpisode, .deleteAllergy, .deleteFamilyHistory,
-        .deleteCustomMetric, .deleteCustomMetricEntry
+        .deleteCustomMetric, .deleteCustomMetricEntry, .deleteHealthKitSamples
     ]
 
     // MARK: - Cancellation
@@ -121,12 +121,27 @@ extension OutboxReplayService {
     /// An unreadable 2xx: keep the row, count the attempt, and remember when
     /// the first such answer came so the window above holds across passes.
     func onUnconfirmed(_ op: OutboxQueue.Operation, now: Date) async {
-        let since = Self.unconfirmedSince(op.lastError) ?? now
-        let marker = "\(Self.unconfirmedPrefix)\(Int(since.timeIntervalSince1970))"
-        try? await outbox.incrementAttempts(id: op.id, lastError: marker)
+        try? await outbox.incrementAttempts(id: op.id, lastError: Self.unconfirmedMarker(op, now: now))
         // Kind is a finite operator-grade enum; no id, no payload.
         // swiftlint:disable:next hllog_public_privacy_interpolation
         HLLog.outbox.warning("Op \(op.kind.rawValue, privacy: .public) sent, unconfirmed — kept for a re-send under its key")
+    }
+
+    /// The marker of an unconfirmed row: the first unconfirmed answer it got,
+    /// or `now` when this is the first.
+    static func unconfirmedMarker(_ op: OutboxQueue.Operation, now: Date) -> String {
+        let since = unconfirmedSince(op.lastError) ?? now
+        return "\(unconfirmedPrefix)\(Int(since.timeIntervalSince1970))"
+    }
+
+    /// 1.4 (S3) — a failure after which the write may be on the server: the
+    /// request went out and its answer never came (a timeout, a connection
+    /// lost on the wire). No connection at all, or no name resolution, means
+    /// nothing was sent. Kinds the server folds by `externalId` do not need
+    /// the window (see ``holdsThisPass(_:now:)``) and keep their plain retry.
+    static func mayHaveLanded(_ error: HLError, kind: OutboxQueue.Operation.Kind) -> Bool {
+        guard !externalIdDedupedKinds.contains(kind) else { return false }
+        return error == .network(.timeout) || error == .network(.connectionLost)
     }
 
     /// The `lastError` a counted retriable failure writes: its own text, unless

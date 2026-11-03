@@ -8,15 +8,10 @@ import SwiftUI
 /// buttons can't drift apart.
 ///
 /// The brand Coach coin (`AskCoachCollapsedCoin`, the purple→pink gradient `✦`)
-/// keeps its own gradient identity but is rendered at the SAME `Self.diameter`
+/// keeps its own gradient identity but is rendered at the SAME 44 pt (`hlHeaderCircle()`)
 /// so the two circles read as an equal-sized pair. This circle is the mono
 /// glass sibling for the gear / options actions.
 struct InsightsHeaderActionCircle: View {
-    /// The canonical header-circle diameter. Matches `AskCoachCollapsedCoin`'s
-    /// 44pt coin so the Coach + gear read as an equal-sized pair, and meets the
-    /// HIG 44pt minimum hit-target without extra padding.
-    static let diameter: CGFloat = 44
-
     let systemImage: String
     let accessibilityLabelText: String
     let accessibilityHintText: String?
@@ -40,11 +35,7 @@ struct InsightsHeaderActionCircle: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.hlTitle3)
-                .foregroundStyle(HLText.secondary)
-                .frame(width: Self.diameter, height: Self.diameter)
-                .hlGlassEffect(in: Circle(), interactive: true, fallback: HLColor.backgroundEleva)
-                .contentShape(Circle())
+                .hlHeaderCircle()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(accessibilityLabelText))

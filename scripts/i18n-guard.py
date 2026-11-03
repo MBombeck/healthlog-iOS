@@ -25,8 +25,6 @@ Detection: a literal is flagged iff
 Allow-listed (German there is intentional, NOT a catalogue-key leak):
   * `Text(verbatim:`        — renders the string as-is, never localized.
   * `Services/AI/**`        — on-device LLM prompt builders (plain String).
-  * `StatistikModeBriefingService.swift` / `DailyBriefingHero+OnDevice.swift`
-                              lang-branched digest copy (`lang == "en" ? … : …`).
   * `DoctorReport*`         — explicit per-`ReportLocale` `.de` PDF branch.
   * `*Tests` / `*UITests`   — fixtures.
   * dotted-ID keys          — `a.b.c` passthrough catalogue keys.
@@ -69,10 +67,8 @@ _LSK_NAMED_ARGS = ["title", "subtitle", "footer"]
 
 _EXCLUDED_PATH_RES = [
     re.compile(r"/Services/AI/"),
-    re.compile(r"/Services/StatistikModeBriefingService\.swift$"),
     re.compile(r"/Services/DoctorReport"),
     re.compile(r"/Screens/DoctorReport/"),
-    re.compile(r"/Screens/Insights/DailyBriefingHero\+OnDevice\.swift$"),
 ]
 
 _UMLAUT = re.compile(r"[äöüÄÖÜß]")

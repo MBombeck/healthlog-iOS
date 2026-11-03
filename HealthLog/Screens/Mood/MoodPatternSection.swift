@@ -6,10 +6,11 @@ import SwiftUI
 /// no statistical gate (#115 · 1.3). They now come from the server
 /// (`GET /api/mood/insights` → `patterns[]`): every row passed its gate on the
 /// account's mood day, and this section only phrases them, one card per entry
-/// in the order delivered, with a "based on N and M days" line under each.
+/// in the order delivered; the chip names the strength and the N and M days
+/// each rests on.
 ///
 /// - `nil` (a server before v1.43): the host does not draw the section.
-/// - `[]` (the server found none): the calm "not enough data yet" line.
+/// - `[]` (the server found none): no section (1.4 B2).
 /// - A row this build cannot phrase (an unknown `kind`, a direction of
 ///   `none`, a lower best weekday) is skipped, never guessed at.
 ///
@@ -21,16 +22,12 @@ struct MoodPatternSection: View {
 
     var body: some View {
         let cards = MoodPatternPresentation.cards(for: patterns)
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            InsightsSectionHeader("mood.patterns.title", flush: true)
-            HLCard {
-                if cards.isEmpty {
-                    Text("Not enough data yet")
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("mood.patterns.empty")
-                } else {
+        // 1.4 B2 — when the server found no pattern there is no card saying
+        // "not enough data yet"; the section is absent.
+        if !cards.isEmpty {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                InsightsSectionHeader("mood.patterns.title", flush: true)
+                HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.lg) {
                         ForEach(cards) { card in
                             row(card)
@@ -39,9 +36,9 @@ struct MoodPatternSection: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("mood.patterns")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("mood.patterns")
     }
 
     /// The analysis body's index for the recent-entries section: right after
@@ -60,25 +57,21 @@ struct MoodPatternSection: View {
                     .accessibilityHidden(true)
                 HLSectionLabel(verbatim: card.category)
                 Spacer(minLength: HLSpace.sm)
-                if let strength = card.strength {
-                    Text(strength)
-                        .font(.hlCaption2.weight(.semibold))
-                        .foregroundStyle(HLText.secondary)
-                        .padding(.horizontal, HLSpace.chip)
-                        .padding(.vertical, HLSpace.xxs)
-                        .background(
-                            RoundedRectangle(cornerRadius: HLRadius.xs, style: .continuous)
-                                .fill(HLSurface.tertiary)
-                        )
-                }
+                // 1.4 B2 — the chip carries strength and basis ("Mittel, 8 und
+                // 22 Tage"); the sentence under every row is gone.
+                Text(card.chip)
+                    .font(.hlCaption2.weight(.semibold))
+                    .foregroundStyle(HLText.secondary)
+                    .padding(.horizontal, HLSpace.chip)
+                    .padding(.vertical, HLSpace.xxs)
+                    .background(
+                        RoundedRectangle(cornerRadius: HLRadius.xs, style: .continuous)
+                            .fill(HLSurface.tertiary)
+                    )
             }
             Text(card.sentence)
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(card.basedOn)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .ignore)
@@ -95,12 +88,18 @@ enum MoodPatternPresentation {
         let category: String
         let icon: String
         let sentence: String
+        /// "8 und 22 Tage": the days the comparison rests on.
         let basedOn: String
         /// `nil` for a strength word this build does not know.
         let strength: String?
 
+        /// The row's chip: strength and basis, or the basis alone.
+        var chip: String {
+            [strength, basedOn].compactMap(\.self).joined(separator: ", ")
+        }
+
         var accessibilityValue: String {
-            [sentence, strength, basedOn].compactMap(\.self).joined(separator: " ")
+            [sentence, chip].joined(separator: " ")
         }
     }
 
@@ -117,7 +116,7 @@ enum MoodPatternPresentation {
             category: look.category,
             icon: look.icon,
             sentence: sentence,
-            basedOn: String(localized: "mood.patterns.basedOn \(size.subject) \(size.comparison)"),
+            basedOn: String(localized: "mood.patterns.days \(size.subject) \(size.comparison)"),
             strength: strengthLabel(pattern.strength)
         )
     }

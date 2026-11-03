@@ -34,9 +34,9 @@ import SwiftUI
 /// moved behind the deliberate session in ``SettingsSupportDiagnosticsScreen``
 /// together with the per-kind anchor advances.
 ///
-/// **Counters are session-scope** — they zero on cold launch. The
-/// surface explains this explicitly so the operator doesn't mistake
-/// "0 reads" for "sync broken" right after a restart.
+/// **Counters are session-scope** — they zero on cold launch. The (i)
+/// says so (1.4 B2-c), so "0 reads" right after a restart does not read as
+/// "sync broken".
 struct SettingsHKSyncDiagnosticsScreen: View {
     @State var diagnostics = HKSyncDiagnostics.shared
     @Environment(HKReadinessStore.self) private var hkReadiness
@@ -65,8 +65,9 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         HLSettingsPage(title: "settings.hkdiag.title") {
             // W5 (1.3.0, #126 1.4) — the server view comes first: it holds
             // the answer to "does this phone deliver on its own?" and the last
-            // background arrival, which opening the app no longer hides. Every
-            // card below names its own source.
+            // background arrival, which opening the app no longer hides. 1.4
+            // B2-c: everything below is this iPhone; the (i) says which cards
+            // count since the last launch and which are kept across launches.
             serverHealthCard
             // W1 — the banner's "waiting" count leaves these rows out, so this
             // is where they are explained.
@@ -81,13 +82,20 @@ struct SettingsHKSyncDiagnosticsScreen: View {
             // 1.3 (#127) — how far back the older history has got, per type.
             historyPerTypeCard
             kindListCard
-            explainerCard
-            systemLimitsCard
+            backgroundCard
             reportCard
             supportDiagnosticsCard
         }
         .navigationTitle("settings.hkdiag.title")
         .navigationBarTitleDisplayMode(.inline)
+        // 1.4 B2-c — the glossary is the screen's one (i): where each card's
+        // values come from, what the words mean, the background limits. The
+        // cards keep their titles and values.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HLInfoButton(content: info, accessibilityIdentifier: "settings.hkdiag.info")
+            }
+        }
         .task { await hkReadiness.refresh() }
         .task { await loadServerSyncHealth() }
         .task { await loadSkipped() }
@@ -101,11 +109,9 @@ struct SettingsHKSyncDiagnosticsScreen: View {
     private var summaryCard: some View {
         HLSettingsCard(
             icon: "waveform.path.ecg",
-            title: "settings.hkdiag.summary_title",
-            subtitle: "settings.hkdiag.summary_subtitle"
+            title: "settings.hkdiag.summary_title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HKSyncDiagnosticsSourceTag(source: .deviceSession)
                 statRow(
                     label: "settings.hkdiag.summary_kinds_observed",
                     value: "\(observedKindCount)"
@@ -144,54 +150,34 @@ struct SettingsHKSyncDiagnosticsScreen: View {
     /// sit behind a two-step, view-local session; a plain push, because the
     /// gate belongs to the destination and starts locked on every mount.
     private var supportDiagnosticsCard: some View {
-        HLSettingsCard(
-            icon: "lifepreserver",
-            title: "settings.support.title",
-            footer: "settings.support.entry_footer"
-        ) {
-            HLSettingsActionRow(title: "settings.support.nav_row", presents: .push) {
+        // 1.4 B2-c — the next screen explains its own confirmation. 1.4 B4 —
+        // one row, one heading: the row names its screen.
+        HLSettingsCard {
+            HLSettingsActionRow(title: "settings.support.title", presents: .push) {
                 SettingsSupportDiagnosticsScreen(topic: .appleHealth)
             }
             .accessibilityIdentifier("settings.hkdiag.supportDiagnosticsEntry")
         }
     }
 
-    // MARK: - System limits (#66 P0.1 — Baustein 4)
+    // MARK: - Background (#66 P0.1 — Baustein 4)
 
-    /// Honest, localized note on the iOS system limits every background wake is
-    /// subject to — so the operator does not read "Nie" as an app bug when it is
-    /// really the OS withholding runtime.
-    private var systemLimitsCard: some View {
+    /// The way to the one iOS switch that decides whether background runs
+    /// happen at all. 1.4 B2-c: the three limits and the "not an app bug"
+    /// note are in the (i); the card keeps the action.
+    private var backgroundCard: some View {
         HLSettingsCard(
             icon: "exclamationmark.triangle",
-            title: "settings.hkdiag.limits_title",
-            footer: "settings.hkdiag.limits_footer"
+            title: "settings.hkdiag.limits_title"
         ) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                bulletRow(
-                    icon: "xmark.circle.fill",
-                    text: "settings.hkdiag.limits_forcequit"
-                )
-                bulletRow(
-                    icon: "switch.2",
-                    text: "settings.hkdiag.limits_bgrefresh"
-                )
-                bulletRow(
-                    icon: "clock.badge.questionmark",
-                    text: "settings.hkdiag.limits_discretion"
-                )
-                // R4 — der Bullet nannte den Ort („in den iOS-Einstellungen"),
-                // ohne hinzuführen. Der Satz sagt jetzt nur noch die Folge; der
-                // Weg dorthin ist diese Zeile.
-                HLSettingsActionRow(
-                    icon: "gear",
-                    title: "settings.hkdiag.limits_openIosSettings",
-                    presents: .external
-                ) {
-                    openIOSSettings()
-                }
-                .accessibilityIdentifier("settings.hkdiag.openIosSettings")
+            HLSettingsActionRow(
+                icon: "gear",
+                title: "settings.hkdiag.limits_openIosSettings",
+                presents: .external
+            ) {
+                openIOSSettings()
             }
+            .accessibilityIdentifier("settings.hkdiag.openIosSettings")
         }
     }
 
@@ -200,9 +186,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
     private var kindListCard: some View {
         HLSettingsCard(
             icon: "list.bullet.indent",
-            title: "settings.hkdiag.kinds_title",
-            subtitle: "settings.hkdiag.kinds_subtitle",
-            subtitleWraps: true
+            title: "settings.hkdiag.kinds_title"
         ) {
             if rows.isEmpty {
                 Text("settings.hkdiag.kinds_empty")
@@ -211,7 +195,6 @@ struct SettingsHKSyncDiagnosticsScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    HKSyncDiagnosticsSourceTag(source: .deviceSession)
                     ForEach(rows, id: \.kind) { row in
                         kindRow(row)
                         if row.kind != rows.last?.kind {
@@ -229,56 +212,29 @@ struct SettingsHKSyncDiagnosticsScreen: View {
                 Image(systemName: row.kind.descriptor.sfSymbol)
                     .font(.hlIcon(HLIconSize.rowAction))
                     .foregroundStyle(HLText.primary)
-                    .frame(width: 22, alignment: .center)
+                    .hlInfoIconColumn()
                 Text(row.kind.descriptor.title)
                     .font(.hlSubhead.weight(.semibold))
                     .foregroundStyle(HLText.primary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Text(row.statusLabel)
                     .font(.hlCaption.monospacedDigit())
                     .foregroundStyle(row.statusTint)
             }
-            Text(row.detailLabel)
-                .font(.hlCaption.monospacedDigit())
-                .foregroundStyle(HLText.secondary)
-            // W5 — says which time it is: checked, or a new value sent.
-            Text(row.timeLabel)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, HLSpace.xs)
-    }
-
-    // MARK: - Explainer
-
-    private var explainerCard: some View {
-        HLSettingsCard(
-            icon: "info.circle",
-            title: "settings.hkdiag.explainer_title"
-        ) {
-            // Audit-Gruppe 10 — der Karten-Footer („Diese Seite ist eine
-            // Diagnose-Hilfe, kein Sync-Schalter. Synchronisation steuerst du
-            // eine Ebene höher.") war ein Wegweiser ohne Ziel (R4). Ein
-            // „Jetzt syncen" gehört laut IA-Entscheidung dieses Screens
-            // ausdrücklich NICHT hierher (siehe Typ-Doku oben) — also fällt der
-            // Satz ersatzlos, statt einen zweiten Auslöser zu bauen.
-            //
-            // Audit-Gruppe 9 — `explainer_session` sagte „Zähler sind
-            // Sitzungs-bezogen" ein zweites Mal; die Heimat ist der
-            // Karten-Untertitel über den Zählern (`summary_subtitle`), wo der
-            // Nutzer die Zahlen liest.
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                bulletRow(
-                    icon: "arrow.down.circle.fill",
-                    text: "settings.hkdiag.explainer_read"
-                )
-                bulletRow(
-                    icon: "arrow.up.circle.fill",
-                    text: "settings.hkdiag.explainer_upload"
-                )
+            if !row.isQuiet {
+                Text(row.detailLabel)
+                    .font(.hlCaption.monospacedDigit())
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                // W5 — says which time it is: checked, or a new value sent.
+                Text(row.timeLabel)
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(.vertical, HLSpace.xs)
     }
 
     /// R4 — der Absprung, der den `limits_bgrefresh`-Wegweiser ersetzt.
@@ -291,34 +247,10 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         #endif
     }
 
-    private func bulletRow(icon: String, text: LocalizedStringKey) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.md) {
-            Image(systemName: icon)
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 18, alignment: .center)
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.hlBody)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
+    /// 1.4 B4 — label and value wrap in full (the workout counts ended in
+    /// "47 nicht…" at the standard size) and stack at the accessibility sizes.
     func statRow(label: LocalizedStringKey, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer(minLength: HLSpace.md)
-            Text(value)
-                .font(.hlBody.monospacedDigit())
-                .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.trailing)
-                // K1 — a localized outcome („Apple-Health-Abfrage
-                // fehlgeschlagen") is longer than the identifier it replaced.
-                .lineLimit(3)
-        }
+        HLSettingsStatRow(label: Text(label), value: value)
     }
 
     // MARK: - Derived state

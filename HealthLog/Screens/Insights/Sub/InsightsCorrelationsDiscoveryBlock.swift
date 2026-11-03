@@ -14,7 +14,7 @@ import SwiftUI
 /// **HONEST-ONLY + self-suppressing.** Renders ONLY the pairs the server
 /// returned. When the surface is gated off OR nothing survived the FDR control,
 /// `metrics` is empty and the block self-suppresses (`EmptyView`) — not an
-/// error, not an empty box (mirrors `InsightsDerivedBlock`).
+/// error, not an empty box.
 ///
 /// **Server-derived.** Pure server compute, no on-device fallback — the call
 /// site gates the block on `BackendAvailability.hasServer`. Monochrome, one
@@ -43,10 +43,6 @@ struct InsightsCorrelationsDiscoveryBlock: View {
     var onSetDismissed: ((DiscoveredCorrelation, Bool) -> Void)?
     /// Pairs whose statement is in flight — the control is disabled meanwhile.
     var pendingIDs: Set<String> = []
-    /// Pairs the server brought back on its own after they had been dismissed,
-    /// because the evidence changed materially. Rendered as a calm note, never
-    /// as an error.
-    var resurfacedIDs: Set<String> = []
     /// Set when a statement could not be saved — the optimistic change has
     /// already been rolled back, and this says so.
     var actionError: String?
@@ -73,6 +69,16 @@ struct InsightsCorrelationsDiscoveryBlock: View {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 DisclosureGroup(isExpanded: $isExpanded) {
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
+                        // 1.4 B2 — the reading instruction once, at the top,
+                        // instead of a footer plus a second "Quellen" under the
+                        // last card (each card carries its own citation).
+                        if !pairs.isEmpty {
+                            Text(Self.footer(pairsTested: pairsTested))
+                                .font(.hlCaption)
+                                .foregroundStyle(HLText.tertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("insights.correlations.discovery.footer")
+                        }
                         VStack(spacing: HLSpace.sm) {
                             ForEach(pairs) { pair in
                                 card(for: pair)
@@ -86,16 +92,6 @@ struct InsightsCorrelationsDiscoveryBlock: View {
                                 .accessibilityIdentifier("insights.correlations.discovery.actionError")
                         }
                         dismissedSection
-                        if !pairs.isEmpty {
-                            Text(Self.footer(pairsTested: pairsTested))
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.tertiary)
-                                .accessibilityIdentifier("insights.correlations.discovery.footer")
-                            // 1.4.1 — the block-level citation. The footer states
-                            // how many pairs were tested; this names the method
-                            // (Benjamini-Hochberg) the statement rests on.
-                            HLSourcesLink(topic: .correlations)
-                        }
                     }
                     .padding(.top, HLSpace.sm)
                 } label: {
@@ -151,6 +147,10 @@ struct InsightsCorrelationsDiscoveryBlock: View {
 
     // MARK: - Discovered-pair card
 
+    /// 1.4 B2 — headline, the server's reading, then ONE foot line: "Details"
+    /// and the card's citation. Everything else a card used to stack below
+    /// (the n/r line, the set-aside and came-back notes, the coach link, the
+    /// relevance control) opens with "Details", so a card is three lines.
     private func card(for pair: DiscoveredCorrelation) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
@@ -165,53 +165,30 @@ struct InsightsCorrelationsDiscoveryBlock: View {
                         .font(.hlBody)
                         .foregroundStyle(HLText.secondary)
                 }
-                // Stat line — n + r, monospaced so the digits align. Mono, no
-                // colored chip (color = signal only). r is the descriptive
-                // strength; the user judges it for themselves.
-                Text(Self.statLine(for: pair))
-                    .font(.hlCaption.weight(.medium))
-                    .monospacedDigit()
-                    .foregroundStyle(HLText.tertiary)
-                // CU-33 — a returning pair explains itself calmly. The server
-                // lifted the dismissal because the evidence moved; that is a
-                // data update, not a lost setting and not a failure.
-                if resurfacedIDs.contains(pair.id) {
-                    Text(Self.resurfacedNote)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("insights.correlations.discovery.resurfaced")
+                // C1 — the follow-up, on EVERY card, and 1.4.1 — the citation
+                // Apple photographed, on every card and visible without
+                // expanding anything: one line, stacked when it does not fit.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: HLSpace.lg) {
+                        followUpLink(for: pair)
+                        Spacer(minLength: 0)
+                        HLSourcesLink(topic: .correlations)
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        followUpLink(for: pair)
+                        HLSourcesLink(topic: .correlations)
+                    }
                 }
-                // CU-33 — the person's own statement, restated on the card so
-                // the muted styling is never a mystery.
-                if pair.isDismissed {
-                    Text(Self.dismissedNote)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
-                // A360 H2 — discreet "Ask the coach about this" footer link,
-                // scoped to both channels in the pair. Outside the combined
-                // a11y element so VoiceOver reaches it as its own control.
-                // C1 — the follow-up, on EVERY card. Unconditional by design:
-                // the ask-coach link below is gated on the coach surface and the
-                // relevance control on the server handing over a pattern handle,
-                // so a card could previously end with nothing at all. This one
-                // cannot be gated away.
-                followUpLink(for: pair)
-                // 1.4.1 — the citation Apple photographed. On EVERY card and
-                // visible without expanding anything: a correlation statement
-                // never stands without its method and reference.
-                HLSourcesLink(topic: .correlations)
                 if expandedPairID == pair.id {
-                    InsightsCorrelationFollowUpSection(pair: pair, onSelectMetric: onSelectMetric)
-                }
-                // #115 · 0.2 — only while the `coach` capability offers an entry.
-                if let onAskCoach, appContainer.offersCoach {
-                    askCoachLink(for: pair, action: onAskCoach)
-                        .accessibilityIdentifier("insights.correlations.discovery.askCoach")
-                }
-                if let onSetDismissed, pair.isDismissable {
-                    relevanceButton(for: pair, action: onSetDismissed)
+                    InsightsCorrelationFollowUpSection(
+                        pair: pair,
+                        onSelectMetric: onSelectMetric,
+                        onAskCoach: appContainer.offersCoach ? onAskCoach : nil
+                    ) {
+                        if let onSetDismissed, pair.isDismissable {
+                            relevanceButton(for: pair, action: onSetDismissed)
+                        }
+                    }
                 }
             }
         }
@@ -242,7 +219,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
         }
         .buttonStyle(.plain)
         .disabled(pendingIDs.contains(pair.id))
-        .padding(.top, HLSpace.xs)
+        .frame(minHeight: 44)
         .accessibilityIdentifier("insights.correlations.discovery.relevance")
     }
 
@@ -268,32 +245,11 @@ struct InsightsCorrelationsDiscoveryBlock: View {
                     .font(.hlIcon(HLIconSize.sm))
             }
             .foregroundStyle(HLText.secondary)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.top, HLSpace.xs)
         .accessibilityIdentifier("insights.correlations.discovery.followUp")
-    }
-
-    /// Discreet ghost coach link under a correlation card. Monochrome, footnote-
-    /// weight — a quiet footer affordance, not a primary CTA (mirrors the metric
-    /// AI-explainer's restraint).
-    private func askCoachLink(
-        for pair: DiscoveredCorrelation,
-        action: @escaping (DiscoveredCorrelation) -> Void
-    ) -> some View {
-        Button {
-            action(pair)
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "sparkles")
-                    .font(.hlIcon(HLIconSize.sm))
-                Text(String(localized: "Ask the coach about this"))
-                    .font(.hlFootnote)
-            }
-            .foregroundStyle(HLText.secondary)
-        }
-        .buttonStyle(.plain)
-        .padding(.top, HLSpace.xs)
     }
 
     // MARK: - Pure resolvers (nonisolated for unit tests)
@@ -383,23 +339,6 @@ struct InsightsCorrelationsDiscoveryBlock: View {
         String(
             localized: "Relevant after all",
             comment: "Correlation card — undo the not-relevant statement"
-        )
-    }
-
-    /// Restates why a card is muted, so the styling is never a mystery.
-    nonisolated static var dismissedNote: String {
-        String(
-            localized: "You marked this as not relevant for you.",
-            comment: "Correlation card — caption on a card the person set aside"
-        )
-    }
-
-    /// A pair the server brought back on its own. Calm and factual — the
-    /// evidence moved, so the server lifted the dismissal. Not an error.
-    nonisolated static var resurfacedNote: String {
-        String(
-            localized: "Back again because the data behind it has changed noticeably.",
-            comment: "Correlation card — a previously set-aside pair returned after a recomputation"
         )
     }
 

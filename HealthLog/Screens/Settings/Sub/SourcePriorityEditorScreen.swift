@@ -133,31 +133,19 @@ struct SourcePriorityEditorScreen: View {
     // MARK: - Editor list
 
     private var editorList: some View {
+        // 1.4 B2-c — no empty lead and tail sections: "order your sources"
+        // repeated the screen before, and "changes are saved immediately" is
+        // what the drag already shows (spinner and haptic).
         List {
-            introSection
             ForEach(store.metricEntries) { row in
                 metricSection(row)
             }
-            footerSection
         }
         .listStyle(.insetGrouped)
         .environment(\.editMode, .constant(.active))
         .scrollContentBackground(.hidden)
         .hlScreenBackground()
         .hlScrollEdgeSoft()
-    }
-
-    private var introSection: some View {
-        Section {
-            EmptyView()
-        } footer: {
-            Text(
-                "Order your sources per data type. The topmost source wins when several values exist for the same time."
-            )
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
-            .padding(.top, HLSpace.xs)
-        }
     }
 
     private func metricSection(_ row: SourcePriorityRow) -> some View {
@@ -194,7 +182,7 @@ struct SourcePriorityEditorScreen: View {
             Image(systemName: sourceIcon(for: source))
                 .font(.hlIcon(HLIconSize.rowAction))
                 .foregroundStyle(HLText.secondary)
-                .frame(width: 22)
+                .hlInfoIconColumn()
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text(LocalizedStringKey(SourcePriorityRow.displayLabel(forSource: source)))
                     .font(.hlSubhead)
@@ -216,24 +204,6 @@ struct SourcePriorityEditorScreen: View {
             Text(String(localized: "Rank \(rank): \(SourcePriorityRow.displayLabel(forSource: source))"))
         )
         .accessibilityHint(Text("Press and drag to reorder."))
-    }
-
-    private var footerSection: some View {
-        Section {
-            EmptyView()
-        } footer: {
-            // Audit-Gruppe 13 — „Quellen ohne Werte werden zur Auswahl
-            // angezeigt …" erklärte für die ganze Liste, was die betroffene
-            // Zeile selbst markiert („Noch keine Werte aus dieser Quelle",
-            // `editorRow`). Die Zeile ist die Heimat (R3, zustandsabhängiger
-            // Text schlägt statischen); der Listen-Footer ist gefallen. Die
-            // Folge-Aussage „Änderungen werden sofort gespeichert." bleibt —
-            // sie ist nirgends sonst sichtbar (R2 Folge).
-            Text("Changes are saved immediately.")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .padding(.top, HLSpace.xs)
-        }
     }
 
     // MARK: - Move logic

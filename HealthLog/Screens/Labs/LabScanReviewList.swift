@@ -153,13 +153,10 @@ struct LabScanReviewList: View {
         return labels
     }
 
-    /// Footer: the verbatim OCR line, plus the catalog-link note for a linked
-    /// row (its unit + range come from the catalog, hence the missing fields).
+    /// Footer: the verbatim line the scan read. 1.4 B2-c: the per-row
+    /// "linked to a catalog marker" note is gone (no badge in its place).
     private func footer(row: LabScanRow) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            if row.isLinked {
-                Text("labs.scan.review.linked")
-            }
             if !row.rawLine.isEmpty {
                 Text(verbatim: row.rawLine)
                     .font(.hlCaption)

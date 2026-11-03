@@ -57,7 +57,7 @@ public actor AppleHealthMedicationImporter {
     let repo: MedicationsRepository
     private let keychain: KeychainStoring
     let registry: AppleHealthMirrorRegistry
-    private let clock: @Sendable () -> Date
+    let clock: @Sendable () -> Date
     /// The account this sweep works for, resolved fresh on every run. `nil` only
     /// in contexts with no session at all, where every sweep refuses: without an
     /// owner there is no partition to write and no one to attribute a dose to.
@@ -171,9 +171,14 @@ public actor AppleHealthMedicationImporter {
         // newest one imported: a held dose keeps the window open behind every
         // later success, and because the HealthKit predicate includes its start
         // instant, an equal-timestamp sibling comes back with it.
+        //
+        // 1.4 / iOS 27 — asked before the read, so the ledger judges absences
+        // against the window this read actually had. The read starts no earlier
+        // than the window, as Apple asks for limited access.
+        let doseWindow = await reader.doseReadWindow()
         let resumeAt = ledger.resumeInstant()
         let medicationRecords = await readMedicationRecords()
-        let doseRecords = await readDoseRecords(since: resumeAt)
+        let doseRecords = await readDoseRecords(since: doseWindow.clamp(resumeAt))
 
         // 2) Mirror the medications the server does not already carry.
         if let medicationRecords {
@@ -194,6 +199,7 @@ public actor AppleHealthMedicationImporter {
                 into: summary,
                 doses: doseRecords,
                 ledger: ledger,
+                readWindow: doseWindow,
                 maxChunks: maxDoseChunks,
                 requiring: lease
             )

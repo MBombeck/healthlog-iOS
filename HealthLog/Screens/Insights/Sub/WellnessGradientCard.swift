@@ -33,6 +33,8 @@ struct WellnessGradientCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 1.4 B4 — `false` once the overview's motion window has closed.
+    @Environment(\.insightsRingMotionActive) private var motionActive
 
     /// Live Low-Power read — the breath drops to its static mid value when on,
     /// mirroring the canonical gate on the prism/cycle-glow drivers
@@ -81,7 +83,7 @@ struct WellnessGradientCard<Content: View>: View {
     /// pulse together.
     @ViewBuilder
     private var glow: some View {
-        let paused = WellnessTileMotion.isPaused(reduceMotion: reduceMotion, lowPower: lowPower)
+        let paused = WellnessTileMotion.isPaused(reduceMotion: reduceMotion, lowPower: lowPower, atRest: !motionActive)
         TimelineView(.animation(minimumInterval: WellnessTileMotion.frameInterval, paused: paused)) { context in
             let b = paused
                 ? 0

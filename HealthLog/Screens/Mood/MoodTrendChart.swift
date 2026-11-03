@@ -83,7 +83,7 @@ struct MoodTrendChart: View {
             sparseState
         } else {
             chart
-                .frame(height: 160)
+                .frame(height: HLChartStyle.heightRegular)
                 .accessibilityChartDescriptor(self)
         }
     }
@@ -95,15 +95,12 @@ struct MoodTrendChart: View {
         let ma = movingAverage
         return Chart {
             // 1. Mean baseline.
+            // 1.4 B4 — its "Ø" label sits beside the plot on the leading axis
+            // (below), not on the line where the daily line ran through it.
             if let mean = overallMean {
                 RuleMark(y: .value(String(localized: "Average"), mean))
                     .foregroundStyle(HLText.tertiary.opacity(0.35))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: HLChartGrid.thresholdDash))
-                    .annotation(position: .top, alignment: .trailing) {
-                        Text("Ø \(mean.formatted(.number.precision(.fractionLength(1))))")
-                            .font(.hlCaption2)
-                            .foregroundStyle(HLText.tertiary)
-                    }
             }
             // Faint scale anchors at 1/3/5.
             ForEach([1, 3, 5], id: \.self) { level in
@@ -165,23 +162,21 @@ struct MoodTrendChart: View {
                     }
                 }
             }
-        }
-        .chartXAxis {
-            AxisMarks { _ in
-                AxisGridLine().foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                AxisValueLabel()
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+            // The mean's label, outside the plot at the height of its rule.
+            AxisMarks(position: .leading, values: overallMean.map { [$0] } ?? []) { value in
+                AxisValueLabel {
+                    if let mean = value.as(Double.self) {
+                        Text("Ø \(mean.formatted(.number.precision(.fractionLength(1))))")
+                            .font(.hlCaption2)
+                            .foregroundStyle(HLText.tertiary)
+                    }
+                }
             }
         }
-        .overlay(alignment: .bottomLeading) {
-            // "≥7 days for the smoothed line" footnote in the 2–6-point state.
-            if ma.isEmpty, series.count >= 2 {
-                Text("Moving average from 7 days of data")
-                    .font(.hlCaption2)
-                    .foregroundStyle(HLText.tertiary)
-            }
-        }
+        // 1.4 B4 — the app's one date-axis rule.
+        .chartXAxis { ChartDateAxis.marks(for: series.map(\.date)) }
+        // 1.4 B2 — no footnote about when the smoothed line starts: below
+        // seven days the chart simply draws the daily line.
     }
 
     // MARK: - Sparse state (< 2 daily points)
@@ -189,12 +184,9 @@ struct MoodTrendChart: View {
     private var sparseState: some View {
         // Audit-01 C1/H4 — the canonical `HLEmptyState` lockup (the bespoke
         // stack used a raw `.system(.title)` glyph + its own type recipe).
-        HLEmptyState(
-            icon: "chart.line.uptrend.xyaxis",
-            title: "Not enough entries for a trend",
-            message: "Log a few more moods to see your line."
-        )
-        .frame(height: 160)
+        // 1.4 B2 — the title says it; no sentence asks for more entries.
+        HLEmptyState(icon: "chart.line.uptrend.xyaxis", title: "Not enough entries for a trend")
+            .frame(height: HLChartStyle.heightRegular)
     }
 
     private struct DailyPoint: Identifiable, Hashable {

@@ -136,9 +136,7 @@ struct IllnessEpisodeDetailScreen: View {
     private func noteCard(_ note: String) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text("illness.detail.note")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                HLSectionLabel("illness.detail.note")
                 Text(note)
                     .font(.hlBody)
                     .foregroundStyle(HLText.primary)
@@ -154,13 +152,17 @@ struct IllnessEpisodeDetailScreen: View {
         .accessibilityIdentifier("illness.detail.logDay")
     }
 
+    /// 1.4 B2 — no logged day yet: no "Verlauf" heading over an empty line.
+    @ViewBuilder
     private var timelineCard: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("illness.daylog.timeline.title")
-                .font(.hlFootnote.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-            IllnessDayLogTimeline(state: store.dayLogTimelineState) {
-                Task { await store.loadDayLogs(episodeId: current.id) }
+        if case .empty = store.dayLogTimelineState {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                HLSectionLabel("illness.daylog.timeline.title")
+                IllnessDayLogTimeline(state: store.dayLogTimelineState) {
+                    Task { await store.loadDayLogs(episodeId: current.id) }
+                }
             }
         }
     }

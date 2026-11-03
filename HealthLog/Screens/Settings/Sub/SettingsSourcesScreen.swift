@@ -18,7 +18,15 @@ struct SettingsSourcesScreen: View {
 
     var body: some View {
         HLSettingsPage(title: "Source priority") {
-            priorityLadderCard
+            // 1.4 B4 — nothing configured is the whole screen's state: the
+            // app's empty lockup on the page, not a card titled like the
+            // screen over one grey sentence.
+            if !priorityStore.isLoading, priorityStore.metricEntries.isEmpty {
+                HLEmptyState(icon: "list.number", title: "settings.sources.priority.empty.title")
+                    .accessibilityIdentifier("settings.sources.priority.empty")
+            } else {
+                priorityLadderCard
+            }
         }
         .navigationTitle("Source priority")
         .navigationBarTitleDisplayMode(.inline)
@@ -32,10 +40,11 @@ struct SettingsSourcesScreen: View {
     // MARK: - Priority ladder (v0.5.3-F3 read-only)
 
     private var priorityLadderCard: some View {
+        // 1.4 B2-c — no subtitle: the hub row above says "which source wins
+        // per metric" already.
         HLSettingsCard(
             icon: "list.number",
-            title: "Source priority",
-            subtitle: "Which source wins per metric when values overlap."
+            title: "Source priority"
         ) {
             if priorityStore.isLoading, priorityStore.ladder == nil {
                 HStack {
@@ -44,10 +53,6 @@ struct SettingsSourcesScreen: View {
                     Spacer()
                 }
                 .padding(.vertical, HLSpace.sm)
-            } else if priorityStore.metricEntries.isEmpty {
-                Text("No source priority configured yet.")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
             } else {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     ForEach(priorityStore.metricEntries) { row in
@@ -90,7 +95,7 @@ struct SettingsSourcesScreen: View {
                         Image(systemName: SourcePriorityRow.iconName(forSource: source))
                             .font(.hlIcon(HLIconSize.rowAction))
                             .foregroundStyle(HLText.secondary)
-                            .frame(width: 22)
+                            .hlInfoIconColumn()
                         Text(LocalizedStringKey(SourcePriorityRow.displayLabel(forSource: source)))
                             .font(.hlSubhead)
                             .foregroundStyle(HLText.primary)

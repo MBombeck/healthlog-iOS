@@ -270,8 +270,9 @@ import Foundation
             case HKQuantityTypeIdentifier.leanBodyMass.rawValue:
                 return WireUnit(hkUnit: .gramUnit(with: .kilo), wireSymbol: "kg", scale: 1)
 
-            // m — Six-minute-walk-test distance.
-            case HKQuantityTypeIdentifier.sixMinuteWalkTestDistance.rawValue:
+            // m — Six-minute-walk-test distance; B5 (1.4) waist circumference
+            // (server `hkUnit: "m"`, stored ×100 in cm).
+            case HKQuantityTypeIdentifier.sixMinuteWalkTestDistance.rawValue, HKQuantityTypeIdentifier.waistCircumference.rawValue:
                 return WireUnit(hkUnit: .meter(), wireSymbol: "m", scale: 1)
 
             // m/s — Stair ascent / descent speed.

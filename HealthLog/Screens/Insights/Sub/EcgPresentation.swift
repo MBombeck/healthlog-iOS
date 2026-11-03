@@ -5,14 +5,14 @@ import Foundation
 ///
 /// **Regulatory framing (load-bearing — do NOT soften).** Every string here
 /// describes the RECORDING DEVICE's own certified on-device result. HealthLog
-/// re-classifies nothing and interprets nothing; the result label is always
-/// paired with ``attribution(for:)``, which names the device as its author.
-/// An unrecognised literal is shown VERBATIM rather than mapped, guessed at, or
-/// dropped — the app must never invent a meaning for a verdict it does not know.
+/// re-classifies nothing and interprets nothing; the result label always sits
+/// in a card whose foot (`EcgAttributionFooter`) names the device as its
+/// author. An unrecognised literal is shown VERBATIM rather than mapped,
+/// guessed at, or dropped — the app must never invent a meaning for a verdict
+/// it does not know.
 ///
-/// Copy is the web catalogue's (`insights.ecg.result.*` /
-/// `insights.ecg.resultAttribution`), which is a copy contract shared with the
-/// server and the web app.
+/// Copy is the web catalogue's (`insights.ecg.result.*`), which is a copy
+/// contract shared with the server and the web app.
 enum EcgPresentation {
     /// The device's result, as a display string. Never a HealthLog assessment.
     static func resultLabel(for classification: EcgClassification) -> String {
@@ -33,11 +33,6 @@ enum EcgPresentation {
         // reinterpret.
         case let .unknown(raw): raw
         }
-    }
-
-    /// The result line, explicitly attributed to the recording device.
-    static func attribution(for classification: EcgClassification) -> String {
-        String(localized: "insights.ecg.resultAttribution \(resultLabel(for: classification))")
     }
 
     /// Whether the "discuss this with a clinician" note belongs on this

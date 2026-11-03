@@ -81,11 +81,12 @@ struct UnifiedSharingScreen: View {
     // MARK: - 1. What
 
     private func whatCard(_ store: UnifiedSharingStore) -> some View {
+        // 1.4 B2-c — no subtitle: a ticked row reads as "included" without
+        // being told, and where the list comes from is not the reader's
+        // question.
         HLSettingsCard(
             icon: "checklist",
-            title: "sharing.unified.what.title",
-            subtitle: "sharing.unified.what.subtitle",
-            subtitleWraps: true
+            title: "sharing.unified.what.title"
         ) {
             UnifiedSharingSelectionSection(
                 store: store,
@@ -99,12 +100,11 @@ struct UnifiedSharingScreen: View {
 
     private func periodCard(_ store: UnifiedSharingStore) -> some View {
         @Bindable var store = store
-        // R5 — one text slot. The footer carries the consequence a user cannot
-        // read off the control: that this is content, not the link's life.
+        // 1.4 B2-c — no footer: the expiry is its own card further down, so
+        // "the period is content, not the link's life" needs no sentence.
         return HLSettingsCard(
             icon: "calendar",
-            title: "sharing.unified.period.title",
-            footer: "sharing.unified.period.footer"
+            title: "sharing.unified.period.title"
         ) {
             Picker(selection: $store.periodDays) {
                 ForEach(UnifiedSharingStore.periodOptions, id: \.self) { days in
@@ -172,24 +172,21 @@ struct UnifiedSharingScreen: View {
         case .zip:
             chartsCard(store)
         case .fhir:
-            fhirScopeCard
+            // 1.4 B2-c — nothing more to ask; the card that explained how the
+            // server assembles the bundle is gone.
+            EmptyView()
         }
     }
 
     private func linkDetailCard(_ store: UnifiedSharingStore) -> some View {
         @Bindable var store = store
         return HLSettingsCard(icon: "link.badge.plus", title: "Label") {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                TextField(
-                    String(localized: "e.g. Dr. Schmidt — cardiology"),
-                    text: $store.linkLabel
-                )
-                .accessibilityIdentifier("sharing.unified.link.label")
-                Text("A name to recognise this link later (1–120 characters).")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // 1.4 B2-c — the placeholder example says what a label is for.
+            TextField(
+                String(localized: "e.g. Dr. Schmidt — cardiology"),
+                text: $store.linkLabel
+            )
+            .accessibilityIdentifier("sharing.unified.link.label")
         }
     }
 
@@ -202,38 +199,31 @@ struct UnifiedSharingScreen: View {
             title: "doctorReport.practice.title",
             subtitle: "doctorReport.practice.subtitle"
         ) {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                TextField(
-                    String(localized: "doctorReport.practice.placeholder"),
-                    text: Binding(
-                        get: { practiceStore?.draft ?? store.practiceName },
-                        // Every keystroke goes through the prefill store so the
-                        // "typed beats suggested" latch is set at the source,
-                        // and through the model so the request carries it.
-                        set: { typed in
-                            practiceStore?.setDraftFromUser(typed)
-                            store.practiceName = typed
-                        }
-                    )
+            // 1.4 B2-c — the prefilled name shows itself in the field; the
+            // line saying where it came from is gone.
+            TextField(
+                String(localized: "doctorReport.practice.placeholder"),
+                text: Binding(
+                    get: { practiceStore?.draft ?? store.practiceName },
+                    // Every keystroke goes through the prefill store so the
+                    // "typed beats suggested" latch is set at the source,
+                    // and through the model so the request carries it.
+                    set: { typed in
+                        practiceStore?.setDraftFromUser(typed)
+                        store.practiceName = typed
+                    }
                 )
-                .textContentType(.organizationName)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("sharing.unified.practiceName")
-
-                if practiceStore?.didPrefill == true {
-                    Text("doctorReport.practice.prefilled")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("sharing.unified.practicePrefilled")
-                }
-            }
+            )
+            .textContentType(.organizationName)
+            .autocorrectionDisabled()
+            .accessibilityIdentifier("sharing.unified.practiceName")
         }
     }
 
     private func chartsCard(_ store: UnifiedSharingStore) -> some View {
         @Bindable var store = store
-        return HLSettingsCard(icon: "chart.xyaxis.line", title: "Include charts") {
+        // 1.4 B4 — the card's title was the switch's own label; one heading.
+        return HLSettingsCard {
             HLSettingsToggleRow(
                 title: "Include charts",
                 description: nil,
@@ -243,35 +233,31 @@ struct UnifiedSharingScreen: View {
         }
     }
 
-    private var fhirScopeCard: some View {
-        HLSettingsCard(icon: "doc.text.fill.viewfinder", title: "sharing.unified.form.fhir.title") {
-            Text("sharing.unified.fhir.scopeNote")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("sharing.unified.fhir.scopeNote")
-        }
-    }
-
     private func expiryCard(_ store: UnifiedSharingStore) -> some View {
         @Bindable var store = store
-        // R5 — one text slot; the footer carries the server's rule, which is
-        // the thing the picker itself cannot say.
-        return HLSettingsCard(
-            icon: "clock.badge.xmark",
-            title: "Expiry",
-            footer: "Required. The link stops working after this date (at most 90 days from now)."
-        ) {
+        // 1.4 B2-c — the server's rule (tomorrow at the earliest, 90 days at
+        // the most) is the picker's range now, not a footer under it.
+        // 1.4 B4 — "Ablauf" over "Läuft ab" named it twice; the row alone.
+        return HLSettingsCard {
             DatePicker(
                 "Expires",
                 selection: Binding(
                     get: { store.expiresAt ?? Date.now },
                     set: { store.expiresAt = $0 }
                 ),
+                in: Self.expiryRange(),
                 displayedComponents: .date
             )
             .accessibilityIdentifier("sharing.unified.expiry")
         }
+    }
+
+    /// Tomorrow to ``UnifiedSharingStore/maxExpiryDays`` from now: the dates
+    /// the server accepts for a link's expiry.
+    static func expiryRange(now: Date = .now, calendar: Calendar = .current) -> ClosedRange<Date> {
+        let first = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+        let last = calendar.date(byAdding: .day, value: UnifiedSharingStore.maxExpiryDays, to: now) ?? first
+        return first ... max(first, last)
     }
 
     // MARK: - 4. The one action, and one feedback shape
@@ -280,12 +266,14 @@ struct UnifiedSharingScreen: View {
         HLSettingsCard(icon: "paperplane.fill", title: "sharing.unified.action.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 // The honesty half of E1.2, next to the button that acts on it.
+                // 1.4 B2-c — said once, here; the copy in the selection card
+                // above is gone.
                 if store.isDocumentsOnly {
                     Text("sharing.unified.emptyMeaning")
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("sharing.unified.action.emptyMeaning")
+                        .accessibilityIdentifier("sharing.unified.emptyMeaning")
                 }
 
                 HLButton(
@@ -319,12 +307,10 @@ struct UnifiedSharingScreen: View {
     /// would have made the consolidation bigger, not clearer — and revoking is
     /// the one action a user reaches for in a hurry.
     private var manageCard: some View {
-        HLSettingsCard(
-            icon: "list.bullet.rectangle",
-            title: "Active links"
-        ) {
+        // 1.4 B4 — one row, one heading: the row names its screen.
+        HLSettingsCard {
             HLSettingsActionRow(
-                title: "sharing.unified.manage.row",
+                title: "Active links",
                 presents: .push
             ) {
                 ShareWithClinicianScreen()

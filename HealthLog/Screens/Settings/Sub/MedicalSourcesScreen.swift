@@ -9,10 +9,9 @@ struct MedicalSourcesScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.xl) {
-                Text("sources.hub.intro")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // 1.4 B2-c — the intro ("this page lists where every one of
+                // them comes from") is gone; the title and the cards say it.
+                // The disclaimer at the end stays (App Review 1.4.1).
                 methodsSection
                 ForEach(Group.allCases) { group in
                     referencesSection(group)
@@ -76,12 +75,9 @@ struct MedicalSourcesScreen: View {
 
     private var learnSection: some View {
         HLSettingsCard(icon: "book", title: "sources.hub.learnTitle") {
-            Text("sources.hub.learnBody")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             ForEach(MedicalSourceCatalog.learnGuides, id: \.slug) { guide in
-                HLSourceRow(name: guide.title, year: nil, caveatKey: nil, url: guide.url)
+                // 1.4 B4 — the title and the article in the app's language.
+                HLSourceRow(name: guide.localizedTitle, year: nil, caveatKey: nil, url: guide.localizedURL)
             }
         }
     }

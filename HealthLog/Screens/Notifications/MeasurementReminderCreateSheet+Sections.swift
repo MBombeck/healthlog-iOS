@@ -52,13 +52,8 @@ extension MeasurementReminderCreateSheet {
             case .rrule:
                 rruleControls
             }
-        } footer: {
-            Text(
-                cadenceMode == .interval
-                    ? "reminders.create.schedule.footer"
-                    : "reminders.create.schedule.rrule.footer"
-            )
         }
+        // 1.4 B2 — no footer saying who computes the next due date.
     }
 
     private var intervalStepper: some View {
@@ -118,9 +113,9 @@ extension MeasurementReminderCreateSheet {
                 }
                 .accessibilityIdentifier("MeasurementReminderCreateSheet.anchorDate")
             }
-        } footer: {
-            Text("reminders.create.anchor.footer")
         }
+        // 1.4 B2 — counting from the day it is created is the expected default;
+        // the toggle names the other choice.
     }
 
     // MARK: - Notify hour
@@ -157,8 +152,6 @@ extension MeasurementReminderCreateSheet {
                 Text("reminders.create.enabled.label")
             }
             .accessibilityIdentifier("MeasurementReminderCreateSheet.enabled")
-        } footer: {
-            Text("reminders.create.enabled.footer")
         }
     }
 }

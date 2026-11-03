@@ -94,7 +94,7 @@ struct FamilyHistoryEditorSheet: View {
                     Section { HLFormErrorText(saveError) }
                 }
             }
-            .navigationTitle(Text(isEditing ? "familyHistory.edit.title" : "familyHistory.add.title"))
+            .navigationTitle(Text(isEditing ? "familyHistory.edit.title" : "familyHistory.add.sheetTitle"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

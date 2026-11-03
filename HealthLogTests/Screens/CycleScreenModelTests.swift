@@ -204,7 +204,7 @@ struct CycleScreenModelTests {
         let phases = CyclePhasePalette.Phase.allCases
         let bodies = phases.map { CyclePhaseExplainer.bodyKey(for: $0) }
         // All four phase bodies must be different keys.
-        #expect(Set(bodies.map { "\($0)" }).count == phases.count)
+        #expect(Set(bodies.map(\.key)).count == phases.count)
         // Each phase has a matching named graphic slot.
         for phase in phases {
             let slot = CyclePhaseExplainer.highlightAssetName(for: phase)

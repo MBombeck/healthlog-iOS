@@ -499,11 +499,7 @@ struct NoMatchesState: View {
     /// Audit-01 C1 — the canonical `HLEmptyState` lockup, matching every other
     /// empty surface app-wide.
     var body: some View {
-        HLEmptyState(
-            icon: "magnifyingglass",
-            title: "No matches",
-            message: "Adjust the filters or search to see measurements."
-        )
-        .accessibilityIdentifier("measurements.list.noMatches")
+        HLEmptyState(icon: "magnifyingglass", title: "No matches")
+            .accessibilityIdentifier("measurements.list.noMatches")
     }
 }

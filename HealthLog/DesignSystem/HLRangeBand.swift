@@ -80,7 +80,7 @@ public enum RangeBandTone: Sendable, Equatable {
     }
 }
 
-/// The 8 pt status-toned rail + percentage header + target-band label.
+/// The 8 pt status-toned rail under one header line: target band, percentage.
 /// Verbatim of `BPStatusCard.bpInTargetBar` so BP and every ranged tile read
 /// identically (handbook cross-screen consistency).
 public struct RangeBandRow: View {
@@ -97,10 +97,14 @@ public struct RangeBandRow: View {
         let pct = min(100, max(0, band.pctInRange))
         let tone = RangeBand.tone(pct: band.pctInRange).color
         VStack(alignment: .leading, spacing: HLSpace.xs) {
+            // 1.4 B2 — one line: the band and the share of days inside it.
+            // "Im Zielbereich" above and "Ziel 71 bis 74 kg" below the rail
+            // said the same thing twice.
             HStack {
-                Text(String(localized: "In range"))
+                Text(band.targetLine)
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
+                    .lineLimit(1)
                 Spacer()
                 Text(HLNumberFormat.percent(pct))
                     .font(.hlCaption.weight(.semibold))
@@ -125,10 +129,6 @@ public struct RangeBandRow: View {
                 }
             }
             .frame(height: InsightsInTargetBar.railHeight)
-            Text(band.targetLine)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "\(pct) of 30 days in target range"))

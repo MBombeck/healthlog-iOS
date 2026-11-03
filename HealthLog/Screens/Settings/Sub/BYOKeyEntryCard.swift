@@ -28,10 +28,11 @@ struct BYOKeyEntryCard: View {
     /// Datenschutz-Zusage sitzt im Footer-Slot, der nach R5 für Rechtliches
     /// vorgesehen ist (Wortlaut unverändert).
     var body: some View {
+        // 1.4 B2-c — no footer: the "Own key" option right above says the
+        // requests go straight from the device to the provider.
         HLSettingsCard(
             icon: "key.horizontal.fill",
-            title: "Your own AI key",
-            footer: "Requests go straight from this iPhone to your provider — never through HealthLog's servers."
+            title: "Your own AI key"
         ) {
             if model.isConfigured, model.phase != .editing {
                 configuredState

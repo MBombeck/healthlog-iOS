@@ -27,7 +27,8 @@ extension AppContainer {
             writer.refresh(
                 medications: medicationsStore.medications,
                 derivedIntakes: medicationsStore.derivedTodayIntakes,
-                serverCompliancePercent: aggregateServerCompliancePercent(medicationsStore)
+                serverCompliancePercent: aggregateServerCompliancePercent(medicationsStore),
+                timeZone: medicationsStore.profileTimeZone
             )
         }
     }

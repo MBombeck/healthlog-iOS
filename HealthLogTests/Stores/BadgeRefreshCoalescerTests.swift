@@ -22,10 +22,9 @@ import Testing
             let coalescer = BadgeRefreshCoalescer()
             let counter = Counter()
             coalescer.schedule { await counter.bump() }
-            // Yield repeatedly so the scheduled Task gets a chance to run.
-            for _ in 0 ..< 16 {
-                await Task.yield()
-            }
+            // T1 (1.4) — waits for the bump itself, bounded by time, not by
+            // 16 yields a loaded machine can spend before the Task even ran.
+            await phase09AwaitCondition { await counter.value >= 1 }
             await #expect(counter.value == 1)
         }
 
@@ -47,9 +46,11 @@ import Testing
                     await counter.bump()
                 }
             }
-            for _ in 0 ..< 32 {
-                await Task.yield()
-            }
+            // T1 (1.4) — the winner's bump is awaited (bounded by time), then
+            // the replaced four get a window to bump wrongly before the count
+            // is read. 32 yields could run out before the winner ran at all.
+            await phase09AwaitCondition { await counter.value >= 1 }
+            await phase09Settle { await counter.value > 1 }
             // Only the last-scheduled Task observes "not cancelled"
             // beyond the yield; the prior four were replaced.
             let value = await counter.value
@@ -63,13 +64,12 @@ import Testing
             let coalescer = BadgeRefreshCoalescer()
             let counter = Counter()
             coalescer.schedule { await counter.bump() }
-            for _ in 0 ..< 16 {
-                await Task.yield()
-            }
+            // T1 (1.4) — each run is awaited before the next schedule, bounded
+            // by time; after 16 yields under load the second schedule could
+            // cancel a first run that had not started yet.
+            await phase09AwaitCondition { await counter.value >= 1 }
             coalescer.schedule { await counter.bump() }
-            for _ in 0 ..< 16 {
-                await Task.yield()
-            }
+            await phase09AwaitCondition { await counter.value >= 2 }
             await #expect(counter.value == 2)
         }
     }

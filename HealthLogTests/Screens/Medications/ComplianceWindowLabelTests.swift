@@ -51,14 +51,19 @@ struct ComplianceWindowLabelTests {
     }
 
     /// #115 · 1.3 — the detail KPI is now the server's `compliance30` (taken
-    /// of expected), the same metric family as the card's rows, so the label
-    /// names the window and "taken", never a client "on time" tally.
-    @Test("Detail KPI window label names the 30-day window and the taken metric")
+    /// of expected), the same metric family as the card's rows, so the card
+    /// names the window and "taken", never a client "on time" tally. 1.4 B2:
+    /// the trailing "Taken in 30 days" repeated its header and is gone; the
+    /// header carries the window and the caption under the number the metric.
+    @Test("Detail KPI names the 30-day window and the taken metric")
     func detailKpiWindowLabel() {
-        let label = String(localized: "med.compliance.window.taken").lowercased()
-        #expect(label.contains("30"))
-        #expect(label.contains("eingenommen") || label.contains("taken"))
-        #expect(!label.contains("pünktlich") && !label.contains("on time"))
+        let header = String(localized: "med.compliance.section.header").lowercased()
+        #expect(header.contains("30"))
+        let caption = String(format: String(localized: "med.compliance.caption.taken"), 4, 5).lowercased()
+        #expect(caption.contains("eingenommen") || caption.contains("taken"))
+        for text in [header, caption] {
+            #expect(!text.contains("pünktlich") && !text.contains("on time"))
+        }
     }
 
     /// The card + Insights bars label each row with its own window day count;

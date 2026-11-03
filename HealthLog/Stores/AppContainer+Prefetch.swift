@@ -39,6 +39,26 @@ public extension AppContainer {
         return (metricInsightsRepo, prefetch)
     }
 
+    /// The series kinds `prefetchTopMetricsSeries()` warms. 1.4 B4 — the list
+    /// used to be read from the Trends overlay's default selection; the overlay
+    /// and its store are gone, but the Insights metric page still reads these
+    /// 30-day series rows (`DashboardScreen` pre-warms the same key per tap),
+    /// so the warm-up keeps its own list. `nonisolated` so tests read it off
+    /// the main actor.
+    nonisolated static let prefetchSeriesKinds: [MetricKind] = [.bloodPressure, .weight, .pulse]
+
+    /// The series window the warm-up requests, in days — the 30-day window the
+    /// Insights metric page and the per-tap pre-warm read.
+    nonisolated static let prefetchSeriesDays = 30
+
+    /// Concurrency cap for the prefetch fan-out. Mirrors the bounded
+    /// `withTaskGroup` window FW1-B added to the compliance fan-out
+    /// (`MedicationsStore.complianceFanoutConcurrency`): the series list is
+    /// only three kinds today, but capping here means a future widening of
+    /// `prefetchSeriesKinds` can never open an unbounded number of warm-up
+    /// sockets at once.
+    static let prefetchFanoutConcurrency = 4
+
     /// W1-3 — fire-and-forget warm-up of the SWR cache for the chart series
     /// users tap most often + the wide measurements page used for tile-state
     /// derivation. Called by `HealthLogApp` immediately after
@@ -50,36 +70,16 @@ public extension AppContainer {
     /// SWR cache rows for the most-tapped detail screens are warm — same
     /// latency win as W1-2's per-tap pre-warm, but covers the very first
     /// tap of the session too.
-    ///
-    /// **v0.6.2.3 F2-CHARTLAG extension.** Trends-overlay first paint also
-    /// hits the SWR cache now — the overlay's defaults are the same three
-    /// vital-sign kinds (`.bloodPressure`, `.weight`, `.pulse`) at the
-    /// `.month` (30-day) range, so the existing prefetch set already
-    /// warms the overlay's cold path. We pull the kind list from
-    /// `TrendsOverlayStore.defaultSelection` instead of hardcoding it
-    /// here so a future change to the overlay defaults stays in lockstep
-    /// with the prefetch coverage.
-    /// Concurrency cap for the prefetch fan-out. Mirrors the bounded
-    /// `withTaskGroup` window FW1-B added to the compliance fan-out
-    /// (`MedicationsStore.complianceFanoutConcurrency`): the default selection
-    /// is only ~3 kinds today, but capping here means a future widening of
-    /// `TrendsOverlayStore.defaultSelection` can never open an unbounded number
-    /// of warm-up sockets at once.
-    static let prefetchFanoutConcurrency = 4
-
     func prefetchTopMetricsSeries() {
         let repo = measurementsRepo
-        // Tile-list + Trends-overlay defaults overlap on the same three
-        // vital signs. Sourcing from `TrendsOverlayStore.defaultSelection`
-        // keeps the two surfaces aligned without duplicating the list.
-        let kinds = Array(TrendsOverlayStore.defaultSelection)
-        let trendsRangeDays = TrendsOverlayStore.Range.month.rawValue
+        let kinds = Self.prefetchSeriesKinds
+        let seriesDays = Self.prefetchSeriesDays
         let cap = Self.prefetchFanoutConcurrency
         // One closure per warm-up unit (each series kind + the wide recentAll
         // page), fed through a sliding-window task group so at most `cap` run
-        // concurrently regardless of how large the default selection grows.
+        // concurrently regardless of how long the kind list grows.
         var work: [@Sendable () async -> Void] = kinds.map { kind in
-            { _ = try? await repo.series(kind: kind, days: trendsRangeDays) }
+            { _ = try? await repo.series(kind: kind, days: seriesDays) }
         }
         work.append { _ = try? await repo.recentAll(limit: 400) }
         Task.detached(priority: .utility) {

@@ -51,12 +51,18 @@
                     }
                     let collected = samples ?? []
                     let deletedCount = deleted?.count ?? 0
+                    // A5 (1.4, R3 S4) — the same UUID the read path sends as
+                    // `externalId`; A6 — unless the sync identifier, the one key
+                    // a deletion keeps, names a HealthLog copy of a server row.
+                    let split = HealthKitCopySyncIdentity.split((deleted ?? []).map { (uuid: $0.uuid, metadata: $0.metadata) })
                     continuation.resume(
                         returning: AnchoredHealthSamplePage(
                             samples: collected,
                             deletedObjectCount: deletedCount,
                             newAnchor: newAnchor,
-                            mayHaveMore: collected.count + deletedCount >= limit
+                            mayHaveMore: collected.count + deletedCount >= limit,
+                            deletedSampleIDs: split.sampleIDs,
+                            deletedCopyServerIDs: split.copyServerIDs
                         )
                     )
                 }
@@ -94,6 +100,17 @@
                 }
                 store.execute(query)
             }
+        }
+
+        /// B5 (1.4, R4 2.1) — A3's adapter, one question for all the types.
+        func readWindows(typeIdentifiers: [String]) async -> [String: HealthReadWindow] {
+            var types: [String: HKObjectType] = [:]
+            for identifier in typeIdentifiers {
+                types[identifier] = HealthKitSampleTypeResolver.sampleType(for: identifier)
+            }
+            let dates = await HealthKitAuthorizedHistory(store: store)
+                .earliestAuthorizedSampleDates(for: Set(types.values))
+            return types.mapValues { HealthReadWindow($0, in: dates) }
         }
     }
 

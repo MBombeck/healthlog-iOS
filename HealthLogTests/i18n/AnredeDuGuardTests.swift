@@ -68,7 +68,6 @@ struct AnredeDuGuardTests {
         "insights.metric.walkingSpeed.description",
         "insights.subPage.explainer.walkingDistanceBody",
         "insights.subPage.explainer.walkingSpeedBody",
-        "med.layout.order.section.footer",
         "nightscout.formIntro",
         "settings.applehealth_import.privacy_upload"
     ]

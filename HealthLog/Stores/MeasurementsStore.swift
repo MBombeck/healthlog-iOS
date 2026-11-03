@@ -244,12 +244,12 @@ public final class MeasurementsStore {
     }
 
     /// Loads the recent measurements page. `limit` defaults to **400** so
-    /// downstream consumers that filter by kind (OnDeviceBriefingHero,
-    /// TrendObservationCard, LocalDoctorReportStore) get roughly a week of
-    /// coverage even for HK-heavy users where Steps + Pulse-every-few-
-    /// seconds dominate the page. The 50-row default that the repo carries
-    /// is fine for "Recent Measurements" list UIs but starves the briefing
-    /// + trend-observation surfaces of input data.
+    /// downstream consumers that filter by kind (`LocalDoctorReportStore`
+    /// among them) get roughly a week of coverage even for HK-heavy users
+    /// where Steps + Pulse-every-few-seconds dominate the page. The 50-row
+    /// default that the repo carries is fine for "Recent Measurements" list
+    /// UIs but starves the per-kind readers of input data. (1.4 B4 — the
+    /// on-device briefing hero that also read it is deleted.)
     ///
     /// DASHBOARD-BUG-FIX-2 (2026-05-16): the operator reported the daily
     /// briefing on Insights/Dashboard rendering "keine Messungen /

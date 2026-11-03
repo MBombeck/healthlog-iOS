@@ -149,9 +149,8 @@ struct MeasureSheetView: View {
                     }
                 }
 
-                // Item 1.4b — backdating. Bounded to "not in the future"; the
-                // footer is the web's own hint copy, which exists because users
-                // kept missing that the field was adjustable at all.
+                // Item 1.4b — backdating. Bounded to "not in the future". 1.4
+                // B2: no footer; the date control is visibly adjustable on iOS.
                 Section {
                     DatePicker(
                         "measurement.form.recordedAt.label",
@@ -162,8 +161,6 @@ struct MeasureSheetView: View {
                     .accessibilityIdentifier("measure-sheet.recordedAt.picker")
                 } header: {
                     Text("measurement.form.recordedAt.section")
-                } footer: {
-                    Text("measurement.form.backdateHint")
                 }
 
                 Section("Note") {

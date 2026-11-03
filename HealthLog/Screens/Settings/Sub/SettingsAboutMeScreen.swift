@@ -100,6 +100,8 @@ struct SettingsAboutMeScreen: View {
                 Task { await store.load() }
             }
         }
+        // 1.4 B2-c — the page margin; the retry button ran edge to edge.
+        .padding(.horizontal, HLSpace.xl)
         .containerCentered()
     }
 

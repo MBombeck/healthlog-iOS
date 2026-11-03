@@ -53,11 +53,8 @@ struct CourseWindowRow: View {
                         .font(.hlCaption)
                 }
             }
-        } else {
-            Text("med.schedule.course.oneShot.caption")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
         }
+        // 1.4 B2 — the one-shot toggle's title says it; no caption under it.
     }
 
     // MARK: - Bindings

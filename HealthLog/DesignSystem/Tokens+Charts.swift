@@ -5,12 +5,17 @@ import SwiftUI
 public enum HLChartStyle {
     public static let lineWidth: CGFloat = 2
     public static let pointSize: CGFloat = 6
-    /// Detail-screen chart height (ChartDetailScreen hero).
-    public static let heightDetail: CGFloat = 200
-    /// Dashboard tile mini-chart height.
-    public static let heightCompact: CGFloat = 80
-    /// Mood / emoji-axis chart height — taller to fit five Y-axis labels.
-    public static let heightEmojiAxis: CGFloat = 220
+    /// **1.4 B4 — the app's two chart heights.** Before this there were
+    /// eleven, set by hand per chart (32 to 280 pt). Every chart now takes one
+    /// of these; the full-screen chart fills its screen.
+    ///
+    /// The line without axes: a tile on Heute, a Vitalwerte or recovery card,
+    /// the 30-day card's line, a record card.
+    public static let heightCompact: CGFloat = 36
+    /// Every chart with axes, in a card or as a detail page's main chart.
+    /// 220 pt fits five y-axis labels (the mood scale) and was already the
+    /// most common height.
+    public static let heightRegular: CGFloat = 220
 }
 
 // MARK: - Theme-2.0 Chart-series ramp + grid (T2-1 Foundation, 2026-05-16)
@@ -62,72 +67,19 @@ public enum HLChartTints {
         HLColor.inkGraphite
     }
 
-    /// Mid-emphasis tint — secondary series (e.g. BP diastolic when the
-    /// primary is systolic) or range-band fill. ~70% of `series`.
+    /// Mid-emphasis tint — a secondary line beside the series (the basal
+    /// temperature line under its phase dots) or the scrubber rule. ~70% of
+    /// `series`.
     public static var seriesMid: Color {
         HLColor.inkGraphite.opacity(0.7)
     }
 
-    /// Low-emphasis tint — tertiary surface (range upper/lower envelope,
-    /// 7-day rolling band). ~40% so it sits behind the primary line without
-    /// competing.
+    /// Low-emphasis tint — the second line of a two-line chart (BP diastolic
+    /// under systolic, the mood chart's daily line under its 7-day average).
+    /// ~40% so it reads as clearly lighter than the primary line without
+    /// disappearing into the 10% grid.
     public static var seriesLow: Color {
         HLColor.inkGraphite.opacity(0.4)
-    }
-
-    // MARK: - Multi-series differentiation (v0.5.2-R1 reconcile)
-
-    //
-    // History: Visual-Polish-1 (2026-05-16) shipped a fixed 4-tint
-    // Dracula palette (purple / cyan / pink / orange) for the
-    // TrendsOverlayCard z-score overlay so 2-4 metrics could be read
-    // at a glance. Operator design-QA on v0.5.2 caught a regression:
-    // when the user-picked accent collides with one of the Dracula alts
-    // (e.g. `.cyan` accent → weight series cyan AND BP series cyan), two
-    // overlaid metrics collapsed onto the same hue.
-    //
-    // Resolution (v0.5.2-R1): lead series = user-picked accent (`series`).
-    // Companion series paint in a monochrome graphite ramp derived from
-    // `HLText.primary` at three opacities so:
-    //   • The accent line always reads as the "headline" series.
-    //   • Companion lines stay distinct from the accent regardless of pick.
-    //   • Theme-2.0 single-accent contract holds — colour information lives
-    //     in the lead line, companion lines differentiate by lightness only.
-    //
-    // Single-metric callers continue to route through `series` exclusively —
-    // the companion ramp activates only when 2+ metrics overlay.
-
-    /// Multi-series companion #1 — graphite at ~80% primary text. Reads as
-    /// the second-headline series (still strong, but visibly behind the
-    /// accent-coloured lead line).
-    public static var seriesAlt1: Color {
-        HLColor.inkGraphite.opacity(0.80)
-    }
-
-    /// Multi-series companion #2 — graphite at ~55%. Reads as a tertiary
-    /// peer line; clearly distinct from companion #1 by lightness step.
-    public static var seriesAlt2: Color {
-        HLColor.inkGraphite.opacity(0.55)
-    }
-
-    /// Multi-series companion #3 — graphite at ~35%. The lightest step,
-    /// sits behind the other three without disappearing into the gridlines
-    /// (`HLChartGrid.lineOpacity` = 0.10, so 0.35 stays clearly above the
-    /// grid noise floor).
-    public static var seriesAlt3: Color {
-        HLColor.inkGraphite.opacity(0.35)
-    }
-
-    /// Ordered ramp consumed by multi-series charts for deterministic
-    /// per-series colour assignment. Index 0 maps to `series` (the
-    /// user-picked accent), 1→alt1, 2→alt2, 3→alt3; consumers cycle via
-    /// modulo when more than 4 series are active.
-    ///
-    /// v0.5.2-R1 reconcile: companions are graphite shades (no longer
-    /// fixed Dracula hues) so the user accent never collides with a
-    /// companion regardless of which `HLTint` the operator picks.
-    public static var multiSeriesRamp: [Color] {
-        [series, seriesAlt1, seriesAlt2, seriesAlt3]
     }
 
     /// Dashed threshold overlay — hard upper bound (hypertensive systolic,
@@ -158,8 +110,8 @@ public enum HLChartGrid {
     public static let labelOpacity: Double = 0.40
 
     /// Threshold-rule stroke style — dashed pattern for both high + low
-    /// overlays. `[4, 3]` reads as discrete dashes at every chart height
-    /// HLChartStyle ships (80pt compact through 220pt emoji-axis).
+    /// overlays. `[4, 3]` reads as discrete dashes at both chart heights
+    /// HLChartStyle ships (36 pt compact, 220 pt regular).
     public static let thresholdDash: [CGFloat] = [4, 3]
 
     /// Threshold-rule stroke width — heavier than gridlines so the dashed

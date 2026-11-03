@@ -32,8 +32,8 @@ public struct HLSettingsRow<Trailing: View>: View {
     private let subtitle: LocalizedStringKey?
     private let trailing: Trailing
     /// v0.14.1 08-04 — the row's layout is a function of the text size, not of
-    /// the device. Read once here and spent in exactly two places: whether the
-    /// hint may wrap, and whether the trailing accessory keeps its column.
+    /// the device: at an accessibility size the trailing accessory gives up
+    /// its column.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(
@@ -97,20 +97,15 @@ public struct HLSettingsRow<Trailing: View>: View {
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.primary)
             if let subtitle {
-                // W1-4: the subtitle truncates after one line so a long hint
-                // doesn't double the row height. 08-04: that density decision
-                // was taken for standard sizes and never revisited — at an
-                // accessibility size the row grew and said *less*, because a
-                // single truncated line of very large text carries fewer words
-                // than a single line of small text. The cap now applies only
-                // where it was argued for. VoiceOver reads the full text either
-                // way through the combined element on `body`.
+                // 1.4 B2-c — the hint wraps at every size. W1-4 cut it after
+                // one line for density and 08-04 lifted that for the
+                // accessibility sizes only, so at the default size a long hint
+                // ended in "…" (HIG: wrap, never truncate). A hint too long
+                // for its row is shortened instead.
                 Text(subtitle)
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                    .truncationMode(.tail)
-                    .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -235,6 +230,9 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
 
     private let icon: String?
     private let title: LocalizedStringKey
+    /// 1.4 B4 — one line under the label. It carries what a card's subtitle
+    /// said when the card had only this row and lost its own title.
+    private let subtitle: LocalizedStringKey?
     private let role: Role
     /// When non-nil, overrides the label colour (used for the disabled/no-op
     /// affordance the Coach restore row needs without changing its behaviour).
@@ -244,6 +242,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     private let destination: Destination?
     private let action: (() -> Void)?
     private let trailing: Trailing
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     // MARK: - Push (NavigationLink)
 
@@ -252,6 +251,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     public init(
         icon: String? = nil,
         title: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
         role: Role = .standard,
         labelTintOverride: Color? = nil,
         presents _: Push,
@@ -260,6 +260,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     ) {
         self.icon = icon
         self.title = title
+        self.subtitle = subtitle
         self.role = role
         self.labelTintOverride = labelTintOverride
         presents = nil
@@ -276,6 +277,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     public init(
         icon: String? = nil,
         title: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
         role: Role = .standard,
         labelTintOverride: Color? = nil,
         presents: Presents,
@@ -284,6 +286,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     ) where Destination == EmptyView {
         self.icon = icon
         self.title = title
+        self.subtitle = subtitle
         self.role = role
         self.labelTintOverride = labelTintOverride
         self.presents = presents
@@ -321,27 +324,72 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
         presents.flatMap { Self.trailingSymbol(for: $0) }
     }
 
+    /// 1.4 B4 — the trailing accessory (a status pill) keeps its own width,
+    /// so "Verbunden" never breaks into "Verbun-den" or collapses to a bar.
+    /// From XXL on, where a name and a pill no longer share one line, it
+    /// moves under the label (like `HLSettingsRow`'s stacked layout) instead
+    /// of squeezing it.
+    @ViewBuilder
     private var label: some View {
-        HStack(spacing: HLSpace.md) {
-            if let icon {
-                HLSettingsIconChip(symbol: icon, tint: chipTint)
+        if dynamicTypeSize >= .xxLarge {
+            // The accessory takes the row's full width under it, so a pill
+            // still reads "Verbunden" in one piece at the largest size.
+            VStack(alignment: .leading, spacing: HLSpace.xs) {
+                HStack(alignment: .top, spacing: HLSpace.md) {
+                    if let icon {
+                        HLSettingsIconChip(symbol: icon, tint: chipTint)
+                    }
+                    labels
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    trailingGlyph
+                }
+                trailing
             }
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+        } else {
+            HStack(spacing: HLSpace.md) {
+                if let icon {
+                    HLSettingsIconChip(symbol: icon, tint: chipTint)
+                }
+                labels
+                    .layoutPriority(1)
+                Spacer(minLength: HLSpace.sm)
+                trailing
+                    .fixedSize()
+                trailingGlyph
+            }
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private var labels: some View {
+        VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(title)
                 .font(.hlSubhead.weight(.semibold))
                 .foregroundStyle(labelTint)
-            Spacer(minLength: HLSpace.sm)
-            trailing
-            if presents == nil {
-                HLDisclosureChevron()
-            } else if let presentationSymbol {
-                Image(systemName: presentationSymbol)
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(labelTintOverride ?? HLText.tertiary)
-                    .accessibilityHidden(true)
+                .fixedSize(horizontal: false, vertical: true)
+            if let subtitle {
+                // The same step down as a toggle row's description.
+                Text(subtitle)
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var trailingGlyph: some View {
+        if presents == nil {
+            HLDisclosureChevron()
+        } else if let presentationSymbol {
+            Image(systemName: presentationSymbol)
+                .font(.hlFootnote.weight(.semibold))
+                .foregroundStyle(labelTintOverride ?? HLText.tertiary)
+                .accessibilityHidden(true)
+        }
     }
 
     public var body: some View {
@@ -360,6 +408,7 @@ public extension HLSettingsActionRow where Trailing == EmptyView {
     init(
         icon: String? = nil,
         title: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
         role: Role = .standard,
         labelTintOverride: Color? = nil,
         presents: Push,
@@ -368,6 +417,7 @@ public extension HLSettingsActionRow where Trailing == EmptyView {
         self.init(
             icon: icon,
             title: title,
+            subtitle: subtitle,
             role: role,
             labelTintOverride: labelTintOverride,
             presents: presents,
@@ -380,6 +430,7 @@ public extension HLSettingsActionRow where Trailing == EmptyView {
     init(
         icon: String? = nil,
         title: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
         role: Role = .standard,
         labelTintOverride: Color? = nil,
         presents: Presents,
@@ -388,6 +439,7 @@ public extension HLSettingsActionRow where Trailing == EmptyView {
         self.init(
             icon: icon,
             title: title,
+            subtitle: subtitle,
             role: role,
             labelTintOverride: labelTintOverride,
             presents: presents,
@@ -466,5 +518,58 @@ public struct HLSettingsIconChip: View {
                     .foregroundStyle(HLText.secondary)
             }
         }
+    }
+}
+
+// MARK: - Stat row
+
+/// **1.4 B4 — one label and its value.** At the standard sizes the value sits
+/// trailing and wraps in full; at an accessibility size it moves under its
+/// label, so neither is squeezed into a column of syllables ("Bundle / -ID",
+/// "de-v.health-log.app"). The sync diagnostics, its server view and About
+/// share it; a value never stops after a few lines ("47 nicht…").
+struct HLSettingsStatRow: View {
+    let label: Text
+    let value: String
+    let tint: Color
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(label: Text, value: String, tint: Color = HLText.secondary) {
+        self.label = label
+        self.value = value
+        self.tint = tint
+    }
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                labelText
+                valueText(alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        } else {
+            HStack(alignment: .firstTextBaseline) {
+                labelText
+                Spacer(minLength: HLSpace.md)
+                valueText(alignment: .trailing)
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private var labelText: some View {
+        label
+            .font(.hlSubhead)
+            .foregroundStyle(HLText.primary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func valueText(alignment: TextAlignment) -> some View {
+        Text(verbatim: value)
+            .font(.hlBody.monospacedDigit())
+            .foregroundStyle(tint)
+            .multilineTextAlignment(alignment)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

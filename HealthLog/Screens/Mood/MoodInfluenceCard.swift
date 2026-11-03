@@ -53,19 +53,14 @@ struct MoodInfluenceCard: View {
                         .font(.hlTitle3)
                         .foregroundStyle(HLText.primary)
 
-                    // The standing association-not-cause caption — once, up top,
-                    // so every row reads under it.
-                    Text("Average mood on days with a tag vs days without. These are associations, not causes.")
+                    // 1.4 B2 — one line saying what the rows compare. "Associations,
+                    // not causes" stands once on the page (the correlation panel)
+                    // and in the method behind the Sources link below; the guide
+                    // link belongs to the page's (i).
+                    Text("mood.influence.caption")
                         .font(.hlFootnote)
                         .foregroundStyle(HLText.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    // 1.0.3 (1.4.1) — the guide plus the method behind the
-                    // present-vs-absent comparison.
-                    HStack(spacing: HLSpace.lg) {
-                        HLLearnMoreLink(concept: "MOOD")
-                        HLSourcesLink(topic: .mood)
-                    }
 
                     VStack(spacing: HLSpace.sm) {
                         ForEach(visibleRows) { row in
@@ -88,6 +83,10 @@ struct MoodInfluenceCard: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("insights.mood.influence.toggle")
                     }
+
+                    // 1.0.3 (1.4.1) — the method behind the present-vs-absent
+                    // comparison; 1.4 B2: at the card's foot.
+                    HLSourcesLink(topic: .mood)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

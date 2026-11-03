@@ -29,16 +29,12 @@ struct McpTokenMintSheet: View {
                 }
 
                 // R19 — Heimat des Schreibzugriffs-Umfangs: hier wird der Scope
-                // gewählt. Der Footer trägt die Aussage deshalb in voller
-                // Stärke, inklusive „getrennt und freiwillig", das vorher auf
-                // der Info-Karte des MCP-Screens stand. Der Rat „Nur-Lesen
-                // reicht meistens" ist entfallen — die Auswahl steht auf
-                // „Nur Lesen" und die Erklärzeile unter dem Picker sagt pro
-                // Fall, was er bedeutet (R2, R3).
+                // gewählt, und die Zeile unter dem Picker sagt pro Fall, was er
+                // bedeutet. 1.4 B2-c: der Footer über die „normale API" ist
+                // weg, die Zeile reicht.
                 HLSettingsCard(
                     icon: "key",
-                    title: "Access",
-                    footer: "Write access is separate and opt-in. It is limited to the MCP endpoint — through the normal API the assistant can never change anything."
+                    title: "Access"
                 ) {
                     Picker(String(localized: "Access"), selection: $scope) {
                         Text("Read only").tag(McpTokenScope.read)
@@ -113,14 +109,12 @@ struct McpTokenRevealSheet: View {
         NavigationStack {
             HLSettingsPage(title: "Your new token") {
                 if let fresh = store.freshToken {
-                    // R19 — DIE Heimat der „nur einmal sichtbar"-Zusage. Sie
-                    // steht als Footer statt als Subtitle, weil der Subtitle auf
-                    // eine Zeile beschnitten ist und den Ersatz-Weg („erstelle
-                    // ein neues") abgeschnitten hätte (R5).
+                    // R19 — DIE Heimat der „nur einmal sichtbar"-Zusage. 1.4
+                    // B2-c: der Kartentitel sagt sie, der Footer, der sie
+                    // wiederholte, ist weg.
                     HLSettingsCard(
                         icon: "exclamationmark.triangle",
-                        title: "Shown once",
-                        footer: "This is the only time the token is displayed. If you lose it, create a new one."
+                        title: "Shown once"
                     ) {
                         Text(verbatim: fresh.token)
                             .font(.hlFootnote.monospaced())

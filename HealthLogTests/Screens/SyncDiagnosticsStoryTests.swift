@@ -206,13 +206,6 @@
             #expect(r.lastNewValueAt == nil)
             #expect(r.timeFact == .checkedOnly(Self.ago(1)))
         }
-
-        @Test("Each source has its own words")
-        func sourcesAreDistinct() {
-            let labels = HKSyncDiagnosticsSource.allCases.map(\.label)
-            #expect(Set(labels).count == HKSyncDiagnosticsSource.allCases.count)
-            #expect(labels.allSatisfy { !$0.isEmpty })
-        }
     }
 
 #endif

@@ -195,7 +195,8 @@ struct APIClientFileUploadTests {
 
         let scratch = try Phase09Scratch("09-02-net")
         let (file, bytes) = try makeBodyFile(scratch)
-        await #expect(throws: HLError.offline) {
+        // B5 (1.4) — a severed load is its own case now, no longer `.offline`.
+        await #expect(throws: HLError.network(.connectionLost)) {
             _ = try await api.uploadFile(self.makeRequest(file: file, byteCount: bytes))
         }
         #expect(calls.count == 1)

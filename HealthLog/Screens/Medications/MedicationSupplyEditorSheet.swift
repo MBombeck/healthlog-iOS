@@ -226,9 +226,8 @@ struct MedicationSupplyEditorSheet: View {
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
                 .accessibilityIdentifier("med.inventory.editor.units")
-                Text("med.inventory.editor.units.hint")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                // 1.4 B2 — "units, not doses" is in the placeholder now
+                // ("z. B. 30 Tabletten").
             }
         }
     }
@@ -252,13 +251,17 @@ struct MedicationSupplyEditorSheet: View {
                 }
                 // **B2 (server v1.33.0)** — state the rule that actually applies to
                 // THIS container form. Pen / ampoule run the 30-days-after-opening
-                // clock alongside the printed date; every other form expires on the
-                // printed date alone. Copy only — the server computes `expiresAt`.
-                Text(verbatim: containerType.localizedExpiryRule)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("med.inventory.editor.expiry.rule")
+                // clock alongside the printed date. Copy only — the server
+                // computes `expiresAt`. 1.4 B2: every other form expires on the
+                // printed date alone, which the date picker already says, so the
+                // line appears only for the first-use clock.
+                if containerType.usesFirstUseExpiryClock {
+                    Text(verbatim: containerType.localizedExpiryRule)
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("med.inventory.editor.expiry.rule")
+                }
             }
         }
     }

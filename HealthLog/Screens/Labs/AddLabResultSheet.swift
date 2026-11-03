@@ -109,7 +109,7 @@ struct AddLabResultSheet: View {
                     Section { HLFormErrorText(saveError) }
                 }
             }
-            .navigationTitle(Text("labs.add.title"))
+            .navigationTitle(Text("labs.add.sheetTitle"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -165,9 +165,9 @@ struct AddLabResultSheet: View {
                 }
             }
         } header: {
+            // 1.4 B2-c — no footer: the rows above show where unit and range
+            // come from, and the form says the rest itself.
             Text("labs.add.biomarker.section")
-        } footer: {
-            Text(isLinked ? "labs.add.biomarker.linkedFooter" : "labs.add.biomarker.freeFooter")
         }
     }
 
@@ -247,18 +247,27 @@ struct AddLabResultSheet: View {
     /// tell a save landed.
     private var saveAndNextSection: some View {
         Section {
+            // 1.4 B2-c — what the button keeps is its own second line; the
+            // footer only counts what was saved.
             Button {
                 Task { await save(keepOpen: true) }
             } label: {
-                Label("labs.add.saveAndNext", systemImage: "plus.circle")
+                Label {
+                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                        Text("labs.add.saveAndNext")
+                        Text("labs.add.saveAndNext.footer")
+                            .font(.hlCaption)
+                            .foregroundStyle(HLText.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "plus.circle")
+                }
             }
             .disabled(!canSave || isSaving)
             .accessibilityIdentifier("labs.add.saveAndNext")
         } footer: {
             if savedCount > 0 {
                 Text("labs.add.saveAndNext.saved \(savedCount)")
-            } else {
-                Text("labs.add.saveAndNext.footer")
             }
         }
     }

@@ -158,9 +158,6 @@ struct HealthLogApp: App {
             .environment(container.measurementRemindersStore)
             .environment(container.aiProviderStore)
             .environment(container.chartsStore)
-            // v0.6.2.3 F2-CHARTLAG — hoisted from `ChartsScreen` so the
-            // overlay survives navigation pop + tab-switch re-mount.
-            .environment(container.trendsOverlayStore)
             .environment(container.doctorReportStore)
             .environment(container.localDoctorReportStore)
             .environment(container.disclaimerAckStore)

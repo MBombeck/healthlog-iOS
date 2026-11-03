@@ -50,8 +50,18 @@ extension InsightsContainerScreen {
     ///    last-400 `recent` window.
     /// 2. The kinds in the last-400 `recent` page — keeps a freshly captured kind
     ///    lit INSTANTLY and keeps the standalone path correct.
+    ///
+    /// 1.4 B4 — RMSSD has no page of its own; it is shown on the HRV page
+    /// (`RecoveryInsightsStore.displayKind(for:)`). An account whose wearable
+    /// only reports RMSSD therefore lights the HRV page too, or it would reach
+    /// its readings nowhere.
     var liveAvailableKinds: Set<MetricKind> {
-        measurementsStore.availableKinds.union(measurementsStore.recent.map(\.kind))
+        Self.pageKinds(for: measurementsStore.availableKinds.union(measurementsStore.recent.map(\.kind)))
+    }
+
+    /// The metric pages `kinds` light: each kind its own, RMSSD the HRV page.
+    nonisolated static func pageKinds(for kinds: Set<MetricKind>) -> Set<MetricKind> {
+        kinds.contains(.hrvRMSSD) ? kinds.union([.hrv]) : kinds
     }
 
     /// #34 — the latched availability set the strip gates metric pills on: the

@@ -105,7 +105,9 @@ struct HLSettingsRowTests {
     /// The card header carries the sentence that says what the card *is*. It
     /// truncated at one line unconditionally, so enlarging the text removed
     /// words from it. Same differential: long vs short subtitle at one width.
-    @Test("the card subtitle wraps at accessibility sizes and stays capped otherwise")
+    /// 1.4 B2-c — it wraps at the standard size too now (HIG: wrap, never
+    /// truncate); the one-line header was what ended in "…".
+    @Test("the card subtitle wraps at every text size")
     func cardSubtitleWrapsAtAccessibilitySizes() throws {
         let short: LocalizedStringKey = "Konto"
         let long: LocalizedStringKey =
@@ -117,7 +119,7 @@ struct HLSettingsRowTests {
 
         let shortDefault = try Self.height(of: Self.card(subtitle: short), size: .large)
         let longDefault = try Self.height(of: Self.card(subtitle: long), size: .large)
-        #expect(abs(longDefault - shortDefault) < 1, "standard sizes must keep the card's one-line header")
+        #expect(longDefault > shortDefault + 1, "at the standard size the long card subtitle was cut to one line")
         #expect(shortAX > shortDefault, "accessibility5 must already scale the card's type")
     }
 

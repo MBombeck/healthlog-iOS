@@ -24,11 +24,19 @@ import SwiftUI
 /// ## The gated arms are the normal case
 ///
 /// `learning_usual_day` is the standing state of the first two weeks and shows
-/// the "N von 14" counter. `no_intraday_today` is a PERMANENT state for
-/// accounts whose activity arrives as a daily total (Fitbit, Withings, Polar)
-/// — honest absence, rendered as a plain sentence. `day_too_young` and
-/// `unsupported_baseline_type` read equally calmly. **None of them renders as
-/// an error**, none gets a warning tint, and none offers a retry.
+/// the "N von 14" counter, one line in the card. Every other gate
+/// (`no_intraday_today`, a PERMANENT state for accounts whose activity arrives
+/// as a daily total, `day_too_young`, `unsupported_baseline_type`, anything
+/// this build does not model) has nothing to compare and no action, so the
+/// card is not there at all (1.4 B2, R2 rule 4: empty cards disappear). None
+/// of them is an error.
+///
+/// ## One line per figure (1.4 B2)
+///
+/// The hour sits in the title row, the usual range under the "usual" figure.
+/// What the dashed curve is and what the comparison rests on are in the
+/// page's info sheet (`InsightsMetricInfo`), not in six lines around two
+/// numbers.
 struct SameTimeBaselineBlock: View {
     /// The cumulative type this instance baselines. Steps is the server's own
     /// default and the only type that drives a digest rail card.
@@ -54,25 +62,37 @@ struct SameTimeBaselineBlock: View {
     var body: some View {
         Group {
             if let baseline = store.sameTimeBaseline?.sameTimeBaseline {
-                card { okContent(baseline) }
-            } else if let gate = store.sameTimeBaseline?.sameTimeBaselineGate {
-                card { gateContent(gate) }
+                card(asOfHour: baseline.asOfHour) { okContent(baseline) }
+            } else if case let .learningUsualDay(historyDays) = store.sameTimeBaseline?.sameTimeBaselineGate {
+                card(asOfHour: nil) { learningContent(historyDays) }
             }
-            // Nothing settled yet, or a 404/422/transport miss: the block stays
-            // absent rather than showing a dead shell.
+            // Nothing settled yet, a gate with nothing to compare, or a
+            // 404/422/transport miss: the block stays absent rather than
+            // showing a dead shell.
         }
         .task { await store.loadSameTimeBaseline(type: type) }
     }
 
     // MARK: - Shell
 
-    private func card(@ViewBuilder content: () -> some View) -> some View {
+    private func card(asOfHour: Int?, @ViewBuilder content: () -> some View) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text("insights.sameTimeBaseline.title")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                    .accessibilityAddTraits(.isHeader)
+                HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+                    Text("insights.sameTimeBaseline.title")
+                        .font(.hlHeadline)
+                        .foregroundStyle(HLText.primary)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    if let asOfHour {
+                        // The last full hour the comparison stands at.
+                        Text("insights.sameTimeBaseline.asOf \(asOfHour)")
+                            .font(.hlCaption)
+                            .foregroundStyle(HLText.secondary)
+                            .fixedSize()
+                            .accessibilityIdentifier("insights.sameTimeBaseline.asOf")
+                    }
+                }
                 content()
             }
         }
@@ -83,12 +103,6 @@ struct SameTimeBaselineBlock: View {
 
     @ViewBuilder
     private func okContent(_ baseline: SameTimeBaseline) -> some View {
-        Text("insights.sameTimeBaseline.asOf \(baseline.asOfHour)")
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("insights.sameTimeBaseline.asOf")
-
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.lg) {
             figure(
                 label: "insights.sameTimeBaseline.today",
@@ -98,7 +112,8 @@ struct SameTimeBaselineBlock: View {
             figure(
                 label: "insights.sameTimeBaseline.typical",
                 value: baseline.typicalValue,
-                unit: baseline.displayUnit
+                unit: baseline.displayUnit,
+                range: (baseline.typicalLow, baseline.typicalHigh)
             )
         }
 
@@ -110,21 +125,16 @@ struct SameTimeBaselineBlock: View {
 
         percentLine(baseline)
 
-        Text("insights.sameTimeBaseline.range \(number(baseline.typicalLow)) \(number(baseline.typicalHigh))")
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
-
         curveChart(baseline)
-
-        Text("insights.sameTimeBaseline.basis \(baseline.baselineDays) \(baseline.windowDays)")
-            .font(.hlCaption2)
-            .foregroundStyle(HLText.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("insights.sameTimeBaseline.basis")
     }
 
-    private func figure(label: LocalizedStringKey, value: Double, unit: String) -> some View {
+    /// One figure; the "usual" one carries its usual range as its caption.
+    private func figure(
+        label: LocalizedStringKey,
+        value: Double,
+        unit: String,
+        range: (low: Double, high: Double)? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(label)
                 .font(.hlCaption)
@@ -133,6 +143,12 @@ struct SameTimeBaselineBlock: View {
                 .font(.hlMetric(.title2))
                 .foregroundStyle(HLText.primary)
                 .monospacedDigit()
+            if let range {
+                Text("insights.sameTimeBaseline.range \(number(range.low)) \(number(range.high))")
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -148,12 +164,13 @@ struct SameTimeBaselineBlock: View {
         }
     }
 
-    /// The percentage — or the honest note that a ratio is undefined right now.
+    /// The percentage, when there is one.
     ///
     /// `percentOfTypical == nil` sits on a perfectly healthy `ok` arm: it means
     /// the typical total at this hour is zero (the normal state at 05:00), an
     /// undefined ratio. It is NOT a hundred percent, NOT missing data, and NOT
-    /// a reason to suppress the rest of the card.
+    /// a reason to suppress the rest of the card; the line is simply left out
+    /// (1.4 B2: no sentence explaining why a number is missing).
     @ViewBuilder
     private func percentLine(_ baseline: SameTimeBaseline) -> some View {
         if let percent = baseline.percentOfTypical {
@@ -161,12 +178,6 @@ struct SameTimeBaselineBlock: View {
                 .font(.hlCaption)
                 .foregroundStyle(HLText.secondary)
                 .accessibilityIdentifier("insights.sameTimeBaseline.percent")
-        } else {
-            Text("insights.sameTimeBaseline.percent.undefined")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("insights.sameTimeBaseline.percent.undefined")
         }
     }
 
@@ -234,7 +245,7 @@ struct SameTimeBaselineBlock: View {
                     }
                 }
             }
-            .frame(height: Self.chartHeight)
+            .frame(height: HLChartStyle.heightRegular)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("insights.sameTimeBaseline.title"))
             .accessibilityValue(Text(chartSummary(baseline)))
@@ -271,41 +282,20 @@ struct SameTimeBaselineBlock: View {
         )
     }
 
-    // MARK: - The gated arms
+    // MARK: - The learning arm
 
-    /// Every gated arm renders as one calm sentence in the SAME card, with no
-    /// warning tint and no retry affordance. Two of them are long-lived states
-    /// of a perfectly healthy account; treating them as failures would be a
-    /// lie about the operator's data.
-    private func gateContent(_ gate: SameTimeBaselineGate) -> some View {
-        Group {
-            switch gate {
-            case let .learningUsualDay(historyDays):
-                // The normal state of the first two weeks — say how far along
-                // it is instead of implying something is broken.
-                Text("insights.sameTimeBaseline.gate.learning \(historyDays) \(SameTimeBaselineMetric.requiredHistoryDays)")
-            case .noIntradayToday:
-                // A PERMANENT state for daily-total providers. Honest absence.
-                Text("insights.sameTimeBaseline.gate.noIntraday")
-            case .dayTooYoung:
-                Text("insights.sameTimeBaseline.gate.dayTooYoung")
-            case .unsupportedType:
-                Text("insights.sameTimeBaseline.gate.unsupportedType")
-            case .notImplemented, .unknown:
-                // A reason this build does not model reads as the same calm
-                // "not yet", never as an error.
-                Text("insights.sameTimeBaseline.gate.notYet")
-            }
-        }
-        .font(.hlCaption)
-        .foregroundStyle(HLText.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-        .accessibilityIdentifier("insights.sameTimeBaseline.gate")
+    /// The normal state of the first two weeks: say how far along it is
+    /// instead of implying something is broken. One calm line, no warning
+    /// tint, no retry.
+    private func learningContent(_ historyDays: Int) -> some View {
+        Text("insights.sameTimeBaseline.gate.learning \(historyDays) \(SameTimeBaselineMetric.requiredHistoryDays)")
+            .font(.hlCaption)
+            .foregroundStyle(HLText.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("insights.sameTimeBaseline.gate")
     }
 
     // MARK: - Formatting
-
-    private static let chartHeight: CGFloat = 160
 
     /// Locale-aware rendering of a server figure. The server does NOT round
     /// `todayValue` / `typicalValue` (a median of integers can be `x.5`), so a

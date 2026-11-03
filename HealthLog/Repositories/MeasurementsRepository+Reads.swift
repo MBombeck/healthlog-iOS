@@ -151,12 +151,10 @@ public extension MeasurementsRepository {
             // list's source chip DOES reach here with `.unknown`, so the page is
             // fetched unfiltered and narrowed on the way out instead.
             if let sourceEq, sourceEq != .unknown { query.append(("sourceEq", sourceEq.wire.rawValue)) }
-            let req: APIRequest<MeasurementListWireResponse> = .get(
-                "/api/measurements",
-                query: query
-            )
-            let response = try await api.send(req)
-            return MeasurementAggregator.mergeBloodPressure(response.measurements)
+            // #145/#146 — a sleep page holds at most 1000 nights; the
+            // helper reads on with `offset` when the server applied less.
+            let rows = try await Self.fetchListRows(api: api, query: query, limit: limit)
+            return MeasurementAggregator.mergeBloodPressure(rows)
         }
         var cacheType = groupByDay ? "\(typeKey):day" : typeKey
         if let sourceEq { cacheType += ":src:\(sourceEq.wire.rawValue)" }
@@ -324,16 +322,29 @@ public extension MeasurementsRepository {
     /// availability is unchanged.
     func availableKinds() async throws -> Set<MetricKind> {
         if isStandalone { return [] }
-        let summaries: MeasurementAvailabilityDTO = if let swr {
-            try await swr.fetchCachingFirst(
-                .measurementAvailability,
-                decoding: MeasurementAvailabilityDTO.self,
-                fetch: { try await self.fetchAvailabilityDirect() }
-            )
-        } else {
-            try await fetchAvailabilityDirect()
-        }
-        return Self.kinds(withDataIn: summaries)
+        return try await Self.kinds(withDataIn: availabilitySummaries())
+    }
+
+    /// **1.4 B4** — the server's mean of the last 30 days for `kind`, from the
+    /// same summaries slice and the same SWR row as ``availableKinds()``. This
+    /// is what the metric page's "30 Tage Durchschnitt" card shows when the
+    /// comprehensive digest (AI-gated, so often absent) carries no average.
+    /// `nil` in standalone, on a failed read, and when the server reports no
+    /// reading in the last 30 days: the card then has no average to show,
+    /// never the latest reading in its place.
+    func average30(for kind: MetricKind) async -> Double? {
+        guard !isStandalone, let key = kind.availabilitySummaryKey,
+              let summaries = try? await availabilitySummaries() else { return nil }
+        return summaries.summaries[key]?.avg30.flatMap { $0.isFinite ? $0 : nil }
+    }
+
+    private func availabilitySummaries() async throws -> MeasurementAvailabilityDTO {
+        guard let swr else { return try await fetchAvailabilityDirect() }
+        return try await swr.fetchCachingFirst(
+            .measurementAvailability,
+            decoding: MeasurementAvailabilityDTO.self,
+            fetch: { try await self.fetchAvailabilityDirect() }
+        )
     }
 
     private func fetchAvailabilityDirect() async throws -> MeasurementAvailabilityDTO {

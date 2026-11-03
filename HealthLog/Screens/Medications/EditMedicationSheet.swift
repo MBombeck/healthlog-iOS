@@ -89,11 +89,6 @@ struct EditMedicationSheet: View {
     /// FORM-2 initial focus + name→dose chain; 15-02 (B3) — the single copy of
     /// the truth, with ``MedicationEditorFocus`` deciding where it belongs.
     @FocusState private var focusedField: MedicationEditorFocus.Field?
-    /// True once a save actually degraded an "Alle Geräte" delivery pref to a
-    /// device-local override (the server roaming field isn't live yet). Drives
-    /// the non-blocking "Server-Sync folgt" hint so it reflects the real write
-    /// outcome, not just the picker selection (FIX 1 / AUDIT-G A1).
-    @State private var deliveryDidDegrade: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -255,11 +250,9 @@ struct EditMedicationSheet: View {
                             .buttonStyle(.plain)
                             .accessibilityLabel(Text("Remove time"))
                         }
-                        Text(MedicationFormLogic.formatTime(row.time))
-                            .font(.hlMetric(.subheadline))
-                            .foregroundStyle(HLText.secondary)
-                            .monospacedDigit()
                     }
+                    // 1.4 B4 — under the time stands its dose, not the time a
+                    // second time in wire form ("08:00").
                     slotDoseRow(for: row.time, index: idx)
                 }
             }
@@ -272,9 +265,6 @@ struct EditMedicationSheet: View {
             }
         } header: {
             Text("med.schedule.times.header")
-        } footer: {
-            Text(timesFooterKey)
-                .font(.hlCaption)
         }
     }
 
@@ -309,21 +299,37 @@ struct EditMedicationSheet: View {
     /// Activity + AlarmKit critical alarm, each with a "Dieses Gerät / Alle
     /// Geräte" scope picker (progressive disclosure). Critical-alarm row is
     /// iOS 26-gated.
+    ///
+    /// 1.4 B2 — each switch says what it does in one line under its title, and
+    /// the footer speaks only when alarms are not allowed. The operator sentence
+    /// under "Alle Geräte" is gone: the medication row carries the roaming
+    /// booleans since server v1.7.0 (`ingestServerDefaults`), so it was wrong as
+    /// well as technical.
     private var deliverySection: some View {
         Section {
-            Toggle("med.edit.live_activity", isOn: $liveActivityEnabled)
+            HLSettingsToggleRow(
+                title: "med.edit.live_activity",
+                description: "med.edit.live_activity.footer",
+                isOn: $liveActivityEnabled,
+                accessibilityID: "med.edit.liveActivity"
+            )
             if liveActivityEnabled {
                 scopePicker(selection: $liveActivityScope)
             }
             if #available(iOS 26.0, *) {
-                Toggle("med.edit.critical_alarm", isOn: $criticalAlarmEnabled)
-                    .onChange(of: criticalAlarmEnabled) { _, isOn in
-                        if isOn {
-                            Task { await requestAlarmAuthorizationIfNeeded() }
-                        } else {
-                            criticalAlarmDenied = false
-                        }
+                HLSettingsToggleRow(
+                    title: "med.edit.critical_alarm",
+                    description: "med.edit.critical_alarm.footer",
+                    isOn: $criticalAlarmEnabled,
+                    accessibilityID: "med.edit.criticalAlarm"
+                )
+                .onChange(of: criticalAlarmEnabled) { _, isOn in
+                    if isOn {
+                        Task { await requestAlarmAuthorizationIfNeeded() }
+                    } else {
+                        criticalAlarmDenied = false
                     }
+                }
                 if criticalAlarmEnabled {
                     scopePicker(selection: $criticalAlarmScope)
                 }
@@ -331,24 +337,11 @@ struct EditMedicationSheet: View {
         } header: {
             Text("med.edit.delivery.section")
         } footer: {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text("med.edit.live_activity.footer")
-                if #available(iOS 26.0, *) {
-                    Text("med.edit.critical_alarm.footer")
-                    if criticalAlarmDenied {
-                        Text("med.edit.critical_alarm.denied")
-                            .foregroundStyle(HLColor.statusWarn)
-                    }
-                }
-                if deliveryDidDegrade
-                    || liveActivityScope == .allDevices
-                    || criticalAlarmScope == .allDevices
-                {
-                    Text("med.edit.scope.sync_pending")
-                        .foregroundStyle(HLText.tertiary)
-                }
+            if #available(iOS 26.0, *), criticalAlarmDenied {
+                Text("med.edit.critical_alarm.denied")
+                    .foregroundStyle(HLColor.statusWarn)
+                    .font(.hlCaption)
             }
-            .font(.hlCaption)
         }
     }
 
@@ -428,14 +421,6 @@ extension EditMedicationSheet {
         }
     }
 
-    private var timesFooterKey: LocalizedStringKey {
-        switch cadenceKind {
-        case .rolling: "med.schedule.times.footer.rolling"
-        case .asNeeded: "med.schedule.times.footer.asNeeded"
-        default: "med.schedule.times.footer.standard"
-        }
-    }
-
     // MARK: - Validation
 
     private var isValid: Bool {
@@ -484,22 +469,22 @@ extension EditMedicationSheet {
     // MARK: - Save
 
     /// v0.9.0 RA3 — persist both delivery prefs at the chosen scope, independent
-    /// of the PUT, and report whether either write degraded to a device-local
-    /// override (the non-blocking "Server-Sync folgt" hint; FIX 1 / AUDIT-G A1).
-    private func persistDeliveryPreferences() async -> Bool {
-        let liveStored = await deliveryPreferences.set(
+    /// of the PUT. An "Alle Geräte" write that the delivery-defaults seam does
+    /// not take falls back to a device-local override inside the store; the
+    /// medication row carries the roaming value (``draft``).
+    private func persistDeliveryPreferences() async {
+        await deliveryPreferences.set(
             enabled: liveActivityEnabled,
             scope: liveActivityScope,
             medicationId: medication.id,
             channel: .liveActivity
         )
-        let alarmStored = await deliveryPreferences.set(
+        await deliveryPreferences.set(
             enabled: criticalAlarmEnabled,
             scope: criticalAlarmScope,
             medicationId: medication.id,
             channel: .criticalAlarm
         )
-        return !liveStored || !alarmStored
     }
 
     private func save() async {
@@ -508,7 +493,7 @@ extension EditMedicationSheet {
         defer { isSaving = false }
         saveError = nil
 
-        deliveryDidDegrade = await persistDeliveryPreferences()
+        await persistDeliveryPreferences()
 
         // RMW rules (schedules, unitsPerDose, category, treatmentClass,
         // trackIntake) live in `MedicationEditDraft.patch(for:)`.

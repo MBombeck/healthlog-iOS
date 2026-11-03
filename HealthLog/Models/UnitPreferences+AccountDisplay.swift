@@ -21,6 +21,11 @@ import Foundation
 // precision). The server's metric branch shows distance in km and speed in
 // km/h; this app has always shown m and m/s there, and that stays as it was —
 // this change is about imperial accounts reading their own unit.
+//
+// **1.4 B4 — two exceptions, on purpose.** Energy expenditure (kJ on the wire)
+// reads in kcal on every account, and day/workout strain carry "von 21" as
+// their label. Neither is an account choice; they are here so every surface
+// that reads the account unit agrees.
 
 /// A linear (or affine) canonical → display mapping plus the label and the
 /// precision the display unit is read at.
@@ -81,6 +86,8 @@ public extension UnitPreferences {
     internal static let cmToIn = 0.393700787402
     internal static let metresToMiles = 0.000621371192237
     internal static let metresPerSecondToMph = 2.2369362920544
+    /// Kilojoules per (thermochemical) kilocalorie.
+    static let kilojoulesPerKilocalorie = 4.184
 
     /// The transform for a unit family under these preferences.
     func transform(for family: MetricKind.UnitFamily) -> UnitDisplayTransform {
@@ -112,6 +119,18 @@ public extension UnitPreferences {
             return imperial
                 ? UnitDisplayTransform(factor: Self.metresPerSecondToMph, suffix: "mph", fractionDigits: 1)
                 : .identity
+        case .energy:
+            // 1.4 B4 (plan decision 4) — kcal on every account. The server
+            // stores and sends kJ and offers no energy preference.
+            return UnitDisplayTransform(
+                factor: 1 / Self.kilojoulesPerKilocalorie,
+                suffix: String(localized: "kcal"),
+                fractionDigits: 0
+            )
+        case .strainScale:
+            // 1.4 B4 — the value stays as sent; the label names the scale
+            // ("12,4 von 21"), as the recovery page does.
+            return UnitDisplayTransform(factor: 1, suffix: String(localized: "metric.strain.ofTwentyOne"), fractionDigits: nil)
         }
     }
 

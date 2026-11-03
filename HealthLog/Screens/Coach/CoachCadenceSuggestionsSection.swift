@@ -5,10 +5,10 @@ import SwiftUI
 /// Rendered on the Insights overview, near the coach surface, when a coach chat
 /// turn surfaced an inline cadence suggestion (routed here via
 /// ``CoachConversationStore`` → ``CoachCadenceSuggestionsStore/present(_:)``) so
-/// the same suggestion is discoverable outside an open chat. Each suggestion is a
-/// calm `HLCard` (the same quiet coach/insight chrome as ``CoachReengageCard``,
-/// NOT the colourful `AskCoachHeroCard` hero — the saturated purple moment stays
-/// reserved for the consented hero) with the cadence label and two actions:
+/// the same suggestion is discoverable outside an open chat. Under one section
+/// title, each suggestion is a calm `HLCard` (the same quiet chrome as
+/// ``CoachReengageCard``, no saturated fill) with the cadence label and two
+/// actions:
 ///
 /// - **Accept** → the server creates the corresponding measurement reminder
 ///   (origin COACH) and the native reminders list re-lists; a calm note points at
@@ -24,7 +24,11 @@ struct CoachCadenceSuggestionsSection: View {
     var body: some View {
         // Self-suppress: nothing to offer ⇒ render nothing (no empty card).
         if !store.suggestions.isEmpty {
-            VStack(spacing: HLSpace.sm) {
+            // 1.4 B4 — the overview's heading form: a section title above its
+            // cards (`InsightsSectionHeader`, like "Vitalwerte"), not a caption
+            // kicker with a sparkle inside each card.
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                InsightsSectionHeader("coach.cadenceSuggestion.title")
                 ForEach(store.suggestions) { suggestion in
                     CoachCadenceSuggestionCard(
                         suggestion: suggestion,
@@ -38,10 +42,9 @@ struct CoachCadenceSuggestionsSection: View {
     }
 }
 
-/// One proactive cadence-suggestion card. Quiet, monochrome coach chrome; the
-/// coach glyph is the only brand cue (no saturated fill). Accept + Dismiss use
-/// the canonical `HLButton` (44pt-floored) so the hit targets and styling match
-/// every other CTA.
+/// One proactive cadence-suggestion card. Quiet, monochrome coach chrome under
+/// the section's title. Accept + Dismiss are the tile-action pair (44 pt) the
+/// medication and Vorsorge cards use.
 private struct CoachCadenceSuggestionCard: View {
     let suggestion: CoachCadenceSuggestion
     let onAccept: () -> Void
@@ -49,36 +52,21 @@ private struct CoachCadenceSuggestionCard: View {
 
     var body: some View {
         HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Label(
-                    String(localized: "coach.cadenceSuggestion.title"),
-                    systemImage: "sparkles"
-                )
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-                .accessibilityIdentifier("coach.cadenceSuggestion.kicker")
-
+            VStack(alignment: .leading, spacing: HLSpace.md) {
                 // The cadence label (resolved i18n key, generic fallback).
                 Text(cadenceLabel)
                     .font(.hlHeadline)
                     .foregroundStyle(HLText.primary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                // 1.4 B4 — the in-card action pair of the medication and
+                // Vorsorge tiles (`HLTileActionButton`), not a retired
+                // `.restrained` button beside a `.ghost` one.
                 HStack(spacing: HLSpace.sm) {
-                    HLButton(
-                        String(localized: "coach.cadenceSuggestion.accept"),
-                        variant: .restrained,
-                        size: .compact,
-                        action: onAccept
-                    )
-                    .accessibilityIdentifier("coach.cadenceSuggestion.accept")
-                    HLButton(
-                        String(localized: "coach.cadenceSuggestion.dismiss"),
-                        variant: .ghost,
-                        size: .compact,
-                        action: onDismiss
-                    )
-                    .accessibilityIdentifier("coach.cadenceSuggestion.dismiss")
+                    HLTileActionButton("coach.cadenceSuggestion.accept", action: onAccept)
+                        .accessibilityIdentifier("coach.cadenceSuggestion.accept")
+                    HLTileActionButton("coach.cadenceSuggestion.dismiss", action: onDismiss)
+                        .accessibilityIdentifier("coach.cadenceSuggestion.dismiss")
                 }
             }
         }

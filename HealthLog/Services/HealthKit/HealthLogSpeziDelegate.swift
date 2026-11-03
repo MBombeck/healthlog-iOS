@@ -375,38 +375,37 @@
             // `HealthLogStandard.notificationContent(for:content:)`), so
             // `NotificationService` presents and handles them like any other.
             NotificationService.reinstallNotificationCenterDelegate()
-            // v0.14.x Q — register Home-Screen Quick Actions + handle a
-            // cold-launch-from-shortcut. UIKit delivers the chosen shortcut in
-            // `launchOptions` on a cold launch (and then suppresses the
-            // `performAction` callback), so we forward it through the same
-            // marker hand-off; `RootView`'s consume runs once auth bootstraps.
+            // v0.14.x Q — register the Home-Screen Quick Actions. The chosen
+            // shortcut itself arrives through the scene (1.4, below).
             HLQuickActions.register(on: application)
-            if let item = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
-                HLQuickActions.handle(item)
-            }
             return result
         }
 
-        // MARK: - Home-Screen Quick Actions (v0.14.x Q)
+        // MARK: - Home-Screen Quick Actions (v0.14.x Q, scene path since 1.4)
 
-        /// Warm-launch / foreground Quick-Action tap. Writes the one-shot
-        /// `CaptureRequestStore` marker; `RootView` consumes it on the resulting
-        /// `.active` scenePhase tick and routes via `AppRouter`. Single capture
-        /// hand-off path shared with the central CapturePicker + the Erfassen
-        /// control. The `completionHandler` reports whether the shortcut was
-        /// recognised (UIKit's contract).
+        /// **1.4 — quick actions reach the app through its scene.** A
+        /// scene-based app gets the shortcut of a cold launch in the scene's
+        /// connection options, not in `launchOptions`, and a warm tap in
+        /// ``HLSceneDelegate``, not in `application(_:performActionFor:)`. The
+        /// two app-delegate paths this replaces never fired.
         ///
-        /// Not an `override` — `SpeziAppDelegate` does not declare this optional
-        /// `UIApplicationDelegate` method, so we provide a fresh implementation
-        /// that UIKit dispatches via the Obj-C runtime. `@objc` makes it visible
-        /// to that dispatch.
-        @objc
-        func application(
-            _: UIApplication,
-            performActionFor shortcutItem: UIApplicationShortcutItem,
-            completionHandler: @escaping (Bool) -> Void
-        ) {
-            completionHandler(HLQuickActions.handle(shortcutItem))
+        /// The cold one is handled here for a new scene session (and again in
+        /// ``HLSceneDelegate`` for a stored one): the marker is written before
+        /// the first frame, and `RootView` consumes it once the auth bootstrap
+        /// promotes the phase. Spezi's configuration stays the base;
+        /// ``HLSceneDelegate`` wraps the delegate class it names.
+        override func application(
+            _ application: UIApplication,
+            configurationForConnecting connectingSceneSession: UISceneSession,
+            options: UIScene.ConnectionOptions
+        ) -> UISceneConfiguration {
+            HLLog.ui.info("Scene-Konfiguration angefragt")
+            if let item = options.shortcutItem {
+                HLQuickActions.handle(item)
+            }
+            return HLSceneDelegate.configure(
+                super.application(application, configurationForConnecting: connectingSceneSession, options: options)
+            )
         }
 
         // MARK: - Remote Notifications (APNs preservation)

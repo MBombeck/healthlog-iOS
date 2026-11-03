@@ -5,9 +5,13 @@ import Foundation
 /// A few plain-text lines a person pastes into a support request, so the
 /// operator can find the fault without a round of questions: app version and
 /// build, iOS version, device class, app language, the server's version and
-/// build, and the last failures with their request ids
-/// (``RecentFailureLines``). Fixed English words, the same style as W5's
-/// Sync Diagnostics report, so the text reads the same on every phone.
+/// build, the account's time zone, the modules that are on, every AI
+/// capability with its reason and the usage level, the Apple Health block of
+/// the Sync Diagnostics report, and the last failures with their request ids
+/// and error codes (``RecentFailureLines``; since server v1.43.7 every failure
+/// carries a code, an `http.*` one where the route has none of its own).
+/// Fixed English words, the same style as W5's Sync Diagnostics report, so
+/// the text reads the same on every phone.
 ///
 /// **What it never carries.** No name, e-mail or account id, no server
 /// address, no token, no health value, no record id. The builder only takes
@@ -29,6 +33,16 @@ struct SupportInfoReport: Equatable {
         var lastKnownServerVersion: String?
         /// Newest first, from ``RecentFailureLog/snapshot()``.
         var failures: [RecentFailure]
+        /// #134 — the account's zone as `/api/auth/me` resolved it.
+        var timeZone: String?
+        /// #134 — `/api/auth/me` `modules`; `nil` before the first load.
+        var modules: [String: Bool]?
+        /// #134 — `/api/auth/me` `ai`; `nil` before the first load and on a
+        /// server older than v1.39.
+        var ai: AIAccountBlock?
+        /// #134 — `GET /api/integrations/healthkit`, when it answered in time.
+        var appleHealth: HKServerSyncHealthSummary?
+        var appleHealthLoadFailed = false
     }
 
     let text: String
@@ -43,6 +57,8 @@ struct SupportInfoReport: Equatable {
         lines.append("device: \(Self.token(input.deviceClass) ?? "unknown")")
         lines.append("language: \(Self.token(input.appLanguage) ?? "unknown")")
         lines.append("server version: \(Self.serverLine(input))")
+        lines += Self.accountLines(input)
+        lines += SyncDiagnosticsReport.appleHealthLines(input.appleHealth, loadFailed: input.appleHealthLoadFailed)
         lines += RecentFailureLines.lines(input.failures)
         text = lines.joined(separator: "\n") + "\n"
     }

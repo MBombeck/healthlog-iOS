@@ -229,11 +229,18 @@ public struct DerivedMetricDTO: Codable, Sendable, Equatable {
         public let value: Double?
         /// Effective weight after null-redistribution, 0…1.
         public let weight: Double
+        /// **#145 (server v1.43.6/7)** — why a SLEEP_SCORE sub-score is
+        /// withheld: `few_nights` (fewer than `rhythmMinNights` nights with a
+        /// main sleep, count in `rhythmNights`) or `no_main_sleep` (the latest
+        /// day had only a nap). Only on a null `consistency` / `timing`; kept as
+        /// the raw token so an unknown one stays a silent gap, never a throw.
+        public let gap: String?
 
-        public init(key: String, value: Double?, weight: Double) {
+        public init(key: String, value: Double?, weight: Double, gap: String? = nil) {
             self.key = key
             self.value = value
             self.weight = weight
+            self.gap = gap
         }
     }
 
@@ -319,6 +326,11 @@ public struct DerivedMetricDTO: Codable, Sendable, Equatable {
         // (provenance-only) → both stay `nil`.
         public let components: [Contributor]?
         public let subScores: [Contributor]?
+        /// #145 — SLEEP_SCORE: nights in the window with a main sleep on the
+        /// clock (what consistency and timing are computed from), and how many
+        /// they need before they are scored. `nil` on an older server.
+        public let rhythmNights: Int?
+        public let rhythmMinNights: Int?
 
         // SAME_TIME_BASELINE (CU-30 / C5, server v1.34.0,
         // `src/lib/insights/derived/same-time-baseline.ts:240-259`). A
@@ -400,6 +412,8 @@ public struct DerivedMetricDTO: Codable, Sendable, Equatable {
             referenceBand: ReferenceBand? = nil,
             components: [Contributor]? = nil,
             subScores: [Contributor]? = nil,
+            rhythmNights: Int? = nil,
+            rhythmMinNights: Int? = nil,
             type: String? = nil,
             unit: String? = nil,
             timezone: String? = nil,
@@ -434,6 +448,8 @@ public struct DerivedMetricDTO: Codable, Sendable, Equatable {
             self.referenceBand = referenceBand
             self.components = components
             self.subScores = subScores
+            self.rhythmNights = rhythmNights
+            self.rhythmMinNights = rhythmMinNights
             self.type = type
             self.unit = unit
             self.timezone = timezone

@@ -210,38 +210,6 @@ struct HLScoreRingTests {
         #expect(missing.signal == nil)
     }
 
-    // MARK: - Ring/text dedup robustness (M3)
-
-    @Test("ring-promoted dedup — promoted set = the rings + gauge + count, single source")
-    func ringPromotedDedup() {
-        let promoted = InsightsScoreCardsBlock.ringPromotedIDs
-        // Every ordered ring score is promoted (so it drops from the text lane).
-        for id in InsightsScoreCardsBlock.ringScoreOrder {
-            #expect(promoted.contains(id))
-        }
-        // The gauge + delta/band rings + count IDs are promoted too — derived
-        // from the same source the block actually renders, so none can vanish nor
-        // double-render.
-        #expect(promoted.contains(InsightsScoreCardsBlock.gaugeID))
-        #expect(promoted.contains(InsightsScoreCardsBlock.vascularID))
-        #expect(promoted.contains(InsightsScoreCardsBlock.hrvBalanceID))
-        #expect(promoted.contains(InsightsScoreCardsBlock.deviationID))
-        // The promoted set is EXACTLY the rendered IDs (no stale extras that
-        // would silently drop a metric from the text lane while no ring shows).
-        let expected = Set(InsightsScoreCardsBlock.ringScoreOrder)
-            .union([
-                InsightsScoreCardsBlock.gaugeID,
-                InsightsScoreCardsBlock.vascularID,
-                InsightsScoreCardsBlock.hrvBalanceID,
-                InsightsScoreCardsBlock.deviationID
-            ])
-        #expect(promoted == expected)
-        // v0.14.9 §2 — EVERY tile-able re-frame is now ring-promoted; the "More
-        // from your data" text lane is empty, so both join the promoted set.
-        #expect(promoted.contains("HRV_BALANCE"))
-        #expect(promoted.contains("VASCULAR_AGE_DELTA"))
-    }
-
     // MARK: - Issue-1 — empty score cards are hidden (no creepy black card)
 
     @Test("renderable score gate — only an ok arm WITH a value renders a tile")

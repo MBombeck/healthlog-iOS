@@ -575,7 +575,7 @@ extension DashboardStore {
     /// `true` when the server's `/api/measurements/series` endpoint
     /// supports the kind. `bodyTemperature` is HK-write-only and the
     /// server returns 422 for it — see `MeasurementsRepository.seriesKindKey`
-    /// + `TrendsOverlayStore.availableMetrics` for the canonical list.
+    /// for the canonical list.
     ///
     /// **v0.5.2 F2** — the three server-backed F2 additions
     /// (`restingHeartRate`, `hrv`, `vo2Max`) route through the series

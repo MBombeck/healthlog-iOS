@@ -228,11 +228,15 @@ struct InsightsContainerScreen: View {
             // failure.
             availabilityResolution = await measurementsStore.loadAvailability() ? .resolved : .unresolved
         }
+        // 1.4 C1 — each data-gated source reports when it has answered, so a
+        // deep link to its page can land on the empty state (`settleSpecial`).
         .task {
             if moodStore.entries.isEmpty { await moodStore.load() }
+            if moodStore.error == nil { settleSpecial(.mood) }
         }
         .task {
             if medicationsStore.medications.isEmpty { await medicationsStore.load() }
+            if medicationsStore.error == nil { settleSpecial(.medications) }
         }
         .task {
             if workoutsStore.workouts.isEmpty { await workoutsStore.load() }
@@ -248,9 +252,9 @@ struct InsightsContainerScreen: View {
         // up without first visiting the page. Cloud-gated + SWR-deduped; a
         // gated-off read resolves to `nil` and the pill simply never appears.
         .task {
-            if backend.canShowCloudInsights, ecgStore.list == nil {
-                await ecgStore.load()
-            }
+            guard backend.canShowCloudInsights else { return }
+            if ecgStore.list == nil { await ecgStore.load() }
+            if ecgStore.list != nil { settleSpecial(.ecg) }
         }
         // W29 — if the visible page falls out of the ordered set, snap back to
         // Übersicht so the pager never strands on a now-missing page with no pill.
@@ -272,20 +276,12 @@ struct InsightsContainerScreen: View {
         // the requested slug + bumps `insightsMetricRequestCount`; we map the slug
         // onto `selection` and let `.onChange(of: selection)` mirror the scroll.
         .onChange(of: router.insightsMetricRequestCount) { _, _ in
-            pager.stageInsightsMetricIfRequested(
-                router: router,
-                liveOrderedSelections: liveOrderedSelections,
-                pages: pagerPages
-            )
+            stageDeepLink()
         }
         // Cold-start-from-tap: the parked slug may already be set by the time this
         // view first appears, so resolve it once on appear too (one-shot consume).
         .onAppear {
-            pager.stageInsightsMetricIfRequested(
-                router: router,
-                liveOrderedSelections: liveOrderedSelections,
-                pages: pagerPages
-            )
+            stageDeepLink()
         }
         // v0.14.1 — strip-customise sheet (reorder + show/hide the top tab-strip
         // tabs). Reuses the server-first `SettingsInsightsCustomizationScreen`.
@@ -373,12 +369,18 @@ struct InsightsContainerScreen: View {
     /// (±1 of the selected index), so a 10-pill strip does not construct 10 chart
     /// stores up front. Off-window pages render a cheap placeholder; the page
     /// identity (`.tag`) stays stable so the system keeps the slot.
+    ///
+    /// **1.4 B3:** the page slot stays `kind`, but the measure shown can differ:
+    /// the HRV page shows RMSSD once SDNN has no reading in the last 30 days
+    /// (`RecoveryInsightsStore.displayKind(for:)`), so it never stands on a
+    /// series that stopped. The page's own title then names the measure.
     @ViewBuilder
     private func metricPage(kind: MetricKind) -> some View {
         if let container = appContainer, pager.realizedMetrics.contains(kind) {
+            let shown = recoveryStore.displayKind(for: kind)
             InsightsMetricScreen(
-                kind: kind,
-                store: container.makeChartDetailStore(kind: kind),
+                kind: shown,
+                store: container.makeChartDetailStore(kind: shown),
                 // v0.14.6 N3 — tell the page when it is the pager's current page so
                 // it can scroll itself back to the top on activation (INSTANT reset).
                 isActivePage: pager.selection == .metric(kind),
@@ -386,8 +388,9 @@ struct InsightsContainerScreen: View {
                 // deliberate re-tap of THIS page's pill animates it to the top.
                 retapSignal: pager.activePageRetapCount
             )
-            // `.id(kind)` keeps each metric's `@State` store distinct.
-            .id(kind)
+            // `.id(shown)` keeps each metric's `@State` store distinct, and
+            // rebuilds the HRV page when its measure switches.
+            .id(shown)
             .accessibilityIdentifier("insights.page.\(kind.rawValue)")
         } else {
             // Off-window placeholder — keeps the page slot + tag alive without

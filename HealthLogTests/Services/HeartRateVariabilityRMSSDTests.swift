@@ -176,12 +176,12 @@
             let old = AppOwnedHealthCollectionCoordinator.serverCollectable(ios27, serverAccepts: gate)
             #expect(!old.contains(rmssd))
             #expect(old.contains(sdnn))
-            #expect(old.count == 35)
+            #expect(old.count == 36)
 
             HealthKitServerTypeGate.record(ServerVersionInfo(version: "1.42.0"), defaults: defaults)
             let new = AppOwnedHealthCollectionCoordinator.serverCollectable(ios27, serverAccepts: gate)
             #expect(new == ios27)
-            #expect(new.count == 36)
+            #expect(new.count == 37)
         }
 
         @Test("on this system the pass collects the registry minus what the server cannot store")

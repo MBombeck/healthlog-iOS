@@ -86,7 +86,7 @@ private struct PinToHomeButton: View {
                 localized: "\(name) removed from Home",
                 comment: "Toast — metric unpinned from home dashboard. %@ = metric name."
             )
-        Task { @MainActor in
+        Task { @MainActor [layoutStore] in
             await layoutStore.setPinned(forId: widgetId, pinned: pinned)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             let id = widgetId

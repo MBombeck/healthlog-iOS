@@ -39,7 +39,9 @@ struct AnamnesisFactCard: View {
             currentStateRow
             valueChoices
             if state.isRecorded { removeRow }
-            historyDisclosure
+            // 1.4 B2-c — no history yet, no disclosure: an empty fold-out that
+            // explained what would appear in it is gone.
+            if !history.isEmpty { historyDisclosure }
         }
         .accessibilityIdentifier("anamnesis.card.\(kind.rawValue)")
     }
@@ -52,15 +54,12 @@ struct AnamnesisFactCard: View {
     private var currentStateRow: some View {
         switch state {
         case .neverRecorded:
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                HLBadge(String(localized: "anamnesis.state.neverRecorded"), icon: "questionmark.circle", tone: .neutral)
-                Text("anamnesis.state.neverRecorded.hint")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("anamnesis.state.neverRecorded.\(kind.rawValue)")
+            // 1.4 B2-c — what "never recorded" means against "none" is said
+            // once, in the screen's (i), not under each of the three cards.
+            HLBadge(String(localized: "anamnesis.state.neverRecorded"), icon: "questionmark.circle", tone: .neutral)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("anamnesis.state.neverRecorded.\(kind.rawValue)")
 
         case let .unreadable(revision):
             VStack(alignment: .leading, spacing: HLSpace.xs) {
@@ -153,9 +152,7 @@ struct AnamnesisFactCard: View {
 
     // MARK: - History
 
-    /// Der Verlauf dieser Art. Eingeklappt, aber immer vorhanden — auch leer,
-    /// damit die Fläche erklärt, was sie mit Änderungen tut, bevor die erste
-    /// stattgefunden hat.
+    /// Der Verlauf dieser Art, eingeklappt; erst da, wenn es einen gibt.
     private var historyDisclosure: some View {
         DisclosureGroup(isExpanded: $showHistory) {
             AnamnesisFactHistoryList(revisions: history, kind: kind)

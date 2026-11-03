@@ -9,11 +9,8 @@ import SwiftUI
 
 extension SettingsHKSyncDiagnosticsScreen {
     var reportCard: some View {
-        HLSettingsCard(
-            icon: "doc.on.clipboard",
-            title: "settings.hkdiag.report.title",
-            footer: "settings.hkdiag.report.footer"
-        ) {
+        // 1.4 B4 — one row, one heading: "Bericht kopieren" names it.
+        HLSettingsCard(footer: "settings.hkdiag.report.footer") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HLSettingsActionRow(
                     icon: "doc.on.doc",
@@ -52,7 +49,8 @@ extension SettingsHKSyncDiagnosticsScreen {
             lastCollectionTriggerSource: diagnostics.lastCollectionTriggerSource,
             kinds: rows,
             recentFailures: RecentFailureLog.shared.snapshot(),
-            hourly: hourlyStatus()
+            hourly: hourlyStatus(),
+            hrBuckets: hrBucketSnapshot
         )
     }
 

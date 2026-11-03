@@ -66,7 +66,6 @@ struct SettingsHealthAccessScreen: View {
 
     var body: some View {
         HLSettingsPage(title: "health.permissions.title") {
-            introCard
             readCard
             writeCard
             footerCard
@@ -82,41 +81,29 @@ struct SettingsHealthAccessScreen: View {
 
     // MARK: - Cards
 
-    /// Trägt die Asymmetrie **einmal** (R3): was die Liste ist, und warum für
-    /// Lesetypen kein Zustand danebensteht.
-    private var introCard: some View {
-        HLSettingsCard(
-            icon: "heart.text.square.fill",
-            title: "health.permissions.intro_title"
-        ) {
-            Text("health.permissions.intro_body")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
+    /// 1.4 B2-c — the asymmetry is said **once**, where it applies: the read
+    /// card's subtitle says Apple does not tell the app what reading is
+    /// allowed. The text-only "Transparency" card that said it in four
+    /// sentences is gone, and so are the "Read"/"Write" badges that repeated
+    /// the card titles; the write card shows the granted state per row.
     private var readCard: some View {
         HLSettingsCard(
             icon: "arrow.down.heart.fill",
             title: "health.permissions.read_title",
-            subtitle: "health.permissions.read_subtitle",
-            trailing: { HLBadge(String(localized: "health.permissions.badge_read"), tone: .neutral) },
-            content: { typeList(rows: readTypeRows, emptyKey: "health.permissions.read_empty") }
-        )
+            subtitle: "health.permissions.read_subtitle"
+        ) {
+            typeList(rows: readTypeRows, emptyKey: "health.permissions.read_empty")
+        }
     }
 
     private var writeCard: some View {
         HLSettingsCard(
             icon: "arrow.up.heart.fill",
             title: "health.permissions.write_title",
-            subtitle: "health.permissions.write_subtitle",
-            // H1 — das Abzeichen benennt die Richtung, nicht den Zustand. In
-            // `.success`-Grün las es sich als „alles erteilt“; der erteilte
-            // Zustand steht jetzt pro Zeile.
-            trailing: { HLBadge(String(localized: "health.permissions.badge_write"), tone: .neutral) },
-            content: { typeList(rows: writeTypeRows, emptyKey: "health.permissions.write_empty") }
-        )
+            subtitle: "health.permissions.write_subtitle"
+        ) {
+            typeList(rows: writeTypeRows, emptyKey: "health.permissions.write_empty")
+        }
     }
 
     /// R4 — der Satz „ändern kannst du das in Apple Health unter …“ war ein
@@ -267,7 +254,7 @@ struct SettingsHealthAccessScreen: View {
     /// ``HealthKitService/defaultReadTypes`` — the very set handed to
     /// `requestAuthorization(read:write:)` — plus the still-gated cycle set, and
     /// never hand-listed. Ohne Zustand: Apple gibt für Lesetypen keinen heraus
-    /// (siehe Intro-Karte).
+    /// (siehe Untertitel der Lese-Karte).
     private var readTypeRows: [HealthAccessTypeRow] {
         #if canImport(HealthKit)
             Self.rows(
@@ -455,6 +442,8 @@ enum HealthAccessTypeNaming {
         "HKQuantityTypeIdentifierStairAscentSpeed": "health.permissions.type.stairAscentSpeed",
         "HKQuantityTypeIdentifierStairDescentSpeed": "health.permissions.type.stairDescentSpeed",
         "HKQuantityTypeIdentifierNumberOfTimesFallen": "health.permissions.type.numberOfTimesFallen",
+        // B5 (1.4) — waist circumference joins the read set.
+        "HKQuantityTypeIdentifierWaistCircumference": "health.permissions.type.waistCircumference",
         // v0.14.8 W-HKREAD — seven categorical EVENT classes read by the
         // `HeartHealthEventImporter`. Read-only (never written back), but they
         // join the always-on read transparency list and so need names too.

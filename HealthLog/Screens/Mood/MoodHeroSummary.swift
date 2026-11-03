@@ -30,8 +30,9 @@ struct MoodHeroSummary: View {
                         // value scales with Dynamic Type.
                         .font(.hlMetric(.title))
                         .foregroundStyle(HLText.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        // 1.4 B4 — wraps at large text sizes instead of
+                        // shrinking the one figure the card exists for.
+                        .fixedSize(horizontal: false, vertical: true)
                     if let avg30 = insights.avg30 {
                         Text("Ø 30d \(avg30.formatted(.number.precision(.fractionLength(1))))")
                             .font(.hlSubhead)
@@ -61,30 +62,28 @@ struct MoodHeroSummary: View {
     /// neither a slope nor a prior-period delta. The glyph warms only on an
     /// adverse (falling) slope; rising/flat stays monochrome (no
     /// green-for-up moralising).
+    ///
+    /// 1.4 B4 — the glyph only leads a delta. Without one it stood alone on
+    /// its own line under the value, an arrow that pointed at nothing.
     @ViewBuilder
     private var trendLine: some View {
-        if let slope = insights.slope30 ?? insights.slope7 {
-            let adverse = slope < -0.02
-            let symbol = slope > 0.02
-                ? "arrow.up.right"
-                : (slope < -0.02 ? "arrow.down.right" : "arrow.right")
+        if let deltaLine {
             HStack(spacing: HLSpace.xs) {
-                Image(systemName: symbol)
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(adverse ? HLColor.statusBad : HLText.secondary)
-                    .accessibilityHidden(true)
-                if let deltaLine {
-                    Text(deltaLine)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .monospacedDigit()
+                if let slope = insights.slope30 ?? insights.slope7 {
+                    let adverse = slope < -0.02
+                    let symbol = slope > 0.02
+                        ? "arrow.up.right"
+                        : (slope < -0.02 ? "arrow.down.right" : "arrow.right")
+                    Image(systemName: symbol)
+                        .font(.hlCaption.weight(.semibold))
+                        .foregroundStyle(adverse ? HLColor.statusBad : HLText.secondary)
+                        .accessibilityHidden(true)
                 }
+                Text(deltaLine)
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
+                    .monospacedDigit()
             }
-        } else if let deltaLine {
-            Text(deltaLine)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .monospacedDigit()
         }
     }
 

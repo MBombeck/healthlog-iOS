@@ -15,6 +15,8 @@ import XCTest
 ///   shares the host filesystem, the same seam `MarketingScreenshotsTest` uses).
 /// - `HL_SWEEP_LANG` — `de` or `en` (default `en`).
 /// - `HL_SWEEP_XXL` — `1` launches at the accessibility text size AX-XXL.
+/// - `HL_SWEEP_APPEARANCE` — `light` launches with the app's light
+///   appearance (Settings → Aussehen); the default is the app's dark one.
 ///
 /// World: the hermetic marketing boot (`-uitest-marketing`, three medications,
 /// four wellness scores) plus the sweep overlay (`-uitest-sweep`, readings for
@@ -35,6 +37,11 @@ final class QASweepScreenshotsTest: XCTestCase {
     }
 
     var app = XCUIApplication()
+
+    /// 1.4 B4-z — where `scrollDown()` drags, as a fraction of the width. The
+    /// middle by default; a page whose chart sits under the middle drag (the
+    /// chart takes the drag as a scrub) is walked from the right gutter.
+    var scrollColumn: CGFloat = 0.5
 
     override func setUpWithError() throws {
         let missing = outputDir.isEmpty
@@ -398,6 +405,9 @@ final class QASweepScreenshotsTest: XCTestCase {
         ]
         if isXXL {
             arguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXL"]
+        }
+        if env["HL_SWEEP_APPEARANCE"] == "light" {
+            arguments += HermeticAppearance.lightArguments
         }
         if let avatar = Bundle(for: Self.self).path(forResource: "marketing-avatar", ofType: "png") {
             arguments += ["-uitest-marketing-avatar", avatar]

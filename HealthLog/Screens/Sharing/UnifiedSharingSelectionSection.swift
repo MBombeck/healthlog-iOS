@@ -76,15 +76,8 @@ struct UnifiedSharingSelectionSection: View {
             .foregroundStyle(HLText.secondary)
             .accessibilityIdentifier("sharing.unified.summary")
 
-        // State-dependent, so it appears exactly when it is true: nothing
-        // chosen means no health data rides at all.
-        if store.isDocumentsOnly {
-            Text("sharing.unified.emptyMeaning")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("sharing.unified.emptyMeaning")
-        }
+        // 1.4 B2-c — "nothing chosen means no health data rides" is said once,
+        // in the action card next to the button it is about.
 
         if let notice = store.profile.notice {
             Text(UnifiedSharingCopy.noticeText(notice))
@@ -141,10 +134,17 @@ struct UnifiedSharingSelectionSection: View {
                 }
                 .accessibilityIdentifier("sharing.unified.clear")
             }
-            Text("sharing.unified.selectAll.consequence")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            // 1.4 B2-c — the consequence of "Select everything" appears when
+            // it is true (everything is ticked), not as a standing line under
+            // the buttons. The screen holds no dialog on purpose (see
+            // `UnifiedSharingScreen`), so there is no confirmation to put it in.
+            if !store.offeredLeaves.isEmpty, store.offeredLeaves.allSatisfy(store.isChosen) {
+                Text("sharing.unified.selectAll.consequence")
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("sharing.unified.selectAll.consequence")
+            }
         }
     }
 

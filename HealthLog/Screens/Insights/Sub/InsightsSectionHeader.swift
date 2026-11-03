@@ -12,13 +12,13 @@ import SwiftUI
 /// column. This unifies them so the overview reads as a single design language
 /// (PROJECT_GUIDE.md cross-screen-consistency check).
 ///
-/// **Monochrome:** title is `HLText.primary`, subtitle `HLText.tertiary` — no
-/// colour, no glass. Matches the web's `font-semibold` h2 + `text-muted xs`.
+/// **Monochrome:** title is `HLText.primary` — no colour, no glass.
+///
+/// 1.4 B2 — the muted trailing caption is gone. Every one of them restated
+/// the title ("Deine neuesten Werte auf einen Blick") or a disclaimer the
+/// card already carries, so a section is its title alone.
 struct InsightsSectionHeader: View {
     let title: LocalizedStringKey
-    /// Optional trailing caption (the web's muted `xs` subtitle). Omitted when a
-    /// section has no subtitle (e.g. the Dynamics "Notable this week" row).
-    var subtitle: LocalizedStringKey?
     /// When `true` the header drops its `HLSpace.xs` horizontal inset so its
     /// leading edge sits **flush** with an unpadded prose body beneath it
     /// (I-0 Item 1: the Einschätzung heading must share the left edge of the
@@ -28,27 +28,16 @@ struct InsightsSectionHeader: View {
     /// already-correct sections.
     var flush: Bool = false
 
-    init(_ title: LocalizedStringKey, subtitle: LocalizedStringKey? = nil, flush: Bool = false) {
+    init(_ title: LocalizedStringKey, flush: Bool = false) {
         self.title = title
-        self.subtitle = subtitle
         self.flush = flush
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                .accessibilityAddTraits(.isHeader)
-            if let subtitle {
-                Spacer(minLength: HLSpace.sm)
-                Text(subtitle)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .multilineTextAlignment(.trailing)
-                    .accessibilityHidden(true)
-            }
-        }
-        .padding(.horizontal, flush ? 0 : HLSpace.xs)
+        Text(title)
+            .font(.hlHeadline)
+            .foregroundStyle(HLText.primary)
+            .accessibilityAddTraits(.isHeader)
+            .padding(.horizontal, flush ? 0 : HLSpace.xs)
     }
 }

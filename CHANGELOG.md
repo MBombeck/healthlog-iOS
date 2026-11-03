@@ -2,6 +2,24 @@
 
 > This changelog resumes at v0.6.2; earlier detailed release notes are not included in this repository.
 
+## 1.4.0 (298) - 2026-10-24
+
+HealthLog Companion App 1.4.0 is available on the [App Store](https://apps.apple.com/app/id6769501341). This source release corresponds to the published build. It reads the HealthLog server v1.43 contract up to v1.43.10 and keeps working with v1.42 servers.
+
+- Sync keeps its place. The window for new data no longer drifts during a slow week, an upload that starts again keeps its unconfirmed entries, a timeout counts as unconfirmed rather than sent, and an entry keeps the ID the server gave it.
+- History knows when to stop. The walk back through older data stops once the server reports that a stretch is already folded, leaves summed types to the daily statistics, waits instead of failing while offline or backing off, and splits a rejected batch to find the one entry the server refuses.
+- Deletions in Apple Health reach the server. Deleting a weight, blood pressure, glucose, body fat, temperature or waist reading in Apple Health removes it on your server too, also when you were offline at the time. Summed and folded types are left alone.
+- A copy deleted in Apple Health stays deleted. HealthLog marks the values it writes to Apple Health, so deleting one of them there keeps the value on your server and the app no longer writes it back. Copies written by 1.3 come back once and carry the mark from then on.
+- The server's answers are read correctly. Sleep tells the main night from naps, the hypnogram shows naps, a missing sleep score says why, and long lists are read to the end (illness episodes used to stop at 100 without a word).
+- One (i) per screen. Explanations, methods and sources moved from the lines between and under cards into one info sheet per screen, and several hundred hint lines are gone or folded into their card. "Last synced" shows on Today, and elsewhere only when something is actually wrong.
+- Recovery with a course. The recovery page in Insights shows 30-day trend cards for recovery and day strain and a list of heart rate and energy with their 30-day averages. The HRV page falls back to RMSSD when SDNN stops coming.
+- Ready for iOS 27. The background task sets its expiry handler first, dose and mood observers start at launch, Home Screen quick actions run through the scene, the two Siri intents that read data ask for Face ID or the passcode, and the watch session starts with the app.
+- Texts that are true. Eleven statements that were wrong are fixed, among them the privacy line: HealthLog sends health data only to your own server and to services you turn on yourself, such as an AI provider.
+- Polish. The 30-day card shows the server's 30-day mean; for accounts without AI it showed the last reading. Charts share one height, date axes no longer cut their labels, blood pressure uses two colors, energy is in kcal everywhere and day strain reads "of 21". Empty states share one form, Today and Settings stay readable up to the largest accessibility sizes, and Withings and WHOOP explain a failure in a sentence. Doses and the Live Activity are graded in the account's time zone, the Insights overview builds at once, and a link to a mood, medication or ECG page without data lands on its empty state. English titles use sentence case, and fertile days stand out in light appearance.
+- Small things with real use. Half doses from 1½ up (server v1.39.1 or later), the Coach says older readings are out of its reach rather than missing, a wrong current password no longer signs you out, waist circumference comes from Apple Health, pulse is no longer written back to Apple Health, and a dropped connection is told apart from being offline.
+
+Not in 1.4.0: the limited Apple Health history of iOS 27. Reading it needs the iOS 27 SDK, so 1.4.0 treats every type as unlimited, as 1.3.0 did.
+
 ## 1.3.0 (296) - 2026-10-19
 
 HealthLog Companion App 1.3.0 is available on the [App Store](https://apps.apple.com/app/id6769501341). This source release corresponds to the published build. It reads the HealthLog server v1.43 contract and keeps working with v1.42 servers.

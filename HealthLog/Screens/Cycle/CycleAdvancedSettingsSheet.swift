@@ -49,8 +49,6 @@ struct CycleAdvancedSettingsSheet: View {
                     )
                 } header: {
                     Text("cycle.settings.priors.header")
-                } footer: {
-                    Text("cycle.settings.priors.footer")
                 }
 
                 Section {
@@ -68,6 +66,17 @@ struct CycleAdvancedSettingsSheet: View {
                 Section("cycle.settings.privacy.header") {
                     Toggle("cycle.settings.sensitiveEncryption.label", isOn: $sensitiveCategoryEncryption)
                     Toggle("cycle.settings.discreetNotifications.label", isOn: $discreetNotifications)
+                }
+
+                // 1.4 B2 — the way to the Apple Health sync, which stood as a
+                // loose link under the last card of the cycle screen.
+                Section {
+                    NavigationLink {
+                        AppleHealthIntegrationDetailScreen()
+                    } label: {
+                        Label("Apple Health", systemImage: "heart.text.square")
+                    }
+                    .accessibilityIdentifier("cycle.settings.appleHealth")
                 }
 
                 if let error {
@@ -91,12 +100,20 @@ struct CycleAdvancedSettingsSheet: View {
         .interactiveDismissDisabled(isSaving)
     }
 
+    /// 1.4 B2 — label left, value right; an empty field reads "Automatisch",
+    /// which is what clearing a prior means (the footer that said so is gone).
     private func numberField(
         _ key: LocalizedStringKey,
         text: Binding<String>,
         range: ClosedRange<Int>
     ) -> some View {
-        TextField(key, text: text)
+        LabeledContent {
+            TextField(text: text, prompt: Text("cycle.settings.priors.automatic")) {
+                Text(key)
+            }
+            .multilineTextAlignment(.trailing)
+            // A value is two digits; the label keeps the rest of the row.
+            .frame(maxWidth: 120)
             .keyboardType(.numberPad)
             .onChange(of: text.wrappedValue) { _, value in
                 let digits = value.filter(\.isNumber)
@@ -105,6 +122,9 @@ struct CycleAdvancedSettingsSheet: View {
             .accessibilityHint(Text(
                 String(format: String(localized: "cycle.settings.range.hint"), range.lowerBound, range.upperBound)
             ))
+        } label: {
+            Text(key)
+        }
     }
 
     private func loadProfile() {

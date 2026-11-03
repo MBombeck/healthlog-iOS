@@ -90,52 +90,34 @@ struct TodayHeroHost: View {
 
     // MARK: - Action routing (intent → native surface)
 
-    /// Maps a priority-card action's stable `intent` (and its web `href`) onto a
-    /// native destination, mirroring the web deep-link map. The coach check-in's
-    /// keep / let-go are the only MUTATING intents (they carry the plan id after
-    /// the ":"); every other intent is pure navigation.
+    /// Maps a priority-card action onto its native destination
+    /// (``TodayHeroActionRoute``, mirroring the web deep-link map) and goes.
     private func handleAction(_ item: DailyPriorityItem, _ action: DailyPriorityItem.Action) {
-        let intent = action.intent
-
-        if let planId = planId(from: intent, prefix: "coach.checkin.keep:") {
+        switch TodayHeroActionRoute.resolve(intent: action.intent, href: action.href) {
+        case let .coachKeep(planId):
             Task { await store.coachCheckinKeep(planId: planId) }
-            return
-        }
-        if let planId = planId(from: intent, prefix: "coach.checkin.letGo:") {
+        case let .coachLetGo(planId):
             Task { await store.coachCheckinLetGo(planId: planId) }
-            return
-        }
-
-        switch intent {
-        case "coach.checkin.adjust":
-            // Adjust opens the Coach. (Web seeds the composer via `?ask=`; the
-            // iOS seed hand-off is a follow-up — the Coach still opens here.)
+        case .coach:
             router.apply(.coach, isAuthenticated: true)
-        case "dose.log":
-            // Wave 2 (2.5) — operator b227: "Medikament fällig" must open the
-            // bottom upcoming-intakes sheet, NOT the medication detail screen.
-            // The sheet is the canonical one-tap dose-logging surface (v0.5.6
-            // HOME-COMPLIANCE-SHEET) and already lists today's pending intakes,
-            // so the web `?highlight=<id>` hop is dropped entirely.
+        case .intakes:
+            // Wave 2 (2.5) — operator b227: "Medikament fällig" opens the
+            // bottom upcoming-intakes sheet, the canonical one-tap dose-logging
+            // surface (v0.5.6), not the medication detail screen.
             onShowIntakes()
-        case "sync.reconnect":
+        case .integrations:
             router.requestSettingsIntegrations()
-        case "checkup.view":
+        case .checkupFrontDoor:
             openVorsorge(for: item)
-        case "ecg.view":
+        case .checkupsList:
+            // #149 — `visit.view`: no visit screen in the app yet.
+            onOpenVorsorge()
+        case .insightsOverview:
             router.requestInsightsOverview()
-        case "milestone.view", "pulse.view":
-            if let slug = insightsSlug(from: action.href) {
-                router.apply(.insights(metric: slug), isAuthenticated: true)
-            } else {
-                router.requestInsightsOverview()
-            }
-        default:
-            // Unknown intent that still carries an in-app insights href → route
-            // there; otherwise no-op (never a dead tap into a web path).
-            if let slug = insightsSlug(from: action.href) {
-                router.apply(.insights(metric: slug), isAuthenticated: true)
-            }
+        case let .insights(slug):
+            router.apply(.insights(metric: slug), isAuthenticated: true)
+        case .none:
+            break
         }
     }
 
@@ -164,28 +146,6 @@ struct TodayHeroHost: View {
             onOpenVorsorge()
         }
     }
-
-    /// Recover the plan id appended after a mutating coach intent's prefix.
-    private func planId(from intent: String, prefix: String) -> String? {
-        guard intent.hasPrefix(prefix) else { return nil }
-        let id = String(intent.dropFirst(prefix.count))
-        return id.isEmpty ? nil : id
-    }
-
-    /// Extract an Insights metric slug from a web `/insights/<slug>` (or
-    /// `/insights#<frag>`) href — `nil` → the Insights overview.
-    private func insightsSlug(from href: String?) -> String? {
-        guard let href, href.contains("/insights") else { return nil }
-        if let range = href.range(of: "/insights/") {
-            let slug = href[range.upperBound...].prefix { $0 != "?" && $0 != "#" && $0 != "/" }
-            return slug.isEmpty ? nil : String(slug)
-        }
-        if let hashIndex = href.firstIndex(of: "#") {
-            let frag = href[href.index(after: hashIndex)...]
-            return frag.isEmpty ? nil : String(frag)
-        }
-        return nil
-    }
 }
 
 // MARK: - The hero card
@@ -202,9 +162,6 @@ struct TodayHeroCard: View {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 readRow
                 TodayHeroFacts(digest: digest) // #126 P2: today[], restMode, steadyWeeks
-                if digest.sleepPending {
-                    freshnessNote
-                }
                 rail
             }
         }
@@ -303,6 +260,13 @@ struct TodayHeroCard: View {
                     .font(.hlSubhead.weight(.medium))
                     .foregroundStyle(appearance.labelColor)
                     .multilineTextAlignment(.center)
+                // 1.4 B2 — last night's sleep is still missing: one word with
+                // the score it qualifies, no sentence of its own.
+                if digest.sleepPending {
+                    Text(verbatim: TodayHeroCopy.provisional)
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.tertiary)
+                }
             }
         }
         .buttonStyle(.plain)
@@ -316,38 +280,18 @@ struct TodayHeroCard: View {
     /// rather than the 84 pt 3-up shrink the score-rings row uses.
     private static let ringDiameter: CGFloat = 96
 
-    // MARK: Freshness note
-
-    private var freshnessNote: some View {
-        HStack(spacing: HLSpace.xs) {
-            Image(systemName: "moon")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityHidden(true)
-            Text(verbatim: TodayHeroCopy.sleepPending)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
     // MARK: Worth-a-look rail
 
     @ViewBuilder
     private var rail: some View {
         let items = digest.rail
-        if items.isEmpty {
-            Text(verbatim: TodayHeroCopy.allClear)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        } else {
+        // 1.4 B2 — an empty rail is simply absent; "nothing needs your
+        // attention" said what the missing cards already show.
+        if !items.isEmpty {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(verbatim: TodayHeroCopy.worthALook)
-                    .font(.hlCaption.weight(.semibold))
-                    .textCase(.uppercase)
-                    .foregroundStyle(HLText.tertiary)
+                // 1.4 B4 — a section inside a card has the app's one
+                // section label, not a hand-set caption.
+                HLSectionLabel(verbatim: TodayHeroCopy.worthALook)
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 240), spacing: HLSpace.md)],
                     alignment: .leading,
@@ -382,9 +326,10 @@ struct TodayHeroCard: View {
     /// this the ONLY carrier (the painted mark is gone), so this label is now
     /// the accessibility function the caption used to duplicate.
     private func ringAccessibilityLabel(score: DailyDigest.Score) -> String {
-        let base = "\(TodayHeroCopy.scoreLabel) \(Int(score.value.rounded())) of 100"
-        guard score.runsOnChosenComposition else { return base }
-        return "\(base). \(HealthScorePresentation.chosenCompositionA11y)"
+        var label = "\(TodayHeroCopy.scoreLabel) \(Int(score.value.rounded())) of 100"
+        if digest.sleepPending { label += ", \(TodayHeroCopy.provisional)" }
+        guard score.runsOnChosenComposition else { return label }
+        return "\(label). \(HealthScorePresentation.chosenCompositionA11y)"
     }
 }
 

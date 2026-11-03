@@ -9,31 +9,32 @@ import Foundation
 extension OutboxReplayService {
     /// Replay the allergy + family-history writes (server dedups a create within
     /// 24h; PATCH is idempotent; the soft-delete is tombstone-idempotent).
-    func dispatchRecords(_ op: OutboxQueue.Operation) async throws {
+    /// Returns the server id of a replayed create (1.4, S5).
+    func dispatchRecords(_ op: OutboxQueue.Operation) async throws -> String? {
         let key = op.idempotencyKey
         switch op.kind {
         case .createAllergy, .updateAllergy, .deleteAllergy:
             guard let allergiesRepo else {
                 throw HLError.unknown("Op-Kind \(op.kind.rawValue): allergiesRepo unwired")
             }
-            try await dispatchAllergy(op, repo: allergiesRepo, key: key)
+            return try await dispatchAllergy(op, repo: allergiesRepo, key: key)
         case .createFamilyHistory, .updateFamilyHistory, .deleteFamilyHistory:
             guard let familyHistoryRepo else {
                 throw HLError.unknown("Op-Kind \(op.kind.rawValue): familyHistoryRepo unwired")
             }
-            try await dispatchFamilyHistory(op, repo: familyHistoryRepo, key: key)
+            return try await dispatchFamilyHistory(op, repo: familyHistoryRepo, key: key)
         default:
-            break
+            return nil
         }
     }
 
-    private func dispatchAllergy(_ op: OutboxQueue.Operation, repo: AllergiesRepository, key: String) async throws {
+    private func dispatchAllergy(_ op: OutboxQueue.Operation, repo: AllergiesRepository, key: String) async throws -> String? {
         switch op.kind {
         case .createAllergy:
             let p = try decoder.decode(OutboxQueue.Payloads.CreateAllergy.self, from: op.payload)
-            // audit-v0162 H-4 — capture the server id so `runOnce` can remap any
-            // queued update/delete that still references the optimistic id.
-            lastCreatedServerId = try await repo.replayCreateReturningServerId(p.body, idempotencyKey: key)
+            // audit-v0162 H-4 — the server id goes back to the pass, which
+            // remaps any queued update/delete still on the optimistic id.
+            return try await repo.replayCreateReturningServerId(p.body, idempotencyKey: key)
         case .updateAllergy:
             let p = try decoder.decode(OutboxQueue.Payloads.UpdateAllergy.self, from: op.payload)
             try await repo.replayUpdate(id: resolveEntityId(p.id, op: op), p.patch, idempotencyKey: key)
@@ -43,13 +44,18 @@ extension OutboxReplayService {
         default:
             break
         }
+        return nil
     }
 
-    private func dispatchFamilyHistory(_ op: OutboxQueue.Operation, repo: FamilyHistoryRepository, key: String) async throws {
+    private func dispatchFamilyHistory(
+        _ op: OutboxQueue.Operation,
+        repo: FamilyHistoryRepository,
+        key: String
+    ) async throws -> String? {
         switch op.kind {
         case .createFamilyHistory:
             let p = try decoder.decode(OutboxQueue.Payloads.CreateFamilyHistory.self, from: op.payload)
-            lastCreatedServerId = try await repo.replayCreateReturningServerId(p.body, idempotencyKey: key)
+            return try await repo.replayCreateReturningServerId(p.body, idempotencyKey: key)
         case .updateFamilyHistory:
             let p = try decoder.decode(OutboxQueue.Payloads.UpdateFamilyHistory.self, from: op.payload)
             try await repo.replayUpdate(id: resolveEntityId(p.id, op: op), p.patch, idempotencyKey: key)
@@ -59,5 +65,6 @@ extension OutboxReplayService {
         default:
             break
         }
+        return nil
     }
 }

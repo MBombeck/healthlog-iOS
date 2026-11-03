@@ -115,6 +115,14 @@ public struct MedicationDetailScreen: View {
         ))
     }
 
+    /// 1.4 B2 — a medication kept as a record with nothing logged shows no
+    /// history card saying so; the hero already says it is a record. 1.4 B4:
+    /// the same for every medication. Nothing logged and nothing due yet is no
+    /// card, not a card saying "Noch keine Einnahmen erfasst."
+    private var showsHistory: Bool {
+        !store.intakes.isEmpty || !(store.doseHistory?.rows.isEmpty ?? true)
+    }
+
     /// v0.12 W0-1 — scroll anchor for the `.history` deep-link focus. Placed on
     /// the compliance/Verlauf section so a reminder body-tap lands there.
     private enum ScrollAnchor: Hashable {
@@ -229,26 +237,27 @@ public struct MedicationDetailScreen: View {
                     LastDoseSection(lastTakenAt: lastTaken, medication: store.medication)
                 }
 
+                // 1.4 B2 — a GLP-1 brand outside the EMA catalogue shows no
+                // card saying the curve is unavailable; the section is absent.
                 if store.isGLP1Recognised, let drug = store.drug {
                     MDRGatedDrugLevelSection(store: store, drug: drug)
-                } else if store.isUnknownGLP1Brand {
-                    UnknownGLP1BrandSection(brand: store.medication.name)
                 }
 
                 if store.isGLP1Recognised {
                     // T-5 GLP-1 Detail Stack — four sub-sections gated
                     // by isGLP1Recognised so non-GLP-1 medications stay
-                    // on the lean Apple-Health-style detail layout.
-                    TitrationLadderSection(store: titrationStore)
-                    SideEffectsLogbookSection(store: sideEffectsStore)
-                    PenInventoryView(
-                        store: penInventoryStore,
+                    // on the lean Apple-Health-style detail layout. 1.4 B2:
+                    // the journals without entries share one "add" card.
+                    GLP1DetailStack(
+                        titrationStore: titrationStore,
+                        sideEffectsStore: sideEffectsStore,
+                        penInventoryStore: penInventoryStore,
+                        injectionSiteStore: injectionSiteStore,
                         catalogPrefill: PenInventoryPrefill(
                             manufacturer: store.drug?.brands.first,
                             doseStrength: store.medication.dose
                         )
                     )
-                    InjectionSitePicker(store: injectionSiteStore)
                 } else if store.medication.injectionSiteCaptureEnabled {
                     // W38 — a non-GLP-1 injection medication with site
                     // tracking on (insulin, B12, methotrexate, …) gets the
@@ -267,43 +276,42 @@ public struct MedicationDetailScreen: View {
                 // schedule edits (v1.16.3). The legacy intake-page section
                 // below stays the verbatim fallback for ≤ v1.15.17 servers /
                 // standalone mode.
-                if let ledger = store.doseHistory {
-                    LedgerHistorySection(
-                        rows: ledger.rows,
-                        scheduledDose: store.medication.dose,
-                        siteFor: { eventId in
-                            store.intakes.first { $0.id == eventId }?.injectionSite
-                        },
-                        onMarkTaken: { row in ledgerRetroMark(row, status: .taken) },
-                        onMarkSkipped: { row in ledgerRetroMark(row, status: .skipped) },
-                        onDelete: { row in pendingDelete = Self.deleteCandidate(for: row) },
-                        onPin: { row in ledgerPin(row) },
-                        onUnpin: { row in ledgerUnpin(row) }
-                    )
-                } else {
-                    IntakeHistorySection(
-                        // REG-10 (v0.5.6): re-sort by `scheduledFor desc` — server's
-                        // `takenAt desc` scatters past-due-pending rows above today's.
-                        // v0.6.1.25 B2: the section also re-sorts internally so the
-                        // filter chip stays in charge of row order regardless of caller.
-                        intakes: store.intakes.sorted { $0.scheduledFor > $1.scheduledFor },
-                        hasMore: store.hasMoreIntakes,
-                        isLoading: store.isLoading,
-                        onLoadMore: { Task { await store.loadMoreIntakes() } },
-                        onMarkTaken: { event in retroMark(event: event, status: .taken) },
-                        onMarkSkipped: { event in retroMark(event: event, status: .skipped) },
-                        onDelete: { event in pendingDelete = event },
-                        onEditTime: { event, newTime in editIntakeTime(event, to: newTime) }
-                    )
+                if showsHistory {
+                    if let ledger = store.doseHistory {
+                        LedgerHistorySection(
+                            rows: ledger.rows,
+                            scheduledDose: store.medication.dose,
+                            siteFor: { eventId in
+                                store.intakes.first { $0.id == eventId }?.injectionSite
+                            },
+                            onMarkTaken: { row in ledgerRetroMark(row, status: .taken) },
+                            onMarkSkipped: { row in ledgerRetroMark(row, status: .skipped) },
+                            onDelete: { row in pendingDelete = Self.deleteCandidate(for: row) },
+                            onPin: { row in ledgerPin(row) },
+                            onUnpin: { row in ledgerUnpin(row) }
+                        )
+                    } else {
+                        IntakeHistorySection(
+                            // REG-10 (v0.5.6): re-sort by `scheduledFor desc` — server's
+                            // `takenAt desc` scatters past-due-pending rows above today's.
+                            // v0.6.1.25 B2: the section also re-sorts internally so the
+                            // filter chip stays in charge of row order regardless of caller.
+                            intakes: store.intakes.sorted { $0.scheduledFor > $1.scheduledFor },
+                            hasMore: store.hasMoreIntakes,
+                            isLoading: store.isLoading,
+                            onLoadMore: { Task { await store.loadMoreIntakes() } },
+                            onMarkTaken: { event in retroMark(event: event, status: .taken) },
+                            onMarkSkipped: { event in retroMark(event: event, status: .skipped) },
+                            onDelete: { event in pendingDelete = event },
+                            onEditTime: { event, newTime in editIntakeTime(event, to: newTime) }
+                        )
+                    }
                 }
 
                 // v1.39.1 (#1033) — a medication kept as a record shows its
-                // stored schedule as information, with a line saying nothing
-                // falls due from it.
-                ScheduleSection(
-                    schedule: store.medication.displaySchedule,
-                    isRecordOnly: !store.medication.tracksIntake
-                )
+                // stored schedule as information; the hero says nothing falls
+                // due from it.
+                ScheduleSection(schedule: store.medication.displaySchedule)
 
                 // W-COMPLIANCE-INV Task 2 — generic per-medication inventory
                 // for ALL treatment classes (web "Bestand" tab parity). The

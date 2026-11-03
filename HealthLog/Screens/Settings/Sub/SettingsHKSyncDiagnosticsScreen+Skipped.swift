@@ -10,14 +10,12 @@ import SwiftUI
 
 extension SettingsHKSyncDiagnosticsScreen {
     var skippedCard: some View {
+        // 1.4 B2-c — what happens to a refused reading is in the (i).
         HLSettingsCard(
             icon: "exclamationmark.arrow.triangle.2.circlepath",
-            title: "settings.hkdiag.skipped_title",
-            subtitle: "settings.hkdiag.skipped_subtitle",
-            subtitleWraps: true
+            title: "settings.hkdiag.skipped_title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HKSyncDiagnosticsSourceTag(source: .deviceStored)
                 if let snapshot = skippedSnapshot, !snapshot.rows.isEmpty {
                     statRow(label: "settings.hkdiag.skipped_count", value: "\(snapshot.rows.count)")
                     if snapshot.overflow > 0 {

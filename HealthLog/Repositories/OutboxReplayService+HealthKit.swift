@@ -54,7 +54,7 @@ extension OutboxReplayService {
         let response: HealthKitBatchResponseDTO
         var splitAccepted = false
         do {
-            response = try await postReplayed(payload.entries, op)
+            response = try await postReplayed(payload.entries, syncTrigger: payload.syncTrigger, op)
         } catch is OutboxQueue.OwnerLeaseError {
             // Session transitions are retryable protocol uncertainty. The
             // message carries neither owner nor token.
@@ -62,18 +62,13 @@ extension OutboxReplayService {
         } catch let invalid as MeasurementBatchInvalid where invalid.entryIndexes != nil && op.ownerUserID != nil {
             // E1 — the entries v1.39.1 named go into the register, the rest of
             // the page is sent once more on its own and folded back in.
-            response = try await replaySplit(invalid, payload.entries, owner: op.ownerUserID)
+            response = try await replaySplit(invalid, payload.entries, syncTrigger: payload.syncTrigger, owner: op.ownerUserID)
             splitAccepted = true
         } catch {
-            // #115 / 0.3 — a refusal the route names deletes the row (see
-            // `onNonRetriable`), but only once it is in the skip register, so
-            // the reading stays visible and is offered again. A register write
-            // that fails parks the row instead. Any other 4xx parks
-            // (`parkReason`).
-            if case let .refused(reason) = HealthKitBatchRejection.classify(error) {
-                try await recordRefused(payload.entries, reason: reason, owner: op.ownerUserID)
-            }
-            throw error
+            // A named refusal is recorded, a 422 that names no row is halved,
+            // anything else is rethrown (`answerRefusal`).
+            response = try await answerRefusal(error, payload, op)
+            splitAccepted = true
         }
 
         do {
@@ -135,6 +130,7 @@ extension OutboxReplayService {
     /// owner lease when it has one, the transitional unleased path otherwise.
     private func postReplayed(
         _ entries: [HealthKitBatchEntryDTO],
+        syncTrigger: SyncTrigger?,
         _ op: OutboxQueue.Operation
     ) async throws -> HealthKitBatchResponseDTO {
         if let ownerUserID = op.ownerUserID {
@@ -145,6 +141,7 @@ extension OutboxReplayService {
             let response = try await measurementsRepo.replayHealthKitBatch(
                 entries,
                 idempotencyKey: op.idempotencyKey,
+                syncTrigger: syncTrigger,
                 authLease: authLease
             )
             try await outbox.validateAuthLease(authLease)
@@ -155,7 +152,8 @@ extension OutboxReplayService {
             // bearer generation exists to capture.
             return try await measurementsRepo.replayHealthKitBatch(
                 entries,
-                idempotencyKey: op.idempotencyKey
+                idempotencyKey: op.idempotencyKey,
+                syncTrigger: syncTrigger
             )
         }
     }
@@ -168,6 +166,7 @@ extension OutboxReplayService {
     private func replaySplit(
         _ invalid: MeasurementBatchInvalid,
         _ entries: [HealthKitBatchEntryDTO],
+        syncTrigger: SyncTrigger?,
         owner: String?
     ) async throws -> HealthKitBatchResponseDTO {
         do {
@@ -177,6 +176,7 @@ extension OutboxReplayService {
                 let answer = try await measurementsRepo.replayHealthKitBatch(
                     rest,
                     idempotencyKey: IdempotencyKey().raw,
+                    syncTrigger: syncTrigger,
                     authLease: authLease
                 )
                 try await outbox.validateAuthLease(authLease)
@@ -192,6 +192,39 @@ extension OutboxReplayService {
             }
             throw refusal
         }
+    }
+
+    /// What a refused page comes to when it is not delivered. Returns a
+    /// response only for a halved page; every other path throws.
+    ///
+    /// * #115 / 0.3 — a refusal the route names deletes the row (see
+    ///   `onNonRetriable`), but only once it is in the skip register, so the
+    ///   reading stays visible and is offered again. A register write that
+    ///   fails parks the row instead. Any other 4xx parks (`parkReason`).
+    /// * A2 (1.4, R3 S7) — a 422 that names no row: the page is halved until
+    ///   the rows it refuses stand alone (`+Bisection`). They come back
+    ///   `skipped` and go into the register with the rest of the answer. Once
+    ///   per row: a page no half of which landed parks as before, marked, and
+    ///   goes out whole from then on. A row without an owner has no register
+    ///   to go to and parks.
+    private func answerRefusal(
+        _ error: Error,
+        _ payload: HealthKitBatchPayload,
+        _ op: OutboxQueue.Operation
+    ) async throws -> HealthKitBatchResponseDTO {
+        switch HealthKitBatchRejection.classify(error) {
+        case let .refused(reason):
+            try await recordRefused(payload.entries, reason: reason, owner: op.ownerUserID)
+        case .notStored(status: 422):
+            guard let owner = op.ownerUserID else { break }
+            guard !HealthKitReplayParked.wasHalved(op) else {
+                throw HealthKitReplayParked(reason: .notStoredAfterHalving(status: 422))
+            }
+            return try await replayHalving(payload.entries, syncTrigger: payload.syncTrigger, owner: owner)
+        default:
+            break
+        }
+        throw error
     }
 
     /// Writes refused rows into the owner's skip register, or parks the row.
@@ -322,6 +355,20 @@ struct HealthKitReplayParked: Error, Equatable, CustomStringConvertible {
         /// The server refused rows, but they could not be written into the
         /// owner's skip register (no owner, or a write that did not verify).
         case refusalNotRecorded
+        /// A2 (1.4, R3 S7) — the whole-batch 4xx survived halving: no half
+        /// landed, or the halving ran out of requests. The row goes out whole
+        /// from now on (``HealthKitReplayParked/halvedMarker``).
+        case notStoredAfterHalving(status: Int)
+    }
+
+    /// A2 — the word that tells a later pass this page was halved already.
+    static let halvedMarker = "halved"
+
+    /// Whether `op` was halved by an earlier pass (its parked note says so).
+    /// "Erneut senden" clears the note, and with it this answer.
+    static func wasHalved(_ op: OutboxQueue.Operation) -> Bool {
+        guard let note = op.lastError, note.hasPrefix(lastErrorPrefix) else { return false }
+        return note.hasSuffix(" " + halvedMarker)
     }
 
     static let lastErrorPrefix = "parked:"
@@ -333,6 +380,7 @@ struct HealthKitReplayParked: Error, Equatable, CustomStringConvertible {
         case let .moduleDisabled(module): "\(Self.lastErrorPrefix)module_disabled module=\(module)"
         case let .notStored(status): "\(Self.lastErrorPrefix)not_stored status=\(status)"
         case .refusalNotRecorded: "\(Self.lastErrorPrefix)refusal_not_recorded"
+        case let .notStoredAfterHalving(status): "\(Self.lastErrorPrefix)not_stored status=\(status) \(Self.halvedMarker)"
         }
     }
 }
@@ -343,9 +391,10 @@ extension MeasurementsRepository {
     /// authentication recovery still applies.
     func replayHealthKitBatch(
         _ entries: [HealthKitBatchEntryDTO],
-        idempotencyKey: String
+        idempotencyKey: String,
+        syncTrigger: SyncTrigger? = nil
     ) async throws -> HealthKitBatchResponseDTO {
-        try await postHealthKitBatch(entries, idempotencyKey: idempotencyKey, authLease: nil)
+        try await postHealthKitBatch(entries, idempotencyKey: idempotencyKey, syncTrigger: syncTrigger, authLease: nil)
     }
 
     /// Account-leased replay path. The captured bearer is pinned into the
@@ -354,22 +403,25 @@ extension MeasurementsRepository {
     func replayHealthKitBatch(
         _ entries: [HealthKitBatchEntryDTO],
         idempotencyKey: String,
+        syncTrigger: SyncTrigger? = nil,
         authLease: OutboxQueue.AuthLease
     ) async throws -> HealthKitBatchResponseDTO {
-        try await postHealthKitBatch(entries, idempotencyKey: idempotencyKey, authLease: authLease)
+        try await postHealthKitBatch(entries, idempotencyKey: idempotencyKey, syncTrigger: syncTrigger, authLease: authLease)
     }
 
     /// The single wire path both replay legs share — identical body and encoder
     /// to `MeasurementBatchUploader.upload`, differing only in where the
-    /// idempotency key and the bearer come from.
+    /// idempotency key and the bearer come from. A2 (1.4) — and the trigger,
+    /// which the row kept from the POST that parked it.
     private func postHealthKitBatch(
         _ entries: [HealthKitBatchEntryDTO],
         idempotencyKey: String,
+        syncTrigger: SyncTrigger?,
         authLease: OutboxQueue.AuthLease?
     ) async throws -> HealthKitBatchResponseDTO {
         let base: APIRequest<HealthKitBatchResponseDTO> = try .post(
             "/api/measurements/batch",
-            body: HealthKitBatchPayload(entries: entries),
+            body: HealthKitBatchPayload(entries: entries, syncTrigger: syncTrigger),
             encoder: .hlBatch,
             idempotencyKey: IdempotencyKey(raw: idempotencyKey)
         )

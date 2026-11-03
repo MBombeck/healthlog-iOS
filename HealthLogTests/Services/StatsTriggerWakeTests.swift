@@ -119,7 +119,7 @@ import Testing
                 })
             })
             let pass = coordinator.begin(plan)
-            #expect(await phase09Settle { clock.requested.contains(ForegroundCoordinator.Budget.standard.deadline) })
+            #expect(await phase09AwaitCondition { clock.requested.contains(ForegroundCoordinator.Budget.standard.deadline) })
             #expect(await v1Settle { started.task != nil })
             clock.fire(ForegroundCoordinator.Budget.standard.deadline)
             clock.fire(ForegroundCoordinator.Budget.standard.drainAllowance)

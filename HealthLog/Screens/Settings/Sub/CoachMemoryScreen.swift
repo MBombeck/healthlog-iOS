@@ -113,7 +113,8 @@ struct CoachMemoryScreen: View {
             HLEmptyState(
                 icon: "brain.head.profile",
                 title: "Nothing learned yet",
-                message: "The assistant hasn't learned anything about you yet. As you chat, facts it picks up will show here — and you can forget any of them."
+                // 1.4 B2-c — the first sentence repeated the title.
+                message: "coachMemory.empty.message"
             )
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
@@ -122,13 +123,8 @@ struct CoachMemoryScreen: View {
 
     @ViewBuilder
     private func factRows(store: CoachFactsStore) -> some View {
-        Section {
-            Text("These are facts the assistant has picked up about you. Swipe to forget any of them.")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .listRowSeparator(.hidden)
-        }
-
+        // 1.4 B2-c — no lead line: the title says what this is, the rows
+        // swipe like every list, and "Forget everything" closes the list.
         ForEach(store.groupedByCategory, id: \.category) { group in
             Section(Self.categoryTitle(group.category)) {
                 ForEach(group.facts) { fact in

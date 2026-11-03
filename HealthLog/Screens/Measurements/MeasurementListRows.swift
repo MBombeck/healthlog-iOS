@@ -42,6 +42,9 @@ struct MeasurementRow: View {
                 ))
                 .font(.hlFootnote)
                 .foregroundStyle(HLText.secondary)
+                // #146 — on a day with naps, the night and the naps beside
+                // the day's total (the headline), as the server sent them.
+                SleepSplitCaption(split: measurement.sleepSplit)
                 if let note = measurement.note, !note.isEmpty {
                     Text(note)
                         .font(.hlCaption)
@@ -50,7 +53,9 @@ struct MeasurementRow: View {
                 }
             }
             Spacer()
-            HLBadge(sourceLabel, tone: sourceTone)
+            // 1.4 B2 — a lock on the source badge marks a row that cannot be
+            // edited here; the reason is one tap away (`MeasurementSwipeRow`).
+            HLBadge(sourceLabel, icon: measurement.isServerDerivedReadOnly ? "lock" : nil, tone: sourceTone)
         }
         .padding(.vertical, HLSpace.xs)
         .accessibilityElement(children: .combine)
@@ -137,6 +142,9 @@ struct MeasurementSwipeRow: View {
     let measurement: Measurement
     let onEdit: (Measurement) -> Void
     let onDelete: (Measurement) -> Void
+    /// 1.4 B2 — the reason a row is locked, shown on tap instead of under
+    /// every locked row of the list.
+    @State private var explainsLock = false
 
     var body: some View {
         MeasurementSwipeActions(
@@ -144,28 +152,30 @@ struct MeasurementSwipeRow: View {
             onEdit: onEdit,
             onDelete: onDelete
         ) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                MeasurementRow(measurement: measurement)
-                // Build 3 / item 3.3 — explain computed read-only rows instead
-                // of silently withholding actions.
-                if measurement.isServerDerivedReadOnly {
-                    Label {
-                        // #115 R3 — an hourly/daily mean or a sleep night is a
-                        // summary, not a row from a connected source.
-                        if measurement.isSyntheticServerRow {
-                            Text("measurement.readOnly.aggregate")
-                        } else {
-                            Text("measurement.readOnly.explain")
-                        }
-                    } icon: {
-                        Image(systemName: "lock")
+            if measurement.isServerDerivedReadOnly {
+                VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                    MeasurementRow(measurement: measurement)
+                    if explainsLock {
+                        Text(lockReason)
+                            .font(.hlCaption)
+                            .foregroundStyle(HLText.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("measurement.readOnly.explain")
                     }
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityIdentifier("measurement.readOnly.explain")
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { explainsLock.toggle() }
+                .accessibilityHint(Text(lockReason))
+            } else {
+                MeasurementRow(measurement: measurement)
             }
         }
+    }
+
+    /// #115 R3 — an hourly/daily mean or a sleep night is a summary, not a
+    /// row from a connected source.
+    private var lockReason: LocalizedStringKey {
+        measurement.isSyntheticServerRow ? "measurement.readOnly.aggregate" : "measurement.readOnly.explain"
     }
 }
 
@@ -301,16 +311,13 @@ struct MeasurementListEmptyState: View {
     var onLog: (() -> Void)?
 
     var body: some View {
-        HLEmptyState(
-            icon: "tray",
-            title: "No measurements yet",
-            message: "Log your first measurement to see the history."
-        ) {
+        // 1.4 B2 — the button names the next step; no sentence repeating it.
+        HLEmptyState(icon: "tray", title: "No measurements yet") {
             if let onLog {
                 HLButton(
                     String(localized: "Log a measurement"),
                     icon: "plus",
-                    variant: .restrained,
+                    variant: .secondary,
                     action: onLog
                 )
                 .accessibilityIdentifier("measurements.list.empty.log")

@@ -132,10 +132,12 @@ enum HKSyncDiagnosticsVocabulary {
     }
 
     /// #12 — the gate that decided the heart-rate bucket path's last outcome,
-    /// in words, followed by its identifier in parentheses. The identifier is
-    /// what a tester quotes back and what Console prints after `gate=`.
+    /// in words. 1.4 B4: the identifier a tester quotes back (and Console
+    /// prints after `gate=`) no longer follows in parentheses on screen, where
+    /// "(cutoverPending)" read like a fault; it is in "Bericht kopieren"
+    /// (``SyncDiagnosticsReport``), next to the other identifiers.
     static func heartRateBucketGate(_ gate: HRBucketGate) -> String {
-        let words = switch gate {
+        switch gate {
         case .uploaded: String(localized: "settings.hkdiag.hrbuckets.gate.uploaded")
         case .upToDate: String(localized: "settings.hkdiag.hrbuckets.gate.upToDate")
         case .standalone: String(localized: "settings.hkdiag.hrbuckets.gate.standalone")
@@ -149,7 +151,6 @@ enum HKSyncDiagnosticsVocabulary {
         case .rawFallbackSweepFailed: String(localized: "settings.hkdiag.hrbuckets.gate.rawFallbackSweepFailed")
         case .rawFallbackSweepStarved: String(localized: "settings.hkdiag.hrbuckets.gate.rawFallbackSweepStarved")
         }
-        return "\(words) (\(gate.rawValue))"
     }
 
     /// The neutral word for a value this build cannot name.

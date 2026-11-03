@@ -190,21 +190,16 @@ struct MoodTagManagementScreen: View {
             title: "mood.tags.manage.tags.title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.lg) {
-                ForEach(store.groups) { group in
+                // 1.4 B4 — a group without a visible tag is left out instead of
+                // a label over "Noch keine Tags in dieser Gruppe."
+                ForEach(store.groups.filter { $0.tags.contains { !$0.archived } }) { group in
                     let tags = group.tags.filter { !$0.archived }
                     VStack(alignment: .leading, spacing: HLSpace.xs) {
                         HLSectionLabel(verbatim: group.localizedLabel)
-                        if tags.isEmpty {
-                            Text("mood.tags.manage.group.empty")
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.tertiary)
-                                .padding(.vertical, HLSpace.sm)
-                        } else {
-                            ForEach(Array(tags.enumerated()), id: \.element.key) { index, tag in
-                                tagRow(tag, group: group, index: index, count: tags.count)
-                                if index < tags.count - 1 {
-                                    Divider().opacity(0.6)
-                                }
+                        ForEach(Array(tags.enumerated()), id: \.element.key) { index, tag in
+                            tagRow(tag, group: group, index: index, count: tags.count)
+                            if index < tags.count - 1 {
+                                Divider().opacity(0.6)
                             }
                         }
                     }
@@ -312,11 +307,9 @@ struct MoodTagManagementScreen: View {
     @ViewBuilder
     private var archivedCard: some View {
         if !store.archivedCustomTags.isEmpty {
-            HLSettingsCard(
-                icon: "archivebox",
-                title: "mood.tags.manage.archived.title",
-                footer: "mood.tags.manage.archived.footer"
-            ) {
+            // 1.4 B2 — the menu on each row shows restore and delete; no
+            // footer explains them.
+            HLSettingsCard(icon: "archivebox", title: "mood.tags.manage.archived.title") {
                 VStack(spacing: 0) {
                     ForEach(Array(store.archivedCustomTags.enumerated()), id: \.element.key) { index, tag in
                         HStack(spacing: HLSpace.md) {

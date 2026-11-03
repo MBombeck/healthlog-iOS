@@ -41,23 +41,12 @@ struct MedicationEfficacySection: View {
 
             // Wirkung is chart-and-number-forward (web parity, 2026-07-18): the
             // two generic MDR prose blocks (med.wirkung.intro / .disclaimer) were
-            // removed — they read as a confusing text wall above the chart. The
-            // honest, data-specific captions below (startFallback / noStart /
-            // levelShift) stay. Verdict wording remains banned structurally by
+            // removed — they read as a confusing text wall above the chart.
+            // 1.4 B2: nothing stands between the label and the cards any more.
+            // "Set a start date" is the comparison block's own sentence
+            // (`needStart`); the first-reading fallback rides in each card's
+            // foot. Verdict wording remains banned structurally by
             // MedicationEfficacyCopyGuardTests.
-            if efficacy.markers.startFromFirstReading {
-                Text("med.wirkung.startFallback")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if efficacy.markers.start == nil {
-                Text("med.wirkung.noStart")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
             if !efficacy.overrideOptions.isEmpty {
                 EfficacyRetargetControl(
                     options: efficacy.overrideOptions,
@@ -114,8 +103,8 @@ private struct EfficacyTargetCard: View {
                     EfficacyAdherenceReadout(points: adherence)
                 }
 
-                if let shift = target.levelShift, shift.isNearStart, let at = shift.at {
-                    Text(levelShiftText(at))
+                if let foot = footNote {
+                    Text(foot)
                         .font(.hlCaption)
                         .foregroundStyle(HLText.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -139,6 +128,19 @@ private struct EfficacyTargetCard: View {
                     .background(HLSurface.tertiary, in: Capsule())
             }
         }
+    }
+
+    /// 1.4 B2 — the card's one foot line: the conservative level-shift note
+    /// and, when no start date is set, that the first reading stands in for it.
+    private var footNote: String? {
+        var parts: [String] = []
+        if let shift = target.levelShift, shift.isNearStart, let at = shift.at {
+            parts.append(levelShiftText(at))
+        }
+        if markers.startFromFirstReading {
+            parts.append(String(localized: "med.wirkung.startFallback"))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     private func levelShiftText(_ at: Date) -> String {
@@ -165,6 +167,19 @@ private struct EfficacyTargetChart: View {
         target.series.sorted { $0.t < $1.t }
     }
 
+    /// The value range: the readings and the typical band, padded.
+    private var yDomain: ClosedRange<Double> {
+        var values = points.map(\.value)
+        if let band = target.referenceBand { values += [band.low, band.high] }
+        return ChartValueDomain.fitting(values) ?? 0 ... 1
+    }
+
+    /// Every date the time axis spans: readings, start, dose changes, pauses.
+    private var axisDates: [Date] {
+        points.map(\.t) + [markers.start].compactMap(\.self) + markers.doseChanges.map(\.at)
+            + markers.pauses.flatMap { [$0.from, $0.to].compactMap(\.self) }
+    }
+
     /// Where an open pause (`to == nil`) runs to — the latest datum, so the
     /// render stays pure (no `Date.now` in the body).
     private var rightEdge: Date? {
@@ -174,7 +189,7 @@ private struct EfficacyTargetChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             chart
-                .frame(height: HLChartStyle.heightDetail)
+                .frame(height: HLChartStyle.heightRegular)
                 .accessibilityLabel(Text("med.wirkung.chart.a11y"))
             legend
         }
@@ -195,23 +210,13 @@ private struct EfficacyTargetChart: View {
                 AxisValueLabel().font(.hlCaption).foregroundStyle(HLText.secondary)
             }
         }
-        .chartXAxis {
-            // Bounded tick count (was `.automatic`, which emitted a date under
-            // nearly every point on a dense 20–30-reading series → the
-            // overlapping-dates wall the operator flagged). Label routed through
-            // the shared HLDateFormat so it honours the user's date-order pref
-            // and matches the rest of the app.
-            AxisMarks(values: .automatic(desiredCount: 5)) { value in
-                if let date = value.as(Date.self) {
-                    AxisValueLabel {
-                        Text(HLDateFormat.date(date, style: .abbreviated))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                    AxisGridLine().foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                }
-            }
-        }
+        // 1.4 B4 — the y range follows the readings (and the typical band)
+        // instead of starting at zero, where the line lay flat along the top.
+        .chartYScale(domain: yDomain)
+        // Bounded tick count (a date under every point was the overlapping
+        // wall the operator flagged); 1.4 B4 — the app's one date-axis rule,
+        // over everything the chart draws on its time axis.
+        .chartXAxis { ChartDateAxis.marks(for: axisDates) }
         .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
     }
 
@@ -417,22 +422,18 @@ private struct EfficacyBeforeAfterCard: View {
                 .font(.hlCaption)
                 .foregroundStyle(HLText.tertiary)
         }
+        // 1.4 B4 — rows of the card, not a filled box inside it.
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(HLSpace.md)
-        .background(HLSurface.tertiary, in: RoundedRectangle(cornerRadius: HLRadius.sm))
     }
 
     private var insufficient: some View {
+        // 1.4 B4 — a line of the card; the dashed frame around it was a box in
+        // a box.
         Text(insufficientText)
             .font(.hlSubhead)
             .foregroundStyle(HLText.secondary)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(HLSpace.md)
-            .background(
-                RoundedRectangle(cornerRadius: HLRadius.sm)
-                    .strokeBorder(HLColor.separator, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            )
     }
 
     private func summaryText(
@@ -510,11 +511,10 @@ private struct EfficacyAdherenceReadout: View {
             }
             Spacer(minLength: HLSpace.sm)
             HLSparkline(values: points.map(\.rate), tint: HLChartTints.seriesMid)
-                .frame(width: 96, height: 32)
+                .frame(width: 96, height: HLChartStyle.heightCompact)
         }
+        // 1.4 B4 — a row of the card, without its own fill.
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(HLSpace.md)
-        .background(HLSurface.tertiary, in: RoundedRectangle(cornerRadius: HLRadius.sm))
     }
 
     private var captionText: String {

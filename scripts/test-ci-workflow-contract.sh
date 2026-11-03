@@ -26,11 +26,11 @@ check_workflow() {
 
       # 2026-09-08 — CI runs on the self-hosted Mac mini; the Xcode pin is a
       # verification step against the selected Xcode of the machine, not a
-      # setup-xcode download. The pinned literal must still read 26.6.
+      # setup-xcode download. The pinned literal must read 27.2.
       xcode_steps = steps.select { |step| step["name"] == "Verify Xcode" }
       abort("expected exactly one Verify Xcode step") unless xcode_steps.length == 1
       xcode_version = xcode_steps.first.fetch("run")[/expected="Xcode ([0-9.]+)"/, 1].to_s
-      abort("expected Xcode 26.6, found #{xcode_version.inspect}") unless xcode_version == "26.6"
+      abort("expected Xcode 27.2, found #{xcode_version.inspect}") unless xcode_version == "27.2"
 
       lint_step = steps.find { |step| step["name"] == "Lint" }
       abort("Lint step is missing") unless lint_step
@@ -99,10 +99,10 @@ fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/healthlog-ci-contract.XXXXXX")"
 # shellcheck disable=SC2064
 trap "rm -rf '$fixture_dir'" EXIT
 
-awk '{ sub(/expected="Xcode 26\.6"/, "expected=\"Xcode 26.5\""); print }' \
+awk '{ sub(/expected="Xcode 27\.2"/, "expected=\"Xcode 26.6\""); print }' \
     "$WORKFLOW_PATH" >"$fixture_dir/stale-xcode.yml"
 if check_workflow "$fixture_dir/stale-xcode.yml" >/dev/null 2>&1; then
-    fail "contract accepted stale Xcode 26.5"
+    fail "contract accepted stale Xcode 26.6"
 fi
 
 awk '

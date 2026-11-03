@@ -26,7 +26,8 @@
         // MARK: - Fixtures
 
         /// A `SyncStateStore` whose handshake has landed → the footer's
-        /// settled "Zuletzt synchronisiert HH:MM" arm renders.
+        /// settled "Zuletzt synchronisiert HH:MM" arm renders. Since 1.4
+        /// (decision 3) that arm is Today's, so the hosts pass `scope: .today`.
         private func makeSettledStore() async throws -> SyncStateStore {
             let env = AppEnvironment(
                 // swiftlint:disable:next force_unwrapping
@@ -133,7 +134,7 @@
             let view = ScrollView {
                 VStack(spacing: HLSpace.lg) {
                     Text(verbatim: "Content")
-                    HLSyncStatusFooter()
+                    HLSyncStatusFooter(scope: .today)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -149,7 +150,7 @@
             let view = List {
                 Section { Text(verbatim: "Row") }
                 Section {} footer: {
-                    HLSyncStatusFooter()
+                    HLSyncStatusFooter(scope: .today)
                 }
             }
             .listStyle(.insetGrouped)
@@ -166,7 +167,7 @@
             let view = Form {
                 Section { Text(verbatim: "Row") }
                 Section {} footer: {
-                    HLSyncStatusFooter()
+                    HLSyncStatusFooter(scope: .today)
                 }
             }
             .environment(store)

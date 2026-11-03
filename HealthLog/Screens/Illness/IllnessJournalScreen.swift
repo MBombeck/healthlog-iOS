@@ -225,11 +225,9 @@ struct IllnessJournalScreen: View {
     /// `ScrollView`).
     private var emptyRows: some View {
         Section {
-            HLEmptyState(
-                icon: "heart.text.square",
-                title: "illness.empty.title",
-                message: "illness.empty.subtitle"
-            ) {
+            // 1.4 B2 — the title names what goes in the journal; the
+            // sentence that listed it again under the title is gone.
+            HLEmptyState(icon: "heart.text.square", title: "illness.empty.title") {
                 HLButton("illness.add.title", icon: "plus", variant: .primary) {
                     showAddSheet = true
                 }

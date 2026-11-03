@@ -64,11 +64,12 @@ struct ChartDetailCutoverTests {
     /// Reusable chart assets that must survive the deletion. The phase context
     /// is explicit that only proven-unreachable code goes; stores and
     /// components stay. `InsightsMetricScreen` composes the same pieces.
+    /// 1.4 B2 removed `TrendsOverlayCard` and `ChartDetailSourcesRow` from
+    /// this list: neither had a caller left, so they went as dead code.
     static let reusableChartAssets = [
         "HealthLog/Screens/Charts/ChartDetailComponents.swift",
         "HealthLog/Screens/Charts/ChartDetailDrillDownRow.swift",
         "HealthLog/Screens/Charts/ChartDetailHeroTrend.swift",
-        "HealthLog/Screens/Charts/ChartDetailSourcesRow.swift",
         "HealthLog/Screens/Charts/ChartsAccessibility.swift",
         "HealthLog/Screens/Charts/FullscreenChartCover.swift",
         "HealthLog/Screens/Charts/HLTileMetricChart.swift",
@@ -76,7 +77,6 @@ struct ChartDetailCutoverTests {
         "HealthLog/Screens/Charts/MetricChartContent.swift",
         "HealthLog/Screens/Charts/MetricChartMath.swift",
         "HealthLog/Screens/Charts/SelectedPointCallout.swift",
-        "HealthLog/Screens/Charts/TrendsOverlayCard.swift",
         "HealthLog/Stores/ChartDetailStore.swift",
         "HealthLog/Stores/ChartDetailStore+Loading.swift"
     ]

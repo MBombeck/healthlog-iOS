@@ -56,7 +56,7 @@ struct HistoryLineChart: View {
                     .foregroundStyle(HLText.primary)
 
                 chart
-                    .frame(height: 220)
+                    .frame(height: HLChartStyle.heightRegular)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Text(title))
                     .accessibilityValue(Text(accessibilityValue))
@@ -91,6 +91,8 @@ struct HistoryLineChart: View {
         }
         .modifier(YDomainModifier(domain: yDomain))
         .chartYAxis { AxisMarks(position: .leading) }
+        // 1.4 B4 — the app's one date-axis rule.
+        .chartXAxis { ChartDateAxis.marks(for: ordered.map(\.date)) }
     }
 
     private var accessibilityValue: String {

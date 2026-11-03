@@ -62,10 +62,11 @@
                 violations.append("HLSettingsRow caps its subtitle at one line without consulting the type size")
             }
 
-            // Preservation: standard sizes keep today's single-line density, and
-            // the type size is honoured at all — so the defect above is the
-            // wrapping decision, not a dead Dynamic Type path.
-            #expect(abs(longDefault - shortDefault) < 1, "standard sizes must keep the current one-line density")
+            // 1.4 B2-c — standard sizes wrap too (HIG: wrap, never truncate);
+            // the row stays compact and the type size is honoured at all, so
+            // the defect above is the wrapping decision, not a dead Dynamic
+            // Type path.
+            #expect(longDefault > shortDefault + 1, "a long hint must wrap at the standard size, not end in an ellipsis")
             #expect(longDefault < 90, "a standard-size Settings row must stay compact")
             #expect(shortAX > shortDefault, "accessibility5 must already scale the row's type")
             #expect(violations.isEmpty, "EXPECTED_RED: 08-02 accessibility Settings row did not wrap")
@@ -304,9 +305,10 @@
             )
         ]
 
+        /// 1.4 B3 — the recovery page has no tile grid any more (two trend
+        /// cards and a list, both full width), so only the score grid remains.
         private static let twoUpGridFiles = [
-            "HealthLog/Screens/Insights/Sub/InsightsScoreCardsBlock.swift",
-            "HealthLog/Screens/Insights/Sub/InsightsRecoveryPage.swift"
+            "HealthLog/Screens/Insights/Sub/InsightsScoreCardsBlock.swift"
         ]
 
         private static let rawMaterialSurfaces = [

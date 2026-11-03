@@ -4,7 +4,7 @@ import SwiftUI
 /// in-app, easy-to-find und tatsächlich destruktiv sein. Zwei-Stufen-Pattern
 /// nach GitHub-Vorlage:
 ///   1. Erklärungs-Stufe mit Warn-Bullets + Consent-Toggle.
-///   2. Type-Confirm-Stufe (User muss `LOESCHEN` / `DELETE` exakt eintippen).
+///   2. Type-Confirm-Stufe (User muss `LÖSCHEN` / `DELETE` exakt eintippen).
 /// Der finale Tap löst `AuthStore.deleteAccount` aus, das den Server-DELETE,
 /// den Keychain-Wipe und die Store-/Outbox-Cleanup-Cascade orchestriert.
 ///
@@ -32,9 +32,9 @@ struct DeleteAccountScreen: View {
     /// (the destructive in-app path cannot complete) instead of a retry banner.
     @State private var stepUpWebURL: URL?
 
-    /// Pro Locale fest: `LOESCHEN` (DE) bzw. `DELETE` (EN). Wir lesen die
-    /// localized String einmal und vergleichen exakt — Case-Sensitive,
-    /// damit der User nicht versehentlich durchklickt.
+    /// Pro Locale fest: `LÖSCHEN` (DE) bzw. `DELETE` (EN). Exakt und
+    /// Case-Sensitive; B5 (1.4): „LOESCHEN“ aus 1.3 gilt weiter
+    /// (``DeleteConfirmationPhrase``).
     private var requiredConfirmation: String {
         String(localized: "DELETE", comment: "Type-confirm phrase the user must enter literally to delete their account")
     }
@@ -174,7 +174,7 @@ struct DeleteAccountScreen: View {
                 ) {
                     Task { await performDeletion() }
                 }
-                .disabled(isDeleting || typedConfirmation != requiredConfirmation)
+                .disabled(isDeleting || !DeleteConfirmationPhrase.matches(typedConfirmation, required: requiredConfirmation))
                 .accessibilityIdentifier(Self.deleteButtonIdentifier)
 
                 HLButton(
@@ -266,7 +266,7 @@ struct DeleteAccountScreen: View {
     // MARK: - Action
 
     private func performDeletion() async {
-        guard typedConfirmation == requiredConfirmation, !isDeleting else { return }
+        guard DeleteConfirmationPhrase.matches(typedConfirmation, required: requiredConfirmation), !isDeleting else { return }
         isDeleting = true
         deletionError = nil
         let ok = await authStore.deleteAccount()

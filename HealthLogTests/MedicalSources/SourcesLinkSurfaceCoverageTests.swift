@@ -33,6 +33,25 @@ struct SourcesLinkSurfaceCoverageTests {
         #expect(caption != "labs.detail.reference.caption")
     }
 
+    /// 1.4 B4 — DESIGN-HINTS rule 3: sources belong to a statement. The
+    /// Vorsorge list states screening cadences and cites them; its empty state
+    /// states nothing, so a lone "Quellen" there cited nothing.
+    @Test("the Vorsorge list cites its cadences while it shows reminders, not in the empty state")
+    func vorsorgeCitesOnlyWithReminders() throws {
+        let screen = try source("HealthLog/Screens/Notifications/MeasurementRemindersScreen.swift")
+        #expect(screen.contains("HLSourcesLink(topic: .vorsorge)"))
+        #expect(screen.contains("if VorsorgeCard.showsSources(reminders: store.reminders) {"))
+        #expect(HLSourcesLink.isRenderable(.vorsorge))
+
+        let row = MeasurementReminderRow(
+            id: "r1", label: "Blutdruck", measurementType: "BLOOD_PRESSURE", intervalDays: 30,
+            rrule: nil, endsOn: nil, origin: .vorsorge, notifyHour: 9, location: nil,
+            nextDueAt: Date(timeIntervalSince1970: 1_800_000_000), lastSatisfiedAt: nil, enabled: true
+        )
+        #expect(VorsorgeCard.showsSources(reminders: [row]))
+        #expect(!VorsorgeCard.showsSources(reminders: []))
+    }
+
     @Test("the cycle prediction card cites what its estimate rests on")
     func cyclePredictionCarriesItsCitation() throws {
         let card = try source("HealthLog/Screens/Cycle/CycleSummaryCards.swift")

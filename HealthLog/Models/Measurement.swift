@@ -297,9 +297,9 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     // Unlike the W21 / IC / W-B189 read-only additions, three of these are
     // MANUAL clinical signals the user logs by hand (`toCreateDTOs()` emits a
     // wire row + the MeasureSheet exposes a capture input); waist-to-height is
-    // render-only for v1. None is HealthKit-backed on iOS today (pain + grip
-    // have no native HK type; waist HK round-trip is blocked on a server
-    // `apple-health-mapping.ts` entry). Raw values are the camelCase mirror of
+    // render-only for v1. Pain + grip have no native HK type; waist is read
+    // from Apple Health since B5 (1.4), see `waistCircumference` below.
+    // Raw values are the camelCase mirror of
     // the server enum; the wire `type` maps in `MeasurementDTO.toDomain()`.
 
     /// Pain — 0–10 integer NRS (Numeric Rating Scale). Server enum `PAIN_NRS`
@@ -313,11 +313,11 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// via the standard kg decimal field.
     case gripStrength
     /// Waist circumference (cm). Server enum `WAIST_CIRCUMFERENCE` (LOINC 8280-0,
-    /// 30–250), lower-is-better. **Manual-only for now.** HealthKit has
-    /// `HKQuantityTypeIdentifier.waistCircumference`, but the server
-    /// `apple-health-mapping.ts` has no waist entry, so an HK-batch upload would
-    /// be dropped server-side — HK round-trip is deferred until the server adds
-    /// the mapping (see server coord). Captured via the standard cm decimal field.
+    /// 30–250), lower-is-better. Captured via the standard cm decimal field and,
+    /// since B5 (1.4), read from Apple Health: the server maps
+    /// `HKQuantityTypeIdentifierWaistCircumference` (sent in metres, stored ×100
+    /// in cm) since v1.25.0. Read only: HealthLog never writes waist readings
+    /// into Apple Health.
     case waistCircumference
     /// Waist-to-height ratio (dimensionless, 0.2–1.5). Server enum
     /// `WAIST_TO_HEIGHT`, lower-is-better. **Render-only on iOS for v1.** The
@@ -676,10 +676,8 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     public let bloodPressureDiastolicId: String?
     /// Discriminator-Context für Blutzucker-Messungen. Nur belegt wenn
     /// `kind == .glucose` und der Server-Record (oder die User-Eingabe)
-    /// einen Context gesetzt hat. Erlaubt Series-Charts + Alerts pro
-    /// Context zu gruppieren (T-2, AC10 finding). Für alle anderen Kinds
-    /// `nil`. Wire-Key: `glucoseContext` (Server-Schema
-    /// `src/lib/validations/measurement.ts`).
+    /// einen Context gesetzt hat; erlaubt Series-Charts + Alerts pro Context
+    /// (T-2, AC10). Sonst `nil`. Wire-Key `glucoseContext`.
     ///
     /// **CU-18 / Server-Migration 0274:** auch auf `kind == .glucose` ist
     /// `nil` ein regulärer Zustand — kein Lesepfad darf einen Kontext
@@ -688,6 +686,8 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     /// werfen, die Zeile bleibt erhalten und wird ohne Kontext-Label
     /// gerendert.
     public let glucoseContext: GlucoseContext?
+    /// #146 — a sleep row's night and naps (``SleepNightSplit``), else `nil`.
+    public internal(set) var sleepSplit: SleepNightSplit?
 
     public init(
         id: String,

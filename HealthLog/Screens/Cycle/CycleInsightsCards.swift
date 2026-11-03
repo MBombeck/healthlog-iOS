@@ -19,14 +19,10 @@ struct CycleInsightsSection: View {
                     }
                 }
             } else if let insights = store.insights {
-                if insights.isLearning {
-                    HLSettingsCard(icon: "chart.dots.scatter", title: "cycle.insights.title") {
-                        Text("cycle.insights.learning")
-                            .font(.hlBody)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                } else {
-                    if let headline = insights.headline {
+                // 1.4 B2 — while the server holds no supported pattern there
+                // is no card saying so.
+                if !insights.isLearning {
+                    if let headline = Self.standaloneHeadline(insights) {
                         CycleInsightHeadlineCard(row: headline)
                     }
                     if !insights.rows.isEmpty {
@@ -45,6 +41,16 @@ struct CycleInsightsSection: View {
             await store.loadCustomSymptoms()
             await store.loadInsights()
         }
+    }
+
+    /// 1.4 B4 — the "most notable pattern" card only for a pattern the
+    /// "Phase × Vitalwerte" card does not list. The server's headline is its
+    /// strongest row, so with the rows on screen the card repeated their first
+    /// line word for word.
+    static func standaloneHeadline(_ insights: CycleInsightsDTO) -> CyclePhaseMetricRow? {
+        guard let headline = insights.headline,
+              !insights.rows.contains(where: { $0.id == headline.id }) else { return nil }
+        return headline
     }
 }
 
@@ -167,8 +173,11 @@ private struct CycleSymptomPatternCard: View {
         }.joined(separator: ", ")
     }
 
+    /// 1.4 B2-b: an interpolated `LocalizationValue` looks up the key
+    /// `cycle.phase.%@.name`, which does not exist, so the raw key showed on
+    /// screen. The explainer's own resource names the phase.
     private func phaseLabel(_ phase: CyclePhaseValue) -> String {
-        String(localized: String.LocalizationValue("cycle.phase.\(phase.rawValue.lowercased()).name"))
+        String(localized: CyclePhaseExplainer.nameKey(for: palette(phase)))
     }
 
     private func palette(_ phase: CyclePhaseValue) -> CyclePhasePalette.Phase {
@@ -217,12 +226,13 @@ enum CycleInsightFormatting {
         }
     }
 
+    /// The days a phase comparison rests on. 1.4 B2: the q-value left the line;
+    /// what it guarantees is said in the screen's (i) (`cycle.info.patterns`).
     static func evidence(_ row: CyclePhaseMetricRow) -> String {
         String(
             format: String(localized: "cycle.insights.evidence"),
             row.lutealDays,
-            row.follicularDays,
-            row.qValue
+            row.follicularDays
         )
     }
 

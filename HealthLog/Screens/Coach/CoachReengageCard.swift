@@ -28,18 +28,16 @@ struct CoachReengageCard: View {
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(HLText.primary)
                         .accessibilityHidden(true)
-                    Text(String(localized: "Enable the coach"))
+                    // 1.4 B2-c — the title is the promise, the button the
+                    // action; the title used to repeat the button.
+                    Text("coach.reengage.title")
                         .font(.hlHeadline)
                         .foregroundStyle(HLText.primary)
                 }
-                Text(
-                    String(
-                        localized: "Your data, explained. Turn the coach on to ask about your trends, scores, and what to watch."
-                    )
-                )
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                Text("coach.reengage.body")
+                    .font(.hlSubhead)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 HLButton(String(localized: "Enable the coach"), variant: .primary, size: .regular, action: action)
                     .accessibilityIdentifier("InsightsScreen.coachReengageCard.button")
             }

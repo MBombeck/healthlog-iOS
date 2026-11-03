@@ -13,9 +13,9 @@ import Testing
 struct CompleteHealthSyncCompositionTests {
     // MARK: - Inventories
 
-    @Test("the sample registry is exactly the thirty-five collected identifiers plus the OS-gated ones")
+    @Test("the sample registry is exactly the thirty-six collected identifiers plus the OS-gated ones")
     func sampleRegistryIsExact() {
-        #expect(HealthLogSampleTypeRegistry.baseIdentifiers.count == 35)
+        #expect(HealthLogSampleTypeRegistry.baseIdentifiers.count == 36)
         #expect(HealthLogSampleTypeRegistry.knownIdentifiers.count == HealthLogSampleTypeRegistry.expectedCount)
         #expect(HealthLogSampleTypeRegistry.contains("HKQuantityTypeIdentifierHeartRate"))
         #expect(HealthLogSampleTypeRegistry.contains("HKQuantityTypeIdentifierTimeInDaylight"))

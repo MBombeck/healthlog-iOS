@@ -74,14 +74,6 @@ struct HLRangeOptionTests {
         }
     }
 
-    @Test("TrendsOverlayStore.Range labels are populated")
-    func trendsLabels() {
-        for option in TrendsOverlayStore.Range.allCases {
-            #expect(!option.label.isEmpty)
-            #expect(!option.rangeAccessibilityLabel.isEmpty)
-        }
-    }
-
     @Test("MoodPeriod labels are populated")
     func moodLabels() {
         for option in MoodPeriod.allCases {

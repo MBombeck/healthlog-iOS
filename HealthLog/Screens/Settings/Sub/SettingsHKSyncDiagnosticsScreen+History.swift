@@ -56,36 +56,44 @@ struct HistoryKindRow: Equatable {
     }
 }
 
-private struct HistoryPerTypeCard: View {
+struct HistoryPerTypeCard: View {
     let store: HealthHistoryCatchUpStore
     let hourlyStatus: () -> HourlyStatsStatus?
     @State private var hourly: HourlyStatsStatus?
 
     var body: some View {
+        // 1.4 B2-c — no subtitle: the Apple Health page already says the
+        // older history follows on its own.
         HLSettingsCard(
             icon: "clock.arrow.circlepath",
-            title: "settings.hkdiag.history_title",
-            subtitle: "settings.hkdiag.history_subtitle"
+            title: "settings.hkdiag.history_title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HKSyncDiagnosticsSourceTag(source: .deviceStored)
                 if let overview = store.overview, !overview.types.isEmpty {
-                    ForEach(HistoryKindRow.rows(overview), id: \.kind) { row in
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(row.kind.descriptor.title)
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.primary)
-                            Spacer(minLength: HLSpace.md)
-                            Text(Self.label(row.state))
-                                .font(.hlCaption.monospacedDigit())
-                                .foregroundStyle(HLText.secondary)
-                                .multilineTextAlignment(.trailing)
+                    let rows = HistoryKindRow.rows(overview)
+                    // 1.4 B4 — twenty-five rows that all read "Bis 19.10.2026"
+                    // are one row for all types.
+                    if let shared = Self.sharedState(rows) {
+                        historyRow(title: Text("settings.hkdiag.history_allTypes"), state: shared)
+                            .accessibilityIdentifier("settings.hkdiag.history.allTypes")
+                    } else {
+                        ForEach(rows, id: \.kind) { row in
+                            historyRow(title: Text(row.kind.descriptor.title), state: row.state)
                         }
                     }
                 } else {
                     Text("settings.hkdiag.history_pending")
                         .font(.hlBody)
                         .foregroundStyle(HLText.secondary)
+                }
+                // B5 (1.4, R4 2.1) — "complete" above means as far as Apple
+                // Health lets HealthLog read; A3's one line says from when.
+                if let start = store.overview?.limitedFrom {
+                    Text("settings.applehealth.limitedHistory \(start.formatted(.dateTime.day().month(.wide).year()))")
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("settings.hkdiag.limitedHistory")
                 }
                 if let hourly {
                     HStack(alignment: .firstTextBaseline) {
@@ -106,6 +114,29 @@ private struct HistoryPerTypeCard: View {
             hourly = hourlyStatus()
             await store.refresh()
         }
+    }
+
+    private func historyRow(title: Text, state: HistoryKindRow.State) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            title
+                .font(.hlSubhead)
+                .foregroundStyle(HLText.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: HLSpace.md)
+            Text(Self.label(state))
+                .font(.hlCaption.monospacedDigit())
+                .foregroundStyle(HLText.secondary)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// 1.4 B4 — the one state every row shares, or `nil` when they differ
+    /// (or there is only one row, which needs no summary).
+    static func sharedState(_ rows: [HistoryKindRow]) -> HistoryKindRow.State? {
+        guard rows.count > 1, let first = rows.first?.state else { return nil }
+        return rows.allSatisfy { label($0.state) == label(first) } ? first : nil
     }
 
     /// INT-Q — the hourly row: complete, or how many of the owed days are on

@@ -38,11 +38,6 @@ struct InsightsBreathingScreeningCard: View {
                     }
                     .accessibilityElement(children: .combine)
 
-                    Text("clinicalSignals.breathing.caption")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     // 1.0.3 (App Review 1.4.1) — Apple's own sleep-apnea
                     // notification documentation behind the device's index.
                     HLSourcesLink(topic: .breathing)
@@ -70,6 +65,9 @@ struct InsightsBreathingScreeningCard: View {
             parts.append(String(format: String(localized: "clinicalSignals.breathing.events"), screening.eventCount))
         }
         if let trend = trendText { parts.append(trend) }
+        // 1.4 B2 — who computed it, in the line itself instead of a separate
+        // "Ein Screening-Signal, das dein Gerät … berechnet hat." caption.
+        parts.append(String(localized: "clinicalSignals.breathing.byDevice"))
         return parts.joined(separator: ", ")
     }
 

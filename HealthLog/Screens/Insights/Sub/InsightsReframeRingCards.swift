@@ -9,8 +9,8 @@ import SwiftUI
 // ring tiles in the same `ScoreRingCard` grid via these two cards, reusing the
 // shared `WellnessGradientCard` surface + the white `WellnessRingPalette` ring
 // (with the dark-shadow legibility safeguard). With both promoted, the "More
-// from your data" text lane (`InsightsDerivedBlock`) has nothing left to render
-// and self-suppresses on the overview composition.
+// from your data" text lane had nothing left to render; 1.4 B4 deleted it and
+// kept its copy in `InsightsDerivedCopy`.
 //
 // Monochrome doctrine: the only colour is the softened convergent wellness
 // gradient (the sanctioned sparse warm accent). The ring + value + label are
@@ -58,7 +58,7 @@ struct VascularDeltaRingCard: View {
                         isHero: glowPhaseIndex == 0
                     )
                     .modifier(WellnessRingShadow(active: appearance.ringShadowActive))
-                    Text(InsightsDerivedBlock.title(for: dto.metric))
+                    Text(InsightsDerivedCopy.title(for: dto.metric))
                         .font(.hlSubhead.weight(.medium))
                         .foregroundStyle(appearance.labelColor)
                         .multilineTextAlignment(.center)
@@ -98,8 +98,8 @@ struct VascularDeltaRingCard: View {
     }
 
     private var accessibilityLabel: String {
-        let title = InsightsDerivedBlock.title(for: dto.metric)
-        return "\(title), \(InsightsDerivedBlock.vascularHeadline(dto.value?.deltaYears))"
+        let title = InsightsDerivedCopy.title(for: dto.metric)
+        return "\(title), \(InsightsDerivedCopy.vascularHeadline(dto.value?.deltaYears))"
     }
 }
 
@@ -145,7 +145,7 @@ struct HrvBalanceRingCard: View {
                         isHero: glowPhaseIndex == 0
                     )
                     .modifier(WellnessRingShadow(active: appearance.ringShadowActive))
-                    Text(InsightsDerivedBlock.title(for: dto.metric))
+                    Text(InsightsDerivedCopy.title(for: dto.metric))
                         .font(.hlSubhead.weight(.medium))
                         .foregroundStyle(appearance.labelColor)
                         .multilineTextAlignment(.center)
@@ -170,8 +170,8 @@ struct HrvBalanceRingCard: View {
     }
 
     private var accessibilityLabel: String {
-        let title = InsightsDerivedBlock.title(for: dto.metric)
-        let headline = InsightsDerivedBlock.hrvHeadline(dto.value?.band) ?? bandWord
+        let title = InsightsDerivedCopy.title(for: dto.metric)
+        let headline = InsightsDerivedCopy.hrvHeadline(dto.value?.band) ?? bandWord
         return "\(title), \(headline)"
     }
 }

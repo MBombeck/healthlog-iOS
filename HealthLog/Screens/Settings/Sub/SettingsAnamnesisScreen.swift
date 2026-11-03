@@ -12,7 +12,7 @@ import SwiftUI
 ///
 /// | Zustand | Anzeige |
 /// |---|---|
-/// | nie erfasst | „Nie erfasst" + Hinweis, dass das etwas anderes ist als „keine" |
+/// | nie erfasst | „Nie erfasst"; dass das etwas anderes ist als „keine", sagt das (i) |
 /// | erfasst, unlesbar | „Nicht lesbar" + Hinweis, dass etwas gespeichert ist |
 /// | erfasst | die Beschriftung des Wertes **in dieser Art** |
 ///
@@ -44,6 +44,14 @@ struct SettingsAnamnesisScreen: View {
         }
         .navigationTitle("anamnesis.title")
         .navigationBarTitleDisplayMode(.inline)
+        // 1.4 B2-c — the screen's one (i): where these answers are kept and
+        // what "never recorded" means, once instead of under each card and
+        // below the last one.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HLInfoButton(content: Self.info, accessibilityIdentifier: "anamnesis.info")
+            }
+        }
         .accessibilityIdentifier("anamnesis.screen")
         .task {
             guard backend.hasServer, store == nil, let container else { return }
@@ -72,7 +80,7 @@ struct SettingsAnamnesisScreen: View {
 
     private func loadFailedState(store: AnamnesisFactsStore) -> some View {
         HLEmptyState(icon: "wifi.exclamationmark", title: "anamnesis.loadFailed") {
-            HLButton("Try again", icon: "arrow.clockwise", variant: .primary) {
+            HLButton("Try again", icon: "arrow.clockwise", variant: .secondary) {
                 Task { await store.load() }
             }
         }
@@ -88,11 +96,21 @@ struct SettingsAnamnesisScreen: View {
             ForEach(AnamnesisFactKind.allCases) { kind in
                 AnamnesisFactCard(kind: kind, store: store)
             }
-            Text("anamnesis.footer")
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    static var info: HLInfoContent {
+        HLInfoContent(
+            title: String(localized: "anamnesis.title"),
+            identifier: "anamnesis.info.sheet",
+            about: String(localized: "anamnesis.footer"),
+            sections: [
+                HLInfoContent.Section(
+                    title: String(localized: "anamnesis.state.neverRecorded"),
+                    paragraphs: [String(localized: "anamnesis.state.neverRecorded.hint")]
+                )
+            ]
+        )
     }
 
     /// Der Schreibfehler steht oben und benennt den Sachverhalt. Bei den

@@ -21,38 +21,58 @@ extension SettingsHKSyncDiagnosticsScreen {
         + [HealthKitHRBucketRow.hkIdentifier]
 
     var statsUploadCard: some View {
+        // 1.4 B2-c — how to read the rows is in the (i).
         HLSettingsCard(
             icon: "sum",
-            title: "settings.hkdiag.stats.title",
-            footer: "settings.hkdiag.stats.footer"
+            title: "settings.hkdiag.stats.title"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HKSyncDiagnosticsSourceTag(source: .deviceStored)
-                statRow(label: "settings.hkdiag.stats.last_sweep", value: statsEventLabel(statsUploadLog?.lastSweep))
+                let nothingSent = Self.nothingSent(statsUploadLog)
+                if statsUploadLog?.lastSweep != nil || !nothingSent {
+                    statRow(label: "settings.hkdiag.stats.last_sweep", value: statsEventLabel(statsUploadLog?.lastSweep))
+                }
+                // 1.4 B4 — when this iPhone has sent none of them, one sentence
+                // for the card instead of the same "none sent from this
+                // iPhone yet" on all six rows. A type the server has its own
+                // line for still shows that line.
+                if nothingSent {
+                    Text("settings.hkdiag.stats.none_sent_all")
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLText.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("settings.hkdiag.stats.noneSent")
+                }
                 ForEach(Self.statsUploadIdentifiers, id: \.self) { identifier in
-                    VStack(alignment: .leading, spacing: HLSpace.xs) {
-                        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-                            Text(Self.statsTypeTitle(identifier))
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.primary)
-                            Spacer(minLength: HLSpace.sm)
-                            Text(Self.statsSentLabel(statsUploadLog?.uploads[identifier]))
-                                .font(.hlCaption.monospacedDigit())
-                                .foregroundStyle(HLText.tertiary)
-                                .multilineTextAlignment(.trailing)
+                    let serverLine = Self.statsServerLine(identifier, freshness: serverSummary?.freshness)
+                    if !nothingSent || serverLine != nil {
+                        VStack(alignment: .leading, spacing: HLSpace.xs) {
+                            HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
+                                Text(Self.statsTypeTitle(identifier))
+                                    .font(.hlCaption)
+                                    .foregroundStyle(HLText.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: HLSpace.sm)
+                                if !nothingSent {
+                                    Text(Self.statsSentLabel(statsUploadLog?.uploads[identifier]))
+                                        .font(.hlCaption.monospacedDigit())
+                                        .foregroundStyle(HLText.tertiary)
+                                        .multilineTextAlignment(.trailing)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            // W5 — the server's word for the same type, so "none
+                            // sent from this iPhone" and "received 5 hours ago" read
+                            // as two facts, not a contradiction (pulse can arrive as
+                            // single readings).
+                            if let serverLine {
+                                Text(verbatim: serverLine)
+                                    .font(.hlCaption2)
+                                    .foregroundStyle(HLText.tertiary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
-                        // W5 — the server's word for the same type, so "none
-                        // sent from this iPhone" and "received 5 hours ago" read
-                        // as two facts, not a contradiction (pulse can arrive as
-                        // single readings).
-                        if let line = Self.statsServerLine(identifier, freshness: serverSummary?.freshness) {
-                            Text(verbatim: line)
-                                .font(.hlCaption2)
-                                .foregroundStyle(HLText.tertiary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        .accessibilityElement(children: .combine)
                     }
-                    .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -69,6 +89,12 @@ extension SettingsHKSyncDiagnosticsScreen {
         guard let entry else { return String(localized: "settings.hkdiag.never") }
         let trigger = HKSyncDiagnosticsVocabulary.collectionTrigger(entry.trigger)
         return "\(relativeOrNever(entry.at)), \(trigger)"
+    }
+
+    /// 1.4 B4 — true when this iPhone has sent none of the listed types yet:
+    /// the card then says so once instead of on every row.
+    static func nothingSent(_ log: HealthKitStatsUploadLog?) -> Bool {
+        statsUploadIdentifiers.allSatisfy { log?.uploads[$0] == nil }
     }
 
     /// W5 — "New value sent 5 minutes ago, Background", or "None sent from

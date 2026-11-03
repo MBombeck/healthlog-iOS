@@ -135,14 +135,12 @@ struct MentalWellbeingForm: View {
 
     private var functionalStep: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            Text("mentalHealth.functionalTitle")
+            // 1.4 B2 — "(optional)" rides on the question instead of a
+            // sentence under it.
+            (Text("mentalHealth.functionalTitle") + Text(verbatim: " ")
+                + Text("mentalHealth.functionalOptional").foregroundStyle(HLText.secondary))
                 .font(.hlHeadline)
                 .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("mentalHealth.functionalOptionalHint")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             MentalHealthOptionPicker(

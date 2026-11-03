@@ -184,14 +184,24 @@ enum WellnessScorePresentation {
     /// Empty for the no-breakdown archetypes.
     nonisolated static func rankedContributors(_ dto: DerivedMetricDTO) -> [Contributor] {
         guard let raw = dto.value?.contributors else { return [] }
+        let nights = dto.value?.rhythmNights
+        let minimum = dto.value?.rhythmMinNights
         return raw
-            // v0.14.3 F4 — honest-only: hide null/absent contributors (e.g.
-            // SLEEP_SCORE "Konsistenz"/"Zeitpunkt" return null under 3 nights)
-            // so no empty "—" rows show. They reappear once data exists.
-            .filter { $0.value != nil }
-            .map { Contributor(key: $0.key, value: $0.value, weight: $0.weight) }
+            .compactMap { row -> Contributor? in
+                if row.value != nil { return Contributor(key: row.key, value: row.value, weight: row.weight) }
+                // v0.14.3 F4 — honest-only: a null contributor the server gives
+                // no reason for stays hidden, so no empty "—" row shows.
+                // #145 — a withheld sleep sub-score whose `gap` the server
+                // names keeps its row and says why, in place of its weight.
+                guard let reason = SleepScoreGap(rawValue: row.gap ?? "")?.reasonLine(nights: nights, minimum: minimum) else {
+                    return nil
+                }
+                return Contributor(key: row.key, value: nil, weight: row.weight, gapReason: reason)
+            }
             .sorted { lhs, rhs in
-                lhs.weight > rhs.weight
+                // Present first (web `rankByImpact`), then by effective weight.
+                if (lhs.value != nil) != (rhs.value != nil) { return lhs.value != nil }
+                return lhs.weight > rhs.weight
             }
     }
 
@@ -204,6 +214,9 @@ enum WellnessScorePresentation {
         let key: String
         let value: Double?
         let weight: Double
+        /// #145 — why a withheld sub-score has no value, shown in its row
+        /// instead of the weight. `nil` on every scored row.
+        var gapReason: String?
         var id: String {
             key
         }
@@ -250,9 +263,10 @@ enum WellnessScorePresentation {
             }
         }
 
-        /// The value read-out ("82", "—" for missing). Mono, never fabricated.
+        /// The value read-out ("82"), empty for a withheld sub-score (its row
+        /// says why instead). Mono, never fabricated.
         var valueText: String {
-            value.map { "\(Int($0.rounded()))" } ?? "—"
+            value.map { "\(Int($0.rounded()))" } ?? ""
         }
     }
 

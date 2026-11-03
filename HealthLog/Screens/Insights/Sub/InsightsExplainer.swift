@@ -45,6 +45,9 @@ enum InsightsExplainer {
         .sleep: "sleep",
         .restingHeartRate: "restingHr",
         .hrv: "hrv",
+        // 1.4 B4 — iOS copy, no web twin: the HRV page shows RMSSD for
+        // wearables that report only RMSSD, and its (i) needs its own words.
+        .hrvRMSSD: "hrvRmssd",
         .spo2: "oxygenSaturation",
         .vo2Max: "cardioFitness",
         .respiratoryRate: "respiratoryRate",
@@ -100,8 +103,8 @@ enum InsightsExplainer {
     }
 
     /// Resolves a catalog key, treating an absent entry (the key echoes back) or
-    /// an empty value as "no copy" → `nil`. Mirrors the `descriptionSlot`
-    /// echo-test in `InsightsMetricScreen`.
+    /// an empty value as "no copy" → `nil`. Mirrors the echo-test in
+    /// `InsightsMetricInfo.about(for:)`.
     private static func resolved(_ key: String) -> String? {
         let value = String(localized: String.LocalizationValue(key))
         guard value != key, !value.isEmpty else { return nil }
@@ -109,11 +112,11 @@ enum InsightsExplainer {
     }
 }
 
-/// I-0 Item 3/4 — the per-page **intro** paragraph, rendered identically to the
-/// canonical `InsightsMetricScreen.descriptionSlot`: the explainer body as calm
+/// I-0 Item 3/4 — the per-page **intro** paragraph: the explainer body as calm
 /// secondary body prose, self-suppressing when absent. Used by the mood +
-/// medications special pages (which previously showed only the page subtitle and
-/// looked broken next to the metric pages that carry a server intro).
+/// medications special pages. 1.4 B2: the metric pages moved this paragraph
+/// behind their (i) (`InsightsMetricInfo`); the special pages follow in their
+/// area unit.
 struct InsightsExplainerIntro: View {
     let slug: String
 

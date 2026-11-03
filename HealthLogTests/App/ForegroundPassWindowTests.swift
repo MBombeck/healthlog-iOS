@@ -98,10 +98,13 @@
             // Nothing about what is asserted changes; the fixture stops racing
             // the mechanism it is measuring. The wall-clock bound only exists
             // so a genuine failure to cancel is a failure rather than a hang.
+            // T1 (1.4) — 30 s like the other hang guards, not 5 s: under load
+            // the cancellation hops can take seconds, and a member that gave
+            // up first would let the leg run on and read as a red.
             let pass = coordinator.begin(ForegroundPlan(legs: [
                 ForegroundLeg([
                     spy.step(.medicationLoad) { _ in
-                        let bound = ContinuousClock.now + .seconds(5)
+                        let bound = ContinuousClock.now + .seconds(30)
                         while !Task.isCancelled, ContinuousClock.now < bound {
                             await Task.yield()
                         }
@@ -110,7 +113,7 @@
                     spy.step(.cycleGate) { _ in }
                 ])
             ]))
-            #expect(await phase09Settle { spy.hasStarted(.medicationLoad) })
+            #expect(await phase09AwaitCondition { spy.hasStarted(.medicationLoad) })
             clock.fire(ForegroundCoordinator.Budget.standard.deadline)
             let report = await pass.value
 
@@ -162,7 +165,7 @@
                     await session.publish { published.record("late") }
                 }])
             ]))
-            _ = await phase09Settle { clock.requested.contains(ForegroundCoordinator.Budget.standard.deadline) }
+            _ = await phase09AwaitCondition { clock.requested.contains(ForegroundCoordinator.Budget.standard.deadline) }
             coordinator.retire()
             slow.open()
             let report = await pass.value

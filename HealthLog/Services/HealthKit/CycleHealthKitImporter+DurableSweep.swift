@@ -423,7 +423,7 @@ import Foundation
             switch reason {
             case .cancelled: return .deferred
             case .leaseLost: return .expired
-            case .nonterminalEntry, .incompleteIndexCoverage, .retryPersistenceFailed: return .failed
+            case .nonterminalEntry, .incompleteIndexCoverage, .retryPersistenceFailed, .serverUnreachable: return .failed
             }
         }
     }

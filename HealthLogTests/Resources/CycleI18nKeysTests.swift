@@ -69,7 +69,6 @@ struct CycleI18nKeysTests {
         "cycle.capture.period.start",
         "cycle.capture.period.end",
         "cycle.capture.period.none",
-        "cycle.capture.period.footer",
         // CU-25 (#72) — the flow-without-period reconciliation prompt.
         "cycle.capture.reconcile.title",
         "cycle.capture.reconcile.message",
@@ -111,7 +110,6 @@ struct CycleI18nKeysTests {
         // Summary / learning / unavailable cards.
         "cycle.learning.title",
         "cycle.learning.body",
-        "cycle.learning.footer",
         "cycle.unavailable.title",
         "cycle.unavailable.body",
         // NEW (CYCLE-polish) — Insights cycle tile.
@@ -124,7 +122,6 @@ struct CycleI18nKeysTests {
         "cycle.capture.bbt.excluded.hint",
         // v1.16.15 — cervix secondary-symptom capture (manual-only).
         "cycle.capture.cervix.header",
-        "cycle.capture.cervix.footer",
         "cycle.capture.cervix.position.label",
         "cycle.capture.cervix.firmness.label",
         "cycle.capture.cervix.opening.label",
@@ -146,7 +143,6 @@ struct CycleI18nKeysTests {
         "cycle.bbt.axis.celsius",
         "cycle.bbt.axis.date",
         "cycle.bbt.axis.temperature",
-        "cycle.bbt.empty",
         "cycle.bbt.ovulation",
         "cycle.bbt.ovulation.confirmed",
         "cycle.bbt.ovulation.estimated",
@@ -180,7 +176,6 @@ struct CycleI18nKeysTests {
         "cycle.custom.edit.title",
         "cycle.custom.error.generic",
         "cycle.custom.error.invalid",
-        "cycle.custom.label.footer",
         "cycle.custom.label.placeholder",
         "cycle.custom.limit",
         "cycle.custom.unnamed",
@@ -189,7 +184,6 @@ struct CycleI18nKeysTests {
         "cycle.history.axis.cycle",
         "cycle.history.axis.days",
         "cycle.history.days.value",
-        "cycle.history.empty",
         "cycle.history.ovulation.confirmed",
         "cycle.history.period",
         "cycle.history.series",
@@ -198,7 +192,6 @@ struct CycleI18nKeysTests {
         "cycle.insights.error",
         "cycle.insights.evidence",
         "cycle.insights.headline.title",
-        "cycle.insights.learning",
         "cycle.insights.loading",
         "cycle.insights.metric.basalBodyTemp",
         "cycle.insights.metric.bloodGlucose",
@@ -235,7 +228,6 @@ struct CycleI18nKeysTests {
         "cycle.settings.goal.tryingToConceive",
         "cycle.settings.lutealPhaseLength.label",
         "cycle.settings.prediction.label",
-        "cycle.settings.priors.footer",
         "cycle.settings.priors.header",
         "cycle.settings.privacy.header",
         "cycle.settings.range.hint",
@@ -249,7 +241,12 @@ struct CycleI18nKeysTests {
         "cycle.symptom.diarrhea",
         "cycle.symptom.libido_high",
         "cycle.symptom.libido_low",
-        "cycle.settings.secondarySymptom.error"
+        "cycle.settings.secondarySymptom.error",
+        // 1.4 B2 — the info sheet's patterns section and the empty-prior prompt.
+        // The eight "empty" and footer keys the cards and forms no longer show
+        // left the catalogue and this list together.
+        "cycle.info.patterns",
+        "cycle.settings.priors.automatic"
     ]
 
     @Test("Every cycle UI key resolves to a non-empty EN value")

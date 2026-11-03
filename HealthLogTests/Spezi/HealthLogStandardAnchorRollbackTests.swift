@@ -40,9 +40,13 @@
 
         /// API stub whose every batch POST throws — the network/server failure the
         /// old suite drove into `.keepAnchor`.
+        ///
+        /// A2 (1.4, R3 S6) — a 503, not `.offline`: an offline page now holds
+        /// without a durable row (`HealthSampleBackfillAndHoldTests`), and this
+        /// suite is about the failure that still writes one.
         private final class FailingAPI: APIClientProtocol, @unchecked Sendable {
             func send<T: Decodable & Sendable>(_: APIRequest<T>) async throws -> T {
-                throw HLError.offline
+                throw HLError.server(status: 503, code: nil, message: "unavailable")
             }
 
             func sendVoid(_: APIRequest<EmptyPayload>) async throws {

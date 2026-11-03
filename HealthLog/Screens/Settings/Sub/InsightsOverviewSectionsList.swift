@@ -29,10 +29,10 @@ struct InsightsOverviewSectionsList: View {
     ///   later build). The row still rides the same `sections` array, so hiding
     ///   or moving it from the phone correctly rearranges the WEB overview.
     ///
-    /// These rows get an honest caption rather than being dropped: they are real
-    /// server-side controls that sync both ways, they simply paint nothing here.
-    /// Mirrors the web editor's own disabled-with-a-hint treatment for its gated
-    /// rows.
+    /// 1.4 B2-c — these rows are not listed on iOS any more: a switch that
+    /// changes nothing on this phone needed a "shown on the web only" line to
+    /// be honest, and the honest answer is not to offer it here. Their place in
+    /// the shared `sections` array is kept on every reorder (see ``move``).
     private static let webOnlySectionIDs: Set<String> = [
         InsightsLayoutSectionId.periodReview,
         InsightsLayoutSectionId.ecg
@@ -60,7 +60,7 @@ struct InsightsOverviewSectionsList: View {
 
     var body: some View {
         Section {
-            ForEach(layoutStore.sections) { section in
+            ForEach(shownSections) { section in
                 row(for: section)
             }
             .onMove(perform: move)
@@ -77,16 +77,9 @@ struct InsightsOverviewSectionsList: View {
 
     private func row(for section: InsightsLayoutSection) -> some View {
         Toggle(isOn: binding(for: section.id)) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(label(for: section.id))
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                if Self.webOnlySectionIDs.contains(section.id) {
-                    Text(String(localized: "Shown on the web only."))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                }
-            }
+            Text(label(for: section.id))
+                .font(.hlSubhead.weight(.semibold))
+                .foregroundStyle(HLText.primary)
         }
         .accessibilityIdentifier("settings.insights.section.\(section.id)")
     }
@@ -98,10 +91,24 @@ struct InsightsOverviewSectionsList: View {
         )
     }
 
+    /// The sections this phone renders, in the stored order.
+    private var shownSections: [InsightsLayoutSection] {
+        layoutStore.sections.filter { !Self.webOnlySectionIDs.contains($0.id) }
+    }
+
+    /// Reorders the shown rows and writes the full order back with every
+    /// web-only section at the index it already had.
     private func move(from source: IndexSet, to destination: Int) {
-        var ids = layoutStore.sections.map(\.id)
-        ids.move(fromOffsets: source, toOffset: destination)
-        Task { await layoutStore.reorderSections(ids) }
+        var shown = shownSections.map(\.id)
+        shown.move(fromOffsets: source, toOffset: destination)
+        Task { await layoutStore.reorderSections(Self.merge(shown: shown, into: layoutStore.sections.map(\.id))) }
+    }
+
+    /// `all` with its shown ids replaced, slot by slot, by `shown`; the
+    /// web-only ids keep their slots. Pure for the test.
+    static func merge(shown: [String], into all: [String]) -> [String] {
+        var next = shown.makeIterator()
+        return all.map { webOnlySectionIDs.contains($0) ? $0 : (next.next() ?? $0) }
     }
 
     /// Falls back to the raw slug for a section id a future server release adds

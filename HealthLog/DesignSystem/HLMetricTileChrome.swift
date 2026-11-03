@@ -41,8 +41,13 @@ struct HLTileHeaderGlyph: View {
 
 /// The metric title beside the glyph. Caption-semibold, secondary, single
 /// line with a gentle scale-down so long titles never wrap a tile.
+///
+/// 1.4 B4 — at the accessibility sizes one line cut "Medikamenten-T…" and
+/// "Sauerstoffsätt…"; there the title wraps instead (Dynamic Type: wrap,
+/// never truncate). The standard sizes keep the one line.
 struct HLTileTitleLabel: View {
     let title: Text
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(_ title: Text) {
         self.title = title
@@ -56,8 +61,9 @@ struct HLTileTitleLabel: View {
         title
             .font(.hlCaption.weight(.semibold))
             .foregroundStyle(HLText.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.8)
+            .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
     }
 }
 
@@ -118,7 +124,7 @@ struct HLTileSparkline: View {
                 HLSparkline(values: values, tint: HLText.tertiary)
             }
         }
-        .frame(height: 36)
+        .frame(height: HLChartStyle.heightCompact)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

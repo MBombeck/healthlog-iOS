@@ -59,13 +59,15 @@ struct MoodHistoryScreen: View {
             filterSection
 
             if let loadError, historyEntries.isEmpty {
+                // 1.4 B4 — the app's lockup with its secondary button, like the
+                // empty state below, instead of the system's.
                 Section {
-                    ContentUnavailableView {
-                        Label("Could not load", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(loadError.userFacingDescription)
-                    } actions: {
-                        Button("Retry") { reloadID = UUID() }
+                    HLEmptyState(
+                        icon: "exclamationmark.triangle",
+                        title: Text("Could not load"),
+                        message: Text(loadError.userFacingDescription)
+                    ) {
+                        HLButton("Retry", variant: .secondary) { reloadID = UUID() }
                     }
                 }
             } else if isLoading, historyEntries.isEmpty {
@@ -186,11 +188,17 @@ struct MoodHistoryScreen: View {
                         .font(.hlCaption)
                         .foregroundStyle(HLText.tertiary)
                 }
+                // 1.4 B4 — `.borderedProminent` filled the capsule with the
+                // app tint (near white) under white text, so "Anwenden" read
+                // as switched off. A plain, semibold text action in the
+                // primary ink; `.plain` keeps the row from firing it.
                 Button("Apply") {
                     appliedFilter = draftFilter
                     reloadID = UUID()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
+                .font(.hlBody.weight(.semibold))
+                .foregroundStyle(HLText.primary)
             }
         } header: {
             Text("Filters")
@@ -293,12 +301,10 @@ struct MoodHistoryScreen: View {
     }
 
     private var emptyState: some View {
-        HLEmptyState(
-            icon: "face.smiling",
-            title: Text("No entries"),
-            message: Text("Log your first mood to see your history.")
-        )
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, HLSpace.xxl)
+        // 1.4 B2 — "log your first mood" was wrong under an active filter;
+        // the title is true either way.
+        HLEmptyState(icon: "face.smiling", title: Text("No entries"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, HLSpace.xxl)
     }
 }

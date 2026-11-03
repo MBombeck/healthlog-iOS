@@ -24,10 +24,12 @@ struct SettingsInjectionSitesScreen: View {
             // auf die eine Aussage gekürzt, die der Schalter nicht zeigt: die
             // Reichweite. Die frühere erste Hälfte („Schalte eine Stelle aus,
             // um sie global auszuschließen.") war eine Bedien-Nacherzählung.
+            // 1.4 B2-c — the reach is the subtitle, read before the long list
+            // instead of after it.
             HLSettingsCard(
                 icon: "circle.grid.cross",
                 title: "Allowed sites",
-                footer: "Sites turned off here are hidden for every injection medication."
+                subtitle: "Sites turned off here are hidden for every injection medication."
             ) {
                 VStack(spacing: 0) {
                     let sites = InjectionSite.serverCases

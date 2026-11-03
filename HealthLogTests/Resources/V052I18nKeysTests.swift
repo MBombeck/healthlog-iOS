@@ -22,7 +22,9 @@ import Testing
 /// belong to the v0.5.3 EN-sprint.
 @Suite("v0.5.2 i18n reconcile keys — catalog presence + DE/EN parity")
 struct V052I18nKeysTests {
-    /// The keys added by the R4 reconcile pass (27, minus "Weekdays", #115 1.3). After the v0.7.2 source-
+    /// The keys added by the R4 reconcile pass (27, minus "Weekdays", #115 1.3, "Show insights",
+    /// 1.4 B2, the consent sheet's withdrawal line, 1.4 B2-c, and the add sheet's photo footer,
+    /// 1.4 B2-b). After the v0.7.2 source-
     /// language flip (de → en) the catalogue keys are the English source
     /// strings; the regression intent is unchanged (catalogue presence +
     /// DE/EN parity), only the key spelling is now English.
@@ -31,7 +33,8 @@ struct V052I18nKeysTests {
         "No measurements in the selected range",
         "No measurements for the selected source",
         "Enable assistant insight",
-        "Show insights",
+        // 1.4 B2 — "Show insights" left the catalogue with the metric page's
+        // consent card, an arm that page could never reach.
         // A3 — more-tab section titles (v0.13 WP: renamed from the stale
         // "Mental health & vital signs" after the v0.11 IA cut its vital-signs row)
         "Mood & achievements",
@@ -51,23 +54,29 @@ struct V052I18nKeysTests {
         // Medications
         "Archived",
         "Reminder times",
-        "Add your first medication. Reminders, compliance heatmap and history follow automatically.",
+        // 1.4 B4 — "Add your first medication. Reminders, …" left with the
+        // Insights medications page's empty sentence; the "Add medication"
+        // button under the title says it.
         "At least one time. Up to eight per day.",
         "No medications yet",
-        "Optional: photograph the packaging to suggest name and dose. The image never leaves the device.",
+        // 1.4 B2-b — the photo-section footer of the add sheet left with its
+        // key: the photo sheet makes the on-device promise where the photo is
+        // taken.
         // #115 1.3 — "Weekdays" left the catalogue with the last screen that
         // used it (the device-calendar mood pattern cards).
         // AI consent
         "Accept",
         "Enable assistant insights",
-        "You can change this choice at any time in Settings.",
+        // 1.4 B2-c — "You can change this choice at any time in Settings."
+        // left with the consent sheet's line under the buttons; the sheet's
+        // last point already names the withdrawal.
         // Theme picker
         "Dark"
     ]
 
-    @Test("R4 keys still in the catalogue — list-size lock (27 minus the retired \"Weekdays\")")
-    func keyCountIsTwentySix() {
-        #expect(Self.r4Keys.count == 26)
+    @Test("R4 keys still in the catalogue — list-size lock (27 minus five retired keys)")
+    func keyCountIsTwentyTwo() {
+        #expect(Self.r4Keys.count == 22)
     }
 
     @Test("Every R4 key resolves to a non-empty German value")

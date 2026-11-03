@@ -1,10 +1,9 @@
 import Foundation
 
 /// The in-target band ("Zielband") for one personal target from
-/// `GET /api/insights/targets`, shared by the Dashboard tile
-/// (`DashboardTileTargetResolver`) and the Insights target panel
-/// (`InsightsTargetReferencePanel`) so both read the same labels and the same
-/// in-range percentage.
+/// `GET /api/insights/targets`, read by the Dashboard tile
+/// (`DashboardTileTargetResolver`). The Insights target panel that shared it
+/// had no caller and was deleted in 1.4 B4.
 ///
 /// It used to live on `InsightsTargetTileGrid`, which was never mounted and is
 /// gone (#115 B7); this helper was the only part of it in use.

@@ -113,7 +113,8 @@ struct RootView: View {
             await refreshOnboardingTourIfReady()
             consumePendingDeepLinkIfAuthenticated()
             consumePendingCaptureRequestIfAuthenticated()
-            await activateMoodHealthSyncIfReady()
+            // R-A2 (1.4) — the dose and State-of-Mind observers are no longer
+            // armed here: `AppContainer.armOptInHealthObserversAtLaunch()`.
             await activateWorkoutHealthSyncIfReady()
             await activateEcgHealthSyncIfReady()
         }
@@ -244,17 +245,6 @@ struct RootView: View {
         // during AppContainer composition, well before this auth-gated path, so
         // the importer always has a live upload sink here.
         await healthKit.startEventImportIfNeeded(userID: userID)
-    }
-
-    /// v0.10.0 W-Mood-B — restore the Apple-Health State-of-Mind import
-    /// observer when the user has the sync toggle on (the observer doesn't
-    /// survive process death). No-op when the toggle is off.
-    private func activateMoodHealthSyncIfReady() async {
-        guard case .authenticated = authStore.phase,
-              let container else { return }
-        await container.moodHealthSyncStore.activateIfEnabled()
-        // W3 (1.3, #126 1.5) — the Apple Health dose observer, restored on the same tick.
-        await container.medicationHealthSyncStore.startObservingIfEnabled()
     }
 
     /// GH #74 — run one ECG sweep on the transition into `.authenticated`, when

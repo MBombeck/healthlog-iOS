@@ -3,12 +3,20 @@ import SwiftUI
 // MARK: - Schedule
 
 struct ScheduleSection: View {
+    /// v1.39.1 (#1033) — for a medication kept as a record the schedule is
+    /// information only. 1.4 B2: the hero's "Nur dokumentiert" mark says so;
+    /// the line that repeated it under the plan is gone.
     let schedule: MedicationSchedule
-    /// v1.39.1 (#1033) — intake tracking is off: the schedule is information
-    /// only, and the section says so under it.
-    var isRecordOnly: Bool = false
 
+    /// 1.4 B4 — no schedule, no card: the plan section is absent rather than a
+    /// card saying "Kein Zeitplan konfiguriert."
     var body: some View {
+        if !scheduleLineIsEmpty || !doseWindowLines.isEmpty {
+            planCard
+        }
+    }
+
+    private var planCard: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             HLSectionLabel("Plan")
             HLCard {
@@ -25,7 +33,6 @@ struct ScheduleSection: View {
                 //   - 'Alle 2 Wochen Mittwoch 08:00'      (multi-week interval)
                 //   - 'Täglich 08:00 · 14:00'             (daily, no weekdays)
                 //   - 'Wöchentlich Mittwoch'              (no times, just days)
-                //   - 'Kein Zeitplan konfiguriert.'       (empty)
                 //
                 // Wired in a single HStack so the SF Symbol stays glued to
                 // the label and lineLimit(1) keeps the row on one row at
@@ -53,13 +60,6 @@ struct ScheduleSection: View {
                             .foregroundStyle(HLText.tertiary)
                             .monospacedDigit()
                             .lineLimit(1)
-                    }
-                    if isRecordOnly {
-                        Text("med.schedule.recordOnly.hint")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("med.schedule.recordOnly.hint")
                     }
                 }
             }
@@ -90,11 +90,7 @@ struct ScheduleSection: View {
     /// weekday list, and optional time list. Falls back to the empty-state
     /// copy when no schedule components are configured.
     private var scheduleLine: String {
-        let hasTimes = !schedule.times.isEmpty
         let hasWeekdays = !(schedule.weekdays?.isEmpty ?? true)
-        if !hasTimes, !hasWeekdays {
-            return String(localized: "No schedule configured.")
-        }
         let cadence = if schedule.intervalWeeks > 1 {
             String(format: String(localized: "Every %d weeks"), schedule.intervalWeeks)
         } else if hasWeekdays {
@@ -106,7 +102,7 @@ struct ScheduleSection: View {
         if hasWeekdays, let days = schedule.weekdays {
             parts.append(weekdayLabel(days))
         }
-        if hasTimes {
+        if !schedule.times.isEmpty {
             parts.append(timesLabel)
         }
         return parts.joined(separator: " ")

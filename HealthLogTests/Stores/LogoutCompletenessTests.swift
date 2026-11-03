@@ -138,7 +138,6 @@
             // show the previous account's sessions to the next sign-in.
             "sessionsStore",
             "serverStatsStores", "settingsStore", "syncModeStore",
-            "trendsOverlayStore",
             "wellnessCardVisibilityStore", // v0141 — clearOnLogout in cascade (UI-pref hidden-set)
             "whoopIntegrationStore",
             "withingsIntegrationStore"
@@ -232,7 +231,7 @@
             "stravaIntegrationStore", "onboardingTourStore",
             "ouraIntegrationStore", "passkeyManagementStore",
             "polarIntegrationStore", "settingsStore",
-            "syncModeStore", "trendsOverlayStore",
+            "syncModeStore",
             "wellnessCardVisibilityStore", // v0141 — UI-pref hidden-set
             "whoopIntegrationStore",
             "withingsIntegrationStore"
@@ -334,29 +333,22 @@
         }
 
         /// An un-saved typed API key in the AI-provider draft must never
-        /// survive into the next user's session; the chart configuration
-        /// (range / metric selection) is per-user taste and resets too.
-        @Test("logout clears AI-provider drafts + trends configuration (M-1)")
-        func logoutClearsDraftsAndTrendsConfig() async throws {
+        /// survive into the next user's session. (1.4 B4 — the Trends overlay
+        /// chart configuration this test also reset went with its store.)
+        @Test("logout clears AI-provider drafts (M-1)")
+        func logoutClearsAIProviderDrafts() async throws {
             let container = try makeContainer(
                 keychain: InMemoryKeychain(),
                 healthKit: MockHealthKitWriter()
             )
             container.aiProviderStore.draftAPIKey = "sk-test-NEVER-LEAK"
             container.aiProviderStore.draftModel = "provider-model-x"
-            container.trendsOverlayStore.range = .year
-            container.trendsOverlayStore.selectedMetrics = [.glucose]
-            container.trendsOverlayStore.averaging = .monthly
 
             await container.performFullLocalLogout(reason: .userInitiated)
 
             #expect(container.aiProviderStore.draftAPIKey.isEmpty)
             #expect(container.aiProviderStore.draftModel.isEmpty)
             #expect(container.aiProviderStore.config == nil)
-            #expect(container.trendsOverlayStore.range == .month)
-            #expect(container.trendsOverlayStore.selectedMetrics == TrendsOverlayStore.defaultSelection)
-            #expect(container.trendsOverlayStore.averaging == .none)
-            #expect(container.trendsOverlayStore.normalisedSeries.isEmpty)
         }
 
         /// The previously dead `HKReadinessStore.clearOnLogout()` is wired:

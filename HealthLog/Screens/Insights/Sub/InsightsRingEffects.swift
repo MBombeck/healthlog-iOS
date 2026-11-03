@@ -33,10 +33,10 @@ struct InsightsRingEffectModifier: ViewModifier {
     var isHero: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// Live Low-Power read — when on, every effect drops to its static cheap path.
-    private var lowPower: Bool {
-        ProcessInfo.processInfo.isLowPowerModeEnabled
+    @Environment(\.insightsRingMotionActive) private var motionActive
+    /// 1.4 B4 — moving effects run without Reduce Motion or Low Power and only while the overview's motion window is open.
+    private var animates: Bool {
+        !reduceMotion && !ProcessInfo.processInfo.isLowPowerModeEnabled && motionActive
     }
 
     func body(content: Content) -> some View {
@@ -45,7 +45,7 @@ struct InsightsRingEffectModifier: ViewModifier {
             content
         case .prismOverlay:
             content.overlay {
-                PrismRimOverlay(animated: !reduceMotion && !lowPower)
+                PrismRimOverlay(animated: animates)
                     .allowsHitTesting(false)
                     // Purely decorative rim — the ring value/signal is announced by
                     // HLScoreRing; keep VoiceOver off the unlabeled prism shapes.
@@ -55,7 +55,7 @@ struct InsightsRingEffectModifier: ViewModifier {
             content.overlay {
                 RingSpecularGlint(
                     fraction: fraction,
-                    animated: !reduceMotion && !lowPower,
+                    animated: animates,
                     dimmed: dimmed,
                     tint: tint
                 )
@@ -64,7 +64,7 @@ struct InsightsRingEffectModifier: ViewModifier {
             }
         case .scoreBloom:
             content.background {
-                ScoreBloomHalo(fraction: fraction, animated: !reduceMotion && !lowPower)
+                ScoreBloomHalo(fraction: fraction, animated: animates)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -73,11 +73,11 @@ struct InsightsRingEffectModifier: ViewModifier {
             // chromatic break-up masked to the FILLED arc (0…fraction); the grid
             // tiles (and reduce-motion / Low-Power) fall back to the jank-free P1
             // overlay so the scroll never re-samples a backdrop shader per tile.
-            if isHero, !reduceMotion, !lowPower {
+            if isHero, animates {
                 content.modifier(PrismShaderRim(fraction: fraction))
             } else {
                 content.overlay {
-                    PrismRimOverlay(animated: !reduceMotion && !lowPower)
+                    PrismRimOverlay(animated: animates)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
@@ -87,11 +87,11 @@ struct InsightsRingEffectModifier: ViewModifier {
             // arc, hero-only; the grid tiles + reduce-motion / Low-Power degrade to
             // the jank-free P1 overlay (the live backdrop-sampling shader never runs
             // per scrolling tile). The glow honours reduce-motion with a hard cut.
-            if isHero, !reduceMotion, !lowPower {
+            if isHero, animates {
                 content.modifier(PrismShaderRim(fraction: fraction, glow: true))
             } else {
                 content.overlay {
-                    PrismRimOverlay(animated: !reduceMotion && !lowPower)
+                    PrismRimOverlay(animated: animates)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
@@ -120,7 +120,7 @@ struct InsightsRingEffectModifier: ViewModifier {
             // on-device AND in the Simulator. The glow honours reduce-motion /
             // Low-Power (passes the static t = 0 frame inside the view).
             content.overlay {
-                PrismUniformRim(fraction: fraction, animated: !reduceMotion && !lowPower)
+                PrismUniformRim(fraction: fraction, animated: animates)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

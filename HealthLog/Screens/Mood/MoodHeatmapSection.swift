@@ -99,23 +99,21 @@ struct MoodHeatmapSection: View {
     }
 
     var body: some View {
-        if !hasEnoughHistory {
+        if !hasEnoughHistory || bucketByDay.isEmpty {
             // 14-day pre-roll gate — hide only on brand-new devices (B13).
+            // 1.4 B2: a window without a single scored day is absent too,
+            // rather than a heading over "log your mood on the Capture tab".
             EmptyView()
         } else {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 header
-                if bucketByDay.isEmpty {
-                    emptyHint
-                } else {
-                    Group {
-                        switch effectiveMode {
-                        case .twelveWeeks: twelveWeekGrid
-                        case .year: yearGrid
-                        }
+                Group {
+                    switch effectiveMode {
+                    case .twelveWeeks: twelveWeekGrid
+                    case .year: yearGrid
                     }
-                    legend
                 }
+                legend
             }
             .opacity(appeared || reduceMotion ? 1 : 0)
             .onAppear {
@@ -201,19 +199,6 @@ struct MoodHeatmapSection: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private var emptyHint: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text("No mood data yet")
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-            Text("Log your mood on the Capture tab and your 12-week history will appear here.")
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     // MARK: - 12-week grid (ported compliance layout)
 
     private var twelveWeekGrid: some View {
@@ -221,12 +206,7 @@ struct MoodHeatmapSection: View {
             if dynamicTypeSize < .accessibility1 {
                 VStack(alignment: .trailing, spacing: Self.cellSpacing) {
                     ForEach(0 ..< Self.daysPerWeek, id: \.self) { row in
-                        Text(Self.weekdayLabels[row])
-                            // swiftlint:disable:next dynamic_type_bypass
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(HLText.tertiary)
-                            .frame(height: Self.cellSize)
-                            .accessibilityHidden(true)
+                        weekdayLabel(row, height: Self.cellSize)
                     }
                 }
             }
@@ -255,13 +235,11 @@ struct MoodHeatmapSection: View {
         return HStack(alignment: .top, spacing: HLSpace.xs) {
             if dynamicTypeSize < .accessibility1 {
                 VStack(alignment: .trailing, spacing: 1) {
+                    // 1.4 B4 — a 6 pt row cannot hold a legible letter, so the
+                    // year grid names every other day (Mo, Mi, Fr, So) and lets
+                    // each label use the empty row beside it.
                     ForEach(0 ..< Self.daysPerWeek, id: \.self) { row in
-                        Text(Self.weekdayLabels[row])
-                            // swiftlint:disable:next dynamic_type_bypass
-                            .font(.system(size: 7, weight: .medium))
-                            .foregroundStyle(HLText.tertiary)
-                            .frame(height: 6)
-                            .accessibilityHidden(true)
+                        weekdayLabel(row, height: 6, visible: Self.showsYearLabel(row: row))
                     }
                 }
             }
@@ -277,6 +255,24 @@ struct MoodHeatmapSection: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// 1.4 B4 — the weekday letters at the smallest system text style
+    /// (caption 2, 11 pt) instead of 9 and 7 pt. The grid cells keep their
+    /// size, so the label is held at that size up to the largest standard text
+    /// size; from the accessibility sizes on, the column is hidden as before.
+    private func weekdayLabel(_ row: Int, height: CGFloat, visible: Bool = true) -> some View {
+        Text(visible ? Self.weekdayLabels[row] : "")
+            .font(.hlCaption2.weight(.medium))
+            .dynamicTypeSize(...DynamicTypeSize.large)
+            .foregroundStyle(HLText.tertiary)
+            .frame(height: height)
+            .accessibilityHidden(true)
+    }
+
+    /// Year grid: Monday, Wednesday, Friday and Sunday carry a letter.
+    nonisolated static func showsYearLabel(row: Int) -> Bool {
+        row.isMultiple(of: 2)
     }
 
     // MARK: - Legend (2-glyph, NOT a rainbow — DESIGN-B §1.3)

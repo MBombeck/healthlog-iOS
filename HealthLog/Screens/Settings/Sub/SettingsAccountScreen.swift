@@ -114,16 +114,18 @@ struct SettingsAccountScreen: View {
         }
     }
 
+    /// 1.4 B4 — each of these cards has one row, so the row is the heading:
+    /// no card title above "Profil öffnen", "Sicherheit öffnen", "Abmelden".
     private var profileCard: some View {
-        HLSettingsCard(
-            icon: "person.crop.circle.fill",
-            title: "Profile",
-            subtitle: "Display name, date of birth, height, time zone."
-        ) {
+        HLSettingsCard {
             // R10 — die Zeile öffnete schon immer ein Sheet, trug aber einen
             // Chevron. `presents: .sheet` malt jetzt das `pencil` und macht
             // die Bearbeiten-Transaktion vor dem Tippen sichtbar.
-            HLSettingsActionRow(title: "Open profile", presents: .sheet) {
+            HLSettingsActionRow(
+                title: "Profile",
+                subtitle: "Display name, date of birth, height, time zone.",
+                presents: .sheet
+            ) {
                 showEditProfile = true
             }
             .accessibilityIdentifier("settings.account.profileRow")
@@ -138,12 +140,12 @@ struct SettingsAccountScreen: View {
     /// retires three hardcoded English literals ("Passkeys", "Sign in with Face
     /// ID instead of a password.", "Manage passkeys") flagged by audit C12.
     private var securityCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield",
-            title: "settings.security.title",
-            subtitle: "settings.security.subtitle"
-        ) {
-            HLSettingsActionRow(title: "settings.security.open", presents: .push) {
+        HLSettingsCard {
+            HLSettingsActionRow(
+                title: "settings.security.title",
+                subtitle: "settings.security.subtitle",
+                presents: .push
+            ) {
                 SettingsSecurityScreen()
             }
             .accessibilityIdentifier("settings.account.securityRow")
@@ -152,14 +154,11 @@ struct SettingsAccountScreen: View {
 
     /// Parity 2.2 — active sessions. Sits directly above sign-out: both answer
     /// "who is signed in to my account", and the single-device answer
-    /// (sign myself out here) belongs next to the all-devices one.
+    /// (sign myself out here) belongs next to the all-devices one. 1.4 B2-c:
+    /// title and row say it, the subtitle that said it again is gone.
     private var sessionsCard: some View {
-        HLSettingsCard(
-            icon: "desktopcomputer",
-            title: "sessions.title",
-            subtitle: "sessions.card.subtitle"
-        ) {
-            HLSettingsActionRow(title: "sessions.card.manage", presents: .push) {
+        HLSettingsCard {
+            HLSettingsActionRow(title: "sessions.title", presents: .push) {
                 SessionsScreen()
             }
             .accessibilityIdentifier("settings.account.sessionsRow")
@@ -174,14 +173,11 @@ struct SettingsAccountScreen: View {
     /// one (Apple HIG destructive-action discipline). Reuses the `MoreScreen`
     /// `Layout` row descriptors so the copy stays a single source of truth.
     private var signOutCard: some View {
-        HLSettingsCard(
-            icon: "rectangle.portrait.and.arrow.right",
-            title: LocalizedStringKey(MoreScreen.Layout.signOutRow.title),
-            subtitle: MoreScreen.Layout.signOutRow.subtitle.map { LocalizedStringKey($0) }
-        ) {
+        HLSettingsCard {
             HLSettingsActionRow(
                 icon: MoreScreen.Layout.signOutRow.icon,
                 title: LocalizedStringKey(MoreScreen.Layout.signOutRow.title),
+                subtitle: MoreScreen.Layout.signOutRow.subtitle.map { LocalizedStringKey($0) },
                 role: .destructive,
                 presents: .confirm
             ) {
@@ -207,14 +203,11 @@ struct SettingsAccountScreen: View {
     /// am Ort der Entscheidung, und dort sogar präziser (sie nennt die
     /// Passkeys namentlich).
     private var resetDataCard: some View {
-        HLSettingsCard(
-            icon: "arrow.counterclockwise",
-            title: "resetData.title",
-            subtitle: "resetData.card.subtitle"
-        ) {
+        HLSettingsCard {
             HLSettingsActionRow(
                 icon: "arrow.counterclockwise",
-                title: "resetData.card.action",
+                title: "resetData.title",
+                subtitle: "resetData.card.subtitle",
                 role: .destructive,
                 presents: .confirm
             ) {
@@ -235,14 +228,11 @@ struct SettingsAccountScreen: View {
     /// Warnung lebt am Ort der Handlung (`DeleteAccountScreen`, Intro-Satz +
     /// Bullet „Diese Aktion kann nicht rückgängig gemacht werden.").
     private var deleteAccountCard: some View {
-        HLSettingsCard(
-            icon: "trash.fill",
-            title: LocalizedStringKey(MoreScreen.Layout.deleteAccountRow.title),
-            subtitle: MoreScreen.Layout.deleteAccountRow.subtitle.map { LocalizedStringKey($0) }
-        ) {
+        HLSettingsCard {
             HLSettingsActionRow(
                 icon: MoreScreen.Layout.deleteAccountRow.icon,
                 title: LocalizedStringKey(MoreScreen.Layout.deleteAccountRow.title),
+                subtitle: MoreScreen.Layout.deleteAccountRow.subtitle.map { LocalizedStringKey($0) },
                 role: .destructive,
                 presents: .confirm
             ) {

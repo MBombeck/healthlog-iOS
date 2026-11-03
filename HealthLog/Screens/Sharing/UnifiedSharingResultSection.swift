@@ -76,12 +76,8 @@ struct UnifiedSharingResultSection: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            if let source = store.artifactSource {
-                Text(UnifiedSharingCopy.sourceLabel(source, form: store.outputForm))
-                    .font(.hlCaption2)
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityIdentifier("sharing.unified.source")
-            }
+            // 1.4 B2-c — no "Source: your server (rendered PDF)" line: which
+            // machine rendered the file is a technical detail.
             ShareLink(items: store.artifacts) {
                 HStack(spacing: HLSpace.md) {
                     Image(systemName: "checkmark.circle.fill")

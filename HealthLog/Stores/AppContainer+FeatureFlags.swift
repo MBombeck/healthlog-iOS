@@ -22,7 +22,7 @@ extension AppContainer {
         moduleGate.serverFeaturesSink = { features in
             KnownServerVersion.recordFeatures(ServerFeatures.recorded(features))
         }
-        Task.detached {
+        Task.detached { [gate] in
             await apiClient.setAIRefusalHandler { @Sendable [weak gate] refusal in
                 await MainActor.run {
                     gate?.applyRefusal(refusal)

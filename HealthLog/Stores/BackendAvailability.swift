@@ -135,8 +135,8 @@ public final class BackendAvailability {
 
     // v0.12 W7-5 — `canShowCloudBriefing` / `canShowCloudCoach` were removed:
     // they were declared on this surface but had ZERO production call sites. The
-    // Daily Briefing already gates via the on-device-vs-server resolver in
-    // `DailyBriefingHero+OnDevice.swift` (`hasServer = serverFallback != nil`)
+    // Daily Briefing gated via its hero's on-device-vs-server resolver
+    // (`hasServer = serverFallback != nil`; that hero was deleted in 1.4 B4)
     // and the Coach via its own `standalonePlaceholder` routing in
     // `AskCoachSheet+ServerFallback.swift`. Two dead flags invited a future
     // maintainer to wire a third, divergent gate — deleting them keeps the

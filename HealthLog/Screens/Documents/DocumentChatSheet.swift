@@ -108,15 +108,13 @@ struct DocumentChatSheet: View {
 
     private var emptyPrompt: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
+            // 1.4 B2-c — the title only: the bar above says the answers rest
+            // on this document alone, and the field says what to do.
             Text("documents.chat.empty.title")
                 // Audit-01 C2 — sheet-header role on the app standard
                 // `.hlTitle3` (vgl. AskCoachSheet, DocumentUploadSheet).
                 .font(.hlTitle3)
                 .foregroundStyle(HLText.primary)
-            Text("documents.chat.empty.hint")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, HLSpace.xl)

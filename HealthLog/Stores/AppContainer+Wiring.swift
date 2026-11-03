@@ -337,9 +337,13 @@ extension AppContainer {
                 }
             }
         )
+        Self.attachWriteBackPolicy(healthKit: healthKit, swr: swr, settingsRepo: settingsRepo) // B5 (1.4)
         Self.wireAIRefusalMirror(apiClient: apiClient, gate: aiCapabilityGate, moduleGate: moduleGate) // #115 0.2
         Self.wireAICapabilityGates(gate: aiCapabilityGate, dailyBriefing: dailyBriefingStore, narrative: serverStatsStores.narrative)
         Self.wireModuleDisabledMirror(apiClient: apiClient, gate: moduleGate) // #30
+        // R-A2 (1.4) — the dose and State-of-Mind observers start at launch,
+        // not from `RootView`, so a background launch registers them too.
+        armOptInHealthObserversAtLaunch()
         // N1 — last, so it wraps the final `onMedicationsDidChange` chain.
         wireMedicationReminderDelivery()
     }

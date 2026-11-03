@@ -23,6 +23,7 @@ enum HealthSampleReplayFloor {
         "HKQuantityTypeIdentifierBodyMass": "WEIGHT",
         "HKQuantityTypeIdentifierBodyFatPercentage": "BODY_FAT",
         "HKQuantityTypeIdentifierBodyTemperature": "BODY_TEMPERATURE",
+        "HKQuantityTypeIdentifierWaistCircumference": "WAIST_CIRCUMFERENCE",
         "HKQuantityTypeIdentifierBloodPressureSystolic": "BLOOD_PRESSURE_SYS",
         "HKQuantityTypeIdentifierBloodPressureDiastolic": "BLOOD_PRESSURE_DIA",
         "HKQuantityTypeIdentifierBloodGlucose": "BLOOD_GLUCOSE",

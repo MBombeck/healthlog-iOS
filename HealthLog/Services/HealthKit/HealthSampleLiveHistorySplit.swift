@@ -73,11 +73,26 @@ struct HealthSampleSplitState: Codable, Sendable, Equatable {
     /// the replay shortcut.
     var fullCatchUp: Bool
     var updatedAt: Date
+    /// 1.4 (S1) — the lower bound of the chosen window, pinned once for this
+    /// partition. 1.3.0 recomputed it from "now" on every pass, so it moved
+    /// forward while the walk moved back, and the two met before the oldest
+    /// part of the window was read. `nil` in a state 1.3.0 wrote and while no
+    /// window is chosen; ``DurableHealthCursorStore/establishSplit`` pins it.
+    var windowFloor: Date?
+
+    /// The window's lower bound for this partition: the pinned one, never
+    /// later than the bound the caller passes. "Alle" (and no choice yet)
+    /// arrives as `.distantPast` and stays unbounded.
+    func windowStart(cutoff: Date) -> Date {
+        guard cutoff != .distantPast, let windowFloor else { return cutoff }
+        return min(windowFloor, cutoff)
+    }
 
     /// The lowest start date the history walk has to reach.
     func historyFloor(cutoff: Date) -> Date {
-        var floor = cutoff
-        if !fullCatchUp, let replayFloor, replayFloor > cutoff {
+        let window = windowStart(cutoff: cutoff)
+        var floor = window
+        if !fullCatchUp, let replayFloor, replayFloor > window {
             floor = replayFloor
         }
         return min(floor, liveStart)
@@ -85,16 +100,34 @@ struct HealthSampleSplitState: Codable, Sendable, Equatable {
 
     /// Whether everything from the floor up to `liveStart` has been read.
     func isHistoryComplete(cutoff: Date) -> Bool {
+        isHistoryComplete(cutoff: cutoff, readable: .unlimited)
+    }
+
+    /// **B5 (1.4, R4 2.1)** — the lowest start date the walk can reach when
+    /// Apple Health shares only a recent window: never below the boundary of
+    /// that window. Everything older is unknown, not absent, so the walk stops
+    /// there and keeps `historyEnd` at the boundary; widened access later
+    /// resumes it from exactly that point.
+    func readableHistoryFloor(cutoff: Date, readable: HealthReadWindow) -> Date {
         let floor = historyFloor(cutoff: cutoff)
+        guard case let .limited(from) = readable, from > floor else { return floor }
+        return min(from, liveStart)
+    }
+
+    /// Whether everything readable from the floor up to `liveStart` has been
+    /// read. With full access that is ``isHistoryComplete(cutoff:)``.
+    func isHistoryComplete(cutoff: Date, readable: HealthReadWindow) -> Bool {
+        let floor = readableHistoryFloor(cutoff: cutoff, readable: readable)
         return historyEnd < floor || (historyEnd == floor && !historyEndInclusive)
     }
 
     /// The dates the legacy leg still owes, or `nil` when it owes none.
     func legacyWindow(cutoff: Date) -> HealthSampleDateWindow? {
         guard legacyLegActive else { return nil }
+        let window = windowStart(cutoff: cutoff)
         let floor = historyFloor(cutoff: cutoff)
-        guard floor > cutoff else { return nil }
-        return HealthSampleDateWindow(start: cutoff == .distantPast ? nil : cutoff, end: floor, endInclusive: false)
+        guard floor > window else { return nil }
+        return HealthSampleDateWindow(start: window == .distantPast ? nil : window, end: floor, endInclusive: false)
     }
 
     /// History may run: the live stream reached the present and, for an
@@ -139,6 +172,33 @@ enum HealthSampleSplitPolicy {
 
     static func replayFloor(lastSeenAt: Date?) -> Date? {
         lastSeenAt.map { $0.addingTimeInterval(-replayMargin) }
+    }
+
+    /// 1.4 (S1) — a leap day and a daylight-saving hour: how far a window
+    /// bound reconstructed by ``pinnedWindowFloor(cutoff:liveStart:now:)``
+    /// can be off. Applied towards overlap.
+    static let windowPinMargin: TimeInterval = 25 * 3600
+
+    /// The window bound a partition without a pin was established under. A
+    /// chosen window is a fixed span of calendar days, so its bound stood as
+    /// much earlier as the partition is old, and the partition was
+    /// established `liveLookback` after its `liveStart`.
+    static func pinnedWindowFloor(cutoff: Date, liveStart: Date, now: Date) -> Date {
+        let age = max(0, now.timeIntervalSince(liveStart.addingTimeInterval(liveLookback)))
+        return cutoff.addingTimeInterval(-(age + windowPinMargin))
+    }
+
+    /// A2 (1.4, R3 3.2) — history pages in a row that came back as nothing
+    /// but `folded_window` duplicates before a type's walk stops. One page can
+    /// straddle the fold boundary; three in a row (1 500 samples) cannot.
+    static let foldedPagesBeforeStop = 3
+
+    /// A2 (1.4, R-A8) — whether the statistics path owns a type's history:
+    /// the summed types travel as day and hour totals (`stats:` rows) while
+    /// the daily-statistics switch is on, and the per-sample gate drops every
+    /// raw row of them, so walking their raw history sends nothing.
+    static func historyOwnedByStatistics(_ typeIdentifier: String, dailyStatsEnabled: Bool) -> Bool {
+        dailyStatsEnabled && HealthKitCumulativeTypeConfig.cumulativeIdentifiers.contains(typeIdentifier)
     }
 }
 
@@ -189,6 +249,25 @@ struct HealthSampleHistoryStatus: Sendable, Equatable {
 /// account that is signed in. Dates and counts only.
 struct HealthHistoryOverview: Sendable, Equatable {
     let types: [HealthSampleHistoryStatus]
+    /// B5 (1.4, R4 2.1) — the earliest date Apple Health shares when it shares
+    /// only a recent window with HealthLog, `nil` with full access. The walk
+    /// counts as done at that date; Sync Diagnostics says so in one line.
+    var limitedFrom: Date?
+
+    init(types: [HealthSampleHistoryStatus], limitedFrom: Date? = nil) {
+        self.types = types
+        self.limitedFrom = limitedFrom
+    }
+
+    /// The overview with the readable windows the walk ran under: the
+    /// earliest limited boundary among them, if any type is limited.
+    init(types: [HealthSampleHistoryStatus], readable: [String: HealthReadWindow]) {
+        let boundaries = readable.values.compactMap { window -> Date? in
+            guard case let .limited(from) = window else { return nil }
+            return from
+        }
+        self.init(types: types, limitedFrom: boundaries.min())
+    }
 
     var totalCount: Int {
         types.count
@@ -279,7 +358,9 @@ extension DurableHealthCursorStore {
         cutoff: Date,
         requiring lease: HealthSyncAuthenticatedLease
     ) throws -> HealthSampleSplitState {
-        if let existing = splitState(for: key) { return existing }
+        if let existing = splitState(for: key) {
+            return pinWindowFloor(existing, cutoff: cutoff, for: key, requiring: lease)
+        }
         try lease.requireCurrent()
         guard lease.ownerID == key.ownerID else {
             throw HealthSyncCursorStoreError.partitionOwnerMismatch
@@ -309,13 +390,41 @@ extension DurableHealthCursorStore {
             replayFloorResolved: !isUpgrade,
             legacyLegActive: isUpgrade,
             fullCatchUp: false,
-            updatedAt: currentTime()
+            updatedAt: currentTime(),
+            windowFloor: cutoff == .distantPast ? nil : cutoff
         )
         try lease.requireCurrent()
         guard writeSiblingVerified(state, suffix: Self.splitSuffix, for: key) else {
             throw HealthSyncCursorStoreError.writeNotVerified
         }
         return state
+    }
+
+    /// 1.4 (S1) — pins the window bound of a partition that has none: one
+    /// 1.3.0 established, or one established before a window was chosen. It
+    /// gets the bound as it stood when the partition was established, so the
+    /// days a moving bound skipped are walked now. An upgraded partition whose
+    /// legacy leg the moving bound retired early resumes from its saved
+    /// cursor for the dates it still owes. A write that does not verify
+    /// leaves the state as it was, and the next pass tries again.
+    private func pinWindowFloor(
+        _ state: HealthSampleSplitState,
+        cutoff: Date,
+        for key: HealthSyncCursorKey,
+        requiring lease: HealthSyncAuthenticatedLease
+    ) -> HealthSampleSplitState {
+        guard state.windowFloor == nil, cutoff != .distantPast else { return state }
+        let floor = HealthSampleSplitPolicy.pinnedWindowFloor(cutoff: cutoff, liveStart: state.liveStart, now: currentTime())
+        let resumesLegacy = state.origin == .upgrade && !state.legacyLegActive && legacyAnchor(for: key) != nil
+        let written = updateSplit(for: key, requiring: lease) { pinned in
+            pinned.windowFloor = floor
+            if resumesLegacy {
+                pinned.legacyLegActive = true
+                pinned.legacyLegActive = pinned.legacyWindow(cutoff: cutoff) != nil
+            }
+        }
+        guard written, let pinned = splitState(for: key) else { return state }
+        return pinned
     }
 
     /// Applies `change` to an existing split state under the lease and
@@ -387,8 +496,14 @@ extension DurableHealthCursorStore {
         return .commit
     }
 
-    /// History state of every partition in `keys`, for diagnostics.
-    func historyStatus(for keys: [HealthSyncCursorKey], cutoff: Date) -> [HealthSampleHistoryStatus] {
+    /// History state of every partition in `keys`, for diagnostics. B5 (1.4):
+    /// `readable` holds each type's readable window (iOS 27 limited history);
+    /// a type without an entry reads as full access.
+    func historyStatus(
+        for keys: [HealthSyncCursorKey],
+        cutoff: Date,
+        readable: [String: HealthReadWindow] = [:]
+    ) -> [HealthSampleHistoryStatus] {
         keys.map { key in
             guard let state = splitState(for: key) else {
                 return HealthSampleHistoryStatus(
@@ -402,7 +517,7 @@ extension DurableHealthCursorStore {
             return HealthSampleHistoryStatus(
                 typeIdentifier: key.typeIdentifier,
                 reachedBack: state.historyEnd,
-                isComplete: state.isHistoryComplete(cutoff: cutoff),
+                isComplete: state.isHistoryComplete(cutoff: cutoff, readable: readable[key.typeIdentifier] ?? .unlimited),
                 legacyPending: state.legacyWindow(cutoff: cutoff) != nil,
                 liveCaughtUp: state.liveCaughtUp
             )

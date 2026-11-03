@@ -478,6 +478,18 @@ struct MetricChartContentSingleAccentTests {
     /// branches, raw `HLColor.orange / .pink / .cyan / .green / .purpleDeep`)
     /// per the C-3 contract. Theme-2.0 collapses every one onto the single
     /// accent.
+    @Test("1.4 B4: the diastolic line is the light step of the ink, not the systolic shade")
+    func diastolicLineIsDistinguishable() throws {
+        let source = try String(contentsOf: Self.sourceURL(), encoding: .utf8)
+        let start = try #require(source.range(of: "private struct BloodPressureMarks"))
+        let end = try #require(source.range(of: "private struct WeightMarks", range: start.upperBound ..< source.endIndex))
+        let block = String(source[start.upperBound ..< end.lowerBound])
+        // At 70 % (`seriesMid`) the two lines read as one colour in the
+        // screenshots; 40 % (`seriesLow`) stays in the palette and reads apart.
+        #expect(block.contains(".foregroundStyle(HLChartTints.seriesLow)"))
+        #expect(!block.contains("HLChartTints.seriesMid"))
+    }
+
     @Test("Every MetricKind branch defaults to `HLChartTints.series`")
     func everyKindDefaultsToSingleAccent() throws {
         let source = try String(contentsOf: Self.sourceURL(), encoding: .utf8)
@@ -485,7 +497,7 @@ struct MetricChartContentSingleAccentTests {
         // The closed switch carries 11 cases (one per `MetricKind`). Each
         // case ends with `emphasisTint ?? HLChartTints.series)` — we count
         // occurrences as a single invariant: ≥ 11 (the diastolic line in
-        // `BloodPressureMarks` uses `seriesMid` directly, not via the
+        // `BloodPressureMarks` uses `seriesLow` directly, not via the
         // emphasis-tint nil-coalesce, so the count is the per-kind count).
         let defaultRouteSites = source.components(separatedBy: "emphasisTint ?? HLChartTints.series").count - 1
         #expect(

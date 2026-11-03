@@ -3,7 +3,9 @@ import SwiftUI
 /// **1.0.3 (App Review 1.4.1) — the citation affordance.**
 ///
 /// One calm caption control ("Sources" + `text.book.closed`) under a medical
-/// statement. Tapping opens ``HLSourcesSheet`` for the topic. Fail-closed like
+/// statement. Tapping opens ``HLInfoSheet`` with the topic's method and
+/// references (``HLInfoContent/sources(_:)``); inside a sheet's own stack it
+/// pushes that page instead. Fail-closed like
 /// ``HLLearnMoreLink``: a topic with neither references nor a methodology text
 /// renders nothing, so a surface can never show a dead "Sources" button.
 struct HLSourcesLink: View {
@@ -22,6 +24,7 @@ struct HLSourcesLink: View {
     var style: Style = .caption
 
     @State private var isPresented = false
+    @Environment(\.hlInsideSheetStack) private var insideSheetStack
 
     nonisolated static func isRenderable(_ topic: MedicalSourceTopic) -> Bool {
         !MedicalSourceCatalog.sources(for: topic).isEmpty
@@ -35,40 +38,67 @@ struct HLSourcesLink: View {
 
     var body: some View {
         if Self.isRenderable(topic) {
-            Button {
-                isPresented = true
-            } label: {
-                switch style {
-                case .caption:
-                    HStack(spacing: HLSpace.xxs) {
-                        Image(systemName: "text.book.closed")
-                            .font(.hlCaption2)
-                            .accessibilityHidden(true)
-                        Text("sources.link.label")
-                    }
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .frame(minHeight: 44, alignment: .leading)
-                    .contentShape(Rectangle())
-                case let .captionText(text):
-                    HStack(spacing: HLSpace.xxs) {
-                        Text(verbatim: text)
-                        Image(systemName: "text.book.closed")
-                            .font(.hlCaption2)
-                            .accessibilityHidden(true)
-                    }
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .frame(minHeight: 44, alignment: .leading)
-                    .contentShape(Rectangle())
+            if insideSheetStack {
+                // 1.4 B2 — inside a sheet the page is pushed into the sheet's
+                // own stack: never a second sheet on top of a sheet.
+                NavigationLink {
+                    HLInfoPage(content: .sources(topic))
+                } label: {
+                    label
+                }
+                .modifier(SourcesLinkTraits(topic: topic))
+            } else {
+                Button {
+                    isPresented = true
+                } label: {
+                    label
+                }
+                .modifier(SourcesLinkTraits(topic: topic))
+                .sheet(isPresented: $isPresented) {
+                    HLInfoSheet(content: .sources(topic))
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var label: some View {
+        switch style {
+        case .caption:
+            HStack(spacing: HLSpace.xxs) {
+                Image(systemName: "text.book.closed")
+                    .font(.hlCaption2)
+                    .accessibilityHidden(true)
+                Text("sources.link.label")
+            }
+            .font(.hlCaption)
+            .foregroundStyle(HLText.secondary)
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        case let .captionText(text):
+            HStack(spacing: HLSpace.xxs) {
+                Text(verbatim: text)
+                Image(systemName: "text.book.closed")
+                    .font(.hlCaption2)
+                    .accessibilityHidden(true)
+            }
+            .font(.hlCaption)
+            .foregroundStyle(HLText.tertiary)
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+    }
+}
+
+/// Style, label and identifier of the citation control, the same whether it
+/// presents or pushes.
+private struct SourcesLinkTraits: ViewModifier {
+    let topic: MedicalSourceTopic
+
+    func body(content: Content) -> some View {
+        content
             .buttonStyle(.plain)
             .accessibilityLabel(Text("sources.link.a11y"))
-            .accessibilityIdentifier(Self.identifier(for: topic))
-            .sheet(isPresented: $isPresented) {
-                HLSourcesSheet(topic: topic)
-            }
-        }
+            .accessibilityIdentifier(HLSourcesLink.identifier(for: topic))
     }
 }

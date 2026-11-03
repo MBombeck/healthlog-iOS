@@ -68,11 +68,9 @@ struct SettingsAdvancedScreen: View {
     /// der App.") stand direkt über der Zeile „Biometrische Sperre", deren
     /// eigene Beschreibung dasselbe plus Substanz sagt. Die Zeilen-Beschreibung
     /// ist Klasse D und bleibt unverändert; die redundante Hälfte ist gefallen.
+    /// 1.4 B4 — one row, one heading: the switch "App-Sperre" says it.
     private var sicherheitCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield.fill",
-            title: "Security"
-        ) {
+        HLSettingsCard {
             HLSettingsToggleRow(
                 title: "Biometric lock",
                 description: "settings.advanced.biometricLock.description",

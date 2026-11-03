@@ -246,6 +246,9 @@ public actor APIClient: APIClientProtocol {
     /// request id. Production writes to the process-wide log the error banner
     /// and "Support-Info kopieren" read; a test injects its own.
     nonisolated let failureLog: RecentFailureLog
+    /// T1 (1.4), test seam: the clock `execute` reads a rate-limit reset
+    /// against and sleeps its retry delays on. Production is `.live`.
+    private let retryClock: APIRetryClock
 
     public init(
         environment: AppEnvironment,
@@ -259,9 +262,11 @@ public actor APIClient: APIClientProtocol {
         coachStreamPolicy: CoachStreamTimeoutPolicy = .coachStream,
         onUnauthorized: (@Sendable () async -> Void)? = nil,
         refreshHandler: (@Sendable () async -> RefreshOutcome)? = nil,
-        failureLog: RecentFailureLog = .shared
+        failureLog: RecentFailureLog = .shared,
+        retryClock: APIRetryClock = .live
     ) {
         self.failureLog = failureLog
+        self.retryClock = retryClock
         self.environment = environment
         self.keychain = keychain
         self.pinner = pinner
@@ -656,7 +661,7 @@ public actor APIClient: APIClientProtocol {
                     // established collapse-to-`.unauthorized` behaviour, and the
                     // refresh→logout bridge is intentionally bypassed here (the ticket,
                     // not a Bearer, is the credential — there is nothing to refresh).
-                    if Self.preserves401Body(path: request.path) || SecurityStepUp.isProofRefusal(body: data) {
+                    if Self.surfaces401(path: request.path, body: data) {
                         return (data, http)
                     }
                     // #5 — `urlRequest` still carries the bearer THIS attempt was
@@ -725,14 +730,14 @@ public actor APIClient: APIClientProtocol {
                     // Wert ab (kein Backoff-Doppel), aber nur bis zur
                     // In-Request-Obergrenze; länger wartet der Aufrufer selbst
                     // (Outbox-Pause, gehaltener Sweep).
-                    let retryAfter = RateLimitDelay.seconds(from: http, body: data)
+                    let retryAfter = RateLimitDelay.seconds(from: http, body: data, now: retryClock.now())
                     throw HLError.rateLimited(retryAfter: retryAfter)
                 }
 
                 // Server v1.40 — a key mismatch does not heal between two
                 // attempts; answer at once instead of spinning the backoff.
                 if (500 ... 599).contains(http.statusCode), attempt <= maxRetries, !isKeyMismatch(http, data) {
-                    try await Task.sleep(nanoseconds: backoffDelay(attempt: attempt))
+                    try await retryClock.sleep(backoffDelay(attempt: attempt))
                     continue
                 }
 
@@ -740,13 +745,13 @@ public actor APIClient: APIClientProtocol {
             } catch let urlError as URLError {
                 let mapped = mapURLError(urlError, sending: request)
                 if mapped.isRetriable, attempt <= maxRetries {
-                    try await Task.sleep(nanoseconds: backoffDelay(attempt: attempt))
+                    try await retryClock.sleep(backoffDelay(attempt: attempt))
                     continue
                 }
                 throw mapped
             } catch let err as HLError {
                 if err.isRetriable, attempt <= maxRetries {
-                    try await Task.sleep(nanoseconds: rateLimitOrBackoffDelay(error: err, attempt: attempt))
+                    try await retryClock.sleep(rateLimitOrBackoffDelay(error: err, attempt: attempt))
                     continue
                 }
                 throw err
@@ -1284,7 +1289,9 @@ public actor APIClient: APIClientProtocol {
     func mapURLError(_ err: URLError) -> HLError {
         switch err.code {
         case .timedOut: .network(.timeout)
-        case .notConnectedToInternet, .networkConnectionLost: .offline
+        case .notConnectedToInternet: .offline
+        // B5 (1.4) — severed mid-load: a write may have reached the server.
+        case .networkConnectionLost: .network(.connectionLost)
         case .cannotFindHost, .dnsLookupFailed: .network(.dnsFailure)
         case .secureConnectionFailed, .serverCertificateUntrusted, .clientCertificateRejected, .clientCertificateRequired:
             .network(.sslPinning)

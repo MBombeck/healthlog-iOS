@@ -22,6 +22,19 @@ public struct HLLearnGuide: Sendable, Equatable {
     public let title: String
     /// The absolute public URL.
     public let url: URL
+
+    /// 1.4 B4 — the guide's title in the app's language, as the site prints
+    /// it. ``title`` stays the English registry title the server mirrors.
+    public var localizedTitle: String {
+        HLLearnLinks.localizedTitle(forSlug: slug) ?? title
+    }
+
+    /// 1.4 B4 — the guide in the app's language: the site publishes every
+    /// guide under `/de/learn` as well, and a German reader no longer lands
+    /// on the English article.
+    public var localizedURL: URL {
+        HLLearnLinks.url(forSlug: slug, languageCode: HLLearnLinks.appLanguageCode) ?? url
+    }
 }
 
 public enum HLLearnLinks {
@@ -61,6 +74,50 @@ public enum HLLearnLinks {
         guard let url = URL(string: "\(baseURL)/\(entry.slug)") else { return nil }
         return HLLearnGuide(slug: entry.slug, title: entry.title, url: url)
     }
+
+    /// 1.4 B4 — the language the app runs in (`de` or `en`), which picks the
+    /// guide's edition on the site.
+    static var appLanguageCode: String {
+        Bundle.main.preferredLocalizations.first ?? "en"
+    }
+
+    /// The guide for a slug in a language: `/de/learn/<slug>` for German,
+    /// `/learn/<slug>` otherwise. `nil` for an unknown slug (fail-closed).
+    static func url(forSlug slug: String, languageCode: String) -> URL? {
+        guard guideBySlug[slug] != nil else { return nil }
+        let base = languageCode.hasPrefix("de") ? "https://healthlog.dev/de/learn" : baseURL
+        return URL(string: "\(base)/\(slug)")
+    }
+
+    /// 1.4 B4 — the site's own title of each guide, through the catalog
+    /// (German and English). Medical Sources listed the English registry
+    /// titles in the German app.
+    static func localizedTitle(forSlug slug: String) -> String? {
+        titleKeys[slug].map { String(localized: $0) }
+    }
+
+    /// One catalog key per guide, `learn.guide.<slug>`.
+    private static let titleKeys: [String: LocalizedStringResource] = [
+        "understanding-your-health-metrics": "learn.guide.understanding-your-health-metrics",
+        "resting-heart-rate": "learn.guide.resting-heart-rate",
+        "heart-rate-variability": "learn.guide.heart-rate-variability",
+        "reading-your-blood-pressure": "learn.guide.reading-your-blood-pressure",
+        "sleep-consistency": "learn.guide.sleep-consistency",
+        "respiratory-rate": "learn.guide.respiratory-rate",
+        "blood-oxygen-spo2": "learn.guide.blood-oxygen-spo2",
+        "body-temperature-baseline": "learn.guide.body-temperature-baseline",
+        "blood-sugar-beyond-diabetes": "learn.guide.blood-sugar-beyond-diabetes",
+        "vo2max-and-longevity": "learn.guide.vo2max-and-longevity",
+        "beyond-the-scale": "learn.guide.beyond-the-scale",
+        "tracking-mood": "learn.guide.tracking-mood",
+        "the-cycle-as-a-vital-sign": "learn.guide.the-cycle-as-a-vital-sign",
+        "how-wearables-measure-you": "learn.guide.how-wearables-measure-you",
+        "reading-your-trends": "learn.guide.reading-your-trends",
+        "steps-and-movement": "learn.guide.steps-and-movement",
+        "caffeine-alcohol-and-your-readings": "learn.guide.caffeine-alcohol-and-your-readings",
+        "hydration-and-your-body": "learn.guide.hydration-and-your-body",
+        "stress-and-recovery": "learn.guide.stress-and-recovery"
+    ]
 
     /// Fast slug → guide index over the catalog.
     private static let guideBySlug: [String: HLLearnGuide] = Dictionary(

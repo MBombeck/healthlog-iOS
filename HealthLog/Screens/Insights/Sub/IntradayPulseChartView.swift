@@ -23,7 +23,6 @@ struct IntradayPulseChartView: View {
 
     /// Y padding around the data, mirroring the web `dataMin - 10 … dataMax + 10`.
     private static let yPadding: Double = 10
-    private static let chartHeight: CGFloat = 180
 
     private var runs: [[IntradayPulseDTO.Bucket]] {
         IntradayPulseMath.runs(day.series, bucketMinutes: day.bucketMinutes)
@@ -99,7 +98,7 @@ struct IntradayPulseChartView: View {
                 }
             }
         }
-        .frame(height: Self.chartHeight)
+        .frame(height: HLChartStyle.heightRegular)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("insights.intraday.title"))
         .accessibilityValue(Text(accessibilitySummary))

@@ -4,13 +4,12 @@ import SwiftUI
 ///
 /// A composite page (NOT a single-metric chart): present-state hero → texture
 /// (heatmap) → trajectory (trend) → steadiness (stability) → drivers (tags +
-/// patterns) → evidence (recent entries). It reuses the exact sub-views the
-/// More → Mood analysis surface (`MoodAnalysisScreen`) already ships
-/// (`MoodHeroSummary`, `MoodHeatmapSection`, `MoodTrendChart`,
-/// `MoodStabilitySection`, `MoodTagInsightSection`, `MoodPatternSection`,
-/// `MoodRecentSection`) so the two surfaces stay one design language.
+/// patterns) → evidence (recent entries), composed from the shared mood
+/// sub-views (`MoodAnalysisContent`: `MoodHeroSummary`, `MoodHeatmapSection`,
+/// `MoodTrendChart`, `MoodStabilitySection`, `MoodTagInsightSection`,
+/// `MoodPatternSection`, `MoodRecentSection`).
 ///
-/// **Lives inside the Insights pager.** Unlike `MoodAnalysisScreen` it owns NO
+/// **Lives inside the Insights pager.** It owns NO
 /// `NavigationStack` (the container's shared stack does) and pins its period
 /// control inline rather than via a `.safeAreaInset` — the pager's strip already
 /// owns the top chrome. Its inner `ScrollView` reports its offset to
@@ -67,8 +66,7 @@ struct InsightsMoodPage: View {
         .background(HLSurface.primary.ignoresSafeArea())
         // v0.13.1 UX-D1 — the period control now pins to the bottom safe-area as
         // the floating Liquid-Glass capsule, IDENTICAL to `InsightsMetricScreen`
-        // (the sibling metric page in the SAME pager) and the standalone
-        // `MoodAnalysisScreen`. It was previously the last inline child of the
+        // (the sibling metric page in the SAME pager). It was previously the last inline child of the
         // ScrollView, so it scrolled off and was only reachable at the very
         // bottom — the operator-reported felt-bug ("static at the bottom, not
         // floating"). `HLFloatingPeriodControl` has a FIXED size that never
@@ -149,6 +147,14 @@ struct InsightsMoodPage: View {
     /// when the assistant is off, so there is never a dead button.
     @ViewBuilder
     private var headerActions: some View {
+        // 1.4 B2 — the page's one (i), first of the circles: the explainer
+        // that stood under the title, and the correlation method when the
+        // mood x blood-pressure card is on the page.
+        HLInfoButton(
+            content: InsightsSpecialPageInfo.mood(showsCorrelation: moodCorrelationPanel != nil),
+            style: .circle,
+            accessibilityIdentifier: "insights.mood.info"
+        )
         InsightsHeaderActionCircle(
             systemImage: "slider.horizontal.3",
             accessibilityLabelText: String(localized: "Customise insights"),
@@ -185,13 +191,6 @@ struct InsightsMoodPage: View {
                 ) {
                     headerActions
                 }
-
-                // I-0 Item 3 — the server-mirrored intro paragraph, IDENTICAL to
-                // the `InsightsMetricScreen.descriptionSlot` the charted pages
-                // carry. Previously the Mood page showed only the "in 30 days"
-                // subtitle and read broken next to every other metric page; now
-                // it opens with the same explainer body (`mood` slug).
-                InsightsExplainerIntro(slug: "mood")
 
                 // v0.12 W4-3 — the seven analysis sub-views now come from the
                 // shared `MoodAnalysisContent` (one implementation; the More →
@@ -268,55 +267,32 @@ struct InsightsMoodPage: View {
 
     /// v0.14.1 — the LIVE mood-relations region: an "Influence on mood" card +
     /// a "Better days" board, under a shared `InsightsSectionHeader`. Server-
-    /// derived; gated on a cloud surface. When the surface is on but the data is
-    /// below its sample/confidence floors (settled + empty), a calm empty state
-    /// stands in — never a fabricated correlation.
+    /// derived; gated on a cloud surface. Never a fabricated correlation.
+    ///
+    /// 1.4 B2 — the section exists only with rows. Below the server's floors
+    /// it used to stand as a "not enough data yet" card for good, for everyone
+    /// who does not use tags.
     @ViewBuilder
     private var relationsBlock: some View {
-        if backend.canShowCloudInsights {
+        if backend.canShowCloudInsights, relationsStore.hasContent {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 // v0.14.4 E4 — the right-aligned grey caption was removed (the C2
                 // cleanup applied elsewhere); the header stands alone, calmer.
                 InsightsSectionHeader("What shapes your mood")
-                if relationsStore.hasContent {
-                    MoodInfluenceCard(
-                        structuredRows: relationsStore.structuredInfluence,
-                        flatRows: relationsStore.flatInfluence
-                    )
-                    MoodBetterDaysCard(factors: relationsStore.betterDays)
-                    // v0.14.8 — the RATED-factor × metric crosstab card (server
-                    // v1.14.0 `factorCrosstab`): the first iOS surface for the
-                    // analytical USE of the slider rating values. Self-suppresses
-                    // when the server returned no significant row.
-                    MoodFactorCrosstabCard(rows: relationsStore.factorCrosstab)
-                } else if relationsStore.hasSettledOnce {
-                    moodRelationsEmptyState
-                }
+                MoodInfluenceCard(
+                    structuredRows: relationsStore.structuredInfluence,
+                    flatRows: relationsStore.flatInfluence
+                )
+                MoodBetterDaysCard(factors: relationsStore.betterDays)
+                // v0.14.8 — the RATED-factor × metric crosstab card (server
+                // v1.14.0 `factorCrosstab`): the first iOS surface for the
+                // analytical USE of the slider rating values. Self-suppresses
+                // when the server returned no significant row.
+                MoodFactorCrosstabCard(rows: relationsStore.factorCrosstab)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .contain)
         }
-    }
-
-    /// Calm empty state for the relations region — shown only once the load has
-    /// settled with no rows clearing the server's ≥5-day / Welch floor. Never a
-    /// dead box, never an invented correlation.
-    private var moodRelationsEmptyState: some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text("Not enough data for connections yet")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                Text(
-                    "Keep logging your mood with tags. Once a tag has enough days both with and without it, you'll see how it tracks with your mood here."
-                )
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityIdentifier("insights.mood.relations.empty")
     }
 
     /// I-1 D — the relocated Mood × blood-pressure correlation card. Same render
@@ -325,27 +301,32 @@ struct InsightsMoodPage: View {
     /// disclaimer), shown only when the digest carries an ok pairing.
     @ViewBuilder
     private var correlationBlock: some View {
-        if backend.canShowCloudInsights, let digest = insightsStore.digest {
-            // A360 H2 — the relocated mood×BP card carries an "Ask the coach
-            // about this" link, pre-scoped to both metrics in the pair.
-            let panel = CorrelationsPanel(
-                digest: digest,
-                pairs: [.moodBp],
-                onAskCoach: { pair in
-                    coachSeedOverride = pair.coachSeed
-                    coachScopeOverride = pair.coachLaunchScope
-                    presentCoach = true
-                }
-            )
-            if panel.hasAnyCard {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    InsightsSectionHeader("Relationships")
-                    panel
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .contain)
+        if let panel = moodCorrelationPanel {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                InsightsSectionHeader("Relationships")
+                panel
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
         }
+    }
+
+    /// The mood x blood-pressure panel, `nil` when it has no card. The (i)
+    /// asks too: it explains the correlation only when the card is there.
+    private var moodCorrelationPanel: CorrelationsPanel? {
+        guard backend.canShowCloudInsights, let digest = insightsStore.digest else { return nil }
+        // A360 H2 — the relocated mood×BP card carries an "Ask the coach
+        // about this" link, pre-scoped to both metrics in the pair.
+        let panel = CorrelationsPanel(
+            digest: digest,
+            pairs: [.moodBp],
+            onAskCoach: { pair in
+                coachSeedOverride = pair.coachSeed
+                coachScopeOverride = pair.coachLaunchScope
+                presentCoach = true
+            }
+        )
+        return panel.hasAnyCard ? panel : nil
     }
 
     /// I-4 Item 3 — apply the span-derived default period ONCE, only when there
@@ -385,24 +366,21 @@ struct InsightsMoodPage: View {
     }
 
     private var emptyState: some View {
-        HLEmptyState(
-            icon: "face.smiling",
-            title: "No entries yet",
-            message: "Log your first mood to see your history."
-        ) {
+        // 1.4 B4 — title and action; the sentence repeated the button.
+        HLEmptyState(icon: "face.smiling", title: "No entries yet") {
             // QoL-4 — a next-step CTA so the empty page isn't a dead-end: open
             // the mood quick-entry sheet (the same path the mood reminder uses).
             HLButton(
                 String(localized: "Log mood"),
                 icon: "face.smiling",
-                variant: .restrained
+                variant: .secondary
             ) {
                 router.requestMoodQuickEntry()
             }
             .accessibilityIdentifier("insights.mood.empty.log")
         }
         .accessibilityIdentifier("insights.mood.empty")
-        .containerCentered()
+        .insightsEmptyStatePlacement()
     }
 }
 

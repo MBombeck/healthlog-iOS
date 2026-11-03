@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Renders the server-computed `Derived<T>` correlation for one episode
-/// (v1.18.1 §B). Pattern-matches `status`: `ok` → render the findings; anything
-/// else (`insufficient`, `nil`, not-deployed) → a calm "still learning" state.
+/// (v1.18.1 §B). Pattern-matches `status`: `ok` renders the findings; anything
+/// else (`insufficient`, `nil`, not-deployed) renders no section (1.4 B2).
 ///
 /// **iOS computes NO baseline.** Deviations are the server's signed robust-SD
 /// findings; this view just labels + lays them out (neutral). Red flags get an
@@ -13,37 +13,45 @@ struct IllnessCorrelationSection: View {
     let correlation: IllnessCorrelationDTO?
     let isLoading: Bool
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.md) {
-            Text("illness.correlation.title")
-                .font(.hlFootnote.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
+    /// 1.4 B2 — the section shows while the correlation loads and when it has
+    /// a finding; "still learning" with an input count is no card any more.
+    private var okValue: IllnessCorrelationValue? {
+        guard let correlation, correlation.status == .ok else { return nil }
+        return correlation.value
+    }
 
-            if isLoading, correlation == nil {
-                HLCard(style: .ghost) {
-                    HStack(spacing: HLSpace.sm) {
-                        ProgressView().controlSize(.small)
-                        Text("illness.correlation.loading")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+    var body: some View {
+        let isLoadingFirst = isLoading && correlation == nil
+        if isLoadingFirst || okValue != nil {
+            VStack(alignment: .leading, spacing: HLSpace.md) {
+                // 1.0.3 (1.4.1) — the method behind the recovery gap and the
+                // red flags, cited once for the whole section. 1.4 B2: in the
+                // section's title row instead of loose under the last card.
+                HStack(alignment: .firstTextBaseline) {
+                    HLSectionLabel("illness.correlation.title")
+                    Spacer(minLength: HLSpace.sm)
+                    HLSourcesLink(topic: .illnessRecovery)
+                }
+
+                if let value = okValue {
+                    okContent(value: value)
+                } else {
+                    HLCard(style: .ghost) {
+                        HStack(spacing: HLSpace.sm) {
+                            ProgressView().controlSize(.small)
+                            Text("illness.correlation.loading")
+                                .font(.hlSubhead)
+                                .foregroundStyle(HLText.secondary)
+                        }
                     }
                 }
-            } else if let correlation, correlation.status == .ok, let value = correlation.value {
-                okContent(value: value)
-            } else {
-                insufficientContent(correlation: correlation)
+
+                // UI-Standard R15 (U1) — die pauschale Fußzeile
+                // `illness.correlation.retrospectiveDisclaimer` ist ersatzlos
+                // entfallen. Die Aussage „blickt zurück, sagt nichts voraus"
+                // trägt genau einmal der Bullet auf dem Opt-in-Screen (R3). Die
+                // Red-Flags-Karte (Klasse 4) ist davon unberührt.
             }
-
-            // UI-Standard R15 (U1) — die pauschale Fußzeile
-            // `illness.correlation.retrospectiveDisclaimer` ist ersatzlos
-            // entfallen. Die Aussage „blickt zurück, sagt nichts voraus" trägt
-            // jetzt genau einmal der Bullet auf dem Opt-in-Screen (R3), an dem
-            // der Nutzer über das Modul entscheidet. Die Red-Flags-Karte
-            // (Klasse 4) ist davon unberührt.
-
-            // 1.0.3 (1.4.1) — the method behind the recovery gap and the red
-            // flags, cited once under the whole section.
-            HLSourcesLink(topic: .illnessRecovery)
         }
     }
 
@@ -90,33 +98,30 @@ struct IllnessCorrelationSection: View {
     ) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text("illness.correlation.recoveryGap.title")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                HLSectionLabel("illness.correlation.recoveryGap.title")
                 Text(recoveryGapText(gap))
                     .font(.hlBody)
                     .foregroundStyle(HLText.primary)
                     .fixedSize(horizontal: false, vertical: true)
-                // v1.21.0: name the metric whose physiological return dominated
-                // the gap (server's `gapDriverType`). Render-only — no recompute.
-                if let driver = gapDriverText(gapDriverType) {
-                    Text(driver)
+                // 1.4 B2 — one caption line instead of three paragraphs: the
+                // metric that settled last (v1.21.0 `gapDriverType`), the day
+                // the person felt better, and the neutral sleep observation the
+                // server sends alongside the gap (never part of it, withheld on
+                // thin data). Render-only, nothing recomputed.
+                let details = [
+                    gapDriverText(gapDriverType),
+                    feltBetterDay.flatMap { day in
+                        day.isEmpty ? nil : String(
+                            format: String(localized: "illness.correlation.feltBetter"),
+                            IllnessDateFormat.mediumDate(day)
+                        )
+                    },
+                    sleepContextText(sleepContext)
+                ].compactMap(\.self)
+                if !details.isEmpty {
+                    Text(details.joined(separator: " "))
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let day = feltBetterDay, !day.isEmpty {
-                    let template = String(localized: "illness.correlation.feltBetter")
-                    Text(String(format: template, IllnessDateFormat.mediumDate(day)))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
-                // v1.21.0: a neutral sleep observation surfaced ALONGSIDE the gap
-                // — never part of it. Withheld by the server on thin data.
-                if let sleep = sleepContextText(sleepContext) {
-                    Text(sleep)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -169,9 +174,7 @@ struct IllnessCorrelationSection: View {
     private func deviationsCard(titleKey: LocalizedStringKey, deviations: [IllnessVitalDeviation]) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(titleKey)
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                HLSectionLabel(titleKey)
                 ForEach(deviations) { dev in
                     HStack {
                         VStack(alignment: .leading, spacing: HLSpace.xxs) {
@@ -195,9 +198,7 @@ struct IllnessCorrelationSection: View {
     private func returnsCard(_ returns: [IllnessVitalReturn]) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text("illness.correlation.returns.title")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                HLSectionLabel("illness.correlation.returns.title")
                 ForEach(returns) { ret in
                     HStack {
                         Text(IllnessVitalLabel.label(for: ret.type))
@@ -208,34 +209,6 @@ struct IllnessCorrelationSection: View {
                             .font(.hlCaption)
                             .foregroundStyle(HLText.secondary)
                     }
-                }
-            }
-        }
-    }
-
-    // MARK: - Insufficient content
-
-    private func insufficientContent(correlation: IllnessCorrelationDTO?) -> some View {
-        HLCard(style: .ghost) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.sm) {
-                    Image(systemName: "hourglass")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.tertiary)
-                        .accessibilityHidden(true)
-                    Text("illness.correlation.insufficient.title")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.secondary)
-                }
-                Text(insufficientBody(correlation: correlation))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let coverage = correlation?.coverage, coverage.requiredInputs > 0 {
-                    let template = String(localized: "illness.correlation.coverage")
-                    Text(String(format: template, coverage.presentInputs, coverage.requiredInputs))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
                 }
             }
         }
@@ -312,12 +285,5 @@ struct IllnessCorrelationSection: View {
         // L10N-3 — count-aware "day(s)" via xcstrings plural substitution (the
         // key carries `%@ %lld` so the days arg drives the one/other variation).
         return String(localized: "illness.correlation.redFlags.detail \(value) \(flag.days)")
-    }
-
-    private func insufficientBody(correlation: IllnessCorrelationDTO?) -> String {
-        if let reason = correlation?.reason, !reason.isEmpty {
-            return reason
-        }
-        return String(localized: "illness.correlation.insufficient.body")
     }
 }

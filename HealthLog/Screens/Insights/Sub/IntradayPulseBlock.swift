@@ -61,7 +61,6 @@ struct IntradayPulseBlock: View {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 header
                 caption
-                coverageNote
                 content
                 // 1.0.3 (App Review 1.4.1) — how the day's tension window is
                 // derived from the personal band. At the card's foot, the same
@@ -122,51 +121,52 @@ struct IntradayPulseBlock: View {
         }
     }
 
-    /// Tension copy > hourly-grain note > the standard caption. Ordered exactly
-    /// like the web (`intraday-pulse-chart.tsx:162-166`): the most specific
-    /// honest statement about THIS day wins.
+    /// The card's one caption line, the most specific true statement about
+    /// THIS day: tension copy > hourly-grain note > the coverage of a day with
+    /// gaps > nothing. Ordered like the web (`intraday-pulse-chart.tsx:162-166`).
+    /// 1.4 B2 — the standing "averaged in 10-minute steps" caption moved into
+    /// the page's info sheet; a day without anything special shows no line.
+    @ViewBuilder
     private var caption: some View {
-        Text(captionKey)
+        if let day = store.day {
+            if let tension = day.tension, let key = Self.tensionKey(tension.part) {
+                captionText(key)
+            } else if day.grain == .hourly {
+                // An older day was folded to hourly means — say so rather than
+                // imply 10-minute detail the row no longer has.
+                captionText("insights.intraday.hourlyNote")
+            } else if let coverage = IntradayPulseMath.coverage(day.series, bucketMinutes: day.bucketMinutes) {
+                // "Based on N readings across M h" — only for a day with a
+                // break, so a contiguous day carries no needless caveat.
+                Group {
+                    if coverage.readingCount == 1 {
+                        Text("insights.intraday.coverage.one \(coverage.hours)")
+                    } else {
+                        Text("insights.intraday.coverage.many \(coverage.readingCount) \(coverage.hours)")
+                    }
+                }
+                .font(.hlCaption)
+                .foregroundStyle(HLText.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("insights.metric.pulse.intraday.coverage")
+            }
+        }
+    }
+
+    private func captionText(_ key: LocalizedStringKey) -> some View {
+        Text(key)
             .font(.hlCaption)
             .foregroundStyle(HLText.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var captionKey: LocalizedStringKey {
-        guard let day = store.day else { return "insights.intraday.caption" }
-        if let tension = day.tension {
-            switch tension.part {
-            case .morning: return "insights.intraday.tension.morning"
-            case .afternoon: return "insights.intraday.tension.afternoon"
-            case .evening: return "insights.intraday.tension.evening"
-            case .night: return "insights.intraday.tension.night"
-            case .unknown: return "insights.intraday.caption"
-            }
-        }
-        // An older day was folded to hourly means — say so rather than imply
-        // 10-minute detail the row no longer has.
-        if day.grain == .hourly { return "insights.intraday.hourlyNote" }
-        return "insights.intraday.caption"
-    }
-
-    /// "Based on N readings across M h" — shown ONLY when the day actually
-    /// contains a break, so a contiguous day carries no needless caveat.
-    @ViewBuilder
-    private var coverageNote: some View {
-        if let day = store.day,
-           let coverage = IntradayPulseMath.coverage(day.series, bucketMinutes: day.bucketMinutes)
-        {
-            Group {
-                if coverage.readingCount == 1 {
-                    Text("insights.intraday.coverage.one \(coverage.hours)")
-                } else {
-                    Text("insights.intraday.coverage.many \(coverage.readingCount) \(coverage.hours)")
-                }
-            }
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("insights.metric.pulse.intraday.coverage")
+    private static func tensionKey(_ part: IntradayPulseDTO.PartOfDay) -> LocalizedStringKey? {
+        switch part {
+        case .morning: "insights.intraday.tension.morning"
+        case .afternoon: "insights.intraday.tension.afternoon"
+        case .evening: "insights.intraday.tension.evening"
+        case .night: "insights.intraday.tension.night"
+        case .unknown: nil
         }
     }
 

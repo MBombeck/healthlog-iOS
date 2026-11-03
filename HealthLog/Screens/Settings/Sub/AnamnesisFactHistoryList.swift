@@ -16,20 +16,11 @@ struct AnamnesisFactHistoryList: View {
     }
 
     var body: some View {
+        // 1.4 B2-c — the card shows this list only when it has rows; the
+        // closing "nothing is overwritten" line is gone, the dated rows show it.
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            if rows.isEmpty {
-                Text("anamnesis.history.empty")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                ForEach(rows) { row in
-                    rowView(row)
-                }
-                Text("anamnesis.history.footer")
-                    .font(.hlCaption2)
-                    .foregroundStyle(HLText.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(rows) { row in
+                rowView(row)
             }
         }
     }

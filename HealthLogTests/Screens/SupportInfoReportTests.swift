@@ -50,6 +50,14 @@
                 "device: iPhone",
                 "language: de",
                 "server version: 1.43.0 (build d06ce36)",
+                // A4 (#134) — the account and Apple Health lines, here as
+                // they read before anything was loaded (`A4DiagnosticsSupportInfoTests`
+                // pins them loaded).
+                "time zone: unknown",
+                "modules: not loaded",
+                "ai: not reported",
+                "[server] GET /api/integrations/healthkit",
+                "not loaded",
                 "recent errors:",
                 "  2026-10-16T09:12:03Z GET /api/medications/:id 500 internal_error id 3f9a2c1b-7d4e-4f10-9a2b-c3d4e5f60718"
             ].joined(separator: "\n") + "\n")

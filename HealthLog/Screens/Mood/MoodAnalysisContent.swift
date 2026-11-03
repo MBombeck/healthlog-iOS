@@ -11,14 +11,16 @@ import SwiftUI
 /// in two places or silently drift.
 ///
 /// **Approach (per the W4-3 brief — "both hosts delegate to one shared body"):**
-/// both entry points are preserved, but the seven-section sequence lives here
-/// once. Each host hands in:
-///   - the `period` binding it owns (a floating control vs. an inline control),
+/// the seven-section sequence lives here once. A host hands in:
+///   - the `period` binding it owns,
 ///   - an `EditMoodSheet`-driving `editing` binding + a `showFullHistory`
-///     binding (both hosts present these identically),
+///     binding,
 ///   - a `section` decorator so the host can wrap each section in its own
-///     entrance treatment (`MoodAnalysisScreen`'s staggered zone fade) or render
-///     it plain (`InsightsMoodPage`).
+///     entrance treatment or render it plain (`InsightsMoodPage`).
+///
+/// 1.4 B2 — the second host, `MoodAnalysisScreen`, had no call site since the
+/// v0.11 IA removed its More row and was deleted; the seams stay so the body
+/// remains testable on its own (`MoodAnalysisContentTests`).
 ///
 /// The shared body reads `MoodStore` from the environment (both hosts inject it)
 /// and computes the windowed / full-history insights here so the two surfaces
@@ -200,12 +202,18 @@ struct MoodAnalysisContent<Section: View>: View {
     /// v0.14.6 N5 — the "Verlauf" title is now a section heading ABOVE the card
     /// (matching the metric pages' heading-outside-card pattern), not a
     /// hard-to-read in-card title. Same "Trend" key (renders "Verlauf" in DE).
+    ///
+    /// 1.4 B4 — with fewer than two days there is no line to draw, and the card
+    /// is absent rather than a heading over "not enough entries".
+    @ViewBuilder
     private var trendSection: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            InsightsSectionHeader("Trend", flush: true)
-            HLCard {
-                MoodTrendChart(entries: trendEntries)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        if MoodTrendPresence.isShown(trendEntries) {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                InsightsSectionHeader("Trend", flush: true)
+                HLCard {
+                    MoodTrendChart(entries: trendEntries)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
     }
@@ -238,5 +246,14 @@ struct MoodAnalysisContent<Section: View>: View {
         } else if !dayEntries.isEmpty {
             showFullHistory = true
         }
+    }
+}
+
+/// **1.4 B4 — when the mood trend card is there at all.** The trend needs two
+/// different days, the threshold below which `MoodTrendChart` itself would only
+/// draw its sparse state. Outside the generic host so a test can ask it.
+enum MoodTrendPresence {
+    static func isShown(_ entries: [MoodTrendChart.Entry], calendar: Calendar = .current) -> Bool {
+        Set(entries.map { calendar.startOfDay(for: $0.date) }).count >= 2
     }
 }

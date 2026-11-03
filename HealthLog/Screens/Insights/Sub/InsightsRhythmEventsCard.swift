@@ -39,10 +39,7 @@ struct InsightsRhythmEventsCard: View {
         // (`if (!data.hasEvents) return null`).
         if !events.isEmpty {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader(
-                    "Device health notifications",
-                    subtitle: "Notifications your watch sent on its own. HealthLog only shows these — it does not detect, confirm, or interpret them."
-                )
+                InsightsSectionHeader("Device health notifications")
                 HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
                         ForEach(events) { event in
@@ -127,24 +124,18 @@ struct InsightsRhythmEventsCard: View {
 
     // MARK: - Disclaimer (permanent, non-dismissible)
 
+    /// 1.4 B2 — the card's foot, on the card's own edge: no inset box inside
+    /// the card and no `info.circle` that opened nothing. Permanent as before.
     private var disclaimer: some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "info.circle")
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityHidden(true)
-            // VERBATIM copy contract — `insights.rhythmEvents.disclaimer`.
-            Text(
-                // swiftlint:disable:next line_length
-                "These are alerts your device produced using its own built-in detection. They are shown here for your awareness only. This is not a medical assessment by HealthLog, and HealthLog does not diagnose any condition. If a notification concerns you, talk to your doctor."
-            )
-            .font(.hlFootnote)
-            .foregroundStyle(HLText.secondary)
-        }
-        .padding(HLSpace.md)
+        // VERBATIM copy contract — `insights.rhythmEvents.disclaimer`.
+        Text(
+            // swiftlint:disable:next line_length
+            "These are alerts your device produced using its own built-in detection. They are shown here for your awareness only. This is not a medical assessment by HealthLog, and HealthLog does not diagnose any condition. If a notification concerns you, talk to your doctor."
+        )
+        .font(.hlFootnote)
+        .foregroundStyle(HLText.secondary)
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(HLSurface.tertiary, in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
-        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("insights.rhythmEvents.disclaimer")
     }
 
