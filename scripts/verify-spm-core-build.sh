@@ -81,8 +81,11 @@ _spm_check_package() {
 
     # Never pipe the build into a filter: the exit code is one of the four
     # things being asserted, and a pipe under `pipefail` reports the filter's.
+    # `--build-system native`: from Swift 6.3 the default build system
+    # (swiftbuild) no longer prints one "Compiling <Target> <file>" line per
+    # file, which assertion 4 counts. The native one still does.
     set +e
-    swift build --package-path "$package_path" --scratch-path "$scratch/.build" \
+    swift build --build-system native --package-path "$package_path" --scratch-path "$scratch/.build" \
         >"$log" 2>&1
     status=$?
     set -e
