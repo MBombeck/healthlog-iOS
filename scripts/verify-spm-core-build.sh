@@ -81,9 +81,12 @@ _spm_check_package() {
 
     # Never pipe the build into a filter: the exit code is one of the four
     # things being asserted, and a pipe under `pipefail` reports the filter's.
-    # `--build-system native`: from Swift 6.3 the default build system
-    # (swiftbuild) no longer prints one "Compiling <Target> <file>" line per
-    # file, which assertion 4 counts. The native one still does.
+    # `--build-system native`: since Swift 6.4 (Xcode 27) the default engine is
+    # swiftbuild, whose log has no `Compiling <Target> <File>.swift` lines, so
+    # assertion 4 would read 0 and reject every healthy package. Native keeps
+    # the per-target line. It is deprecated; once SwiftPM drops it, the unknown
+    # option makes `swift build` exit non-zero and this gate fails closed, never
+    # green.
     set +e
     swift build --build-system native --package-path "$package_path" --scratch-path "$scratch/.build" \
         >"$log" 2>&1

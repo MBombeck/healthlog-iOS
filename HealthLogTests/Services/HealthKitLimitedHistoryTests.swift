@@ -71,11 +71,11 @@
             #expect(dates == [:])
         }
 
-        // The iOS 27 SDK (Swift 6.3) declares this selector as typed API on
+        // The iOS 27 SDK (Xcode 27, Swift 6.4) declares this selector as typed API on
         // HKHealthStore, so the fake below no longer compiles there. The
         // runtime call is off in shipping builds (`shipsRuntimeCall = false`);
         // the typed path with its own tests replaces it.
-        #if !compiler(>=6.3)
+        #if !compiler(>=6.4)
             @Test("the runtime call reaches the method and types its answer")
             func runtimeCallIsTyped() async throws {
                 let weight = HKQuantityType(.bodyMass)
@@ -204,7 +204,7 @@
         }
     }
 
-    #if !compiler(>=6.3)
+    #if !compiler(>=6.4)
         /// An `HKHealthStore` that answers the iOS 27 selector itself, so the
         /// runtime path (`responds(to:)`, `method(for:)`, the block, the typed
         /// dictionary) runs end to end on an iOS 26 simulator.
