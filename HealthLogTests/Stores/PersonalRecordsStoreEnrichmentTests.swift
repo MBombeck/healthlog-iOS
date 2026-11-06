@@ -121,37 +121,51 @@ struct PersonalRecordsStoreEnrichmentTests {
         #expect(store.visibleRecords.map(\.id) == ["w-this"])
     }
 
-    @Test("Streak records are surfaced into the rail by metricSlot pattern")
-    func streakSurfacing() async {
+    @Test("Every catalog language keeps streaks in the rail and milestones, out of the grid")
+    func streakSurfacing() async throws {
+        let catalog = try ParityCatalog.load()
+        let entry = try #require(catalog.strings["records.streak.slot %@ %lld"])
+        let localizations = try #require(entry.localizations)
+        #expect(localizations.keys.contains("ko"), "The localized streak regression must cover Korean")
         MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let repo = PersonalRecordsRepository(api: makeAPI())
         let plain = makeRecord(id: "p1", metricType: "ACTIVITY_STEPS", value: 23000, achievedAt: now)
-        let streak = PersonalRecordDTO(
-            id: "s1",
-            userId: "u1",
-            metricType: "ACTIVITY_STEPS",
-            metricSlot: "Längste Serie ≥ 10.000 (14 Tage)",
-            direction: .max,
-            value: 14,
-            unit: "Tage",
-            achievedAt: now,
-            sourceMeasurementId: nil,
-            source: "HEALTHLOG_CLIENT",
-            externalId: nil,
-            createdAt: now
-        )
-        let derived = StubDerivedSource(records: [plain, streak])
-        let store = PersonalRecordsStore(
-            repo: repo,
-            derivedSource: derived,
-            sparklineProvider: nil,
-            clock: { now }
-        )
-        await store.load()
-        #expect(store.streakRecords.map(\.id) == ["s1"])
+        // Read every translation directly so a new language cannot silently lose its streak marker.
+        for language in localizations.keys.sorted() {
+            let format = try #require(ParityCatalog.value(entry, language: language), "Missing streak slot for \(language)")
+            let streak = PersonalRecordDTO(
+                id: "s1",
+                userId: "u1",
+                metricType: "ACTIVITY_STEPS",
+                metricSlot: String(format: format, "10,000", Int64(30)),
+                direction: .max,
+                value: 30,
+                unit: "",
+                achievedAt: now,
+                sourceMeasurementId: nil,
+                source: "HEALTHLOG_CLIENT",
+                externalId: nil,
+                createdAt: now
+            )
+            let derived = StubDerivedSource(records: [plain, streak])
+            let store = PersonalRecordsStore(
+                repo: repo,
+                derivedSource: derived,
+                sparklineProvider: nil,
+                clock: { now }
+            )
+            await store.load()
+            let enrichedStreak = try #require(store.enrichedRecords.first { $0.id == streak.id }, "\(language)")
+            let grid = PersonalRecordsScreen.gridRecords(store.enrichedRecords)
+            #expect(grid.map(\.id) == [plain.id], "\(language): only the plain record belongs in the grid")
+            #expect(store.streakRecords.map(\.id) == [streak.id], "\(language): only the streak belongs in the rail")
+            let milestoneIDs = Milestone.synthesise(from: [enrichedStreak]).map(\.id)
+            #expect(milestoneIDs.contains("week-streak"), "\(language): a 30-day streak earns the week milestone")
+            #expect(milestoneIDs.contains("month-streak"), "\(language): a 30-day streak earns the month milestone")
+        }
     }
 
     @Test("clearOnLogout resets selectedBucket + enrichedRecords")

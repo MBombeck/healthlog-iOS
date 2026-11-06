@@ -145,13 +145,13 @@ public final class PersonalRecordsStore {
     }
 
     /// Streak-class records surfaced by `StreakComputer` (derived rows
-    /// with `metricSlot` containing "Serie" / "streak"). The Streak rail
+    /// with `metricSlot` containing "Serie" / "streak" / "연속"). The Streak rail
     /// hoists them out of the main grid so the visual rhythm reads as
     /// "Records · Streaks · Milestones" rather than mixing all three.
     public var streakRecords: [PersonalRecord] {
         enrichedRecords.filter { record in
             let slot = (record.base.metricSlot ?? "").lowercased()
-            return slot.contains("serie") || slot.contains("streak")
+            return slot.contains("serie") || slot.contains("streak") || slot.contains("연속")
         }
     }
 

@@ -74,14 +74,14 @@ struct Milestone: Identifiable, Equatable {
         }
         let weekStreak = records.contains { record in
             let slot = (record.base.metricSlot ?? "").lowercased()
-            return (slot.contains("serie") || slot.contains("streak")) && record.base.value >= 7
+            return (slot.contains("serie") || slot.contains("streak") || slot.contains("연속")) && record.base.value >= 7
         }
         if weekStreak {
             out.append(.init(id: "week-streak", symbol: "flame.fill", titleKey: "records.milestone.weekStreak"))
         }
         let monthStreak = records.contains { record in
             let slot = (record.base.metricSlot ?? "").lowercased()
-            return (slot.contains("serie") || slot.contains("streak")) && record.base.value >= 30
+            return (slot.contains("serie") || slot.contains("streak") || slot.contains("연속")) && record.base.value >= 30
         }
         if monthStreak {
             out.append(.init(id: "month-streak", symbol: "flame.circle.fill", titleKey: "records.milestone.monthStreak"))
