@@ -173,7 +173,7 @@ struct AppReviewConfigurationTests {
             "NSPrivacyCollectedDataTypeOtherUserContent",
             "NSPrivacyCollectedDataTypeSensitiveInfo",
             "NSPrivacyCollectedDataTypeDeviceID",
-            "NSPrivacyCollectedDataTypePhotosorVideos"
+            "NSPrivacyCollectedDataTypePhotosorVideos", "NSPrivacyCollectedDataTypePreciseLocation"
         ])
         for entry in entries {
             #expect(entry["NSPrivacyCollectedDataTypeTracking"] as? Bool == false)
@@ -343,7 +343,8 @@ extension AppReviewConfigurationTests {
         #expect(accountScreen.contains("DeleteAccountScreen()"))
         #expect(!accountScreen.contains("#if DEBUG"))
 
-        let service = try text("HealthLog/Services/AuthService.swift")
+        let account = try text("HealthLog/Services/AuthService+Account.swift")
+        let service = try text("HealthLog/Services/AuthService.swift") + "\n" + account
         #expect(service.contains("path: \"/api/settings/account\""))
         #expect(service.contains("method: .delete"))
         #expect(service.contains("confirm: \"DELETE_ACCOUNT\""))
@@ -365,13 +366,12 @@ extension AppReviewConfigurationTests {
         #expect(service.contains("for provider in AIProvider.allCases"))
         #expect(service.contains("for provider in BYOProviderID.allCases"))
 
-        let nativeDeleteStart = try #require(service.range(of: "public func deleteAccount() async throws"))
-        let nativeDeleteEnd = try #require(service.range(
-            of: "private nonisolated static func wipeDeletedAccountKeychain",
-            range: nativeDeleteStart.upperBound ..< service.endIndex
-        ))
-        let nativeDelete = String(service[nativeDeleteStart.lowerBound ..< nativeDeleteEnd.lowerBound])
-        let nativeDeleteAccepted = try #require(nativeDelete.range(of: "try await api.sendVoid(deleteReq)"))
+        #expect(account.contains("public extension AuthService"), "deleteAccount stays public API")
+        let nativeDeleteStart = try #require(account.range(of: "func deleteAccount() async throws -> AccountDeletionReceipt"))
+        let afterDelete = nativeDeleteStart.upperBound ..< account.endIndex // 1.5 KONTO: AuthService+Account.swift
+        let nativeDeleteEnd = try #require(account.range(of: "static func wipeDeletedAccountKeychain", range: afterDelete))
+        let nativeDelete = String(account[nativeDeleteStart.lowerBound ..< nativeDeleteEnd.lowerBound])
+        let nativeDeleteAccepted = try #require(nativeDelete.range(of: "try await api.download(deleteReq)"))
         let nativeWipe = try #require(nativeDelete.range(of: "invalidateAndWipeDeletedAccountCredentials()"))
         #expect(nativeDeleteAccepted.lowerBound < nativeWipe.lowerBound)
         #expect(!nativeDelete.contains("Self.wipeDeletedAccountKeychain"))

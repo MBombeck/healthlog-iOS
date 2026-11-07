@@ -419,23 +419,34 @@ public struct DoctorReportSpec: Sendable, Equatable {
 
 // MARK: - Locale gate
 
-/// Report locale — DE primary, EN secondary. Forced at spec-build time so
-/// the renderer's date-formatter + section-titles agree on one language,
-/// even when the system locale differs (operator may share the PDF with
-/// an English-speaking specialist).
+/// Report locale — one per interface language (DE, EN, NL). Forced at
+/// spec-build time so the renderer's date-formatter + section-titles agree
+/// on one language, even when the system locale differs (operator may share
+/// the PDF with an English-speaking specialist).
 public enum ReportLocale: String, Sendable, Equatable, CaseIterable {
     case de
     case en
+    case nl
+
+    /// The report language for an interface language. Exhaustive on purpose:
+    /// a fourth `AppLanguage` must not compile until the report speaks it.
+    public init(_ language: AppLanguage) {
+        switch language {
+        case .de: self = .de
+        case .en: self = .en
+        case .nl: self = .nl
+        }
+    }
 
     public var bcp47: String {
         rawValue
     }
 
+    /// The language's home locale (`de_DE`, `en_US`, `nl_NL`), from
+    /// `AppLanguage`. Deliberately not the device region: the report is read
+    /// by someone else, often elsewhere (see `ReportLocale+Language.swift`).
     public var foundationIdentifier: String {
-        switch self {
-        case .de: "de_DE"
-        case .en: "en_US"
-        }
+        appLanguage.homeLocaleIdentifier
     }
 }
 
@@ -480,14 +491,23 @@ public struct DoctorReportSectionSelection: Sendable, Equatable {
 /// Verbatim copy locked by the operator (Phase T-7 dispatch). Any change
 /// here is a compliance-affecting copy edit — must go through the operator + the
 /// MDR-disclaimer test (`DoctorReportLocalSpecTests.footerDisclaimer*`).
+/// Since 1.5 the text is the medical key `report.disclaimer` of
+/// `DoctorReport.xcstrings`; a language other than German stays
+/// `needs_review` until a person signs it off.
 public enum DoctorReportDisclaimer {
-    public static let de = "Lokaler Export, kein Server beteiligt, auf-Geraet erzeugt, kein medizinisches Dokument"
-    public static let en = "Local export, no server involved, generated on-device, not a medical document"
+    public static var de: String {
+        text(for: .de)
+    }
+
+    public static var en: String {
+        text(for: .en)
+    }
+
+    public static var nl: String {
+        text(for: .nl)
+    }
 
     public static func text(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: de
-        case .en: en
-        }
+        DoctorReportStrings.text(.disclaimer, locale)
     }
 }

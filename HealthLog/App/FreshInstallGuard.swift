@@ -246,6 +246,8 @@ enum FreshInstallGuard {
         let inherited = keychain.getString(forKey: KeychainKey.serverURL)?.nilIfEmpty != nil
         try? keychain.remove(forKey: KeychainKey.serverURLExplicitHostFingerprint)
         try? keychain.remove(forKey: KeychainKey.serverURL)
+        // GH-iOS #27 — proxy credentials belong to that inherited server too.
+        try? keychain.remove(forKey: KeychainKey.serverAccessHeaders)
         // The sentinel goes in last. A crash between the removal and this
         // write costs the next launch one more (idempotent) wipe of an
         // already-empty slot — the harmless direction.

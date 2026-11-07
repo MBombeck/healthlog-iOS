@@ -106,6 +106,12 @@ public actor ApiTokenRepository {
         self.api = api
     }
 
+    /// SEC — `GET /api/version`, for the proof gate of a mint when the app
+    /// has not recorded the server's version yet.
+    public func serverVersion() async throws -> ServerVersionInfo {
+        try await api.fetchServerVersion()
+    }
+
     /// Every token on the account, revoked ones included (the server does not
     /// filter). The store splits them for display.
     public func list() async throws -> [ApiTokenDTO] {

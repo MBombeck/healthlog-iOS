@@ -137,21 +137,30 @@ enum IllnessVitalLabel {
     /// Maps a server vital-type string to a localized label. Unknown types fall
     /// back to a title-cased rendering of the raw string (forward-compat).
     static func label(for type: String) -> String {
-        switch type.uppercased() {
-        case "RESTING_HEART_RATE", "RHR": String(localized: "illness.vital.restingHeartRate")
-        case "RESPIRATORY_RATE": String(localized: "illness.vital.respiratoryRate")
-        case "BODY_TEMPERATURE", "TEMPERATURE": String(localized: "illness.vital.temperature")
-        case "HEART_RATE_VARIABILITY", "HRV": String(localized: "illness.vital.hrv")
-        case "OXYGEN_SATURATION", "SPO2": String(localized: "illness.vital.spo2")
-        // v1.21.0: the user-logged symptom-burden track (`FUNCTIONAL_IMPACT`)
-        // can win `gapDriverType` — name it "your symptoms" (mirrors the web).
-        case "FUNCTIONAL_IMPACT": String(localized: "illness.vital.functionalImpact")
-        default:
-            type
-                .replacingOccurrences(of: "_", with: " ")
-                .capitalized
-        }
+        if let key = keys[type.uppercased()] { return String(localized: key) }
+        return type
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
     }
+
+    /// Server vital type to catalog key. v1.21.0: the user-logged
+    /// symptom-burden track (`FUNCTIONAL_IMPACT`) can win `gapDriverType`, named
+    /// "your symptoms" as on the web. 1.5: the rest of the server's correlation
+    /// set (`src/lib/illness/correlation.ts`), which printed as raw English.
+    private static let keys: [String: String.LocalizationValue] = [
+        "RESTING_HEART_RATE": "illness.vital.restingHeartRate", "RHR": "illness.vital.restingHeartRate",
+        "RESPIRATORY_RATE": "illness.vital.respiratoryRate",
+        "BODY_TEMPERATURE": "illness.vital.temperature", "TEMPERATURE": "illness.vital.temperature",
+        "HEART_RATE_VARIABILITY": "illness.vital.hrv", "HRV": "illness.vital.hrv",
+        "OXYGEN_SATURATION": "illness.vital.spo2", "SPO2": "illness.vital.spo2",
+        "FUNCTIONAL_IMPACT": "illness.vital.functionalImpact",
+        "HRV_RMSSD": "illness.vital.hrvRmssd",
+        "RECOVERY_SCORE": "illness.vital.recovery",
+        "BLOOD_PRESSURE_SYS": "illness.vital.bloodPressureSys",
+        "BLOOD_PRESSURE_DIA": "illness.vital.bloodPressureDia",
+        "PULSE": "illness.vital.pulse",
+        "WEIGHT": "illness.vital.weight"
+    ]
 }
 
 extension IllnessRedFlag {

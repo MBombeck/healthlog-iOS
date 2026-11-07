@@ -43,13 +43,20 @@ route on the server. The drift-test
 and parameterises over the full route table — adding a new auth route without
 updating the exemption list (or the test) will fail the build.
 
-## Cloudflare Access
+## Proxy access headers (Cloudflare Access, Pangolin)
 
-Optional. Slots im APIClient, default leer:
-- `cf-access-client-id`
-- `cf-access-client-token`
+Optional, default leer. Seit 1.4.1 (GH-iOS #27) traegt jede Anfrage an den
+konfigurierten Server die Header aus `AppEnvironment.accessHeaders`:
 
-Werte kommen ueber `xcconfig` (Debug + Release Schemes), niemals hardcoded.
+- vom Nutzer gesetzt, im Keychain (`KeychainKey.serverAccessHeaders`, JSON),
+  Eingabe beim Einrichten und unter Einstellungen, Server;
+- dazu ein im Build hinterlegtes Cloudflare-Paar aus `Info.plist`
+  (`CFAccess.ClientID`, `CFAccess.ClientSecret`, alt `ClientToken`), gesendet als
+  `CF-Access-Client-Id` und `CF-Access-Client-Secret`. Bis 1.4.0 ging das Secret
+  faelschlich als `cf-access-client-token` raus.
+
+Gleichnamige Nutzer-Header gewinnen. Eine Weiterleitung auf einen anderen Host
+entfernt sie (`PinningDelegate`, `ServerAccessHeaders.redirectRequest`).
 
 ## Idempotency
 

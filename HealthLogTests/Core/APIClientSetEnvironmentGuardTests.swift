@@ -104,6 +104,29 @@ struct APIClientSetEnvironmentGuardTests {
         )
     }
 
+    /// #153 — an unchanged address is no host change. 1.4 refused it with
+    /// a token present, so changed access headers waited for a relaunch (and
+    /// DEBUG asserted). No test hook here: it must not assert either.
+    @Test("Same address with a token present is accepted (#153)")
+    func sameAddressAcceptedDespiteToken() async {
+        let original = Self.makeEnvironment(host: "self-hosted.example.com")
+        let next = AppEnvironment(
+            baseURL: URL(string: "https://self-hosted.example.com"),
+            accessHeaders: [ServerAccessHeader(name: "X-Proxy-Key", value: "new")],
+            bundleID: "dev.healthlog.app",
+            appVersion: "0.1.0",
+            buildNumber: "1"
+        )
+        let kc = InMemoryKeychain()
+        try? kc.setString("hlk_active_session", forKey: KeychainKey.authToken)
+        let api = makeClient(env: original, keychain: kc)
+
+        await api.setEnvironment(next)
+
+        let envAfter = await api.environment
+        #expect(envAfter.accessHeaders == [ServerAccessHeader(name: "X-Proxy-Key", value: "new")])
+    }
+
     @Test("Logout-then-swap is permitted again — token absence re-enables the rotation")
     func swapAfterLogoutPermitted() async {
         let original = Self.makeEnvironment(host: "old.healthlog.local")

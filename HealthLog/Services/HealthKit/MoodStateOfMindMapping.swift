@@ -71,43 +71,46 @@ enum MoodStateOfMindMapping {
             return out
         }
 
-        /// Small German+English keyword → emotion `Label` table. Keys are
-        /// lower-cased; matching is exact on the normalized tag.
+        /// Small German, English and Dutch keyword → emotion `Label` table.
+        /// Keys are lower-cased; matching is exact on the normalized tag. A
+        /// word two languages share ("stress", "familie") is listed once: a
+        /// dictionary literal with a duplicate key traps at runtime.
         @available(iOS 18.0, *)
         private static var labelTable: [String: HKStateOfMind.Label] {
             [
-                "angst": .anxious, "ängstlich": .anxious, "anxious": .anxious,
-                "gestresst": .stressed, "stress": .stressed, "stressed": .stressed,
-                "dankbar": .grateful, "grateful": .grateful,
-                "glücklich": .happy, "happy": .happy,
-                "traurig": .sad, "sad": .sad,
-                "ruhig": .calm, "calm": .calm,
-                "müde": .drained, "tired": .drained, "erschöpft": .drained,
-                "wütend": .angry, "angry": .angry,
-                "froh": .joyful, "joyful": .joyful,
-                "einsam": .lonely, "lonely": .lonely,
-                "überfordert": .overwhelmed, "overwhelmed": .overwhelmed,
-                "zufrieden": .content, "content": .content,
-                "hoffnungsvoll": .hopeful, "hopeful": .hopeful
+                "angst": .anxious, "ängstlich": .anxious, "anxious": .anxious, "angstig": .anxious, "bang": .anxious,
+                "gestresst": .stressed, "stress": .stressed, "stressed": .stressed, "gestrest": .stressed,
+                "dankbar": .grateful, "grateful": .grateful, "dankbaar": .grateful,
+                "glücklich": .happy, "happy": .happy, "blij": .happy, "gelukkig": .happy,
+                "traurig": .sad, "sad": .sad, "verdrietig": .sad, "somber": .sad,
+                "ruhig": .calm, "calm": .calm, "rustig": .calm, "kalm": .calm,
+                "müde": .drained, "tired": .drained, "erschöpft": .drained, "moe": .drained, "uitgeput": .drained,
+                "wütend": .angry, "angry": .angry, "boos": .angry,
+                "froh": .joyful, "joyful": .joyful, "vrolijk": .joyful,
+                "einsam": .lonely, "lonely": .lonely, "eenzaam": .lonely,
+                "überfordert": .overwhelmed, "overwhelmed": .overwhelmed, "overweldigd": .overwhelmed,
+                "zufrieden": .content, "content": .content, "tevreden": .content,
+                "hoffnungsvoll": .hopeful, "hopeful": .hopeful, "hoopvol": .hopeful
             ]
         }
 
-        /// Small German+English keyword → context `Association` table.
+        /// Small German, English and Dutch keyword → context `Association` table.
         @available(iOS 18.0, *)
         private static var associationTable: [String: HKStateOfMind.Association] {
             [
-                "arbeit": .work, "work": .work, "job": .work,
-                "familie": .family, "family": .family,
-                "freunde": .friends, "friends": .friends,
-                "gesundheit": .health, "health": .health,
-                "fitness": .fitness, "sport": .fitness,
-                "geld": .money, "money": .money, "finanzen": .money,
-                "schlaf": .selfCare, "sleep": .selfCare, "selbstfürsorge": .selfCare,
-                "hobby": .hobbies, "hobbies": .hobbies,
-                "partner": .partner, "beziehung": .partner,
-                "reise": .travel, "travel": .travel, "urlaub": .travel,
-                "wetter": .weather, "weather": .weather,
-                "lernen": .education, "education": .education, "schule": .education
+                "arbeit": .work, "work": .work, "job": .work, "werk": .work,
+                "familie": .family, "family": .family, "gezin": .family,
+                "freunde": .friends, "friends": .friends, "vrienden": .friends,
+                "gesundheit": .health, "health": .health, "gezondheid": .health,
+                "fitness": .fitness, "sport": .fitness, "sporten": .fitness,
+                "geld": .money, "money": .money, "finanzen": .money, "financiën": .money,
+                "schlaf": .selfCare, "sleep": .selfCare, "selbstfürsorge": .selfCare, "slaap": .selfCare, "zelfzorg": .selfCare,
+                "hobby": .hobbies, "hobbies": .hobbies, "hobby's": .hobbies,
+                "partner": .partner, "beziehung": .partner, "relatie": .partner,
+                "reise": .travel, "travel": .travel, "urlaub": .travel, "reizen": .travel, "vakantie": .travel,
+                "wetter": .weather, "weather": .weather, "weer": .weather,
+                "lernen": .education, "education": .education, "schule": .education,
+                "leren": .education, "studie": .education, "school": .education
             ]
         }
     #endif

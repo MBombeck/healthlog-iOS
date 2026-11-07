@@ -142,6 +142,46 @@ extension HealthSyncOrchestrator {
         return nil
     }
 
+    /// SYNC-HR (1.5, #159) — the longest one capability may hold its
+    /// lane. Above every capability's own limit (the pulse sweep's is two
+    /// minutes), so it only ever catches a capability that has none. A
+    /// task-local so a test can shorten it.
+    @TaskLocal static var capabilityDeadline: Duration = .seconds(150)
+
+    /// Runs the adapter in its own task and waits for it at most
+    /// ``capabilityDeadline``. A capability that does not return by then is
+    /// cancelled and named `expired`, and the rest of the round (samples,
+    /// workouts, the outbox drain) runs. Until 1.4.1 a capability that never
+    /// returned held its lane, and with it the whole pass, until a restart.
+    private static func runBounded(
+        _ adapter: HealthSyncCapabilityAdapter,
+        context: HealthSyncRunContext
+    ) async -> HealthSyncCapabilityResult {
+        let work = Task { await adapter.run(context) }
+        let outcome = await withTaskCancellationHandler {
+            await BoundedWait.value(of: work, limit: capabilityDeadline)
+        } onCancel: {
+            work.cancel()
+        }
+        switch outcome {
+        case let .finished(result):
+            return result
+        case .cancelled:
+            // The caller went away: the adapter saw the cancellation and
+            // usually answers at once with its own disposition. Give it a
+            // short grace, from a task the cancellation does not reach.
+            let grace = Task { await BoundedWait.value(of: work, limit: .seconds(5)) }
+            if case let .finished(result) = await grace.value { return result }
+            return .cancelled(adapter.capability)
+        case .timedOut, .expired:
+            work.cancel()
+            let name = adapter.capability.rawValue
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            HLLog.healthKit.error("HK pass: \(name, privacy: .public) passed its deadline, cancelled")
+            return .expired(adapter.capability)
+        }
+    }
+
     /// Runs one adapter and times it. An adapter that returns a result for a
     /// different capability than the one asked for is corrected here, so a
     /// mis-wired composition cannot make a capability disappear from the plan.
@@ -156,7 +196,7 @@ extension HealthSyncOrchestrator {
         let name = adapter.capability.rawValue, trigger = context.trigger.rawValue
         // swiftlint:disable:next hllog_public_privacy_interpolation
         HLLog.healthKit.notice("HK pass \(trigger, privacy: .public): \(name, privacy: .public) begins")
-        let result = await adapter.run(context)
+        let result = await runBounded(adapter, context: context)
         let elapsed = Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)
         // swiftlint:disable:next hllog_public_privacy_interpolation
         HLLog.healthKit.notice(

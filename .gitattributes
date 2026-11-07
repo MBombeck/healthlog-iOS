@@ -1,3 +1,10 @@
 # Keep server-contract fixtures byte-exact: they are captured evidence of the
 # server's actual responses, and normalizing them would edit the evidence.
 HealthLogTests/Fixtures/** -whitespace
+
+# String catalogs merge by key, not by line (scripts/l10n/merge-xcstrings.py,
+# docs/localization.md). Parallel branches each append keys at the end of
+# "strings"; a line merge conflicts there every time. The driver itself is
+# registered once per clone with `git config merge.xcstrings.driver ...`;
+# without it git falls back to its normal line merge.
+*.xcstrings merge=xcstrings

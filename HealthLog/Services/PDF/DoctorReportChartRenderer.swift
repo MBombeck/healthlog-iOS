@@ -29,10 +29,13 @@ import SwiftUI
         /// #115 P2 — `units` (the spec's `printUnits`) wins over `glucoseUnit`
         /// when given: weight / temperature / waist tiles plot in the account's
         /// unit too.
+        /// L10N-REPORT — `reportLocale` names the tiles and formats the axis
+        /// dates in the report language; `nil` keeps the interface language.
         static func renderImages(
             _ block: DoctorReportSpec.ChartsBlock,
             glucoseUnit: GlucoseUnit = .mgdL,
             units: UnitPreferences? = nil,
+            reportLocale: ReportLocale? = nil,
             tileSize: CGSize = CGSize(width: 540, height: 120)
         ) -> [ChartImage] {
             let units = units ?? UnitPreferences(glucose: glucoseUnit)
@@ -42,6 +45,7 @@ import SwiftUI
                     image: renderSeriesImage(
                         series: DoctorReportGlucoseDisplay.series(series, units: units),
                         units: units,
+                        reportLocale: reportLocale,
                         size: tileSize
                     )
                 )
@@ -51,9 +55,11 @@ import SwiftUI
         private static func renderSeriesImage(
             series: DoctorReportSpec.ChartsBlock.Series,
             units: UnitPreferences,
+            reportLocale: ReportLocale?,
             size: CGSize
         ) -> UIImage? {
-            let view = ChartTile(series: series, glucoseUnit: units.glucose, units: units)
+            let view = ChartTile(series: series, glucoseUnit: units.glucose, units: units, reportLocale: reportLocale)
+                .environment(\.locale, reportLocale?.formattingLocale ?? .current)
                 .frame(width: size.width, height: size.height)
                 .padding(.horizontal, 0)
             let renderer = ImageRenderer(content: view)
@@ -103,15 +109,22 @@ import SwiftUI
         /// #115 P2 — the units the tile's points are in (glucose from
         /// ``glucoseUnit`` when not given).
         var units: UnitPreferences?
+        /// L10N-REPORT — the report language of the tile title; `nil` reads
+        /// the interface language.
+        var reportLocale: ReportLocale?
+
+        private var metricName: String {
+            reportLocale.map { DoctorReportStrings.metricName(series.kind, $0) } ?? series.kind.displayName
+        }
 
         /// The tile title; a converted kind carries its unit, which is the
         /// account's and not self-evident from the axis.
         var title: String {
             let units = units ?? UnitPreferences(glucose: glucoseUnit)
             guard let unit = DoctorReportGlucoseDisplay.titleUnit(for: series.kind, units: units) else {
-                return series.kind.displayName
+                return metricName
             }
-            return "\(series.kind.displayName) (\(unit))"
+            return "\(metricName) (\(unit))"
         }
 
         // v0.14 light-mode walk: the doctor PDF always prints on white
@@ -152,9 +165,16 @@ import SwiftUI
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    // POLISH-A F-PDF-2 — whole days only. The automatic marks
+                    // fell to half days on a short window and printed "12 mei,
+                    // 12" in Dutch, an hour without a unit.
+                    AxisMarks(values: .stride(by: .day, count: Self.dayStride(for: series.points))) { _ in
                         AxisGridLine().foregroundStyle(Color.gray.opacity(0.3))
-                        AxisValueLabel().foregroundStyle(Self.printGraphite.opacity(0.6))
+                        // The format style reads `Locale.current`, not the
+                        // environment: name the report's locale explicitly.
+                        AxisValueLabel(format: .dateTime.day().month(.abbreviated)
+                            .locale(reportLocale?.formattingLocale ?? .current))
+                            .foregroundStyle(Self.printGraphite.opacity(0.6))
                     }
                 }
                 .chartYAxis {
@@ -170,6 +190,14 @@ import SwiftUI
             .background(Color.white)
         }
 
+        /// Days between two axis marks: about four marks over the window,
+        /// never less than one day apart.
+        static func dayStride(for points: [DoctorReportSpec.ChartsBlock.Point]) -> Int {
+            guard let first = points.map(\.at).min(), let last = points.map(\.at).max() else { return 1 }
+            let days = last.timeIntervalSince(first) / 86400
+            return max(1, Int((days / 4).rounded(.up)))
+        }
+
         private func makeChartDescriptor() -> AXChartDescriptor {
             let formatter = DateFormatter()
             formatter.dateStyle = .short
@@ -179,7 +207,9 @@ import SwiftUI
             return HLChartAX.singleSeries(
                 title: series.kind.displayName,
                 summary: series.kind.displayName,
-                xAxisTitle: "Datum",
+                // VoiceOver reads this in the interface language, like the
+                // series names around it.
+                xAxisTitle: String(localized: "Date"),
                 yAxisTitle: series.kind.displayName,
                 seriesName: series.kind.displayName,
                 points: points.map { ($0.x, $0.y, $0.xLabel) }

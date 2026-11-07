@@ -7,6 +7,19 @@ brew install xcodegen swiftlint swiftformat
 xcode-select --install   # falls nicht da
 ```
 
+Xcode ist auf **27.2** festgelegt (`project.yml` `options.xcodeVersion`; Producer und CI
+pruefen das). Seit Xcode 27 ist die **Metal-Toolchain** ein eigener Download, den
+mlx-swift fuer seine Shader braucht. Fehlt sie, bricht der Build erst mittendrin mit
+`cannot execute tool 'metal' due to missing Metal Toolchain` ab. Nach jeder
+Neuinstallation von Xcode einmal:
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+xcodebuild -showComponent MetalToolchain   # Status: installed
+```
+
+`scripts/ship-to-testflight.sh` und der CI-Schritt "Verify Tooling" pruefen das vorab.
+
 Apple Developer Account: noch nicht vorhanden (in dieser Session). Sobald da:
 - Team-ID kopieren (Apple Developer → Membership → Team ID, 10-Zeichen).
 - In `project.yml` unter `settings.base.DEVELOPMENT_TEAM` eintragen.

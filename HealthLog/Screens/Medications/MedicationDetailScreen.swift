@@ -62,6 +62,10 @@ public struct MedicationDetailScreen: View {
     /// so `proxy.scrollTo` + its `withAnimation` never run against a dead scroll
     /// view (benign, but avoids a stray animation transaction).
     @State private var isOnScreen = false
+    /// #141 — records related to this medication, from its single read.
+    @State var related = RelatedRecordsModel()
+    /// #131 — the composition per unit, from the same single read.
+    @State var composition = MedicationCompositionModel()
 
     public init(
         medication: Medication,
@@ -352,6 +356,14 @@ public struct MedicationDetailScreen: View {
                     NotesSection(text: notes)
                 }
 
+                MedicationCoursesSection(medication: store.medication) // MED-PLUS: courses, under "Erweitert"
+
+                MedicationCompositionSection(model: composition, medication: store.medication) {
+                    await related.reload()
+                }
+
+                RelatedRecordsLoadedSection(model: related)
+
                 // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
                 // primitive as Dashboard/Insights, self-suppressing).
                 HLSyncStatusFooter(screenLoading: store.isLoading)
@@ -374,10 +386,12 @@ public struct MedicationDetailScreen: View {
             await titrationStore.load(serverChanges: store.details?.doseChanges ?? [])
             await injectionSiteStore.load(serverIntakes: store.intakes)
         }
+        .task(id: store.medication.id) { await loadRelated() }
         .refreshable {
             await store.load()
             await titrationStore.load(serverChanges: store.details?.doseChanges ?? [])
             await injectionSiteStore.load(serverIntakes: store.intakes)
+            await related.reload()
         }
         // MED-4 / C3 — the inventory fetch is the signal that the supply view
         // of this medication has settled (a supply edit / intake refetch

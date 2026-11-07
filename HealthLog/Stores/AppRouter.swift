@@ -20,6 +20,8 @@ final class AppRouter {
     var medsPath: NavigationPath = .init()
     var insightsPath: NavigationPath = .init()
     var morePath: NavigationPath = .init()
+    /// VISIT — the booked visit a push or `visit.view` named (``AppRouter+PushPaths``).
+    var focusedVisitId: String?
 
     /// Geparkte Route für Cold-Start-from-Tap. Konsumiert + geleert von
     /// `consumePendingRoute()` sobald der Auth-Bootstrap fertig ist.
@@ -487,7 +489,7 @@ final class AppRouter {
             selectedTab = .more
             morePath = .init()
             morePath.append(PersonalRecordRoute(id: id))
-        case .settingsNotifications, .checkups, .cycle, .settingsSecurity, .settingsIntegrations:
+        case .settingsNotifications, .checkups, .checkupsVisit, .cycle, .settingsSecurity, .settingsIntegrations:
             // #141 — every More-stack screen a link opens (see `+PushPaths`).
             applyMoreStackRoute(route)
         case .mood:

@@ -63,4 +63,14 @@ public enum NutrientDisplay {
         guard let reference, reference > 0 else { return nil }
         return amount / reference
     }
+
+    /// POLISH-A A1 — why the detail page shows no reference. The server sends
+    /// `reference: null` for two reasons it does not name: the code has no
+    /// reference of its own (`dha`, `epa`: EFSA sets one adequate intake for
+    /// both together, server v1.43 `supplementOnly`), or the reference is
+    /// sex-split and the profile has no sex on file. Only the syncable codes
+    /// can be the second case; a supplement-only or unknown code is the first.
+    public static func missingReferenceMeansNoSex(for code: NutrientCode) -> Bool {
+        code.isSyncable
+    }
 }

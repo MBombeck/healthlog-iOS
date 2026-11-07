@@ -59,6 +59,13 @@ public struct InsightsTargetsResponseDTO: Codable, Sendable, Equatable {
         public let streakDays: Int
         public let insufficientData: Bool
         public let consistency7d: [ConsistencyBucket?]
+        /// **1.5 VERDICTS (#135, server v1.43)** — which way a change of this
+        /// target counts, judged against the person's own band. `nil` on an
+        /// older server and on a block this build cannot read.
+        public var direction: TrendVerdict?
+        /// #135 — the verdict applied to this target's own `trend`. `nil` on an
+        /// older server; an unknown word is ``TrendSentiment/unknown``.
+        public var trendSentiment: TrendSentiment?
 
         public enum Trend: String, Codable, Sendable, Equatable, TolerantServerEnum {
             case up
@@ -154,5 +161,43 @@ public struct InsightsTargetsResponseDTO: Codable, Sendable, Equatable {
             self.gender = gender
             self.glucoseUnit = glucoseUnit
         }
+    }
+}
+
+// MARK: - Tolerant decode (1.5 VERDICTS)
+
+/// The two v1.43 verdict fields decode on their own: a block this build cannot
+/// read is "not sent", never a failed targets page. Everything else decodes
+/// exactly as the synthesised conformance did.
+public extension InsightsTargetsResponseDTO.TargetItem {
+    private enum Keys: String, CodingKey {
+        case type, label, current, average30, trend, unit, range, classification, source
+        case daysInRange7d, daysLogged7d, daysInRange30d, daysLogged30d, lastMetGoalAt, streakDays
+        case insufficientData, consistency7d, direction, trendSentiment
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        try self.init(
+            type: c.decode(String.self, forKey: .type),
+            label: c.decode(String.self, forKey: .label),
+            current: c.decodeIfPresent(Double.self, forKey: .current),
+            average30: c.decodeIfPresent(Double.self, forKey: .average30),
+            trend: c.decodeIfPresent(Trend.self, forKey: .trend),
+            unit: c.decode(String.self, forKey: .unit),
+            range: c.decodeIfPresent(Range.self, forKey: .range),
+            classification: c.decodeIfPresent(Classification.self, forKey: .classification),
+            source: c.decode(String.self, forKey: .source),
+            daysInRange7d: c.decode(Int.self, forKey: .daysInRange7d),
+            daysLogged7d: c.decode(Int.self, forKey: .daysLogged7d),
+            daysInRange30d: c.decode(Int.self, forKey: .daysInRange30d),
+            daysLogged30d: c.decode(Int.self, forKey: .daysLogged30d),
+            lastMetGoalAt: c.decodeIfPresent(String.self, forKey: .lastMetGoalAt),
+            streakDays: c.decode(Int.self, forKey: .streakDays),
+            insufficientData: c.decode(Bool.self, forKey: .insufficientData),
+            consistency7d: c.decode([ConsistencyBucket?].self, forKey: .consistency7d),
+            direction: try? c.decodeIfPresent(TrendVerdict.self, forKey: .direction),
+            trendSentiment: try? c.decodeIfPresent(TrendSentiment.self, forKey: .trendSentiment)
+        )
     }
 }

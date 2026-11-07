@@ -49,6 +49,52 @@ public extension HKReadinessStore {
         return []
     }
 
+    /// **#154 (MIRROR, 1.5)** — welche Handlung die Apple-Health-Karte anbietet.
+    ///
+    /// Bis 1.4.1 standen „Mit Apple Health verbinden“ und „In Apple Health
+    /// öffnen“ immer da, solange nicht jeder Schreibtyp erteilt war. Mit
+    /// teilweise erteiltem Schreibzugriff sagte die Pille also „Verbunden“ und
+    /// der Primärknopf darunter „Verbinden“. Jetzt gibt es genau eine Handlung,
+    /// passend zum Zustand.
+    enum ConnectionAction: Equatable, Sendable {
+        /// Nichts zu tun: alles erteilt, oder der Zustand ist noch unbekannt.
+        case none
+        /// Der Systemdialog ist unbeantwortet: Primärknopf „Verbinden“.
+        case connect
+        /// Empfang steht oder der Dialog ist beantwortet, aber Schreibtypen
+        /// fehlen: Link „Schreibzugriff prüfen“ neben dem Hinweis.
+        case reviewWriteAccess
+        /// Abgelehnt und nichts angekommen: „In Apple Health öffnen“ als
+        /// Primärknopf, denn iOS fragt nie zweimal.
+        case openHealthApp
+    }
+
+    /// Reine Ableitung, damit jeder Zustand ohne HealthKit testbar ist.
+    /// `sheetAnswered` ist ``authorizationSheetAnswered(shareIdentifiers:readIdentifiers:)``:
+    /// `false` heißt, iOS würde den Dialog zeigen; `nil` heißt, die Plattform
+    /// kann es nicht sagen, dann gilt ohne Beleg für Empfang die Regel von 1.4.
+    static func connectionAction(
+        state: ConnectionState,
+        isConnected: Bool,
+        sheetAnswered: Bool?
+    ) -> ConnectionAction {
+        switch state {
+        case .unknown, .fullyGranted:
+            return .none
+        case .notRequested, .partiallyGranted, .denied:
+            break
+        }
+        if sheetAnswered == false { return .connect }
+        if case .denied = state, !isConnected { return .openHealthApp }
+        if sheetAnswered == true || isConnected { return .reviewWriteAccess }
+        return .connect
+    }
+
+    /// Die Handlung für den aktuellen Zustand dieses Stores.
+    func connectionAction(sheetAnswered: Bool?) -> ConnectionAction {
+        Self.connectionAction(state: state, isConnected: isConnected, sheetAnswered: sheetAnswered)
+    }
+
     /// #10 — welcher Zeitpunkt unter "Last synced" steht.
     ///
     /// Zuerst der eigene Stempel dieses Geräts (``lastSyncedAt``), sonst der des

@@ -48,6 +48,7 @@ gate_wait_seconds="${HEALTHLOG_XCODE_GATE_WAIT_SECONDS:-1800}"
 
 gate_acquired=0
 gate_started=$SECONDS
+gate_ticket=""
 
 _gate_test_census() {
     xcrun xcresulttool get test-results summary \
@@ -80,6 +81,9 @@ print("\n".join(sorted(seen)))' 2>/dev/null
 }
 
 _gate_release() {
+    if [[ -n "$gate_ticket" ]]; then
+        rm -f -- "$gate_ticket"
+    fi
     if [[ "$gate_acquired" -eq 1 && -d "$gate_lock_dir" ]]; then
         local recorded_owner=""
         recorded_owner="$(cat "$gate_lock_owner" 2>/dev/null || true)"
@@ -93,8 +97,46 @@ trap _gate_release EXIT
 trap '_gate_release; exit 130' INT
 trap '_gate_release; exit 143' TERM
 
+# 1.5.0 wave 4 — first come, first served. With five or six units queued, the
+# bare mkdir race let a unit with several runs win again and again while a
+# single run waited over an hour. Every waiter takes a ticket named by its
+# arrival time; only the oldest live ticket may try the lock. Tickets of dead
+# waiters are pruned. A waiter without a ticket (an older copy of this script,
+# a CI job on an older commit) still races as before, so the lock itself is
+# unchanged. HEALTHLOG_XCODE_GATE_FIFO=0 turns the queue off.
+gate_queue_dir="${gate_lock_dir}.queue"
+if [[ "${HEALTHLOG_XCODE_GATE_FIFO:-1}" == 1 ]]; then
+    mkdir -p -- "$gate_queue_dir" 2>/dev/null || true
+    gate_ticket="$gate_queue_dir/$(perl -MTime::HiRes=time -e 'printf "%017.6f", time')-$$"
+    if ! : >"$gate_ticket" 2>/dev/null; then
+        gate_ticket=""
+    fi
+fi
+
+_gate_my_turn() {
+    [[ -n "$gate_ticket" ]] || return 0
+    local ticket pid
+    for ticket in "$gate_queue_dir"/*; do
+        [[ -e "$ticket" ]] || continue
+        pid="${ticket##*-}"
+        if [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null; then
+            [[ "$ticket" == "$gate_ticket" ]]
+            return
+        fi
+        rm -f -- "$ticket"
+    done
+    return 0
+}
+
 gate_ownerless_since=""
-while ! mkdir -- "$gate_lock_dir" 2>/dev/null; do
+while ! { _gate_my_turn && mkdir -- "$gate_lock_dir" 2>/dev/null; }; do
+    if ! _gate_my_turn; then
+        if ((SECONDS - gate_started >= gate_wait_seconds)); then
+            _gate_fail "timed out waiting in the gate queue"
+        fi
+        sleep 0.2
+        continue
+    fi
     [[ -d "$gate_lock_dir" ]] || continue
     if [[ ! -f "$gate_lock_owner" ]]; then
         # 2026-09-09 — a second gate user (the CI runners share this lock with
@@ -138,6 +180,10 @@ done
 
 gate_acquired=1
 printf '%s\n' "$$" >"$gate_lock_owner"
+if [[ -n "$gate_ticket" ]]; then
+    rm -f -- "$gate_ticket"
+    gate_ticket=""
+fi
 
 command -v xcodegen >/dev/null 2>&1 || _gate_fail "xcodegen is unavailable"
 command -v xcodebuild >/dev/null 2>&1 || _gate_fail "xcodebuild is unavailable"

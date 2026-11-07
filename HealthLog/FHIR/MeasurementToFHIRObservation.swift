@@ -240,7 +240,8 @@ enum MeasurementToFHIRObservation {
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes, .stateOfMindValence, .afibBurden,
              // Build 7 / item 7.3 — mood is a survey self-report, not a FHIR
              // vital sign (and is never exported as an Observation anyway).
              .mood,

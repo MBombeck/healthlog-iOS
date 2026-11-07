@@ -53,6 +53,11 @@ extension SettingsHKSyncDiagnosticsScreen {
                     label: "settings.hkdiag.workout_hr_backfill",
                     value: HKSyncDiagnosticsVocabulary.workoutBackfill(diagnostics.workout.backfillState)
                 )
+                // 1.5 ROUTES — routes sent, thinned and unreadable this session.
+                // Hidden until a route was read at all.
+                if WorkoutRouteDiagnostics.shared.hasActivity {
+                    statRow(label: "settings.hkdiag.workout_routes", value: Self.routesLabel(WorkoutRouteDiagnostics.shared))
+                }
             }
         }
     }
@@ -86,6 +91,11 @@ extension SettingsHKSyncDiagnosticsScreen {
             return String(localized: "settings.hkdiag.workout_history_importing")
         }
         return String(localized: "settings.hkdiag.workout_history_importing_remaining \(remaining)")
+    }
+
+    /// Plain text for the route counters (counts only).
+    static func routesLabel(_ routes: WorkoutRouteDiagnostics) -> String {
+        String(localized: "settings.hkdiag.workout_routes_value \(routes.attached) \(routes.thinned) \(routes.failed)")
     }
 
     private var workoutOutcomeLabel: String {

@@ -28,8 +28,11 @@ import Foundation
 /// `workoutHrSamplesSchema` locks. Until #86 we shipped only the typed
 /// HR aggregates, so the web had nothing to draw a session curve from
 /// (`workout_samples` stayed empty server-side) while the iOS detail
-/// screen read the full series HK-locally. `route` (GPS geometry) stays
-/// omitted — it is a separate read path and unrelated to the curve.
+/// screen read the full series HK-locally.
+///
+/// **`route` (1.5 ROUTES, #149).** The GPS track rides along only after
+/// the person switched "Send routes" on (see ``WorkoutRouteOptIn``); without
+/// that the field is never built and the wire boundary strips it again.
 ///
 /// **Empty ≠ absent.** A workout without a usable HR point OMITS the
 /// field entirely; it never ships `samples: []`. The server's schema is
@@ -59,6 +62,9 @@ public struct WorkoutIngestDTO: Codable, Sendable, Equatable {
     /// Per-session HR curve. `nil` (omitted on the wire) when the workout
     /// carries no usable HR point — NEVER `[]`, which the server rejects.
     public let samples: [Sample]?
+    /// GPS track (``Route``). `nil` (omitted on the wire) unless the route
+    /// opt-in is on; an outbox payload from 1.4 without the key decodes to `nil`.
+    public let route: Route?
 
     /// One point of the per-session series (`workoutHrSamplesSchema`).
     /// `t` encodes through the `.hlBatch` `.iso8601` strategy, `hr` is the
@@ -89,7 +95,8 @@ public struct WorkoutIngestDTO: Codable, Sendable, Equatable {
         elevationM: Double? = nil,
         source: String = "APPLE_HEALTH",
         externalId: String? = nil,
-        samples: [Sample]? = nil
+        samples: [Sample]? = nil,
+        route: Route? = nil
     ) {
         self.sportType = sportType
         self.startedAt = startedAt
@@ -104,6 +111,7 @@ public struct WorkoutIngestDTO: Codable, Sendable, Equatable {
         self.source = source
         self.externalId = externalId
         self.samples = samples
+        self.route = route
     }
 }
 

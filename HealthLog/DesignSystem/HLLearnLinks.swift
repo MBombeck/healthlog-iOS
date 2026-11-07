@@ -75,10 +75,10 @@ public enum HLLearnLinks {
         return HLLearnGuide(slug: entry.slug, title: entry.title, url: url)
     }
 
-    /// 1.4 B4 — the language the app runs in (`de` or `en`), which picks the
-    /// guide's edition on the site.
+    /// 1.4 B4 — the language the app runs in (``AppLanguage/current``), which
+    /// picks the guide's edition on the site.
     static var appLanguageCode: String {
-        Bundle.main.preferredLocalizations.first ?? "en"
+        AppLanguage.current.rawValue
     }
 
     /// The guide for a slug in a language: `/de/learn/<slug>` for German,

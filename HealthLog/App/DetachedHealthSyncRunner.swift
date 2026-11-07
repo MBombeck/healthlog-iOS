@@ -17,6 +17,14 @@ import Foundation
 /// into exactly one trailing pass. A trailing pass keeps the first trigger that
 /// asked for it, so a cold activation queued behind nothing is not renamed by a
 /// foreground tick that arrives a moment later.
+///
+/// **SYNC-HR (1.5, #159 / HealthLog#1326):** the budget only stops
+/// *admitting* capabilities. A pass whose capability never returned kept
+/// `running` set, and every later request (pull to refresh included) was
+/// folded into it until the app was restarted. A request that finds a pass
+/// older than ``staleAfter`` now cancels it and starts a new one; the stale
+/// pass is fenced by its generation, so it neither clears the new slot nor
+/// takes the new pending request when it finally returns.
 actor DetachedHealthSyncRunner {
     typealias Pass = @Sendable (HealthSyncTrigger, @escaping @Sendable () -> Bool) async -> Void
 
@@ -29,16 +37,34 @@ actor DetachedHealthSyncRunner {
     /// keep the trailing pass waiting for minutes.
     static let defaultBudget: TimeInterval = 90
 
+    /// SYNC-HR — three minutes: the budget plus the longest capability
+    /// deadline a pass admitted just before it closed may still run into.
+    static let defaultStaleAfter: TimeInterval = 180
+
     private let budget: TimeInterval
+    private let staleAfter: TimeInterval
     private let clock: @Sendable () -> Date
-    private var running: Task<Void, Never>?
+    private var running: Run?
+
+    private struct Run {
+        let task: Task<Void, Never>
+        let generation: UInt64
+        var passStartedAt: Date
+    }
+
     private var pending: (trigger: HealthSyncTrigger, pass: Pass)?
+    private var generation: UInt64 = 0
 
     /// Test introspection: how many passes this runner has started.
     private(set) var passesStarted = 0
 
-    init(budget: TimeInterval = DetachedHealthSyncRunner.defaultBudget, clock: @escaping @Sendable () -> Date = { Date() }) {
+    init(
+        budget: TimeInterval = DetachedHealthSyncRunner.defaultBudget,
+        staleAfter: TimeInterval = DetachedHealthSyncRunner.defaultStaleAfter,
+        clock: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.budget = budget
+        self.staleAfter = staleAfter
         self.clock = clock
     }
 
@@ -48,27 +74,44 @@ actor DetachedHealthSyncRunner {
     @discardableResult
     func request(_ trigger: HealthSyncTrigger, pass: @escaping Pass) -> Task<Void, Never> {
         if let running {
-            if pending == nil { pending = (trigger, pass) }
-            return running
+            let age = clock().timeIntervalSince(running.passStartedAt)
+            guard age >= staleAfter else {
+                if pending == nil { pending = (trigger, pass) }
+                return running.task
+            }
+            running.task.cancel()
+            self.running = nil
+            pending = nil
+            // Generation and age are counts.
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            HLLog.healthKit.error(
+                "detached pass \(running.generation, privacy: .public) stuck \(Int(age), privacy: .public)s: replaced"
+            )
         }
+        generation &+= 1
+        let id = generation
         let task = Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
-            await drain(trigger, pass)
+            await drain(trigger, pass, generation: id)
         }
-        running = task
+        running = Run(task: task, generation: id, passStartedAt: clock())
         return task
     }
 
-    private func drain(_ trigger: HealthSyncTrigger, _ pass: @escaping Pass) async {
+    private func drain(_ trigger: HealthSyncTrigger, _ pass: @escaping Pass, generation id: UInt64) async {
         var next: (trigger: HealthSyncTrigger, pass: Pass)? = (trigger, pass)
-        while let work = next {
+        while let work = next, running?.generation == id {
             pending = nil
             passesStarted += 1
+            running?.passStartedAt = clock()
             let clock = clock
             let deadline = clock().addingTimeInterval(budget)
-            await work.pass(work.trigger) { clock() >= deadline }
-            next = pending
+            // A replaced pass closes its window at once: the orchestrator
+            // admits nothing more for it.
+            let handle = running?.task
+            await work.pass(work.trigger) { clock() >= deadline || handle?.isCancelled == true }
+            next = running?.generation == id ? pending : nil
         }
-        running = nil
+        if running?.generation == id { running = nil }
     }
 }

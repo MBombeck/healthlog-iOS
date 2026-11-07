@@ -72,8 +72,11 @@ enum MedicationReminderDeliveryPolicy {
     /// rule. `autoMarkTaken: true` on the wire is folded into
     /// `remindersActive: false` when the row is decoded
     /// (`MedicationWireDTO.toDomain()`), so either one stops a reminder.
+    ///
+    /// **MED (#1280)** — a course ended at an instant (`endedAt`) arms nothing,
+    /// so tonight's dose of a course ended this afternoon is not reminded.
     static func plansLocalReminder(for medication: Medication) -> Bool {
-        medication.remindersActive != false
+        medication.remindersActive != false && !medication.hasEndedCourseNow
             && medication.active && medication.notificationsEnabled && medication.tracksIntake
     }
 

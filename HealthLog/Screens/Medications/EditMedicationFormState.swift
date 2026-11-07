@@ -44,6 +44,8 @@ struct EditMedicationFormState: Equatable {
     /// the field (older than v1.39.1). The editor offers the switch, and ever
     /// sends the field, only when this is non-nil.
     var serverTrackIntake: Bool?
+    /// MED-PLUS (v1.42.2) — "record doses automatically", as served.
+    var autoMarkTaken: MedicationAutoMarkTakenFormValue
 
     init(from served: Medication) {
         // v1.39.1 (#1033) — a medication kept as a record is served with an
@@ -54,6 +56,7 @@ struct EditMedicationFormState: Equatable {
         let medication = served.replacingSchedule(served.displaySchedule)
         trackIntake = served.tracksIntake
         serverTrackIntake = served.trackIntake
+        autoMarkTaken = MedicationAutoMarkTakenFormValue(from: served)
         name = medication.name
         dose = medication.dose
         // PRN carries no schedule times; otherwise pre-fill from the schedule.

@@ -14,6 +14,12 @@
             "state": "translated",
             "value": "All done"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles gedaan"
+          }
         }
       }
     },
@@ -29,6 +35,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Health score"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gezondheidsscore"
           }
         }
       }
@@ -46,6 +58,12 @@
             "state": "translated",
             "value": "Latest measurement"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laatste meting"
+          }
         }
       }
     },
@@ -61,6 +79,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Next dose"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volgende dosis"
           }
         }
       }
@@ -78,6 +102,12 @@
             "state": "translated",
             "value": "No measurements yet"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen metingen"
+          }
         }
       }
     },
@@ -93,6 +123,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open iPhone app"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open iPhone-app"
           }
         }
       }
@@ -110,6 +146,12 @@
             "state": "translated",
             "value": "Your latest Personal Health Score."
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je laatste persoonlijke gezondheidsscore."
+          }
         }
       }
     },
@@ -126,6 +168,12 @@
             "state": "translated",
             "value": "Your most recent measurement reading."
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je meest recente meting."
+          }
         }
       }
     },
@@ -141,6 +189,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Your next medication dose and today's adherence."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je volgende medicijndosis en je therapietrouw van vandaag."
           }
         }
       }

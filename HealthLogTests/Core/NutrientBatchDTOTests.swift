@@ -15,10 +15,13 @@ struct NutrientBatchDTOTests {
         // Audit B-4 — `serverCases`, not `allCases`: the decode-only `.unknown`
         // sentinel is not a catalogue member and must never be requested from
         // HealthKit or offered anywhere.
-        #expect(NutrientCode.serverCases.count == 26)
-        #expect(NutrientCode.allCases.count == 27)
+        // SUPP (v1.43) — `dha` and `epa` are server codes too, but responses
+        // only: the HealthKit catalogue is the 26 SYNCABLE codes.
+        #expect(NutrientCode.serverCases.count == 28)
+        #expect(NutrientCode.allCases.count == 29)
         let codes = Set(NutrientCatalog.all.map(\.code))
-        #expect(codes == Set(NutrientCode.serverCases), "every catalog code is unique + present")
+        #expect(codes == Set(NutrientCode.serverCases.filter(\.isSyncable)), "every catalog code is unique + present")
+        #expect(!codes.contains(.dha) && !codes.contains(.epa))
         #expect(!codes.contains(.unknown))
         for item in NutrientCatalog.all {
             #expect(["mg", "ug", "ml"].contains(item.unit), "\(item.code.rawValue) unit must be mg|ug|ml")

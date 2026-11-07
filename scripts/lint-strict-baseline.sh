@@ -245,8 +245,12 @@ fi
 command -v "$SWIFTLINT_BIN" >/dev/null 2>&1 || fail "SwiftLint executable not found: $SWIFTLINT_BIN"
 [[ -f "$REPO_ROOT/.swiftlint.yml" ]] || fail ".swiftlint.yml is missing"
 
-output_path="$(mktemp "${TMPDIR:-/tmp}/healthlog-swiftlint.XXXXXX.json")"
-trap 'rm -f "$output_path"' EXIT
+# 1.5.0 — macOS mktemp only replaces trailing X's, so a `.json` suffix gave
+# every run the same literal file and a second concurrent run failed. A unique
+# directory keeps the `.json` name and isolates parallel runs.
+output_dir="$(mktemp -d "${TMPDIR:-/tmp}/healthlog-swiftlint.XXXXXX")"
+output_path="$output_dir/swiftlint.json"
+trap 'rm -rf "$output_dir"' EXIT
 run_lint "$output_path"
 if [[ "$MODE" == "refresh" ]]; then
     refresh_baseline "$output_path"

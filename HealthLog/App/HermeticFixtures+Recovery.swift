@@ -11,6 +11,15 @@
         static var isRecoveryOverlayActive: Bool {
             ProcessInfo.processInfo.arguments.contains(recoveryOverlayArgument)
         }
+
+        /// #162 `-uitest-garmin` — adds Garmin's four types to the recovery
+        /// overlay. Only `MarketingScreenshotsTest.test_capture_garmin_recovery`
+        /// passes it, so the App Store motifs stay as they were captured.
+        static let garminOverlayArgument = "-uitest-garmin"
+
+        static var isGarminOverlayActive: Bool {
+            ProcessInfo.processInfo.arguments.contains(garminOverlayArgument)
+        }
     }
 
     /// **1.4 B3 — a wearable account for the recovery and HRV pages.**
@@ -45,7 +54,28 @@
 
         private static let recent = Array(0 ..< 45)
 
-        private static let series: [Series] = [
+        private static var series: [Series] {
+            HermeticUITestSupport.isGarminOverlayActive ? baseSeries + garminSeries : baseSeries
+        }
+
+        /// #162 — Body Battery and stress level as Garmin writes them, the
+        /// readiness and the acute load as a bridge writes them (`EXTERNAL`).
+        private static let garminSeries: [Series] = [
+            Series(type: "BODY_BATTERY", unit: "score", source: "GARMIN", offsets: recent) { offset in
+                offset == 0 ? 78 : (70 + wave(offset, 12, 0.57, 6, 1.9)).rounded()
+            },
+            Series(type: "STRESS_LEVEL", unit: "score", source: "GARMIN", offsets: recent) { offset in
+                offset == 0 ? 29 : (31 + wave(offset, 7, 0.71, 4, 2.2)).rounded()
+            },
+            Series(type: "TRAINING_READINESS", unit: "score", source: "EXTERNAL", offsets: recent) { offset in
+                offset == 0 ? 71 : (64 + wave(offset, 13, 0.49, 6, 1.7)).rounded()
+            },
+            Series(type: "ACUTE_TRAINING_LOAD", unit: "load", source: "EXTERNAL", offsets: recent) { offset in
+                offset == 0 ? 412 : (420 + wave(offset, 60, 0.33, 25, 1.4)).rounded()
+            }
+        ]
+
+        private static let baseSeries: [Series] = [
             Series(type: "RECOVERY_SCORE", unit: "score", offsets: recent) { offset in
                 // Ends on the derived batch's RECOVERY_SCORE (83), so the card
                 // and the score detail behind it agree.

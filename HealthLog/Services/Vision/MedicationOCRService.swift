@@ -63,10 +63,13 @@ public enum MedicationOCRError: Error, Sendable, Equatable {
 /// (slower path) because medication labels are typically high-contrast +
 /// well-lit and the user is **not** in a real-time-overlay flow.
 ///
-/// **Language switch (recognitionLanguages):** de-DE primary, en-US
-/// secondary. This is a deliberate operator choice — most German pharmacy
-/// blisters carry the active-ingredient (Wirkstoff) line in German + a
-/// product-name in English, so the dual-language pass catches both.
+/// **Language switch (recognitionLanguages):** the interface language
+/// first, then German and English. Most German pharmacy blisters carry the
+/// active-ingredient (Wirkstoff) line in German + a product-name in English,
+/// so German and English stay in every pass; a Dutch reader's packs are
+/// Dutch, so nl-NL leads for them. A language this device's Vision build
+/// cannot recognise is dropped before the request runs, see
+/// ``usableRecognitionLanguages(requested:supported:)``.
 ///
 /// **Why an actor?** `VNImageRequestHandler` is documented thread-safe but
 /// the in-flight request graph is not — running two pass-through calls on
@@ -81,16 +84,46 @@ public actor MedicationOCRService {
     private let minimumConfidence: Float
 
     /// Locale identifiers passed to `VNRecognizeTextRequest.recognitionLanguages`.
-    /// Order matters — Vision biases towards the first language. We put
-    /// German first because the operator's primary market is DE.
+    /// Order matters — Vision biases towards the first language, so the
+    /// interface language leads (see ``defaultRecognitionLanguages(for:)``).
     private let recognitionLanguages: [String]
 
     public init(
         minimumConfidence: Float = 0.4,
-        recognitionLanguages: [String] = ["de-DE", "en-US"]
+        recognitionLanguages: [String] = MedicationOCRService.defaultRecognitionLanguages(for: AppLanguage.current)
     ) {
         self.minimumConfidence = minimumConfidence
         self.recognitionLanguages = recognitionLanguages
+    }
+
+    /// The recognition order for an interface language: that language
+    /// first, so language correction favours its words, then German and
+    /// English, which every pack in the operator's market carries. A new
+    /// `AppLanguage` case does not compile until it has a row here.
+    public static func defaultRecognitionLanguages(for language: AppLanguage) -> [String] {
+        switch language {
+        case .de: ["de-DE", "en-US"]
+        case .en: ["en-US", "de-DE"]
+        case .nl: ["nl-NL", "de-DE", "en-US"]
+        }
+    }
+
+    /// The requested languages this Vision build can recognise, in the
+    /// requested order. Vision rejects a request that names an unsupported
+    /// language, so a language missing on the device (Dutch on an older
+    /// Vision revision) must be dropped rather than fail the whole scan.
+    /// An empty `supported` list (the query failed) keeps the request as-is.
+    static func usableRecognitionLanguages(requested: [String], supported: [String]) -> [String] {
+        guard !supported.isEmpty else { return requested }
+        let supportedLower = Set(supported.map { $0.lowercased() })
+        return requested.filter { supportedLower.contains($0.lowercased()) }
+    }
+
+    /// Asks Vision which languages an accurate text request supports here.
+    private static func supportedRecognitionLanguages() -> [String] {
+        let probe = VNRecognizeTextRequest()
+        probe.recognitionLevel = .accurate
+        return (try? probe.supportedRecognitionLanguages()) ?? []
     }
 
     // OCR a single image. The image is preprocessed (orientation-corrected
@@ -124,7 +157,11 @@ public actor MedicationOCRService {
     /// invariant ("orientation must match the cgImage's pixel-data
     /// orientation") is enforced by the two `recognise(_:)` overloads.
     private func runRecognition(on cgImage: CGImage, orientation: CGImagePropertyOrientation) async throws -> MedicationOCRResult {
-        try await withCheckedThrowingContinuation { continuation in
+        let languages = Self.usableRecognitionLanguages(
+            requested: recognitionLanguages,
+            supported: Self.supportedRecognitionLanguages()
+        )
+        return try await withCheckedThrowingContinuation { continuation in
             let request = VNRecognizeTextRequest { request, error in
                 if let error {
                     HLLog.api
@@ -142,12 +179,14 @@ public actor MedicationOCRService {
                 continuation.resume(returning: MedicationOCRResult(
                     rawText: rawText,
                     observations: lines,
-                    recognitionLanguage: self.recognitionLanguages.first ?? "de-DE"
+                    recognitionLanguage: languages.first ?? "de-DE"
                 ))
             }
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            request.recognitionLanguages = self.recognitionLanguages
+            if !languages.isEmpty {
+                request.recognitionLanguages = languages
+            }
             request.minimumTextHeight = 0.012 // ~1.2% of the shorter image-side → catches small dose-strength text on blister foils
 
             let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])

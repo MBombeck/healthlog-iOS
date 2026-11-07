@@ -171,14 +171,9 @@ extension APIClient: WebLoginRouteProbing {
         // a reachability statement.
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.timeoutInterval = 8
-        // A Cloudflare-Access-fronted instance needs these to reach the origin
-        // at all; the login route itself ignores them.
-        if let id = environment.cfAccessClientID {
-            request.setValue(id, forHTTPHeaderField: "cf-access-client-id")
-        }
-        if let token = environment.cfAccessClientToken {
-            request.setValue(token, forHTTPHeaderField: "cf-access-client-token")
-        }
+        // An instance behind Cloudflare Access or Pangolin needs these to reach
+        // the origin at all; the login route itself ignores them.
+        environment.applyAccessHeaders(to: &request)
 
         do {
             let (_, response) = try await session.data(for: request)

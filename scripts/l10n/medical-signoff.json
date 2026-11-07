@@ -1,0 +1,21 @@
+{
+  "_doc": "One line per medical sign-off (scripts/l10n/signoff-medical.py): who read the medical texts of a language and when, how many values were set from `needs_review` to `translated`, and a SHA-256 fingerprint of exactly those values (catalog, key, variant path and text, sorted). Appended only.",
+  "signoffs": [
+    {
+      "language": "nl",
+      "by": "maintainer",
+      "date": "2026-11-06",
+      "values": 153,
+      "keys": 151,
+      "fingerprint": "4e567a350839b53ca52a25fb15739aa99366139bf03a857c6ec225684ad09069"
+    },
+    {
+      "language": "en",
+      "by": "maintainer",
+      "date": "2026-11-06",
+      "values": 1,
+      "keys": 1,
+      "fingerprint": "6a399c49fa1a7ace8575590d667e60240b391b6da437d36604fb38552cdec01c"
+    }
+  ]
+}

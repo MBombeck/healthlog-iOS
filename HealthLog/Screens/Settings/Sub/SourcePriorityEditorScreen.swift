@@ -236,7 +236,8 @@ struct SourcePriorityEditorScreen: View {
     private func augmentedSources(_ wire: [String]) -> [String] {
         var seen = Set(wire.map { $0.uppercased() })
         var augmented = wire
-        for token in SourcePriorityStore.canonicalSourceTokens {
+        // POLISH-C (C5) — Garmin only on a server that takes it in a ladder.
+        for token in SourcePriorityStore.offeredSourceTokens() {
             let upper = token.uppercased()
             if !seen.contains(upper) {
                 augmented.append(token)

@@ -497,9 +497,9 @@ public enum MetricFHIRMapper {
              .phq9Score, .gad7Score, .who5Score, .sciScore,
              .recoveryScore, .stressScore, .strainScore, .hrvRMSSD,
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
-             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
-             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent:
+             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
+             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence, .afibBurden,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad:
             additiveSignalMapping(for: kind)
 
         // Build 7 / item 7.3 — mood is a subjective self-report with no LOINC we
@@ -553,7 +553,7 @@ public enum MetricFHIRMapper {
              // (`expected-measurement-loinc.json`); mirror it so the doctor-report
              // FHIR bundle category matches the server's. (L8 fix — grip strength +
              // waist-to-height were previously mis-bucketed as `.activity`.)
-             .waistCircumference, .gripStrength, .waistToHeight:
+             .waistCircumference, .gripStrength, .waistToHeight, .afibBurden:
             .vitalSigns
         case .glucose:
             .laboratory
@@ -588,9 +588,9 @@ public enum MetricFHIRMapper {
              // exhaustive + auditable.)
              .recoveryScore, .stressScore, .strainScore, .hrvRMSSD,
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
-             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
-             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent:
+             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
+             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad:
             .activity
         // Build 3 / item 3.3 — the four screener SUM scores are
         // patient-reported instruments, the same `survey` bucket `painNRS`

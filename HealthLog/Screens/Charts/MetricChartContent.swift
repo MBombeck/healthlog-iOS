@@ -177,9 +177,9 @@ enum MetricChartContent {
              .phq9Score, .gad7Score, .who5Score, .sciScore,
              .recoveryScore, .stressScore, .strainScore, .hrvRMSSD,
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
-             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
-             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent,
+             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
+             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence, .afibBurden,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
              // Build 7 / item 7.3 — mood renders as a single-series scalar line
              // if a mood series ever reaches this surface (today the tile reads
              // the summary snapshot; there is no mood `/series` endpoint).

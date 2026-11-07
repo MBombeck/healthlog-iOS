@@ -307,7 +307,22 @@ public struct CategoryAssignmentMap: Codable, Sendable, Equatable {
             "PHQ9_SCORE": "scores",
             "GAD7_SCORE": "scores",
             "WHO5_SCORE": "scores",
-            "SCI_SCORE": "scores"
+            "SCI_SCORE": "scores",
+            // #162 — Garmin (server v1.47.0 `categories.ts`): all four join
+            // the device-native scores.
+            "BODY_BATTERY": "scores",
+            "STRESS_LEVEL": "scores",
+            "TRAINING_READINESS": "scores",
+            "ACUTE_TRAINING_LOAD": "scores",
+            // HK-NEW (1.5) — server v1.44 `categories.ts`: the rings and mindful
+            // minutes join activity, the valence the scores, AFib burden the
+            // cardiovascular cluster.
+            "EXERCISE_MINUTES": "activity",
+            "STAND_MINUTES": "activity",
+            "STAND_HOURS": "activity",
+            "MINDFUL_MINUTES": "activity",
+            "STATE_OF_MIND_VALENCE": "scores",
+            "AFIB_BURDEN": "cardiovascular"
         ]
     )
 }

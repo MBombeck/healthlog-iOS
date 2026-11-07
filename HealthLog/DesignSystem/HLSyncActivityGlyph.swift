@@ -51,22 +51,36 @@ struct HLSyncActivityGlyph: View {
         .animation(Self.dismissal, value: glyph)
     }
 
+    @ViewBuilder
     private func symbol(for glyph: SyncSlotGlyph) -> some View {
-        Image(systemName: Self.symbol(for: glyph))
-            .font(.hlSubhead.weight(.semibold))
-            .foregroundStyle(HLText.secondary)
-            .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
-            .symbolEffect(
-                .rotate.clockwise,
-                options: .repeat(.continuous),
-                isActive: glyph == .syncing && !reduceMotion
-            )
-            .frame(width: HLSyncActivityGlyph.hitSize, height: HLSyncActivityGlyph.hitSize)
-            .contentShape(Rectangle())
+        if glyph == .done {
+            // 1.5 (Alex, 07.11.) — the checkmark is its own view, upright and
+            // green. Swapped in by `.symbolEffect(.replace)` on the rotating
+            // image it inherited the spin and came in tilted.
+            Image(systemName: Self.symbol(for: glyph))
+                .font(.hlSubhead.weight(.semibold))
+                .foregroundStyle(HLColor.statusOK)
+                .frame(width: HLSyncActivityGlyph.hitSize, height: HLSyncActivityGlyph.hitSize)
+                .contentShape(Rectangle())
+                .transition(.opacity)
+                .id("sync.done")
+        } else {
+            Image(systemName: Self.symbol(for: glyph))
+                .font(.hlSubhead.weight(.semibold))
+                .foregroundStyle(HLText.secondary)
+                .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                .symbolEffect(
+                    .rotate.clockwise,
+                    options: .repeat(.continuous),
+                    isActive: glyph == .syncing && !reduceMotion
+                )
+                .frame(width: HLSyncActivityGlyph.hitSize, height: HLSyncActivityGlyph.hitSize)
+                .contentShape(Rectangle())
+        }
     }
 
-    /// One calm symbol per state, all in the secondary text colour: the slot
-    /// is a quiet pointer to the panel, not an alarm.
+    /// One calm symbol per state in the secondary text colour (the done
+    /// checkmark in green): the slot is a quiet pointer to the panel, not an alarm.
     nonisolated static func symbol(for glyph: SyncSlotGlyph) -> String {
         switch glyph {
         case .syncing: "arrow.triangle.2.circlepath"

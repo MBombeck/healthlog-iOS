@@ -518,7 +518,7 @@ public final class HKSyncDiagnostics {
     /// Dictionary-backed (vs `switch`) to keep cyclomatic complexity under
     /// the 12-branch SwiftLint threshold.
     public nonisolated static func metricKind(for identifier: String) -> MetricKind? {
-        identifierToKind[identifier]
+        identifierToKind[HealthKitServer144Types.registryIdentifier(forWire: identifier)]
     }
 
     /// Reverse-map table. Built once at class-load and read everywhere; HK
@@ -562,7 +562,7 @@ public final class HKSyncDiagnostics {
             if HeartRateVariabilityRMSSD.sampleType != nil {
                 map[HeartRateVariabilityRMSSD.identifier] = .hrvRMSSD
             }
-            return map
+            return map.merging(HealthKitServer144Types.metricKinds) { _, new in new } // HK-NEW (1.5)
         #else
             return [:]
         #endif

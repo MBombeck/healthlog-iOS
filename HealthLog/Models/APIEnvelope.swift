@@ -121,6 +121,9 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
     /// #130 (v1.43) — `404 labs.biomarker.notFound` for a marker that was
     /// merged names the marker it went into.
     public let mergedInto: String?
+    /// KONTO (server 1.46.0) — `403 auth.account.deletion_pending` says when
+    /// the locked account is erased. Raw ISO string; ``APIRefusal`` parses it.
+    public let purgeAt: String?
 
     public init(
         errorCode: String? = nil,
@@ -135,7 +138,8 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
         smtpCode: Int? = nil,
         upstreamBody: String? = nil,
         alias: String? = nil,
-        mergedInto: String? = nil
+        mergedInto: String? = nil,
+        purgeAt: String? = nil
     ) {
         self.errorCode = errorCode
         self.module = module
@@ -150,11 +154,12 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
         self.upstreamBody = upstreamBody
         self.alias = alias
         self.mergedInto = mergedInto
+        self.purgeAt = purgeAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case errorCode, module, mfaRequired, mfaTicket, methods, reason, capability
-        case unknownLeaves, upstreamStatus, smtpCode, upstreamBody, alias, mergedInto
+        case unknownLeaves, upstreamStatus, smtpCode, upstreamBody, alias, mergedInto, purgeAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -174,6 +179,7 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
         upstreamBody = try? c.decodeIfPresent(String.self, forKey: .upstreamBody)
         alias = try? c.decodeIfPresent(String.self, forKey: .alias)
         mergedInto = try? c.decodeIfPresent(String.self, forKey: .mergedInto)
+        purgeAt = try? c.decodeIfPresent(String.self, forKey: .purgeAt)
     }
 }
 
@@ -202,7 +208,15 @@ public enum APIRefusal {
     /// machine-readable *why* lives in another field: `alias.taken` names the
     /// `alias`, and a `notFound` marker that was merged names `mergedInto` (a
     /// plain not-found without it stays the ordinary 404).
+    ///
+    /// KONTO (server 1.46.0) — also the one place a sign-in to an account
+    /// pending deletion becomes ``HLError/accountDeletionPending(purgeAt:)``,
+    /// with the date from `meta.purgeAt`. The code is specific enough to be
+    /// honoured on any status; every sign-in door runs through here.
     static func throwIfReasoned(_ meta: APIEnvelopeMeta?) throws {
+        if meta?.errorCode == AccountDeletionWire.deletionPendingCode {
+            throw HLError.accountDeletionPending(purgeAt: AccountDeletionWire.date(meta?.purgeAt))
+        }
         guard let code = meta?.errorCode, reasonedCodes.contains(code) else { return }
         let detail: String? = switch code {
         case LabsRefusal.aliasTaken: meta?.alias

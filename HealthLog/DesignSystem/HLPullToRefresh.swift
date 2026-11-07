@@ -222,7 +222,8 @@ struct HLPullToRefreshModifier: ViewModifier {
         Image(systemName: "checkmark.circle.fill")
             // swiftlint:disable:next dynamic_type_bypass
             .font(.system(size: 22, weight: .semibold))
-            .foregroundStyle(HLText.primary)
+            // 1.5 — green like the top-bar sync checkmark.
+            .foregroundStyle(HLColor.statusOK)
             .symbolEffect(
                 .bounce,
                 options: reduceMotion ? .speed(1000) : .default,

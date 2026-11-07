@@ -74,9 +74,7 @@ struct WebhookChannelCard: View {
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
                     SecureField(headerValuePlaceholder, text: $headerValueDraft)
-                        .textContentType(.password)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        .hlSecretEntry()
                         .accessibilityIdentifier("notifications.webhook.headerValueField")
                 }
 

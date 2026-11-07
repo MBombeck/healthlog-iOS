@@ -89,6 +89,15 @@ public actor CustomMetricsRepository {
         return try await networkFetch()
     }
 
+    /// **1.5 SHORTCUT** — the last cached catalog, however old, without
+    /// touching the network. The shortcut picker falls back to it when the
+    /// read above fails: a freshly started intent process cannot know it is
+    /// offline yet (its `Reachability` starts out "online"), so the SWR
+    /// offline-serve rung never fires there. `nil` without a cache or a row.
+    public func cachedCustomMetrics() async -> ListCustomMetricsResponse? {
+        await swr?.peek(.customMetrics, as: ListCustomMetricsResponse.self)?.value
+    }
+
     /// `GET /api/custom-metrics/{id}` — the bare definition. Note this shape
     /// carries NO `latest` / `entryCount` (the server's `serialiseCustomMetric`
     /// omits both); read the list for those.

@@ -33,6 +33,11 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
     /// Feld nicht (älterer Server); `[]` = er kennt es, aber noch kein Typ hat
     /// geliefert. Der Unterschied ist für die Fläche relevant, deshalb optional.
     public let metricFreshness: [MetricFreshness]?
+    /// HK-NEW (1.5, HealthLog#1340, requested) — the HealthKit identifiers the
+    /// server's batch route maps. GET only, never sent back. `nil` = the server
+    /// does not publish the list (every release up to v1.47.0); the app's own
+    /// table then decides (`HealthKitServerTypeGate`).
+    public let acceptedTypes: [String]?
 
     /// Typisierte Lesart von ``lastSyncTrigger``; `nil` sowohl bei Abwesenheit
     /// als auch bei einem Wort, das dieser Build nicht kennt.
@@ -47,7 +52,8 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
         lastBackgroundSyncAt: Date? = nil,
         syncHealth: HealthKitSyncHealth? = nil,
         metricFreshness: [MetricFreshness]? = nil,
-        health: ConnectionHealth? = nil
+        health: ConnectionHealth? = nil,
+        acceptedTypes: [String]? = nil
     ) {
         self.entries = entries
         self.lastSyncedAt = lastSyncedAt
@@ -56,10 +62,11 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
         self.syncHealth = syncHealth
         self.metricFreshness = metricFreshness
         self.health = health
+        self.acceptedTypes = acceptedTypes
     }
 
     private enum CodingKeys: String, CodingKey {
-        case entries, lastSyncedAt, lastSyncTrigger, lastBackgroundSyncAt, syncHealth, metricFreshness, health
+        case entries, lastSyncedAt, lastSyncTrigger, lastBackgroundSyncAt, syncHealth, metricFreshness, health, acceptedTypes
     }
 
     public init(from decoder: any Decoder) throws {
@@ -72,6 +79,8 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
         syncHealth = try? c.decodeIfPresent(HealthKitSyncHealth.self, forKey: .syncHealth)
         metricFreshness = try c.decodeIfPresent([MetricFreshness].self, forKey: .metricFreshness)
         health = ConnectionHealth.tolerant(from: c, forKey: .health)
+        // Tolerant: a malformed list reads as absent, so the table decides.
+        acceptedTypes = try? c.decodeIfPresent([String].self, forKey: .acceptedTypes)
     }
 
     /// #10 — das PATCH-Echo mit den Lesefeldern des vorigen GET.
@@ -92,7 +101,8 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
             lastBackgroundSyncAt: lastBackgroundSyncAt ?? previous.lastBackgroundSyncAt,
             syncHealth: syncHealth ?? previous.syncHealth,
             metricFreshness: metricFreshness ?? previous.metricFreshness,
-            health: health ?? previous.health
+            health: health ?? previous.health,
+            acceptedTypes: acceptedTypes ?? previous.acceptedTypes
         )
     }
 

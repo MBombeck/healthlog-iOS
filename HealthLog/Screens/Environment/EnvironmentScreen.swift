@@ -18,6 +18,9 @@ struct EnvironmentScreen: View {
     @Environment(\.appContainer) private var container
 
     @State private var store: EnvironmentStore?
+    /// 1.5 MOVE — "Unterwegs", owned by the screen so pull to refresh reads
+    /// it again with the rest. Hidden until it knows it has something to show.
+    @State private var movement: MovementStore?
 
     var body: some View {
         HLAsyncListScreen(
@@ -69,6 +72,7 @@ struct EnvironmentScreen: View {
                 homeSection(store: store)
                 coverageSection(store: store)
                 travelSection(store: store)
+                movementSection
             } else {
                 Section {
                     HLEmptyState(
@@ -78,8 +82,18 @@ struct EnvironmentScreen: View {
                     )
                     .listRowBackground(Color.clear)
                 }
+                movementSection
             }
             attributionSection(store: store)
+        }
+    }
+
+    /// 1.5 MOVE — only with the module on (the disabled branch never gets
+    /// here) and only when the store has something to show.
+    @ViewBuilder
+    private var movementSection: some View {
+        if let movement {
+            EnvironmentMovementSection(store: movement)
         }
     }
 
@@ -159,11 +173,19 @@ struct EnvironmentScreen: View {
         if store == nil {
             store = container?.environmentStore
         }
+        if movement == nil, let api = container?.api {
+            movement = MovementStore(repository: MovementRepository(api: api))
+        }
         await reload()
     }
 
     private func reload() async {
         await store?.load()
+        // Movement belongs to the `environment` module: with it off the
+        // overview says so and the movement read is not made at all.
+        if store?.isDisabled == false {
+            await movement?.load()
+        }
     }
 
     // MARK: - Date helpers (tolerant — raw string fallback)

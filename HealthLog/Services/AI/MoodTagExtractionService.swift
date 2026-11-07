@@ -25,6 +25,10 @@ public struct MoodTagSuggestionOutcome: Sendable {
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
+        /// ``OnDeviceLanguageGate`` is closed for the interface language:
+        /// the model or the MDR filter does not speak it. Never answered in
+        /// another language instead.
+        case languageUnsupported
         /// Note input was empty / whitespace-only — there is nothing to
         /// extract from. Caller suppresses the suggestion-row entirely.
         case emptyInput
@@ -118,7 +122,7 @@ public actor MoodTagExtractionService {
     public func suggestTags(
         forNote rawNote: String,
         existingTags: [String] = [],
-        locale: Locale = .current
+        locale: Locale = AppLanguage.current.locale
     ) async -> MoodTagSuggestionOutcome {
         let trimmed = rawNote.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -160,6 +164,9 @@ public actor MoodTagExtractionService {
                 return .fallback(mapAvailabilityReason(reason))
             @unknown default:
                 return .fallback(.deviceIneligible)
+            }
+            guard OnDeviceLanguageGate.allows(locale: locale) else {
+                return .fallback(.languageUnsupported)
             }
 
             let prompt = MoodTagExtractionPrompt.build(rawNote: rawNote, existingTags: existingTags, locale: locale)
@@ -256,13 +263,21 @@ public struct MoodTagsExtraction: Sendable, Equatable, BriefingTextProvider {
     /// `canImport(FoundationModels)` + `@available(iOS 26.0, *)` gate
     /// because Apple's macro requires both. Converted to the always-available
     /// POD shell via `toExtraction()`.
+    ///
+    /// The labels become the user's own free-text tags verbatim
+    /// (`MoodFreeTextTagRules.insert`), with no canonical-key mapping, so they
+    /// are written in the interface language the instructions name. The
+    /// `@Guide` description is language-neutral English for that reason: it
+    /// is baked in at compile time and its old German examples pulled a Dutch
+    /// session's labels into German.
     @available(iOS 26.0, *)
     @Generable
     struct GenerableMoodTagsExtraction {
         @Guide(
-            description: "Bis zu 5 kurze Tag-Labels (1-2 Wörter, kein Satz), die das Thema der Notiz beschreiben. " +
-                "Keine Diagnosen, keine Wertungen, keine Empfehlungen. " +
-                "Beispiele: 'Schlaf', 'Stress', 'Arbeit', 'Sport'."
+            description: "Up to 5 short tag labels (1-2 words, never a sentence) that name the topics of the note, " +
+                "in the language the instructions require. " +
+                "No diagnoses, no judgements, no recommendations. " +
+                "Examples: 'sleep', 'stress', 'work', 'exercise'."
         )
         var suggestions: [String]
 
@@ -278,18 +293,33 @@ public struct MoodTagsExtraction: Sendable, Equatable, BriefingTextProvider {
 /// pass is the belt-and-braces guarantee if the model drifts anyway.
 enum MoodTagExtractionPrompt {
     static func build(rawNote: String, existingTags: [String], locale: Locale) -> String {
-        let language = locale.language.languageCode?.identifier ?? "de"
+        let language = AppLanguage.resolve(locale)
         let existingClause: String
         if existingTags.isEmpty {
             existingClause = ""
         } else {
             let joined = existingTags.joined(separator: ", ")
-            existingClause = language == "en"
-                ? "\n\nTags already on the entry (do NOT repeat): \(joined)"
-                : "\n\nBereits gesetzte Tags (NICHT wiederholen): \(joined)"
+            existingClause = language.pick(
+                de: "\n\nBereits gesetzte Tags (NICHT wiederholen): \(joined)",
+                en: "\n\nTags already on the entry (do NOT repeat): \(joined)",
+                nl: "\n\nTags die al bij de registratie staan (NIET herhalen): \(joined)"
+            )
         }
         switch language {
-        case "en":
+        case .nl:
+            return """
+            Vrije notitie van een gebruiker van een stemmingsdagboek:
+            \"\"\"
+            \(rawNote)
+            \"\"\"\(existingClause)
+
+            Haal maximaal 5 korte tag-labels (elk 1-2 woorden, geen zinnen) uit de notitie die de \
+            onderwerpen beschrijven waarover de gebruiker schreef. \
+            Gebruik alleen neutrale, beschrijvende labels in het Nederlands. \
+            Stel GEEN diagnose. Raad NIETS aan. Voorspel NIETS. \
+            Als er niets zuiver uit te halen is, geef dan een lege lijst terug.
+            """
+        case .en:
             return """
             Free-text mood note from a German/English health-journal user:
             \"\"\"
@@ -301,7 +331,7 @@ enum MoodTagExtractionPrompt {
             Do NOT diagnose anything. Do NOT recommend anything. Do NOT predict anything. \
             If nothing extracts cleanly, return an empty list.
             """
-        default:
+        case .de:
             return """
             Freitext-Notiz eines deutschen Stimmungs-Tagebuch-Nutzers:
             \"\"\"
@@ -317,46 +347,74 @@ enum MoodTagExtractionPrompt {
         }
     }
 
+    /// The system-instruction text for one interface language. Outside the
+    /// `FoundationModels` gate so tests can pin every language's guardrails.
+    ///
+    /// Each block names its output language: the labels are stored verbatim
+    /// as the user's free-text tags, so they must read in the interface
+    /// language rather than as canonical keys.
+    static func instructionText(for language: AppLanguage) -> String {
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+    }
+
     #if canImport(FoundationModels)
         @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
-            let language = locale.language.languageCode?.identifier ?? "de"
-            switch language {
-            case "en":
-                return Instructions {
-                    """
-                    You are a lexical-extraction tool for a German/English mood-journal app. \
-                    Your only job is to extract short tag labels from a free-text mood note.
-
-                    NON-NEGOTIABLE:
-                    - Output only short labels (1-2 words each, never sentences).
-                    - Never diagnose, predict, or prescribe.
-                    - Never reference a condition, disease, or symptom by clinical name.
-                    - Never recommend an action.
-                    - Never imply causality between metrics.
-                    - If nothing extracts cleanly, return an empty list — do NOT invent labels.
-
-                    STYLE: lexical, not advisory. You are a topic-extractor, not a doctor.
-                    """
-                }
-            default:
-                return Instructions {
-                    """
-                    Du bist ein lexikalisches Extraktions-Werkzeug für eine deutsche Stimmungs-Tagebuch-App. \
-                    Deine einzige Aufgabe: kurze Tag-Labels aus einer Freitext-Stimmungsnotiz extrahieren.
-
-                    UNVERHANDELBAR:
-                    - Gib nur kurze Labels aus (je 1-2 Wörter, niemals Sätze).
-                    - Diagnostiziere, sage nichts vorher, verordne nichts.
-                    - Erwähne keine Krankheit, kein Symptom und keine Indikation mit klinischem Namen.
-                    - Empfehle keine Handlung.
-                    - Behaupte keine kausalen Zusammenhänge zwischen Werten.
-                    - Wenn nichts sauber extrahierbar ist, gib eine leere Liste zurück — erfinde KEINE Labels.
-
-                    STIL: lexikalisch, nicht beratend. Du bist ein Themen-Extraktor, kein Arzt.
-                    """
-                }
+            let text = instructionText(for: AppLanguage.resolve(locale))
+            return Instructions {
+                text
             }
         }
     #endif
+
+    private static let englishInstructions = """
+    You are a lexical-extraction tool for a German/English mood-journal app. \
+    Your only job is to extract short tag labels from a free-text mood note. \
+    Always write the labels in English.
+
+    NON-NEGOTIABLE:
+    - Output only short labels (1-2 words each, never sentences).
+    - Never diagnose, predict, or prescribe.
+    - Never reference a condition, disease, or symptom by clinical name.
+    - Never recommend an action.
+    - Never imply causality between metrics.
+    - If nothing extracts cleanly, return an empty list — do NOT invent labels.
+
+    STYLE: lexical, not advisory. You are a topic-extractor, not a doctor.
+    """
+
+    /// The second rule used to read "Diagnostiziere, sage nichts vorher,
+    /// verordne nichts", which tells the model to diagnose; it now forbids it
+    /// like the English and Dutch rows.
+    private static let germanInstructions = """
+    Du bist ein lexikalisches Extraktions-Werkzeug für eine deutsche Stimmungs-Tagebuch-App. \
+    Deine einzige Aufgabe: kurze Tag-Labels aus einer Freitext-Stimmungsnotiz extrahieren. \
+    Schreibe die Labels IMMER auf Deutsch.
+
+    UNVERHANDELBAR:
+    - Gib nur kurze Labels aus (je 1-2 Wörter, niemals Sätze).
+    - Diagnostiziere nichts, sage nichts vorher, verordne nichts.
+    - Erwähne keine Krankheit, kein Symptom und keine Indikation mit klinischem Namen.
+    - Empfehle keine Handlung.
+    - Behaupte keine kausalen Zusammenhänge zwischen Werten.
+    - Wenn nichts sauber extrahierbar ist, gib eine leere Liste zurück — erfinde KEINE Labels.
+
+    STIL: lexikalisch, nicht beratend. Du bist ein Themen-Extraktor, kein Arzt.
+    """
+
+    private static let dutchInstructions = """
+    Je bent een lexicaal extractiehulpmiddel voor een stemmingsdagboek-app. \
+    Je enige taak: korte tag-labels halen uit een vrije stemmingsnotitie. \
+    Schrijf de labels ALTIJD in het Nederlands.
+
+    NIET ONDERHANDELBAAR:
+    - Geef alleen korte labels (elk 1-2 woorden, nooit zinnen).
+    - Stel nooit een diagnose, voorspel niets en schrijf niets voor.
+    - Noem geen aandoening, ziekte, symptoom of indicatie bij een klinische naam.
+    - Raad geen handeling aan.
+    - Beweer geen oorzakelijke verbanden tussen waarden.
+    - Als er niets zuiver uit te halen is, geef dan een lege lijst terug en verzin GEEN labels.
+
+    STIJL: lexicaal, niet adviserend. Je haalt onderwerpen uit tekst, je bent geen arts.
+    """
 }

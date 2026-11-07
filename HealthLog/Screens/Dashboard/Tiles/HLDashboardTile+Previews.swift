@@ -70,7 +70,10 @@ import SwiftUI
         sparkline: [73.6, 73.4, 73.0, 72.9, 72.7, 72.5, 72.4],
         updatedAt: Date()
     )
-    HLDashboardTile(metric: metric, weightTrendSentiment: .upBad)
-        .padding()
-        .hlScreenBackground()
+    HLDashboardTile(
+        metric: metric,
+        trendVerdicts: TileTrendVerdicts(targets: [:], directions: [:], weightTrend: .upBad)
+    )
+    .padding()
+    .hlScreenBackground()
 }

@@ -140,6 +140,8 @@ import Foundation
         /// `HKSampleQuery` per workout, spent only on the incremental path
         /// (see ``shouldAttachSeries(workoutCount:)``).
         let series: any WorkoutHeartRateSeriesSyncServicing
+        /// 1.5 ROUTES — the opt-in route step of small pages.
+        let routes: WorkoutRouteAttachment
         private let anchorKey: String
         private let backlogKey: String
         private let defaultsBox: WorkoutDefaultsBox
@@ -201,7 +203,8 @@ import Foundation
             sweepOverride: (@Sendable () async -> Void)? = nil,
             directDTOProvider: (@Sendable () async -> [WorkoutIngestDTO])? = nil,
             beforeSeriesFreeAnchorAdvance: @escaping @Sendable (Int) async -> Bool = { _ in true },
-            clock: WorkoutCatchUpClock = .live
+            clock: WorkoutCatchUpClock = .live,
+            routes: WorkoutRouteAttachment? = nil
         ) {
             let canonicalOwner = userID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             self.lifecycleStore = lifecycleStore ?? LiveWorkoutHealthKitStore(store: store)
@@ -215,6 +218,7 @@ import Foundation
                 self.defaultsBox = WorkoutDefaultsBox(defaults)
             }
             self.series = series ?? HealthKitWorkoutDetailService(store: store)
+            self.routes = routes ?? .live(store: store, ownerUserID: canonicalOwner)
             self.sweepOverride = sweepOverride
             self.directDTOProvider = directDTOProvider
             self.beforeSeriesFreeAnchorAdvance = beforeSeriesFreeAnchorAdvance
@@ -827,13 +831,10 @@ import Foundation
         private func drain(_ dtos: [WorkoutIngestDTO], generation: UInt64) async throws {
             // GH #86 — a batch carrying HR series chunks far smaller: 100
             // series-bearing workouts would push the body past the route's
-            // 5 MB ceiling (413). Series-free batches keep the 100-cap.
-            let cap = dtos.contains { $0.samples != nil }
-                ? WorkoutIngestDTO.maxWorkoutsPerSeriesBatch
-                : WorkoutIngestDTO.maxWorkoutsPerBatch
-            for start in stride(from: 0, to: dtos.count, by: cap) {
+            // 5 MB ceiling (413). Series-free batches keep the 100-cap; 1.5
+            // ROUTES also closes a chunk at the route point budget.
+            for slice in WorkoutIngestDTO.uploadChunks(dtos) {
                 guard sweepMayProceed(generation) else { throw CancellationError() }
-                let slice = Array(dtos[start ..< min(start + cap, dtos.count)])
                 guard sweepMayProceed(generation) else { throw CancellationError() }
                 await MainActor.run {
                     HKSyncDiagnostics.shared.recordWorkoutSend(count: slice.count)

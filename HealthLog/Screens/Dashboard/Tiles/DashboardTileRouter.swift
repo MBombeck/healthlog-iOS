@@ -40,9 +40,14 @@ struct DashboardTileRouter: View {
     /// renders exactly as pre-7.1.
     var digest: ComprehensiveDigest?
     var targets: InsightsTargetsResponseDTO?
-    /// #115 · 1.1 — the snapshot's `tiles.weightTrend.direction`, forwarded to
-    /// the weight tile. `nil` before the snapshot landed.
-    var weightTrendSentiment: TrendDirectionSentiment?
+    /// 1.5 VERDICTS — the snapshot half of the trend verdicts
+    /// (`tiles.directions`, `tiles.weightTrend`). `nil` before it landed.
+    var snapshot: DashboardSnapshotBriefing?
+
+    /// Target first, then the snapshot, then the card (``TileTrendVerdicts``).
+    private var trendVerdicts: TileTrendVerdicts {
+        TileTrendVerdicts(targets: targets, snapshot: snapshot)
+    }
 
     /// #115 P2 — the account's display units (the same environment value the
     /// tile formats its headline with) so the target band converts alongside.
@@ -60,7 +65,9 @@ struct DashboardTileRouter: View {
             // the matched-geometry namespace so the duration text
             // participates in the same shared-element transition into
             // the chart-detail hero that every other metric tile uses.
-            SleepCompositeTile(metric: metric, stages: nil, matchedNamespace: matchedNamespace)
+            SleepCompositeTile(
+                metric: metric, stages: nil, matchedNamespace: matchedNamespace, trendVerdicts: trendVerdicts
+            )
         default:
             // Build 7 / item 7.1 — project the secondary stats once, per kind,
             // from the digest + targets. The resolvers are pure + honestly omit
@@ -79,7 +86,7 @@ struct DashboardTileRouter: View {
                     targets: targets,
                     units: unitPreferences
                 ),
-                weightTrendSentiment: weightTrendSentiment
+                trendVerdicts: trendVerdicts
             )
         }
     }

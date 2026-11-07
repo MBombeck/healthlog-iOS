@@ -53,6 +53,30 @@ struct BiomarkerExplainerTests {
         #expect(BiomarkerExplainer.slug(forName: name) == expected)
     }
 
+    @Test(
+        "Dutch lab names resolve like their German and English twins",
+        arguments: [
+            ("Totaal cholesterol", "total-cholesterol"),
+            ("Triglyceriden", "triglycerides"),
+            ("Nuchtere glucose", "fasting-glucose"),
+            ("Bloedsuiker", "fasting-glucose"),
+            ("Nuchter insuline", "fasting-insulin"),
+            ("Vrij T4", "ft4"),
+            ("Ferritine", "ferritin"),
+            ("Transferrineverzadiging", "transferrin-saturation"),
+            ("Vitamine D", "vitamin-d"),
+            ("Foliumzuur", "folate"),
+            ("C-reactief proteïne", "hs-crp"),
+            ("Hemoglobine", "hemoglobin"),
+            ("Hematocriet", "hematocrit"),
+            ("Witte bloedcellen", "wbc"),
+            ("Bloedplaatjes", "platelets")
+        ]
+    )
+    func dutchAliasResolvesToSlug(name: String, expected: String) {
+        #expect(BiomarkerExplainer.slug(forName: name) == expected)
+    }
+
     @Test("v1.25 longevity markers each carry a real explainer paragraph")
     func v125ExplainersResolve() throws {
         let names = ["ApoB", "Lp(a)", "Omega-3-Index", "Fasting insulin", "HOMA-IR"]

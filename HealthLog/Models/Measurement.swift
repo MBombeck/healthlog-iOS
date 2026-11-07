@@ -445,6 +445,33 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// exactly like them — `isCategoricalEvent`, unitless, read-only.
     case audioExposureEvent
 
+    // MARK: - #162 — Garmin (server v1.47.0), read/display-only
+
+    /// Garmin Body Battery, the day's highest charge (0–100). `BODY_BATTERY`.
+    case bodyBattery
+    /// Garmin all-day average stress (0–100), lower is calmer. `STRESS_LEVEL`,
+    /// its own type because the computed HRV proxy owns `STRESS_SCORE`.
+    case stressLevel
+    /// Garmin training readiness (0–100), bridged in as `EXTERNAL`.
+    case trainingReadiness
+    /// Garmin seven-day acute training load (unit `load`, 0–3000), bridged in.
+    case acuteTrainingLoad
+
+    // MARK: - HK-NEW (1.5) — Apple Health types the server maps since v1.44.0
+
+    /// Exercise ring minutes per day. `EXERCISE_MINUTES`.
+    case exerciseMinutes
+    /// Stand ring minutes per day. `STAND_MINUTES`.
+    case standMinutes
+    /// Stood hours per day. `STAND_HOURS`.
+    case standHours
+    /// Mindful minutes per day. `MINDFUL_MINUTES`, privacy-sensitive.
+    case mindfulMinutes
+    /// State of Mind valence −1…1, unitless. `STATE_OF_MIND_VALENCE`.
+    case stateOfMindValence
+    /// AFib burden, percent of the week. `AFIB_BURDEN`, privacy-sensitive.
+    case afibBurden
+
     // MARK: - Build 7 / item 7.3 — mood dashboard tile
 
     //
@@ -598,6 +625,13 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
         // Build 7 / item 7.3 — mood is a unitless daily score; the summary tile
         // reads its label from the server `unitKey` anyway (empty here).
         case .mood: ""
+        // #162 — Garmin scores and the load are unitless (`score` / `load`).
+        case .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad: ""
+        // HK-NEW (1.5) — server `unit-map.ts`: minutes, hours, valence (bare), %.
+        case .exerciseMinutes, .standMinutes, .mindfulMinutes: "min"
+        case .standHours: "h"
+        case .stateOfMindValence: ""
+        case .afibBurden: "%"
         // Audit B-4 — the unknown sentinel has no unit, because this build does
         // not know what the number is. An invented one would be a lie printed
         // next to a health value.
@@ -622,35 +656,6 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
-/// Tolerant-decoding wrapper used at array-decode sites so a single
-/// unknown enum case from the server doesn't reject the whole list
-/// (PROJECT_GUIDE.md anti-pattern: "Silent error swallowing — entweder
-/// behandeln oder bewusst durchwerfen mit Kontext"). Here we choose
-/// "log + continue" — the array survives.
-///
-/// Use at every decode site that takes a `[MetricKind]`-shaped array
-/// of dashboard tiles, sync entries etc. — pre-v0.4.0 the dashboard
-/// summary failed wholesale on a single new kind from the server
-/// (A4-Audit row 5).
-public struct TolerantMetricKind: Decodable, Sendable {
-    public let value: MetricKind?
-
-    public init(value: MetricKind?) {
-        self.value = value
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let raw = try container.decode(String.self)
-        if let kind = MetricKind(rawValue: raw) {
-            value = kind
-        } else {
-            HLLog.api.warning("Unknown MetricKind raw value: \(raw, privacy: .public) — dropping from array.")
-            value = nil
-        }
-    }
-}
-
 /// Domain-Type für eine Messung. Wert-Container ist enum-basiert, damit BP zwei Werte tragen kann.
 ///
 /// **BP pair-id note:** the server stores Blutdruck als ZWEI Wire-Rows
@@ -667,12 +672,10 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     public let note: String?
     public let source: MeasurementSource
     public let externalUUID: String?
-    /// Server-side `BLOOD_PRESSURE_DIA` row id, only set when `kind ==
-    /// .bloodPressure` and the merge had both halves on hand. `nil` for
-    /// scalar measurements und für BP-Halbpaare die solo aus dem Server
-    /// kamen (Aggregator-Fallback). Edit-Pfade fanout PATCH auf beide
-    /// Peers nur wenn dieser Wert gesetzt ist — sonst greift der
-    /// historische Single-PATCH-Pfad (systolic only).
+    /// Server-side `BLOOD_PRESSURE_DIA` row id, only set when `kind == .bloodPressure` and the merge had
+    /// both halves on hand. `nil` for scalar measurements und für BP-Halbpaare die solo aus dem Server
+    /// kamen (Aggregator-Fallback). Edit-Pfade fanout PATCH auf beide Peers nur wenn dieser Wert gesetzt
+    /// ist — sonst greift der historische Single-PATCH-Pfad (systolic only).
     public let bloodPressureDiastolicId: String?
     /// Discriminator-Context für Blutzucker-Messungen. Nur belegt wenn
     /// `kind == .glucose` und der Server-Record (oder die User-Eingabe)
@@ -688,6 +691,8 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     public let glucoseContext: GlucoseContext?
     /// #146 — a sleep row's night and naps (``SleepNightSplit``), else `nil`.
     public internal(set) var sleepSplit: SleepNightSplit?
+    /// MIRROR (1.5) — the server's `appleHealthMirror`, `nil` without the key (``isServerMirrorAllowed``).
+    public internal(set) var appleHealthMirror: Bool?
 
     public init(
         id: String,
@@ -750,7 +755,7 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     var isServerDerivedReadOnly: Bool {
         if isSyntheticServerRow { return true }
         return switch source {
-        case .computed, .strava, .oura, .polar, .nightscout, .healthConnect, .telegram, .mcp: true
+        case .computed, .strava, .oura, .polar, .nightscout, .healthConnect, .garmin, .telegram, .mcp: true
         case .manual, .appleHealth, .external, .withings, .whoop, .fitbit, .googleHealth, .import_: false
         // Audit B-4 — a source we cannot name is server-owned until proven
         // otherwise: `WRITABLE_MEASUREMENT_SOURCES` is `{MANUAL, APPLE_HEALTH}`
@@ -858,6 +863,9 @@ public enum MeasurementSource: String, Codable, Sendable {
     /// Rows from the web Health Connect import. Read-only, never written by
     /// the app, never mirrored into Apple Health.
     case healthConnect
+    /// Server-Wire-Form: `GARMIN` (Server v1.47.0, #162). Server-side pull,
+    /// read-only, never written by the app, never mirrored into Apple Health.
+    case garmin
     /// Server-Wire-Form: `TELEGRAM` (Server v1.19.2). Numerische Antwort auf
     /// eine Telegram-Erinnerung, aus dem chat-gebundenen Webhook geschrieben —
     /// kein Client-Write-Pfad.
@@ -883,31 +891,4 @@ public enum MeasurementSource: String, Codable, Sendable {
     /// filter chip, the read-only and mirror decisions all want a real answer —
     /// but the row no longer waits for it.
     case unknown
-}
-
-public extension Measurement {
-    /// Convenience: scalar-Wert oder für BP der systolische.
-    var primaryValue: Double {
-        switch value {
-        case let .scalar(v): v
-        case let .bloodPressure(s, _): s
-        }
-    }
-
-    /// Severity nach Effective Range. `.ok` wenn keine Bereiche bekannt.
-    func severity(against range: EffectiveRange?) -> Severity {
-        guard let range else { return .ok }
-        let v = primaryValue
-        if let lo = range.criticalLow, v < lo { return .critical }
-        if let hi = range.criticalHigh, v > hi { return .critical }
-        if let lo = range.warnLow, v < lo { return .warning }
-        if let hi = range.warnHigh, v > hi { return .warning }
-        return .ok
-    }
-}
-
-public enum Severity: String, Codable, Sendable {
-    case ok
-    case warning
-    case critical
 }

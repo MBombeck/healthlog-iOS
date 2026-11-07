@@ -138,6 +138,26 @@ struct DoctorReportEndToEndTests {
         #expect(document.pageCount == 6)
     }
 
+    @Test("Full snapshot → renderer → PDFDocument reload yields 6 pages (NL)")
+    func endToEndNL() async throws {
+        let spec = DoctorReportSpecBuilder.build(
+            snapshot: Self.fullSnapshot(),
+            periodStart: Self.periodStart,
+            periodEnd: Self.periodEnd,
+            generatedAt: Self.periodEnd,
+            locale: .nl
+        )
+        let renderer = DoctorReportRenderer()
+        let data = try await renderer.renderData(spec)
+        let document = try #require(PDFDocument(data: data))
+        #expect(document.pageCount == 6)
+        let cover = try #require(document.page(at: 0))
+        let text = cover.string ?? ""
+        #expect(text.contains("Artsenrapport"))
+        #expect(text.contains("Rapportageperiode"))
+        #expect(!text.contains("Arztbericht"), "a Dutch reader must not get the German cover")
+    }
+
     // MARK: - Footer disclaimer presence (MDR boundary)
 
     @Test("DE disclaimer appears in every page of the rendered PDF")
@@ -186,6 +206,31 @@ struct DoctorReportEndToEndTests {
             #expect(
                 text.contains("not a medical document"),
                 "page \(index) is missing the EN 'not a medical document' marker"
+            )
+        }
+    }
+
+    @Test("NL disclaimer appears in every page of the rendered PDF")
+    func footerDisclaimerPresentOnEveryPageNL() async throws {
+        let spec = DoctorReportSpecBuilder.build(
+            snapshot: Self.fullSnapshot(),
+            periodStart: Self.periodStart,
+            periodEnd: Self.periodEnd,
+            locale: .nl
+        )
+        let renderer = DoctorReportRenderer()
+        let data = try await renderer.renderData(spec)
+        let document = try #require(PDFDocument(data: data))
+        for index in 0 ..< document.pageCount {
+            let page = try #require(document.page(at: index))
+            let text = page.string ?? ""
+            #expect(
+                text.contains("Lokale export"),
+                "page \(index) is missing the NL disclaimer"
+            )
+            #expect(
+                text.contains("geen medisch document"),
+                "page \(index) is missing the NL 'not a medical document' marker"
             )
         }
     }

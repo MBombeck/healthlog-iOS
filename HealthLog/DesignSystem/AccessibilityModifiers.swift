@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Respektiert `accessibilityReduceMotion`: deaktiviert die Animation,
 /// wenn der User Reduce-Motion aktiviert hat.
@@ -112,4 +113,13 @@ public struct HLMaterialBackground: View {
             Rectangle().fill(material)
         }
     }
+}
+
+/// A11Y (1.5) — `withAnimation` that honours Reduce Motion: with the setting
+/// on, the change lands without the animation (a section unfolds at once
+/// instead of sliding open). For actions, where no view environment is at
+/// hand; inside a view body `hlAnimation(_:value:)` does the same.
+@MainActor
+func withHLAnimation<Result>(_ animation: Animation?, _ body: () throws -> Result) rethrows -> Result {
+    try withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : animation, body)
 }

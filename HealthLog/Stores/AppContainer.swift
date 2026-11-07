@@ -37,11 +37,11 @@ public final class AppContainer {
     let authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry
     public let measurementsRepo: MeasurementsRepository
     let profileTimeZoneBox = ProfileTimeZoneBox.shared // AUD-3 D-3 — see ADR; #115 1.5 shared
-    /// audit-v0162 M-7 — persisted "does this server materialise today's dose
-    /// slots itself?" verdict; drives `MedicationsStore
-    /// .derivedIntakeSynthesisEnabledProvider`. See the type doc for the
-    /// threshold, the unknown-state default, and what each direction costs.
+    /// audit-v0162 M-7 — persisted "does this server materialise today's dose slots itself?"
+    /// verdict; drives `MedicationsStore.derivedIntakeSynthesisEnabledProvider`. See the type
+    /// doc for the threshold, the unknown-state default, and what each direction costs.
     let medicationSlotGate = MedicationSlotMaterializationGate()
+    let onboardingDraft = OnboardingDraftStore() // #153 — setup draft, memory only; see type doc
 
     // MARK: Repositories
 

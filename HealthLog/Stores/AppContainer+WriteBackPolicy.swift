@@ -17,7 +17,9 @@ extension AppContainer {
         guard let healthKit else { return }
         let provider: @Sendable () async -> HealthKitWriteBackPolicy? = {
             if let fetched = try? await swr.fetchCachingFirst(.hkSyncConfig, decoding: HealthKitSyncConfig.self, fetch: {
-                try await settingsRepo.healthKitConfig()
+                // HK-NEW (1.5) — a network answer also says which types the
+                // server maps (`acceptedTypes`, once it publishes the list).
+                try await HealthKitAcceptedTypes.recording(settingsRepo.healthKitConfig())
             }) {
                 return HealthKitWriteBackPolicy(entries: fetched.entries)
             }

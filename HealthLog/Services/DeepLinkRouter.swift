@@ -49,6 +49,8 @@ enum DeepLinkRoute: Equatable {
     /// `/settings/security` and `/settings/integrations`. No custom-scheme
     /// spelling; the router lands each on its More-stack screen.
     case checkups
+    /// VISIT — `/checkups?visit=<id>`: Vorsorge with that booked visit.
+    case checkupsVisit(id: String)
     case cycle
     case settingsSecurity
     case settingsIntegrations
@@ -60,7 +62,7 @@ enum DeepLinkRoute: Equatable {
     /// stay short. Anything else (`/`, `..`, percent-encoded bytes that
     /// survive `pathComponents` decoding, unicode look-alikes) is a tampered
     /// link and is rejected with `.unknown` (M-5 hardening).
-    private static let idAllowlist: NSRegularExpression? = try? NSRegularExpression(
+    static let idAllowlist: NSRegularExpression? = try? NSRegularExpression(
         pattern: "^[A-Za-z0-9_-]{1,64}$",
         options: []
     )

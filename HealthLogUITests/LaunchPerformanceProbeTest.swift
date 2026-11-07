@@ -20,10 +20,9 @@ final class LaunchPerformanceProbeTest: XCTestCase {
         ProcessInfo.processInfo.environment["HL_PERF_OUT"] ?? ""
     }
 
-    private let arguments = [
+    private let arguments = UITestLanguage.de.launchArguments + [
         "-uitest-hermetic", "-uitest-ack-disclaimer", "-uitest-disable-biometric-lock",
         "-uitest-phase8", "insightsAccessibility",
-        "-AppleLanguages", "(de)", "-AppleLocale", "de_DE",
         "-hl.healthkit.requestedAt.hermetic-user", "true",
         "-hl.healthkit.workoutReadMigrated.hermetic-user", "true"
     ]

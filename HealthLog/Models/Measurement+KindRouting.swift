@@ -52,6 +52,10 @@ extension MetricKind {
         // sum, exactly like `.steps`.
         case .steps, .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight:
             true
+        // HK-NEW (1.5) — the server sums these per day too
+        // (`CUMULATIVE_HK_TYPES`, v1.44): a day is its total, never one sample.
+        case .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes:
+            true
         default:
             false
         }
@@ -237,6 +241,18 @@ extension MetricKind {
         // Audit B-4 — the 77th server type, keyed like its five sibling events
         // so the availability slice lights its has-data signal too. `.unknown`
         // is deliberately absent: it is no server type and has no count.
-        .audioExposureEvent: "AUDIO_EXPOSURE_EVENT"
+        .audioExposureEvent: "AUDIO_EXPOSURE_EVENT",
+        // #162 — Garmin (server v1.47.0); keys as in the summaries map.
+        .bodyBattery: "BODY_BATTERY",
+        .stressLevel: "STRESS_LEVEL",
+        .trainingReadiness: "TRAINING_READINESS",
+        .acuteTrainingLoad: "ACUTE_TRAINING_LOAD",
+        // HK-NEW (1.5) — server v1.44 Apple Health types.
+        .exerciseMinutes: "EXERCISE_MINUTES",
+        .standMinutes: "STAND_MINUTES",
+        .standHours: "STAND_HOURS",
+        .mindfulMinutes: "MINDFUL_MINUTES",
+        .stateOfMindValence: "STATE_OF_MIND_VALENCE",
+        .afibBurden: "AFIB_BURDEN"
     ]
 }

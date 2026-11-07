@@ -8,7 +8,7 @@ options:
   generateEmptyDirectories: true
   # 03-03 release preflight pins the exact installed archive toolchain rather
   # than accepting an unproven older value. Keep in lockstep with PROJECT_GUIDE.md.
-  xcodeVersion: "26.6"
+  xcodeVersion: "27.2"
 
 settings:
   base:
@@ -17,7 +17,7 @@ settings:
     # 2026-08-21 three of them hardcoded "0.19.0" instead — the same split as
     # the build number below, and it would have shipped a stale marketing
     # version on the first release that changed one.
-    MARKETING_VERSION: "1.4.0"
+    MARKETING_VERSION: "1.5.0"
     # 11-03 THE SINGLE FROZEN BUILD-NUMBER ALLOCATION POINT.
     #
     # This is the ONLY `CURRENT_PROJECT_VERSION:` assignment in this file, and
@@ -48,7 +48,7 @@ settings:
     #
     # The procedure and the receipt it must produce live in
     # .planning/active/apple-review-reliability/CANDIDATE-FREEZE.md.
-    CURRENT_PROJECT_VERSION: "298"
+    CURRENT_PROJECT_VERSION: "302"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -390,9 +390,12 @@ targets:
         # mood, invite?token=hlv_… (b182 W-B182-INVITE, GH #16 — custom-scheme
         # fallback für die Web-Invite-QR wenn der Universal Link nicht feuert /
         # Non-AASA-Hosts).
-        # Universal Links sind seit b182 live (apple-app-site-association
-        # serverseitig gehostet, `applinks:` auf den Managed-Host in den
-        # Associated Domains) — sie matchen ausschliesslich `/auth/register?invite=`.
+        # Universal Links (Invite `/auth/register?invite=`, SSO-Rückweg `https`)
+        # gibt es nur in einem Build mit Betreiber-Overlay (Vorlage `Config/local.example.yml`:
+        # `applinks:`/`webcredentials:` plus `HLAppLinkHosts`). Der ausgelieferte
+        # Build hat bewusst keine Associated Domains (siehe `entitlements`
+        # unten); SSO kehrt dort immer über `healthlog://oidc-callback` mit PKCE
+        # zurück (SEC 1.5, `OidcReturnRoute`).
         CFBundleURLTypes:
           - CFBundleURLName: dev.healthlog.app.deeplink
             CFBundleURLSchemes:
@@ -436,7 +439,7 @@ targets:
         # in the source: zero hits for `PHPhotoLibrary`,
         # `PHPickerViewController`, `UIImagePickerController` and `import Photos`.
         # Reinstate the key the moment any of those four appears.
-        NSCameraUsageDescription: "HealthLog nutzt die Kamera, um Medikamenten-Packungen und Laborberichte auf dem Gerät auszulesen oder von dir ausgewählte Scans in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen."
+        NSCameraUsageDescription: "HealthLog nutzt die Kamera, um Medikamenten-Packungen und Laborberichte auf dem Gerät auszulesen oder von dir ausgewählte Scans in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen. Wenn du es auswählst, geht ein Foto von Laborbericht oder Etikett außerdem zum Lesen an deinen HealthLog-Server."
         # v0.5.6 F.1 — SpeziBluetooth lazily allocates a `CBCentralManager`
         # the first time a `scanNearbyDevices` / `powerOn()` call mounts.
         # iOS requires `NSBluetoothAlwaysUsageDescription` for any
@@ -446,7 +449,7 @@ targets:
         # registered Spezi modules) plus the empty Settings → Geräte screen
         # with a disabled "Gerät hinzufügen" CTA — no scan is started yet,
         # so the prompt stays dormant until F.2 wires the first device
-        # profile. Localized permission copy lives in de/en InfoPlist.strings.
+        # profile. Localized permission copy lives in de/en/nl InfoPlist.strings.
         # 1.0.3 / audit row 26 — narrowed from "Blutdruckmessgeräte,
         # Glukose-Sensoren und Waagen" to what is actually registered: the single
         # `Discover(OmronBloodPressureCuff, by: .advertisedService(BloodPressureService))`
@@ -457,6 +460,7 @@ targets:
         CFBundleLocalizations:
           - de
           - en
+          - nl
         # No server identity is compiled into the distributed app. HTTPS uses
         # system trust and the user enters a server during onboarding.
     settings:
@@ -507,7 +511,12 @@ targets:
         # Associated Domains are intentionally absent: a distributed
         # self-hosting client cannot bind one operator-owned RP/domain without
         # disclosing and privileging that operator. Password login and custom
-        # scheme routes remain available.
+        # scheme routes remain available. Every HealthLog server serves the
+        # same host-independent AASA (`applinks` paths ["*"] plus
+        # `webcredentials`, appID S8WDX4W5KX.dev.healthlog.app); it only takes
+        # effect for a host an operator's own build lists via the overlay.
+        # Regression-tested in `AppReviewConfigurationTests` and
+        # `SecUniversalLinkTests`.
         keychain-access-groups:
           - $(AppIdentifierPrefix)dev.healthlog.app
         # v0.8.4 WWIDGET-1 — App Group shared between the app and the
@@ -688,6 +697,9 @@ targets:
       # R2 / #115 A6 — `AuthService.refresh()` reads the device id through
       # this extension; Foundation only.
       - path: HealthLog/Services/AuthService+RefreshDeviceID.swift
+      # 1.5 KONTO — the deletion path moved out of `AuthService.swift` (file
+      # length); `invalidateAndWipeDeletedAccountCredentials()` calls into it.
+      - path: HealthLog/Services/AuthService+Account.swift
       - path: HealthLog/Services/OidcStatus.swift
       - path: HealthLog/Services/AvatarCache.swift
       - path: HealthLog/Services/BatchSyncThrottle.swift
@@ -745,6 +757,7 @@ targets:
         CFBundleLocalizations:
           - de
           - en
+          - nl
         # The extension follows the same operator-neutral system-trust posture
         # as the host app and carries no compiled server identity.
         # WidgetKit extension point — without this the extension never
@@ -812,6 +825,7 @@ targets:
         CFBundleLocalizations:
           - de
           - en
+          - nl
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
@@ -879,6 +893,7 @@ targets:
         CFBundleLocalizations:
           - de
           - en
+          - nl
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.watchkitapp
@@ -939,6 +954,7 @@ targets:
         CFBundleLocalizations:
           - de
           - en
+          - nl
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

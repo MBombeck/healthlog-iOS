@@ -23,6 +23,10 @@ public struct MedicationExtractionOutcome: Sendable {
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
+        /// ``OnDeviceLanguageGate`` is closed for the interface language:
+        /// the model or the MDR filter does not speak it. Never answered in
+        /// another language instead.
+        case languageUnsupported
         /// OCR input was empty — neither heuristic nor FoundationModels can
         /// produce a draft from zero text. Caller routes to "type manually".
         case emptyInput
@@ -82,7 +86,7 @@ public actor MedicationExtractionService {
     /// posture extended to extraction).
     public func extract(
         from rawText: String,
-        locale: Locale = .current
+        locale: Locale = AppLanguage.current.locale
     ) async -> MedicationExtractionOutcome {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -119,6 +123,9 @@ public actor MedicationExtractionService {
                 return .fallback(mapAvailabilityReason(reason))
             @unknown default:
                 return .fallback(.deviceIneligible)
+            }
+            guard OnDeviceLanguageGate.allows(locale: locale) else {
+                return .fallback(.languageUnsupported)
             }
 
             let prompt = MedicationExtractionPrompt.build(rawText: rawText, locale: locale)
@@ -175,22 +182,37 @@ public actor MedicationExtractionService {
     /// `canImport(FoundationModels)` + `@available(iOS 26.0, *)` gate
     /// because Apple's macro requires both. Converted to the always-available
     /// POD shell via `toMedicationDraft()`.
+    ///
+    /// Every field is a verbatim copy of package text and is shown to the
+    /// user as-is, so the guides ask for the package's own wording and never
+    /// a translation. They are language-neutral English with German, Dutch
+    /// and English examples: the previous German-only examples nudged the
+    /// model towards German forms ("Tablette") on a Dutch pack ("tablet").
     @available(iOS 26.0, *)
     @Generable
     struct GenerableMedicationDraft {
         @Guide(
-            description: "Produktname des Medikaments, exakt wie auf der Packung. Keine Marketing-Worte, keine Krankheits-Begriffe. Nur der Name."
+            description: "Product name of the medication exactly as printed on the package, never translated. "
+                + "No marketing words, no disease terms. Only the name."
         )
         var name: String
 
-        @Guide(description: "Dosisstärke wie auf der Packung (z.B. '500 mg', '0,5 mg', '100 IE/ml'). Leer wenn nicht eindeutig erkennbar.")
+        @Guide(
+            description: "Dose strength exactly as printed on the package (e.g. '500 mg', '0,5 mg', '100 IE/ml'). "
+                + "Empty if not clearly recognisable."
+        )
         var doseStrength: String
 
-        @Guide(description: "Darreichungsform (z.B. 'Tablette', 'Filmtablette', 'Spritze', 'Kapsel'). Leer wenn nicht eindeutig erkennbar.")
+        @Guide(
+            description: "Dose form exactly as printed on the package, never translated "
+                + "(e.g. 'Tablette', 'Filmtablette', 'tablet', 'filmomhulde tablet', 'Kapsel', 'capsule'). "
+                + "Empty if not clearly recognisable."
+        )
         var doseForm: String
 
         @Guide(
-            description: "Optionaler Hersteller-Hinweis aus der Packung (Firmenname mit Suffix wie GmbH, AG, KG). Leer wenn nicht erkennbar."
+            description: "Optional manufacturer hint from the package (company name with a suffix such as GmbH, AG, KG, B.V., N.V.). "
+                + "Empty if not recognisable."
         )
         var manufacturerHint: String
 
@@ -224,10 +246,21 @@ extension MedicationDraft: BriefingTextProvider {
 /// extended to text-extraction).
 enum MedicationExtractionPrompt {
     static func build(rawText: String, locale: Locale) -> String {
-        let language = locale.language.languageCode?.identifier ?? "de"
-        switch language {
-        case "en":
-            return """
+        switch AppLanguage.resolve(locale) {
+        case .nl:
+            """
+            OCR-transcript van een foto van een medicijnverpakking:
+            \"\"\"
+            \(rawText)
+            \"\"\"
+
+            Haal eruit: productnaam, sterkte, toedieningsvorm, fabrikanthint. \
+            Gebruik ALLEEN tekstdelen die letterlijk in het transcript staan, en vertaal niets. \
+            Als een veld niet duidelijk herkenbaar is, laat het leeg. \
+            Leid NIET af waarvoor het middel dient, wat de indicatie is of wat de klinische werking is.
+            """
+        case .en:
+            """
             OCR transcript from a medication-package photo:
             \"\"\"
             \(rawText)
@@ -238,8 +271,8 @@ enum MedicationExtractionPrompt {
             If a field is not clearly present, leave it empty. \
             Do NOT infer the drug's use, indication, or any clinical effect.
             """
-        default:
-            return """
+        case .de:
+            """
             OCR-Transkript eines Medikamenten-Packungsfotos:
             \"\"\"
             \(rawText)
@@ -253,48 +286,73 @@ enum MedicationExtractionPrompt {
         }
     }
 
+    /// The system-instruction text for one interface language. Outside the
+    /// `FoundationModels` gate so tests can pin every language's guardrails.
+    ///
+    /// Unlike the prose surfaces, no block asks for output "in" a language:
+    /// every field is a verbatim copy of the package text, so the Dutch block
+    /// says "translate nothing" where the others say "verbatim".
+    static func instructionText(for language: AppLanguage) -> String {
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+    }
+
     #if canImport(FoundationModels)
         @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
-            let language = locale.language.languageCode?.identifier ?? "de"
-            switch language {
-            case "en":
-                return Instructions {
-                    """
-                    You are a lexical-extraction tool for a German health-journal app. \
-                    Your only job is to copy four fields out of an OCR transcript: product name, dose-strength, dose form, manufacturer hint.
-
-                    NON-NEGOTIABLE:
-                    - Output only text that appears verbatim in the transcript.
-                    - Never invent or paraphrase a drug name.
-                    - Never explain what the drug does.
-                    - Never diagnose, predict, or prescribe.
-                    - Never reference a condition, disease, or symptom.
-                    - If a field is not clearly present, leave it empty.
-
-                    STYLE: lexical, not advisory. You are a copy-out function, not a doctor.
-                    """
-                }
-            default:
-                return Instructions {
-                    """
-                    Du bist ein lexikalisches Extraktions-Werkzeug für eine deutsche Gesundheits-Tagebuch-App. \
-                    Deine einzige Aufgabe: vier Felder aus einem OCR-Transkript kopieren: Produktname, Dosisstärke, Darreichungsform, Hersteller-Hinweis.
-
-                    UNVERHANDELBAR:
-                    - Gib nur Textstellen aus, die im Transkript wortwörtlich vorkommen.
-                    - Erfinde oder umformuliere niemals einen Medikamentennamen.
-                    - Erkläre niemals, was das Medikament bewirkt.
-                    - Diagnostiziere, sage nichts vorher, verordne nichts.
-                    - Erwähne keine Krankheit, kein Symptom, keine Indikation.
-                    - Wenn ein Feld nicht eindeutig erkennbar ist, lass es leer.
-
-                    STIL: lexikalisch, nicht beratend. Du bist eine Kopier-Funktion, kein Arzt.
-                    """
-                }
+            let text = instructionText(for: AppLanguage.resolve(locale))
+            return Instructions {
+                text
             }
         }
     #endif
+
+    private static let englishInstructions = """
+    You are a lexical-extraction tool for a German health-journal app. \
+    Your only job is to copy four fields out of an OCR transcript: product name, dose-strength, dose form, manufacturer hint.
+
+    NON-NEGOTIABLE:
+    - Output only text that appears verbatim in the transcript.
+    - Never invent or paraphrase a drug name.
+    - Never explain what the drug does.
+    - Never diagnose, predict, or prescribe.
+    - Never reference a condition, disease, or symptom.
+    - If a field is not clearly present, leave it empty.
+
+    STYLE: lexical, not advisory. You are a copy-out function, not a doctor.
+    """
+
+    /// The fourth rule used to read "Diagnostiziere, sage nichts vorher,
+    /// verordne nichts", which tells the model to diagnose; it now forbids it
+    /// like the English and Dutch rows.
+    private static let germanInstructions = """
+    Du bist ein lexikalisches Extraktions-Werkzeug für eine deutsche Gesundheits-Tagebuch-App. \
+    Deine einzige Aufgabe: vier Felder aus einem OCR-Transkript kopieren: Produktname, Dosisstärke, Darreichungsform, Hersteller-Hinweis.
+
+    UNVERHANDELBAR:
+    - Gib nur Textstellen aus, die im Transkript wortwörtlich vorkommen.
+    - Erfinde oder umformuliere niemals einen Medikamentennamen.
+    - Erkläre niemals, was das Medikament bewirkt.
+    - Diagnostiziere nichts, sage nichts vorher, verordne nichts.
+    - Erwähne keine Krankheit, kein Symptom, keine Indikation.
+    - Wenn ein Feld nicht eindeutig erkennbar ist, lass es leer.
+
+    STIL: lexikalisch, nicht beratend. Du bist eine Kopier-Funktion, kein Arzt.
+    """
+
+    private static let dutchInstructions = """
+    Je bent een lexicaal extractiehulpmiddel voor een gezondheidsdagboek-app. \
+    Je enige taak: vier velden uit een OCR-transcript kopiëren: productnaam, sterkte, toedieningsvorm, fabrikanthint.
+
+    NIET ONDERHANDELBAAR:
+    - Geef alleen tekstdelen die letterlijk in het transcript staan, en vertaal niets.
+    - Verzin of herformuleer nooit een medicijnnaam.
+    - Leg nooit uit wat het medicijn doet.
+    - Stel geen diagnose, voorspel niets en schrijf niets voor.
+    - Noem geen aandoening, symptoom of indicatie.
+    - Als een veld niet duidelijk herkenbaar is, laat het leeg.
+
+    STIJL: lexicaal, niet adviserend. Je bent een kopieerfunctie, geen arts.
+    """
 }
 
 // `String.nilIfEmpty` is provided by `Util/AppEnvironment.swift` as an

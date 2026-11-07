@@ -22,6 +22,10 @@ public struct OnDeviceBriefingOutcome: Sendable {
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
+        /// ``OnDeviceLanguageGate`` is closed for the interface language:
+        /// the model or the MDR filter does not speak it. Never answered in
+        /// another language instead.
+        case languageUnsupported
     }
 
     public static func success(_ briefing: OnDeviceBriefing) -> Self {
@@ -104,6 +108,9 @@ public actor OnDeviceBriefingService {
                 return .fallback(mapAvailabilityReason(reason))
             @unknown default:
                 return .fallback(.deviceIneligible)
+            }
+            guard OnDeviceLanguageGate.allows(locale: locale) else {
+                return .fallback(.languageUnsupported)
             }
 
             let prompt = OnDeviceBriefingPrompt.build(
@@ -208,21 +215,34 @@ public actor OnDeviceBriefingService {
     /// `canImport(FoundationModels)` + `@available(iOS 26.0, *)` gate because
     /// Apple's macro requires both. Converted to the always-available POD
     /// shell via `toOnDeviceBriefing()` for storage + rendering.
+    ///
+    /// The `@Guide` descriptions are language-neutral English: a description
+    /// is baked into the generation schema at compile time and cannot branch
+    /// on the session locale. They used to be German, which pulled a Dutch
+    /// session's output back into German; the instructions now name the
+    /// output language and the guides defer to them.
     @available(iOS 26.0, *)
     @Generable
     struct GenerableBriefing {
         @Guide(
-            description: "Ein ruhiger, beobachtender Tagesbriefing-Satz, 1-3 Sätze. Niemals diagnostisch, niemals prädiktiv, niemals prescriptiv."
+            description: "A calm, observational daily-briefing summary, 1-3 sentences, in the language the instructions require. "
+                + "Never diagnostic, never predictive, never prescriptive."
         )
         var summary: String
 
-        @Guide(description: "2-4 knappe Beobachtungen aus den letzten 7 Tagen, jeweils faktisch + zeitlich verankert.")
+        @Guide(
+            description: "2-4 brief observations from the last 7 days, each factual and anchored in time, "
+                + "in the language the instructions require."
+        )
         var keyFindings: [String]
 
-        @Guide(description: "0-3 sanfte Nudges in Frageform. Keine Aussagen, was der Nutzer tun soll.")
+        @Guide(
+            description: "0-3 gentle nudges phrased as questions, in the language the instructions require. "
+                + "Never a statement of what the user should do."
+        )
         var actionableNudges: [String]
 
-        @Guide(description: "Selbsteinschätzung der Datenbasis: 0.0 wenn Daten dünn, 1.0 wenn umfangreich.")
+        @Guide(description: "Self-assessment of the data basis: 0.0 when data is thin, 1.0 when it is ample.")
         var confidence: Float
 
         func toOnDeviceBriefing() -> OnDeviceBriefing {
@@ -246,15 +266,15 @@ enum OnDeviceBriefingPrompt {
         healthScore: HealthScore?,
         locale: Locale
     ) -> String {
-        let language = locale.language.languageCode?.identifier ?? "de"
-        let digest = digestMeasurements(measurements, locale: locale)
+        let language = AppLanguage.resolve(locale)
+        let digest = digestMeasurements(measurements, language: language)
         let scoreLine = if let healthScore {
             "HealthScore: \(healthScore.score)/100" + (healthScore.delta.map { ", Δ \($0)" } ?? "")
         } else {
-            "HealthScore: keine Daten"
+            "HealthScore: " + language.pick(de: "keine Daten", en: "no data", nl: "geen gegevens")
         }
         switch language {
-        case "en":
+        case .en:
             return """
             Last 7 days of data:
             \(digest)
@@ -263,7 +283,16 @@ enum OnDeviceBriefingPrompt {
             Compose a calm, observational daily briefing. Stay strictly observational. \
             Never diagnose, predict, or prescribe. If data is thin, say so.
             """
-        default:
+        case .nl:
+            return """
+            Gegevens van de laatste 7 dagen:
+            \(digest)
+            \(scoreLine)
+
+            Schrijf een rustige, beschrijvende dagbriefing. Blijf strikt beschrijvend. \
+            Nooit diagnosticeren, voorspellen of voorschrijven. Als er weinig gegevens zijn, zeg dat eerlijk.
+            """
+        case .de:
             return """
             Daten der letzten 7 Tage:
             \(digest)
@@ -275,47 +304,65 @@ enum OnDeviceBriefingPrompt {
         }
     }
 
+    /// The system-instruction text for one interface language. Outside the
+    /// `FoundationModels` gate so tests can pin every language's guardrails.
+    static func instructionText(for language: AppLanguage) -> String {
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+    }
+
     #if canImport(FoundationModels)
         @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
-            let language = locale.language.languageCode?.identifier ?? "de"
-            switch language {
-            case "en":
-                return Instructions {
-                    """
-                    You are a calm, factual daily-briefing voice for a German/English health-journal app.
-
-                    NON-NEGOTIABLE:
-                    - Never make medical diagnoses.
-                    - Never recommend doses or therapy changes.
-                    - Never interpret drug levels.
-                    - Never claim causal links between metrics.
-                    - Never predict ("will rise", "will fall").
-                    - Defer to a doctor if values look unusual.
-
-                    STYLE: observational, not advisory. Use concrete numbers only if they appear in the data.
-                    """
-                }
-            default:
-                return Instructions {
-                    """
-                    Du bist eine ruhige, sachliche Tagesbriefing-Stimme für eine deutsche \
-                    Gesundheits-Tagebuch-App. Schreibe IMMER auf Deutsch in du-Form.
-
-                    UNVERHANDELBAR:
-                    - Du gibst niemals medizinische Diagnosen.
-                    - Du empfiehlst niemals Dosierungen oder Therapieänderungen.
-                    - Du interpretierst niemals Wirkstoffspiegel.
-                    - Du behauptest niemals kausale Zusammenhänge zwischen Werten.
-                    - Du sagst nichts vorher ("wird steigen", "wird sinken").
-                    - Bei Auffälligkeiten verweise auf den Arzt.
-
-                    STIL: beobachtend, nicht ratend. Konkrete Zahlen nur, wenn sie in den Daten stehen.
-                    """
-                }
+            let text = instructionText(for: AppLanguage.resolve(locale))
+            return Instructions {
+                text
             }
         }
     #endif
+
+    private static let englishInstructions = """
+    You are a calm, factual daily-briefing voice for a German/English health-journal app.
+
+    NON-NEGOTIABLE:
+    - Never make medical diagnoses.
+    - Never recommend doses or therapy changes.
+    - Never interpret drug levels.
+    - Never claim causal links between metrics.
+    - Never predict ("will rise", "will fall").
+    - Defer to a doctor if values look unusual.
+
+    STYLE: observational, not advisory. Use concrete numbers only if they appear in the data.
+    """
+
+    private static let germanInstructions = """
+    Du bist eine ruhige, sachliche Tagesbriefing-Stimme für eine deutsche \
+    Gesundheits-Tagebuch-App. Schreibe IMMER auf Deutsch in du-Form.
+
+    UNVERHANDELBAR:
+    - Du gibst niemals medizinische Diagnosen.
+    - Du empfiehlst niemals Dosierungen oder Therapieänderungen.
+    - Du interpretierst niemals Wirkstoffspiegel.
+    - Du behauptest niemals kausale Zusammenhänge zwischen Werten.
+    - Du sagst nichts vorher ("wird steigen", "wird sinken").
+    - Bei Auffälligkeiten verweise auf den Arzt.
+
+    STIL: beobachtend, nicht ratend. Konkrete Zahlen nur, wenn sie in den Daten stehen.
+    """
+
+    private static let dutchInstructions = """
+    Je bent een rustige, zakelijke stem voor de dagbriefing in een \
+    gezondheidsdagboek-app. Schrijf ALTIJD in het Nederlands, in je-vorm.
+
+    NIET ONDERHANDELBAAR:
+    - Je stelt nooit een medische diagnose.
+    - Je raadt nooit doseringen of therapiewijzigingen aan.
+    - Je interpreteert nooit medicijnspiegels.
+    - Je beweert nooit oorzakelijke verbanden tussen waarden.
+    - Je voorspelt niets ("gaat stijgen", "gaat dalen").
+    - Bij opvallende waarden verwijs je naar de arts, met de woorden "bespreek dit met je arts".
+
+    STIJL: beschrijvend, niet adviserend. Noem concrete getallen alleen als ze in de gegevens staan.
+    """
 
     /// Compact digest of the last 7 days of measurements (R4 §2.7 — the
     /// 4096-token context window means we never dump raw data).
@@ -330,18 +377,26 @@ enum OnDeviceBriefingPrompt {
     /// keeps the prompt well under the 4096-token budget (we cap at
     /// 12 kinds × ~30 chars/line ≈ 360 chars/locale, plus the legacy
     /// count line). Free-form notes are still excluded (PII).
-    private static func digestMeasurements(_ measurements: [Measurement], locale: Locale) -> String {
-        let isEN = locale.language.languageCode?.identifier == "en"
+    private static func digestMeasurements(_ measurements: [Measurement], language: AppLanguage) -> String {
         if measurements.isEmpty {
-            return isEN ? "(no measurements in window)" : "(keine Messungen im Zeitfenster)"
+            return language.pick(
+                de: "(keine Messungen im Zeitfenster)",
+                en: "(no measurements in window)",
+                nl: "(geen metingen in het tijdvenster)"
+            )
         }
         let count = measurements.count
-        let header = isEN ? "\(count) measurements logged" : "\(count) Messungen erfasst"
-        let breakdown = perKindBreakdown(measurements, isEN: isEN)
+        let header = language.pick(
+            de: "\(count) Messungen erfasst",
+            en: "\(count) measurements logged",
+            nl: "\(count) metingen vastgelegd"
+        )
+        let breakdown = perKindBreakdown(measurements, language: language)
         return breakdown.isEmpty ? header : "\(header)\n\(breakdown)"
     }
 
-    private static func perKindBreakdown(_ measurements: [Measurement], isEN: Bool) -> String {
+    private static func perKindBreakdown(_ measurements: [Measurement], language: AppLanguage) -> String {
+        let suffix = language.pick(de: "letzte", en: "latest", nl: "laatste")
         var buckets: [MetricKind: [Measurement]] = [:]
         for m in measurements {
             buckets[m.kind, default: []].append(m)
@@ -351,9 +406,8 @@ enum OnDeviceBriefingPrompt {
             .prefix(12)
             .map { kind, rows in
                 let latest = rows.max(by: { $0.recordedAt < $1.recordedAt })
-                let label = englishLabel(kind: kind, isEN: isEN)
+                let label = promptLabel(kind: kind, language: language)
                 let valueLabel = latestValueText(latest: latest, kind: kind) ?? "—"
-                let suffix = isEN ? "latest" : "letzte"
                 return "- \(label): \(rows.count)× (\(suffix) \(valueLabel))"
             }
         return lines.joined(separator: "\n")
@@ -384,9 +438,13 @@ enum OnDeviceBriefingPrompt {
         .bmi: "BMI"
     ]
 
-    private static func englishLabel(kind: MetricKind, isEN: Bool) -> String {
-        guard isEN else { return kind.displayName }
-        return englishLabels[kind] ?? kind.displayName
+    /// English prompts use the fixed table above; every other language
+    /// reads the catalogue name, which is in the interface language.
+    private static func promptLabel(kind: MetricKind, language: AppLanguage) -> String {
+        switch language {
+        case .en: englishLabels[kind] ?? kind.displayName
+        case .de, .nl: kind.displayName
+        }
     }
 
     private static func latestValueText(latest: Measurement?, kind: MetricKind) -> String? {

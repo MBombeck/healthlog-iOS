@@ -1,0 +1,228 @@
+{
+  "_doc": "Questionnaire wording copied from the HealthLog server. Do not edit: run scripts/l10n/sync-questionnaire-wording.py --server-ref <tag>. See docs/localization.md.",
+  "language": "nl",
+  "serverRef": "v1.46.6",
+  "serverCommit": "2c8140a50270a39852b57103785fc867bc2d47f6",
+  "generator": "scripts/l10n/sync-questionnaire-wording.py",
+  "punctuation": [
+    {
+      "instrument": "PHQ9",
+      "field": "items[5]",
+      "printed": "uzelf — of het",
+      "shown": "uzelf, of het",
+      "reason": "The em dash before \"of\" becomes a comma, the same change as in the English item (R2 3.4)."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.1",
+      "printed": "46–60 min",
+      "shown": "46 tot 60 min",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.2",
+      "printed": "31–45 min",
+      "shown": "31 tot 45 min",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.3",
+      "printed": "16–30 min",
+      "shown": "16 tot 30 min",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.4",
+      "printed": "0–15 min",
+      "shown": "0 tot 15 min",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.nights.0",
+      "printed": "5–7",
+      "shown": "5 tot 7",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.nights.4",
+      "printed": "0–1",
+      "shown": "0 tot 1",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.1",
+      "printed": "7–12 maanden",
+      "shown": "7 tot 12 maanden",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.2",
+      "printed": "3–6 maanden",
+      "shown": "3 tot 6 maanden",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.3",
+      "printed": "1–2 maanden",
+      "shown": "1 tot 2 maanden",
+      "reason": "A range between two numbers reads with the range word \"tot\" instead of an en dash."
+    }
+  ],
+  "instruments": {
+    "PHQ9": {
+      "serverFile": "src/lib/mental-health/wording/phq9/nl.ts",
+      "serverBlob": "0b7a0d547e2123ad374ac02ab03eb923e09ee112",
+      "validated": true,
+      "source": "Pfizer Inc., PHQ-9, official translation \"Dutch for the Netherlands\", read from https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/PHQ9_Dutch%20for%20the%20Netherlands.pdf. Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or distribute.",
+      "stems": {
+        "period": "Hoe vaak hebt u in de afgelopen 2 weken last gehad van één of meer van de volgende problemen?"
+      },
+      "items": [
+        "Weinig interesse of plezier in activiteiten",
+        "Zich neerslachtig, depressief of hopeloos voelen",
+        "Moeilijk inslapen, moeilijk doorslapen of te veel slapen",
+        "Zich moe voelen of gebrek aan energie hebben",
+        "Weinig eetlust of overmatig eten",
+        "Een slecht gevoel hebben over uzelf, of het gevoel hebben dat u een mislukkeling bent of het gevoel dat u zichzelf of uw familie teleurgesteld hebt",
+        "Problemen om u te concentreren, bijvoorbeeld om de krant te lezen of om tv te kijken",
+        "Zo traag bewegen of zo langzaam spreken dat andere mensen dit opgemerkt kunnen hebben? Of het tegenovergestelde, zo zenuwachtig of rusteloos zijn dat u veel meer bewoog dan gebruikelijk",
+        "De gedachte dat u beter dood zou kunnen zijn of de gedachte uzelf op een bepaalde manier pijn te doen"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Helemaal niet",
+          "1": "Verscheidene dagen",
+          "2": "Meer dan de helft van de dagen",
+          "3": "Bijna elke dag"
+        }
+      },
+      "functional": {
+        "title": "Als u enig probleem hebt aangekruist, hoe moeilijk maakten deze problemen het dan voor u om uw werk of uw taken in en om het huis te doen, of om met andere mensen om te gaan?",
+        "anchors": {
+          "0": "Helemaal niet moeilijk",
+          "1": "Enigszins moeilijk",
+          "2": "Erg moeilijk",
+          "3": "Extreem moeilijk"
+        }
+      }
+    },
+    "GAD7": {
+      "serverFile": "src/lib/mental-health/wording/gad7/nl.ts",
+      "serverBlob": "bf865101aa535720457fed99db798495d9dfb1ff",
+      "validated": true,
+      "source": "Pfizer Inc., GAD-7, official translation \"Dutch for the Netherlands\", read from https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/GAD7_Dutch%20for%20the%20Netherlands.pdf. Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or distribute.",
+      "stems": {
+        "period": "Hoe vaak hebt u in de afgelopen 2 weken last gehad van één of meer van de volgende problemen?"
+      },
+      "items": [
+        "U nerveus, angstig of gespannen voelen",
+        "Niet kunnen stoppen met u zorgen maken of dit niet kunnen beteugelen",
+        "U te veel zorgen maken om verschillende dingen",
+        "Moeite hebben u te ontspannen",
+        "Zo rusteloos zijn dat het moeilijk is om stil te zitten",
+        "Snel geërgerd of geïrriteerd zijn",
+        "Bang zijn dat er iets vreselijks zou kunnen gebeuren"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Helemaal niet",
+          "1": "Verscheidene dagen",
+          "2": "Meer dan de helft van de dagen",
+          "3": "Bijna elke dag"
+        }
+      }
+    },
+    "WHO5": {
+      "serverFile": "src/lib/mental-health/wording/who5/nl.ts",
+      "serverBlob": "cc2654ac47dfdeb04782d037ce26407a874ee664",
+      "validated": true,
+      "source": "Psychiatric Research Unit (WHO Collaborating Centre in Mental Health, Mental Health Centre North Zealand) translation, republished by WHO beside WHO/UCN/MSD/MHE/2024.1 (licence CC BY-NC-SA 3.0 IGO). Dutch, 1999 version (\"WHO (vijf) Welzijnsindex\"), read from https://cdn.who.int/media/docs/default-source/mental-health/five-well-being-index-(who-5)/who-5_dutch.pdf.",
+      "stems": {
+        "period": "Gedurende de laatste twee weken"
+      },
+      "items": [
+        "Ik voelde me vrolijk en in een opperbeste stemming",
+        "Ik voelde me rustig en ontspannen",
+        "Ik voelde me actief en doelbewust",
+        "Ik voelde me fris en uitgerust wanneer ik wakker werd",
+        "Mijn dagelijkse leven was gevuld met dingen die me interesseren"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Helemaal niet",
+          "1": "Soms",
+          "2": "Minder dan de helft van de tijd",
+          "3": "Meer dan de helft van de tijd",
+          "4": "Meestal",
+          "5": "Constant"
+        }
+      }
+    },
+    "SCI": {
+      "serverFile": "src/lib/mental-health/wording/sci/nl.ts",
+      "serverBlob": "535d13a9eac28d94f2723c1dc0b8b19f6ff14d00",
+      "validated": false,
+      "source": null,
+      "stems": {
+        "finally": "Tot slot …",
+        "impact": "Als u denkt aan de afgelopen maand, in hoeverre heeft slecht slapen …",
+        "night": "Als u denkt aan een gewone nacht in de afgelopen maand …"
+      },
+      "items": [
+        "… hoe lang duurt het voordat u in slaap valt?",
+        "… als u daarna ’s nachts wakker wordt … hoe lang bent u dan in totaal wakker? (tel alle keren dat u wakker was bij elkaar op)",
+        "… hoeveel nachten per week hebt u een probleem met uw slaap?",
+        "… hoe zou u de kwaliteit van uw slaap beoordelen?",
+        "… invloed gehad op uw stemming, energie of relaties?",
+        "… invloed gehad op uw concentratie, productiviteit of vermogen om wakker te blijven?",
+        "… u in het algemeen dwarsgezeten?",
+        "… hoe lang hebt u al een probleem met uw slaap?"
+      ],
+      "anchors": {
+        "duration": {
+          "0": "≥ 61 min",
+          "1": "46 tot 60 min",
+          "2": "31 tot 45 min",
+          "3": "16 tot 30 min",
+          "4": "0 tot 15 min"
+        },
+        "impact": {
+          "0": "Heel veel",
+          "1": "Veel",
+          "2": "Enigszins",
+          "3": "Een beetje",
+          "4": "Helemaal niet"
+        },
+        "nights": {
+          "0": "5 tot 7",
+          "1": "4",
+          "2": "3",
+          "3": "2",
+          "4": "0 tot 1"
+        },
+        "problemDuration": {
+          "0": "> 1 jaar",
+          "1": "7 tot 12 maanden",
+          "2": "3 tot 6 maanden",
+          "3": "1 tot 2 maanden",
+          "4": "Ik heb geen probleem / < 1 maand"
+        },
+        "quality": {
+          "0": "Zeer slecht",
+          "1": "Slecht",
+          "2": "Gemiddeld",
+          "3": "Goed",
+          "4": "Zeer goed"
+        }
+      }
+    }
+  }
+}

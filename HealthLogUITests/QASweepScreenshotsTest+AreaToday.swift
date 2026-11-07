@@ -133,9 +133,7 @@ extension QASweepScreenshotsTest {
     func test_15_todayWithoutMedications() {
         guard !isXXL else { return }
         app = XCUIApplication()
-        let arguments = [
-            "-AppleLanguages", "(\(language))",
-            "-AppleLocale", language == "de" ? "de_DE" : "en_US",
+        let arguments = language.launchArguments + [
             "-uitest-phase8", "insightsAccessibility",
             "-uitest-sweep",
             "-hl.healthkit.requestedAt.hermetic-user", "true",

@@ -387,7 +387,7 @@ public enum EndpointFailureDiagnostics {
         // Audit B-2 — `.idempotencyReplayInFlight` is a 409 the server answered
         // with, so it belongs to the answered class like every other verdict.
         case .server, .unauthorized, .rateLimited, .aiUnavailable, .moduleDisabled,
-             .writeConflictUnresolved, .refusedWithReason, .idempotencyReplayInFlight: .status
+             .writeConflictUnresolved, .refusedWithReason, .idempotencyReplayInFlight, .accountDeletionPending: .status
         // `.unknown` is the URL-construction failure; `.notPersisted` never
         // originates in `APIClient`. `.serverNotConfigured` heisst, dass es
         // noch gar keine Adresse gibt — es ging nie ein Paket raus. Alle drei
@@ -406,7 +406,7 @@ public enum EndpointFailureDiagnostics {
         case .unauthorized: 401
         case .rateLimited: 429
         case let .aiUnavailable(refusal): refusal.httpStatus
-        case .moduleDisabled: 403
+        case .moduleDisabled, .accountDeletionPending: 403
         case .idempotencyReplayInFlight: 409
         default: 0
         }

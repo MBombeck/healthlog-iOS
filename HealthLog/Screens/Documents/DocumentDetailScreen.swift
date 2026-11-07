@@ -26,6 +26,12 @@ struct DocumentDetailScreen: View {
     /// The detail's staged facts — kept so the "N Laborwerte" jump can count
     /// non-rejected OBSERVATION facts without a second request (Wave 4.5).
     @State var facts: [ExtractedFact] = []
+    /// #151 — the staged facts may leave part of the document out.
+    @State var extractionIncomplete = false
+    /// #151 — why the automatic read produced nothing to show yet.
+    @State var readNotice: DocumentReadNotice?
+    /// #141 — related records from the detail read (`nil` from an older server).
+    @State var related: [RelatedLink] = []
 
     // Inline metadata edit state. The filing date is edited directly via an
     // inline DatePicker (defaults to the stored date, else today).
@@ -74,6 +80,10 @@ struct DocumentDetailScreen: View {
                 metadataCard
                 conditionsCard
                 labValuesLink
+                RelatedRecordsSection(links: RelatedLinks.excludingEpisodes(
+                    related,
+                    linkedOn: Set(document.conditionLinks.map(\.episodeId))
+                ))
                 if let actionError {
                     HLFormErrorText(actionError)
                 }
@@ -239,6 +249,8 @@ struct DocumentDetailScreen: View {
             let detail = try await store.detail(id: documentId)
             document = detail.document
             facts = detail.facts
+            extractionIncomplete = detail.extractionIncomplete
+            related = detail.related?.items ?? []
             syncEditState(from: detail.document)
         } catch {
             if DocumentsRepository.isModuleDisabled(error) {
@@ -256,15 +268,22 @@ struct DocumentDetailScreen: View {
     /// when the body is not yet indexed. Any failure is swallowed: this is a
     /// quiet background nicety, never a surfaced error. On success the detail is
     /// re-read so the flipped `hasContentIndex` unlocks the chat affordance.
+    ///
+    /// #151 — a document the server found too large to read
+    /// (`lastIndexOutcome: resource-limit`) is not tried again. A busy reader
+    /// or a read cut off before any value replaces the spinner with one
+    /// sentence (``DocumentReadNotice``); every other failure stays quiet.
     private func autoIndexIfNeeded() async {
         guard !didAttemptAutoIndex else { return }
         didAttemptAutoIndex = true
-        guard contentIndexEnabled, !document.hasContentIndex else { return }
+        guard contentIndexEnabled, !document.hasContentIndex, !document.isTooLargeToRead else { return }
         do {
             _ = try await store.indexContent(id: documentId)
+            readNotice = nil
             await reload()
         } catch {
             // Best-effort only — search simply won't cover this document yet.
+            readNotice = DocumentReadNotice.from(error: error)
         }
     }
 

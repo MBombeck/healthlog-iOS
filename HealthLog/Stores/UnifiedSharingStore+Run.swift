@@ -23,6 +23,8 @@ public extension UnifiedSharingStore {
         public let localReportStore: LocalDoctorReportStore
         public let linkStore: ShareLinkStore
         public let snapshot: DoctorReportSpecBuilder.Snapshot
+        /// The report language (``UnifiedSharingStore/reportLanguage``) as a
+        /// language code; the PDF is written in it, on the server and here.
         public let locale: String
         public let isBackendReachable: Bool
 
@@ -111,12 +113,16 @@ public extension UnifiedSharingStore {
     /// is a contract mismatch rather than a hiccup, where the scope is rebuilt
     /// from a fresh capabilities read and the user retries.
     private func producePDF(_ context: OutputContext) async {
-        if context.isBackendReachable, let arguments = pdfArguments(locale: context.locale) {
+        // L10N-REPORT — `context.locale` is the chosen report language; the
+        // server takes Dutch only from 1.43.7 and reads English before that.
+        let serverLocale = ReportLocale(AppLanguage.resolve(context.locale)).exportServerCode()
+        if context.isBackendReachable, let arguments = pdfArguments(locale: serverLocale) {
             await context.reportStore.generate(
                 days: arguments.days,
                 locale: arguments.locale,
                 selection: arguments.selection,
-                practiceName: arguments.practiceName
+                practiceName: arguments.practiceName,
+                range: arguments.window == nil ? nil : exportRange
             )
             if let url = context.reportStore.pdfURL, context.reportStore.error == nil {
                 artifacts = [url]
@@ -137,7 +143,10 @@ public extension UnifiedSharingStore {
 
     private func produceLocalPDF(_ context: OutputContext) async {
         context.localReportStore.periodDays = periodDays
-        await context.localReportStore.generate(locale: context.locale == "en" ? .en : .de)
+        context.localReportStore.window = windowInterval
+        // The chosen report language (by default the interface language); an
+        // unknown code reads English, as the interface itself does.
+        await context.localReportStore.generate(locale: ReportLocale(AppLanguage.resolve(context.locale)))
         guard context.localReportStore.pdfURL != nil, context.localReportStore.error == nil else {
             outcome = .failed(
                 context.localReportStore.error?.userFacingDescription

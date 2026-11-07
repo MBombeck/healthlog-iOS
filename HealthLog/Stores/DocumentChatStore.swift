@@ -212,9 +212,11 @@ public final class DocumentChatStore {
 
     // MARK: - Helpers
 
-    /// The two-letter locale the server renders its refusal / limit copy in
-    /// (`"de"` / `"en"`), mirroring the Coach's `serverLocaleCode()`.
-    static var localeCode: String {
-        Locale.current.language.languageCode?.identifier == "de" ? "de" : "en"
+    /// The locale the server renders its refusal / limit copy in, mirroring
+    /// the Coach's `serverLocaleCode()`. `nil` for a Dutch interface against a
+    /// server before 1.46.2, whose body schema does not accept it; the server
+    /// then resolves the reader's language itself.
+    static var localeCode: String? {
+        AppLanguage.current.chatServerCode()
     }
 }

@@ -22,6 +22,8 @@ extension AppContainer {
         moduleGate.serverFeaturesSink = { features in
             KnownServerVersion.recordFeatures(ServerFeatures.recorded(features))
         }
+        // Explicit capture: the handler holds the gate weakly; Swift 6.4
+        // (#ImplicitStrongCapture) wants the outer strong capture named.
         Task.detached { [gate] in
             await apiClient.setAIRefusalHandler { @Sendable [weak gate] refusal in
                 await MainActor.run {

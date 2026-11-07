@@ -245,26 +245,7 @@ extension SettingsHKSyncDiagnosticsScreen {
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach(freshness) { row in
-                    VStack(alignment: .leading, spacing: HLSpace.xs) {
-                        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-                            Text(HKSyncDiagnosticsVocabulary.freshnessType(row.type))
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.primary)
-                            Spacer(minLength: HLSpace.sm)
-                            Text(relativeOrNever(row.lastSeenAt))
-                                .font(.hlCaption.monospacedDigit())
-                                .foregroundStyle(row.stale ? HLColor.statusWarn : HLText.tertiary)
-                                .lineLimit(1)
-                        }
-                        // V1/W5 — last check (with its trigger), last new value,
-                        // last background arrival. Absent on older servers.
-                        ForEach(ServerFreshnessFacts(row: row).detailLines, id: \.self) { line in
-                            Text(verbatim: line)
-                                .font(.hlCaption2)
-                                .foregroundStyle(HLText.tertiary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
+                    ServerFreshnessRow(row: row, seenText: relativeOrNever(row.lastSeenAt))
                 }
             }
         }

@@ -29,38 +29,10 @@ public extension Medication {
     /// upsert (the server GET/POST responses don't echo `externalSource`, so the
     /// importer is the authority on which med it mirrored).
     func withAppleHealthProvenance(externalId: String?) -> Medication {
-        Medication(
-            id: id,
-            name: name,
-            dose: dose,
-            treatmentClass: treatmentClass,
-            category: category,
-            dosesPerUnit: dosesPerUnit,
-            unitsPerDose: unitsPerDose,
-            schedule: schedule,
-            lastTakenAt: lastTakenAt,
-            todayEventCount: todayEventCount,
-            notificationsEnabled: notificationsEnabled,
-            active: active,
-            archivedAt: archivedAt,
-            startsOn: startsOn,
-            endsOn: endsOn,
-            oneShot: oneShot,
-            asNeeded: asNeeded,
-            trackIntake: trackIntake,
-            recordedSchedule: recordedSchedule,
-            deliveryForm: deliveryForm,
-            createdAt: createdAt,
-            nextDueAt: nextDueAt,
-            nextDueOverdue: nextDueOverdue,
-            liveActivityEnabled: liveActivityEnabled,
-            criticalAlarmEnabled: criticalAlarmEnabled,
-            trackInjectionSites: trackInjectionSites,
-            allowedInjectionSites: allowedInjectionSites,
-            externalSource: IntakeSource.appleHealth.wireValue,
-            externalId: externalId ?? self.externalId,
-            courseStatus: courseStatus,
-            intakeActionable: intakeActionable
-        ).carryingCategoryLabel(categoryLabel).carryingRemindersActive(remindersActive)
+        // MED (1.5.0): a copy, not a rebuild, so no `var` field is lost.
+        var copy = self
+        copy.externalSource = IntakeSource.appleHealth.wireValue
+        copy.externalId = externalId ?? self.externalId
+        return copy
     }
 }

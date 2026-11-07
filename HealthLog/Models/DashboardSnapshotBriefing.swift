@@ -115,6 +115,11 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
     /// only a block whose shape this build cannot read at all stays `nil`, so
     /// the tile colours nothing rather than guessing.
     public let weightTrend: WeightTrendJudgement?
+    /// **1.5 VERDICTS (#135, server v1.43)** — `tiles.directions`: per
+    /// measurement type (`WEIGHT`, `BLOOD_PRESSURE_SYS`, …), which way a change
+    /// counts for this person. Empty on an older server and on a block this
+    /// build cannot read; a row it cannot read is dropped on its own.
+    public let directions: [String: TrendVerdict]
 
     public init(
         briefing: DailyBriefing? = nil,
@@ -124,7 +129,8 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         scoreRings: [DashboardScoreRing] = [],
         healthScore: HealthScore? = nil,
         briefingAi: AICapabilityState? = nil,
-        weightTrend: WeightTrendJudgement? = .legacyReading
+        weightTrend: WeightTrendJudgement? = .legacyReading,
+        directions: [String: TrendVerdict] = [:]
     ) {
         self.briefing = briefing
         self.briefingState = briefingState
@@ -134,6 +140,7 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         self.healthScore = healthScore
         self.briefingAi = briefingAi
         self.weightTrend = weightTrend
+        self.directions = directions
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -141,7 +148,7 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
     }
 
     private enum TilesKeys: String, CodingKey {
-        case weightTrend
+        case weightTrend, directions
     }
 
     public init(from decoder: Decoder) throws {
@@ -171,6 +178,24 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         healthScore = try? c.decodeIfPresent(HealthScore.self, forKey: .healthScore)
         briefingAi = try? c.decodeIfPresent(AICapabilityState.self, forKey: .briefingAi)
         weightTrend = Self.decodeWeightTrend(from: c)
+        directions = Self.decodeDirections(from: c)
+    }
+
+    /// `tiles.directions`, row by row: an absent block (a server before v1.43)
+    /// or one that is not an object is `[:]`, a row this build cannot read is
+    /// left out, never the snapshot.
+    private static func decodeDirections(from c: KeyedDecodingContainer<CodingKeys>) -> [String: TrendVerdict] {
+        guard let tiles = try? c.nestedContainer(keyedBy: TilesKeys.self, forKey: .tiles),
+              let rows = try? tiles.decodeIfPresent([String: LossyVerdict].self, forKey: .directions) else { return [:] }
+        return rows.compactMapValues(\.verdict)
+    }
+
+    private struct LossyVerdict: Decodable {
+        let verdict: TrendVerdict?
+
+        init(from decoder: Decoder) throws {
+            verdict = try? TrendVerdict(from: decoder)
+        }
     }
 
     /// `tiles.weightTrend`, tolerant. Absent `tiles` or absent block → the
@@ -192,9 +217,10 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         try c.encode(scoreRings, forKey: .scoreRings)
         try c.encodeIfPresent(healthScore, forKey: .healthScore)
         try c.encodeIfPresent(briefingAi, forKey: .briefingAi)
-        if let weightTrend {
+        if weightTrend != nil || !directions.isEmpty {
             var tiles = c.nestedContainer(keyedBy: TilesKeys.self, forKey: .tiles)
-            try tiles.encode(weightTrend, forKey: .weightTrend)
+            try tiles.encodeIfPresent(weightTrend, forKey: .weightTrend)
+            if !directions.isEmpty { try tiles.encode(directions, forKey: .directions) }
         }
     }
 }

@@ -22,37 +22,22 @@ extension LocaleText {
 
     static func adherenceRow(_ row: DoctorReportSpec.AdherenceBlock.Row, windowDays: Int, locale: ReportLocale) -> String {
         guard row.applicable, let rate = row.rate, let taken = row.taken, let expected = row.expected else {
-            switch locale {
-            case .de: return "\(row.medicationName): kein Einnahmeplan in HealthLog, keine Einnahmetreue"
-            case .en: return "\(row.medicationName): no HealthLog schedule, no adherence rate"
-            }
+            return DoctorReportStrings.format(.adherenceRowNoSchedule, locale, row.medicationName)
         }
-        let percent = HLNumberFormat.percent(rate, locale: Locale(identifier: locale.foundationIdentifier))
-        switch locale {
-        case .de: return "\(row.medicationName): \(taken) von \(expected) eingenommen (\(percent)) in \(windowDays) Tagen"
-        case .en: return "\(row.medicationName): \(taken) of \(expected) taken (\(percent)) in \(windowDays) days"
-        }
+        let percent = HLNumberFormat.percent(rate, locale: locale.formattingLocale)
+        return DoctorReportStrings.format(.adherenceRow, locale, row.medicationName, taken, expected, percent, windowDays)
     }
 
     static func adherenceSource(windowDays: Int, locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Einnahmetreue der letzten \(windowDays) Tage, vom HealthLog-Server nach Einnahmeplan berechnet."
-        case .en: "Adherence over the last \(windowDays) days, computed by the HealthLog server from the dosing schedule."
-        }
+        DoctorReportStrings.format(.adherenceSource, locale, windowDays)
     }
 
     static func adherenceWindowMismatch(windowDays: Int, periodDays: Int, locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Fuer den Berichtszeitraum von \(periodDays) Tagen liefert der Server keine Einnahmetreue; gezeigt sind die letzten \(windowDays) Tage."
-        case .en: "The server provides no adherence for the \(periodDays)-day report period; the last \(windowDays) days are shown."
-        }
+        DoctorReportStrings.format(.adherenceWindowMismatch, locale, periodDays, windowDays)
     }
 
     static func adherenceUnavailable(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Einnahmetreue nicht verfuegbar: Der HealthLog-Server war beim Erstellen nicht erreichbar."
-        case .en: "Adherence not available: the HealthLog server could not be reached when this report was made."
-        }
+        DoctorReportStrings.text(.adherenceUnavailable, locale)
     }
 }
 
@@ -99,12 +84,15 @@ extension LocaleText {
         windowDays: Int,
         locale: ReportLocale
     ) -> String {
-        let percent = HLNumberFormat.percent(figure.rate, locale: Locale(identifier: locale.foundationIdentifier))
-        switch locale {
-        case .de:
-            return "Alle Medikamente (\(figure.medicationCount)): \(figure.taken) von \(figure.expected) eingenommen (\(percent)) in \(windowDays) Tagen"
-        case .en:
-            return "All medications (\(figure.medicationCount)): \(figure.taken) of \(figure.expected) taken (\(percent)) in \(windowDays) days"
-        }
+        let percent = HLNumberFormat.percent(figure.rate, locale: locale.formattingLocale)
+        return DoctorReportStrings.format(
+            .adherenceAccount,
+            locale,
+            figure.medicationCount,
+            figure.taken,
+            figure.expected,
+            percent,
+            windowDays
+        )
     }
 }

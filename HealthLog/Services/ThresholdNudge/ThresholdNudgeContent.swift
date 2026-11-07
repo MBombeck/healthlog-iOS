@@ -123,8 +123,8 @@ struct ThresholdNudgeContent: Equatable {
         } else {
             value.formatted(.number.precision(.fractionLength(0 ... 1)))
         }
-        let trimmedUnit = unit.trimmingCharacters(in: .whitespaces)
-        return trimmedUnit.isEmpty ? numberText : "\(numberText) \(trimmedUnit)"
+        // #160 — the unity "1" (a ratio or index) prints nothing.
+        return LabUnit.appending(unit, to: numberText)
     }
 
     /// Format the range "<low> to <high>" / "≥ <low>" / "≤ <high>" depending on

@@ -80,7 +80,7 @@ struct DoctorReportLocalSpecTests {
             periodEnd: Self.periodEnd,
             locale: .de
         )
-        #expect(spec.footer.disclaimer == "Lokaler Export, kein Server beteiligt, auf-Geraet erzeugt, kein medizinisches Dokument")
+        #expect(spec.footer.disclaimer == "Lokaler Export, kein Server beteiligt, auf-Gerät erzeugt, kein medizinisches Dokument")
     }
 
     @Test("footer disclaimer (EN) is verbatim and locked")
@@ -94,10 +94,22 @@ struct DoctorReportLocalSpecTests {
         #expect(spec.footer.disclaimer == "Local export, no server involved, generated on-device, not a medical document")
     }
 
-    @Test("disclaimer matches DoctorReportDisclaimer.text(for:) for both locales")
+    @Test("footer disclaimer (NL) is verbatim and locked")
+    func footerDisclaimerNL() {
+        let spec = DoctorReportSpecBuilder.build(
+            snapshot: Self.snapshot(),
+            periodStart: Self.periodStart,
+            periodEnd: Self.periodEnd,
+            locale: .nl
+        )
+        #expect(spec.footer.disclaimer == "Lokale export, geen server betrokken, op het apparaat aangemaakt, geen medisch document")
+    }
+
+    @Test("disclaimer matches DoctorReportDisclaimer.text(for:) for every locale")
     func disclaimerLookupIsStable() {
         #expect(DoctorReportDisclaimer.text(for: .de) == DoctorReportDisclaimer.de)
         #expect(DoctorReportDisclaimer.text(for: .en) == DoctorReportDisclaimer.en)
+        #expect(DoctorReportDisclaimer.text(for: .nl) == DoctorReportDisclaimer.nl)
     }
 
     // MARK: - In-window filtering

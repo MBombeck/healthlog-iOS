@@ -22,6 +22,8 @@ import SwiftUI
 /// never send a competing copy.
 struct LabScanReviewList: View {
     @Bindable var scan: LabScanStore
+    /// #160 — the "No unit" switch per row, from server 1.46.6 on.
+    @State private var offersNoUnit = LabUnit.offersNoUnit()
 
     var body: some View {
         Form {
@@ -52,6 +54,13 @@ struct LabScanReviewList: View {
             Text("labs.scan.review.header")
         } footer: {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
+                // LAB-OCR (#151) — what a server read could not read, one
+                // calm line each, above everything else that is said here.
+                ForEach(scan.readLimits, id: \.self) { limit in
+                    Text(verbatim: limit.message)
+                        .foregroundStyle(HLText.primary)
+                        .accessibilityIdentifier("labs.ocr.limit")
+                }
                 Text("labs.scan.review.footer")
                 Text("labs.scan.review.selected.\(scan.includedCount).\(scan.rows.count)")
                 if let summary = scan.saveSummary {
@@ -117,10 +126,15 @@ struct LabScanReviewList: View {
         }
     }
 
+    @ViewBuilder
     private func unitField(row: Binding<LabScanRow>) -> some View {
-        TextField("labs.add.unit", text: row.unit)
+        TextField("labs.add.unit", text: LabUnit.fieldBinding(typed: row.unit, noUnit: row.wrappedValue.noUnit))
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
+            .disabled(row.wrappedValue.noUnit)
+        if offersNoUnit {
+            LabNoUnitToggle(isOn: row.noUnit)
+        }
     }
 
     @ViewBuilder
@@ -153,7 +167,8 @@ struct LabScanReviewList: View {
         return labels
     }
 
-    /// Footer: the verbatim line the scan read. 1.4 B2-c: the per-row
+    /// Footer: the verbatim line the scan read (a server read: the range as
+    /// printed). 1.4 B2-c: the per-row
     /// "linked to a catalog marker" note is gone (no badge in its place).
     private func footer(row: LabScanRow) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {

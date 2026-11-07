@@ -2,15 +2,22 @@
 #
 # UI-Standard E8 (R18) — Katalog-Hygiene für `HealthLog/Resources/Localizable.xcstrings`.
 #
-# Prüft drei Dinge:
+# Prüft vier Dinge:
 #
 #   1. **Unreferenzierte Schlüssel.** Ein Schlüssel, den kein Quelltext mehr
 #      nennt, ist eine Katalogleiche. „Nennen" heißt hier mehr als ein
 #      wörtliches Literal — siehe den Abschnitt unten.
 #   2. **Fehlende Übersetzungen.** Jeder Eintrag mit Lokalisierungen braucht
-#      `de` UND `en` (DE primär, EN Parität — PROJECT_GUIDE.md).
+#      jede `required`-Sprache aus `scripts/l10n/languages.json` (heute `de`
+#      und `en`). Lücken einer `pending`-Sprache werden gezählt, brechen nichts.
 #   3. **Mojibake.** Doppelt kodierte UTF-8-Sequenzen (`flieãŸen` statt
 #      `fließen`).
+#   4. **Fragebogentexte.** Items, Stämme, Antwortanker und die PHQ-9-Zusatz-
+#      frage der validierten Instrumente stehen seit 1.5.0 nie im Katalog,
+#      sondern kommen aus `HealthLog/Resources/Questionnaires/` (vom Server
+#      kopiert, `scripts/l10n/sync-questionnaire-wording.py`). Ein Übersetzer,
+#      der den Katalog durchgeht, darf kein Item sehen: ein geändertes Wort
+#      ändert, was gemessen wird (R2 3.4 und 3.11).
 #
 # ## Warum ein Grep auf Literale nicht reicht (U8-Befund)
 #
@@ -57,6 +64,12 @@ import re
 import sys
 
 WRITE = "--write" in sys.argv[1:]
+
+sys.dont_write_bytecode = True  # no __pycache__ in the checkout
+sys.path.insert(0, "scripts/l10n")
+import l10n_common  # noqa: E402
+
+LANGUAGES = l10n_common.load_languages()
 
 CATALOG = "HealthLog/Resources/Localizable.xcstrings"
 BASELINE = "scripts/check-strings-baseline.json"
@@ -290,15 +303,13 @@ unreferenced = {key for key in entries if referenced(key) is None}
 tolerated = server_provided | test_anchored | known_orphans
 
 # ---------------------------------------------------------------- Übersetzungen
-missing = {"de": [], "en": []}
+missing = {lang: [] for lang in LANGUAGES.all}
 for key, entry in entries.items():
     localizations = entry.get("localizations")
     if not localizations:
         continue  # Quellsprache-Only-Eintrag; EmptyTranslationGuardTests deckt das ab.
-    for lang in ("de", "en"):
-        block = localizations.get(lang) or {}
-        has_text = bool((block.get("stringUnit") or {}).get("value"))
-        if not has_text and not block.get("variations"):
+    for lang in LANGUAGES.all:
+        if not l10n_common.has_text(localizations.get(lang)):
             missing[lang].append(key)
 
 # ---------------------------------------------------------------- Mojibake
@@ -313,6 +324,23 @@ for key, entry in entries.items():
         value = (block.get("stringUnit") or {}).get("value") or ""
         if MOJIBAKE.search(value):
             mojibake.add(key)
+
+# ---------------------------------------------------------------- Fragebogen
+# Die Schlüssel, unter denen bis 1.4 der Wortlaut stand. Kommt einer zurück
+# (Port, Merge, Übersetzungsdurchgang), bricht das Gate.
+QUESTIONNAIRE_PREFIXES = (
+    "mentalHealth.items.",
+    "mentalHealth.stems.",
+    "mentalHealth.stem.",
+    "mentalHealth.options.",
+    "mentalHealth.who5Options.",
+    "mentalHealth.sciOptions.",
+    "mentalHealth.functional.",
+)
+QUESTIONNAIRE_KEYS = {"mentalHealth.stem", "mentalHealth.functionalTitle"}
+questionnaire_keys = sorted(
+    key for key in entries if key.startswith(QUESTIONNAIRE_PREFIXES) or key in QUESTIONNAIRE_KEYS
+)
 
 # ---------------------------------------------------------------- Auswertung
 if WRITE:
@@ -388,12 +416,22 @@ if missing_anchors:
     for key in missing_anchors:
         print(f"    {key}")
 
-for lang in ("de", "en"):
+for lang in LANGUAGES.required:
     if missing[lang]:
         problems += len(missing[lang])
-        print(f"\n✗ {len(missing[lang])} Einträge ohne `{lang}`-Übersetzung (DE primär, EN Parität):")
+        print(f"\n✗ {len(missing[lang])} Einträge ohne `{lang}`-Übersetzung (`required` in scripts/l10n/languages.json):")
         for key in sorted(missing[lang])[:40]:
             print(f"    {key}")
+for lang in LANGUAGES.pending:
+    print(f"\n  `{lang}` ist `pending`: {len(missing[lang])} Einträge ohne Übersetzung (gezählt, kein Befund).")
+
+if questionnaire_keys:
+    problems += len(questionnaire_keys)
+    print(f"\n✗ {len(questionnaire_keys)} Fragebogentexte im Katalog (validierte Instrumente gehören nie hierher):")
+    for key in questionnaire_keys[:40]:
+        print(f"    {key}")
+    print("  → Schlüssel löschen. Der Wortlaut kommt aus HealthLog/Resources/Questionnaires/,")
+    print("    erzeugt von scripts/l10n/sync-questionnaire-wording.py (docs/localization.md).")
 
 if mojibake:
     problems += len(mojibake)

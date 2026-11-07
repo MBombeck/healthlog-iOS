@@ -329,6 +329,14 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
             self.symbol = symbol
             self.recordedAt = recordedAt
         }
+
+        /// POLISH-B B2 (MATRIX M6) — the moment the relative line names. A
+        /// measurement cannot lie in the future; a stamp after `now` (a clock
+        /// skew between devices, a time zone mix-up at the source) reads as
+        /// now instead of "in 4 hours".
+        public func shownDate(now: Date) -> Date {
+            min(recordedAt, now)
+        }
     }
 
     /// The neutral snapshot shown before the app has written anything (or

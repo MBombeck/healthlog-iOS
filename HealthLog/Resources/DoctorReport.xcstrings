@@ -1,0 +1,750 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "report.adherence.account %lld %lld %lld %@ %lld": {
+      "comment": "Adherence: all medications; number of medications, taken, expected, percentage, days",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Medikamente (%1$lld): %2$lld von %3$lld eingenommen (%4$@) in %5$lld Tagen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All medications (%1$lld): %2$lld of %3$lld taken (%4$@) in %5$lld days"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle medicatie (%1$lld): %2$lld van %3$lld ingenomen (%4$@) in %5$lld dagen"
+          }
+        }
+      }
+    },
+    "report.adherence.row %@ %lld %lld %@ %lld": {
+      "comment": "Adherence row: medication, doses taken, doses expected, percentage, days",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld von %3$lld eingenommen (%4$@) in %5$lld Tagen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld of %3$lld taken (%4$@) in %5$lld days"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld van %3$lld ingenomen (%4$@) in %5$lld dagen"
+          }
+        }
+      }
+    },
+    "report.adherence.row.noSchedule %@": {
+      "comment": "Adherence row: medication without a dosing schedule",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: kein Einnahmeplan in HealthLog, keine Einnahmetreue"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: no HealthLog schedule, no adherence rate"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: geen innameschema in HealthLog, geen therapietrouw"
+          }
+        }
+      }
+    },
+    "report.adherence.source %lld": {
+      "comment": "Adherence: where the figures come from; number of days",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einnahmetreue der letzten %lld Tage, vom HealthLog-Server nach Einnahmeplan berechnet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adherence over the last %lld days, computed by the HealthLog server from the dosing schedule."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Therapietrouw over de afgelopen %lld dagen, door de HealthLog-server berekend op basis van het innameschema."
+          }
+        }
+      }
+    },
+    "report.adherence.title": {
+      "comment": "Section heading: adherence",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einnahmetreue"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adherence"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Therapietrouw"
+          }
+        }
+      }
+    },
+    "report.adherence.unavailable": {
+      "comment": "Adherence: the server could not be reached",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einnahmetreue nicht verfügbar: Der HealthLog-Server war beim Erstellen nicht erreichbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adherence not available: the HealthLog server could not be reached when this report was made."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Therapietrouw niet beschikbaar: de HealthLog-server was bij het aanmaken van dit rapport niet bereikbaar."
+          }
+        }
+      }
+    },
+    "report.adherence.windowMismatch %lld %lld": {
+      "comment": "Adherence: report period in days, then the window shown in days",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für den Berichtszeitraum von %1$lld Tagen liefert der Server keine Einnahmetreue; gezeigt sind die letzten %2$lld Tage."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server provides no adherence for the %1$lld-day report period; the last %2$lld days are shown."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voor de rapportageperiode van %1$lld dagen levert de server geen therapietrouw; getoond worden de afgelopen %2$lld dagen."
+          }
+        }
+      }
+    },
+    "report.charts.dataPoints %@ %lld": {
+      "comment": "Chart fallback caption: metric name and number of data points",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld Datenpunkte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld data points"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld datapunten"
+          }
+        }
+      }
+    },
+    "report.charts.title": {
+      "comment": "Section heading: charts",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlauf"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verloop"
+          }
+        }
+      }
+    },
+    "report.cover.appVersion": {
+      "comment": "Cover: label before the app version",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App-Version"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App version"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App-versie"
+          }
+        }
+      }
+    },
+    "report.cover.fullName": {
+      "comment": "Cover: label before the full name",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voller Name"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full name"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volledige naam"
+          }
+        }
+      }
+    },
+    "report.cover.generated": {
+      "comment": "Cover: label before the creation date",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstellt am"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generated"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aangemaakt op"
+          }
+        }
+      }
+    },
+    "report.cover.insuranceNumber": {
+      "comment": "Cover: label before the insurance number",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versicherungsnummer"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insurance number"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verzekeringsnummer"
+          }
+        }
+      }
+    },
+    "report.cover.insurer": {
+      "comment": "Cover: label before the health insurer",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Krankenkasse"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health insurer"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zorgverzekeraar"
+          }
+        }
+      }
+    },
+    "report.cover.patient": {
+      "comment": "Cover: label before the patient's display name",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Patient"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Patient"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Patiënt"
+          }
+        }
+      }
+    },
+    "report.cover.period": {
+      "comment": "Cover: label before the report period",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Berichtszeitraum"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report period"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rapportageperiode"
+          }
+        }
+      }
+    },
+    "report.disclaimer": {
+      "comment": "Footer on every page: the not-a-medical-document disclaimer (medical key)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokaler Export, kein Server beteiligt, auf-Gerät erzeugt, kein medizinisches Dokument"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local export, no server involved, generated on-device, not a medical document"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale export, geen server betrokken, op het apparaat aangemaakt, geen medisch document"
+          }
+        }
+      }
+    },
+    "report.medications.archived": {
+      "comment": "Medications: heading above stopped medications",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Früher genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previously taken"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eerder gebruikt"
+          }
+        }
+      }
+    },
+    "report.medications.title": {
+      "comment": "Section heading: medications",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medikamente"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medications"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medicatie"
+          }
+        }
+      }
+    },
+    "report.mood.summary %lld %.1f": {
+      "comment": "Mood: number of entries, average score out of 5",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Einträge, Durchschnitt %.1f / 5"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld entries, average %.1f / 5"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld registraties, gemiddeld %.1f / 5"
+          }
+        }
+      }
+    },
+    "report.mood.tags": {
+      "comment": "Mood: label before the most used tags",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Häufigste Tags"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dominant tags"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meest gebruikte tags"
+          }
+        }
+      }
+    },
+    "report.mood.title": {
+      "comment": "Section heading: mood",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mood"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stemming"
+          }
+        }
+      }
+    },
+    "report.period.range %@ %@": {
+      "comment": "Cover: report period, start date and end date",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ bis %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ to %2$@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ tot %2$@"
+          }
+        }
+      }
+    },
+    "report.title": {
+      "comment": "PDF title and cover heading",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arztbericht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doctor Report"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artsenrapport"
+          }
+        }
+      }
+    },
+    "report.vitals.column.count": {
+      "comment": "Vitals table column: number of readings",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anzahl"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Count"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aantal"
+          }
+        }
+      }
+    },
+    "report.vitals.column.max": {
+      "comment": "Vitals table column: maximum",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max"
+          }
+        }
+      }
+    },
+    "report.vitals.column.mean": {
+      "comment": "Vitals table column: mean",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mittelwert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mean"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemiddelde"
+          }
+        }
+      }
+    },
+    "report.vitals.column.median": {
+      "comment": "Vitals table column: median",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Median"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Median"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mediaan"
+          }
+        }
+      }
+    },
+    "report.vitals.column.metric": {
+      "comment": "Vitals table column: metric name",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metrik"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metric"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meetwaarde"
+          }
+        }
+      }
+    },
+    "report.vitals.column.min": {
+      "comment": "Vitals table column: minimum",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Min"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Min"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Min"
+          }
+        }
+      }
+    },
+    "report.vitals.title": {
+      "comment": "Section heading: vital signs table",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vitalwerte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vital signs"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vitale waarden"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

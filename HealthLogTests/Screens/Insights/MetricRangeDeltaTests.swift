@@ -4,8 +4,8 @@ import Testing
 
 /// W5-3 (v0.12 W5a) — pins the pure period-over-period delta math behind the
 /// per-metric Insights page caption: the temporal-midpoint window split, the
-/// signed-percentage formatting, the polarity→sentiment rules, and the
-/// self-suppression contract (nil → the caption renders nothing). Pure
+/// signed-percentage formatting, the server's change with its verdict (1.5
+/// VERDICTS), and the self-suppression contract (nil → the caption renders nothing). Pure
 /// `nonisolated static` logic, no SwiftUI host.
 @Suite("Metric range delta")
 struct MetricRangeDeltaTests {
@@ -26,15 +26,14 @@ struct MetricRangeDeltaTests {
     @Test("Fewer than four points → nil (self-suppress)")
     func tooFewPoints() {
         let result = MetricRangeDelta.resolve(
-            points: [point(10, daysAgo: 3), point(12, daysAgo: 1)],
-            sentiment: nil
+            points: [point(10, daysAgo: 3), point(12, daysAgo: 1)]
         )
         #expect(result == nil)
     }
 
     @Test("Empty series → nil")
     func emptySeries() {
-        #expect(MetricRangeDelta.resolve(points: [], sentiment: nil) == nil)
+        #expect(MetricRangeDelta.resolve(points: []) == nil)
     }
 
     @Test("A prior-half mean of zero → nil (no meaningful percentage)")
@@ -44,8 +43,7 @@ struct MetricRangeDeltaTests {
             points: [
                 point(-5, daysAgo: 10), point(5, daysAgo: 9), // prior mean 0
                 point(4, daysAgo: 2), point(6, daysAgo: 1)
-            ],
-            sentiment: nil
+            ]
         )
         #expect(result == nil)
     }
@@ -59,8 +57,7 @@ struct MetricRangeDeltaTests {
             points: [
                 point(100, daysAgo: 30), point(100, daysAgo: 29),
                 point(110, daysAgo: 2), point(110, daysAgo: 1)
-            ],
-            sentiment: nil
+            ]
         ))
         #expect(result.percent == 10)
         #expect(result.symbol == "arrow.up")
@@ -75,8 +72,7 @@ struct MetricRangeDeltaTests {
             points: [
                 point(80, daysAgo: 30), point(80, daysAgo: 29),
                 point(72, daysAgo: 2), point(72, daysAgo: 1)
-            ],
-            sentiment: nil
+            ]
         ))
         #expect(result.percent == -10)
         #expect(result.symbol == "arrow.down")
@@ -90,60 +86,59 @@ struct MetricRangeDeltaTests {
             points: [
                 point(50, daysAgo: 30), point(50, daysAgo: 29),
                 point(50, daysAgo: 2), point(50, daysAgo: 1)
-            ],
-            sentiment: nil
+            ]
         ))
         #expect(result.percent == 0)
         #expect(result.symbol == "minus")
         #expect(result.sentiment == .neutral)
     }
 
-    // MARK: - Sentiment rules (#115 · 1.3 — the server's verdict or none)
+    // MARK: - Colour (1.5 VERDICTS — the server's change and verdict, or neutral)
 
-    @Test("no server verdict: a rise or a fall is never tinted good or bad")
-    func noVerdictIsNeutral() {
-        #expect(MetricRangeDelta.sentiment(percent: 5, server: nil) == .neutral)
-        #expect(MetricRangeDelta.sentiment(percent: -5, server: nil) == .neutral)
+    @Test("The own comparison (server before v1.43) is never tinted good or bad")
+    func ownComparisonIsNeutral() throws {
+        for values in [[80.0, 80, 72, 72], [72.0, 72, 80, 80]] {
+            let result = try #require(MetricRangeDelta.resolve(points: [
+                point(values[0], daysAgo: 30), point(values[1], daysAgo: 29),
+                point(values[2], daysAgo: 2), point(values[3], daysAgo: 1)
+            ]))
+            #expect(result.sentiment == .neutral)
+            #expect(result.percent != nil)
+        }
     }
 
-    @Test("server up-good: a rise is favourable, a fall adverse")
-    func upGoodVerdict() {
-        #expect(MetricRangeDelta.sentiment(percent: 5, server: .upGood) == .favourable)
-        #expect(MetricRangeDelta.sentiment(percent: -5, server: .upGood) == .adverse)
+    @Test("The server's change shows its own delta in the unit, not a percentage")
+    func serverChangeValue() throws {
+        let result = try #require(MetricRangeDelta.resolve(serverDelta: -0.6, unit: "kg", sentiment: .positive))
+        #expect(result.deltaText == "\u{2212}" + 0.6.formatted(.number.precision(.fractionLength(0 ... 1))) + " kg")
+        #expect(result.symbol == "arrow.down")
+        #expect(result.percent == nil)
+        #expect(result.sentiment == .favourable)
+        let flat = try #require(MetricRangeDelta.resolve(serverDelta: 0.01, unit: "kg", sentiment: .neutral))
+        #expect(flat.symbol == "minus")
+        #expect(flat.sentiment == .neutral)
+        #expect(MetricRangeDelta.resolve(serverDelta: .nan, unit: "kg", sentiment: .positive) == nil)
     }
 
-    @Test("server up-bad: a fall is favourable, a rise adverse")
-    func upBadVerdict() {
-        #expect(MetricRangeDelta.sentiment(percent: -5, server: .upBad) == .favourable)
-        #expect(MetricRangeDelta.sentiment(percent: 5, server: .upBad) == .adverse)
+    @Test("The server's verdict colours: negative adverse, positive favourable, neutral and unknown nothing")
+    func serverChangeColour() throws {
+        func sentiment(_ verdict: TrendSentiment) throws -> MetricRangeDelta.Sentiment {
+            try #require(MetricRangeDelta.resolve(serverDelta: 4, unit: "bpm", sentiment: verdict)).sentiment
+        }
+        #expect(try sentiment(.negative) == .adverse)
+        #expect(try sentiment(.positive) == .favourable)
+        #expect(try sentiment(.neutral) == .neutral)
+        #expect(try sentiment(.unknown) == .neutral)
     }
 
-    @Test("server hold: level is progress, a move either way is neutral")
-    func holdVerdict() {
-        #expect(MetricRangeDelta.sentiment(percent: 0.02, server: .hold) == .favourable)
-        #expect(MetricRangeDelta.sentiment(percent: 8, server: .hold) == .neutral)
-        #expect(MetricRangeDelta.sentiment(percent: -8, server: .hold) == .neutral)
-    }
-
-    @Test("a weight loss without a server verdict is not called favourable any more")
-    func weightLossWithoutVerdictIsNeutral() throws {
-        // Before #115 the caption read weight as lower-is-better for everyone,
-        // so someone below their target saw a loss coloured as progress.
-        let result = try #require(MetricRangeDelta.resolve(
-            points: [
-                point(80, daysAgo: 30), point(80, daysAgo: 29),
-                point(72, daysAgo: 2), point(72, daysAgo: 1)
-            ],
-            sentiment: nil
-        ))
-        #expect(result.sentiment == .neutral)
-        let belowTarget = try #require(MetricRangeDelta.resolve(
-            points: [
-                point(80, daysAgo: 30), point(80, daysAgo: 29),
-                point(72, daysAgo: 2), point(72, daysAgo: 1)
-            ],
-            sentiment: .upGood
-        ))
-        #expect(belowTarget.sentiment == .adverse)
+    @Test("Rising steps are no longer amber: a positive verdict on a rise reads favourable")
+    func risingStepsNotAmber() throws {
+        let steps = try #require(MetricRangeDelta.resolve(.server(delta: 1200, unit: "", sentiment: .positive)))
+        #expect(steps.sentiment == .favourable)
+        #expect(steps.symbol == "arrow.up")
+        #expect(HeroDeltaChip.colorRole(for: .positive) == .statusOK)
+        #expect(HeroDeltaChip.colorRole(for: nil) == .textSecondary)
+        #expect(HeroDeltaChip.colorRole(for: .neutral) == .textSecondary)
+        #expect(HeroDeltaChip.colorRole(for: .negative) == .statusBad)
     }
 }

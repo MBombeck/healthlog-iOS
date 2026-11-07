@@ -142,6 +142,36 @@ wait "$first_pid"
 wait "$second_pid"
 ! rg -F 'overlap' "$trace" >/dev/null
 
+# 1.5.0 wave 4 — waiters take the lock in arrival order. A holder keeps the
+# lock while three waiters arrive in order; each must start after the one
+# before it, never out of turn.
+fifo_trace="$test_root/fifo-trace"
+env "${common_env[@]}" GATE_DESTINATION='platform=iOS Simulator,id=SIM-123' \
+    FAKE_SLEEP=0.8 FAKE_ACTIVE_FILE="$active_file" \
+    "$repo_root/scripts/run-serialized-xcode-gate.sh" fifo-holder -- build &
+holder_pid=$!
+sleep 0.2
+fifo_pids=()
+for name in fifo-a fifo-b fifo-c; do
+    env "${common_env[@]}" GATE_DESTINATION='platform=iOS Simulator,id=SIM-123' \
+        FAKE_TRACE="$fifo_trace" FAKE_SLEEP=0.05 FAKE_ACTIVE_FILE="$active_file" \
+        "$repo_root/scripts/run-serialized-xcode-gate.sh" "$name" -- build &
+    fifo_pids+=("$!")
+    sleep 0.15
+done
+wait "$holder_pid"
+for pid in "${fifo_pids[@]}"; do wait "$pid"; done
+fifo_order="$(rg -o 'dd-hl-fifo-[abc]' "$fifo_trace" | uniq | tr '\n' ' ')"
+[[ "$fifo_order" == "dd-hl-fifo-a dd-hl-fifo-b dd-hl-fifo-c " ]] || {
+    echo "expected arrival order, got: $fifo_order" >&2
+    exit 1
+}
+! rg -F 'overlap' "$fifo_trace" >/dev/null
+[[ -z "$(ls -A "$lock.queue" 2>/dev/null)" ]] || {
+    echo 'expected an empty gate queue after all waiters finished' >&2
+    exit 1
+}
+
 if env "${common_env[@]}" GATE_DESTINATION='platform=iOS Simulator,id=SIM-123' \
     FAKE_XCODEBUILD_STATUS=23 \
     "$repo_root/scripts/run-serialized-xcode-gate.sh" failure-cleanup -- build >/dev/null 2>&1

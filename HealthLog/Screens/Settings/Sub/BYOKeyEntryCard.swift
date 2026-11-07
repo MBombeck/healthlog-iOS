@@ -98,8 +98,7 @@ struct BYOKeyEntryCard: View {
     @ViewBuilder
     private var entryFields: some View {
         SecureField(String(localized: "API key"), text: $model.keyDraft)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
+            .hlSecretEntry()
             .accessibilityIdentifier("BYOKeyEntryCard.keyField")
 
         TextField(

@@ -31,7 +31,7 @@ extension DeepLinkRoute {
         case "medications":
             return medicationsRoute(parts: Array(parts.dropFirst()))
         case "checkups" where parts.count == 1:
-            return .checkups
+            return checkupsRoute(query: query)
         case "cycle" where parts.count == 1:
             return .cycle
         case "coach" where parts.count == 1:
@@ -55,6 +55,21 @@ extension DeepLinkRoute {
         guard let url = URL(string: "healthlog://medications/\(rawId)"),
               case let .medication(id)? = DeepLinkRoute(url: url) else { return .medications }
         return .medication(id: id)
+    }
+
+    /// VISIT — `/checkups?visit=<id>` names one booked visit; the id passes
+    /// the same allowlist as every other record id. Anything else (no id,
+    /// `?view=visits`, a tampered id) opens Vorsorge as before.
+    private static func checkupsRoute(query: [URLQueryItem]) -> DeepLinkRoute {
+        guard let id = query.first(where: { $0.name == "visit" })?.value, isAllowedRecordId(id) else {
+            return .checkups
+        }
+        return .checkupsVisit(id: id)
+    }
+
+    static func isAllowedRecordId(_ id: String) -> Bool {
+        guard let regex = idAllowlist else { return false }
+        return regex.firstMatch(in: id, range: NSRange(id.startIndex..., in: id)) != nil
     }
 
     /// Mirrors the server's `isSafeAppPath`: one leading slash, no

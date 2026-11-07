@@ -35,7 +35,7 @@ struct MeasurementRemindersScreen: View {
 
     var body: some View {
         HLSettingsPage(title: "reminders.manage.title") {
-            content(store: store)
+            NextVisitSection { content(store: store) } // VISIT — "Nächster Termin" above, only while booked
             // 1.0.3 (1.4.1) — where the screening cadences come from. 1.4 B4:
             // only under reminders; the empty state states nothing to cite.
             if VorsorgeCard.showsSources(reminders: store.reminders) {

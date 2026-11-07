@@ -14,17 +14,26 @@ struct BiomarkerLastMeasurementCard: View {
     /// B2-c: they sit in this card, the one that states the verdict, since the
     /// explainer they stood under moved behind the page's (i). `nil` hides it.
     var sourcesTopic: MedicalSourceTopic?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HStack(alignment: .firstTextBaseline) {
+                    // POLISH-C (F-AX-CAPSULE) — at an accessibility size the
+                    // badge goes under the value; side by side one of them
+                    // had to break into single letters.
+                    let layout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
+                        : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+                    layout {
                         Text(valueLabel)
                             .font(.hlMetric(.largeTitle))
                             .monospacedDigit()
                             .foregroundStyle(HLText.primary)
-                        Spacer(minLength: HLSpace.sm)
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            Spacer(minLength: HLSpace.sm)
+                        }
                         LabRangeBadge(status: latest.rangeStatus)
                     }
                     Text(takenCaption)

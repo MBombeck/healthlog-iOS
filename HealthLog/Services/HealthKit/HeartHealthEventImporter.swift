@@ -221,10 +221,10 @@ import Foundation
         /// W-HK-RELIABILITY G-7: skip only OUR own echo (our externalUUID AND
         /// this app's HK source). A third-party heart-event sample carrying an
         /// externalUUID now flows in instead of being silently dropped.
-        private func entry(from sample: HKCategorySample) -> HealthKitBatchEntryDTO? {
+        nonisolated static func entry(from sample: HKCategorySample) -> HealthKitBatchEntryDTO? {
             if HealthKitSampleOwnership.isOwnEcho(sample) { return nil }
             return HealthKitBatchEntryDTO(
-                hkIdentifier: sample.categoryType.identifier,
+                hkIdentifier: HealthKitServer144Types.wireIdentifier(forRegistry: sample.categoryType.identifier),
                 value: 1,
                 unit: "event",
                 startDate: sample.startDate,
@@ -319,7 +319,7 @@ import Foundation
                 // Fence 2 of 3 — an account replacement that landed during the
                 // read must not let this page reach the wire under the new owner.
                 try lease.requireCurrent()
-                let entries = result.samples.compactMap(entry(from:))
+                let entries = result.samples.compactMap(Self.entry(from:))
                 let page = await transmit(entries, requiring: lease)
                 return await commitAnchor(result.newAnchor, for: type, page: page, requiring: lease)
             } catch let refusal as HealthSyncLeaseRefusal {

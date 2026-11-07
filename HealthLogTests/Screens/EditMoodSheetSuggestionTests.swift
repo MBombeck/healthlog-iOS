@@ -58,7 +58,7 @@ struct EditMoodSheetSuggestionTests {
         let allReasons: [MoodTagSuggestionOutcome.FallbackReason] = [
             .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady,
             .capabilityNotAllowed, .safetyRefused, .generationFailed,
-            .frameworkUnavailable, .emptyInput
+            .frameworkUnavailable, .languageUnsupported, .emptyInput
         ]
         for reason in allReasons {
             // The mapping table in EditMoodSheet should produce a non-empty
@@ -107,7 +107,7 @@ private struct SuggestionAcceptance {
         switch reason {
         case .capabilityNotAllowed:
             "Tag-Vorschlaege sind aktuell deaktiviert."
-        case .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady, .frameworkUnavailable:
+        case .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady, .frameworkUnavailable, .languageUnsupported:
             "On-Device-Vorschlaege sind auf diesem Geraet nicht verfuegbar."
         case .safetyRefused:
             "Vorschlaege wurden vom Sicherheitsfilter zurueckgehalten."

@@ -1,7 +1,6 @@
 import Foundation
 #if canImport(HealthKit)
     import HealthKit
-    import os
 #endif
 
 #if canImport(HealthKit)
@@ -49,63 +48,79 @@ import Foundation
         }
     }
 
-    /// The live answer, reached through the Objective-C runtime.
+    /// The live answer, through the typed iOS 27 API.
     ///
-    /// **Why the runtime.** The app builds with Xcode 26.6 against the iOS 26
-    /// SDK, which has no symbol for this method, so `#available(iOS 27, *)`
-    /// alone cannot call it. The store is asked whether it responds to the
-    /// selector, and the implementation comes from `method(for:)`. On iOS 26
-    /// and older it does not respond, every type reads as unlimited, and the app
-    /// behaves exactly as before.
+    /// `HKHealthStore.earliestAuthorizedSampleDate(for:)` is the Swift async
+    /// form of `getEarliestAuthorizedSampleDateForTypes:completion:`
+    /// (`HKHealthStore.h`, `API_AVAILABLE(ios(27.0))`). It is an Objective-C
+    /// method, so the call goes through `objc_msgSend` and links no HealthKit
+    /// symbol; the compiler builds the completion block. `#available(iOS 27.0, *)`
+    /// keeps every older system off it, where every type reads as unlimited,
+    /// exactly as in 1.4.
     ///
-    /// **Replace this type with the direct API** (`try await
-    /// store.earliestAuthorizedSampleDate(for:)`) once the project builds with
-    /// the iOS 27 SDK (1.4 plan, wave 0 / Z0). The protocol above stays.
+    /// 1.4.0 (297) crashed at launch on iOS 27.0 inside a hand-made runtime
+    /// cast of this method (`method(for:)` plus `unsafeBitCast`), built
+    /// against the iOS 26 SDK. That adapter is gone. 1.5 calls only the typed,
+    /// availability-guarded API.
     struct HealthKitAuthorizedHistory: HealthKitAuthorizedHistoryProviding {
-        /// `- (void)getEarliestAuthorizedSampleDateForTypes:(NSSet<HKObjectType *> *)types
-        /// completion:(void (^)(NSDictionary<HKObjectType *, NSDate *> *, NSError *))completion`
-        static let selector = NSSelectorFromString("getEarliestAuthorizedSampleDateForTypes:completion:")
+        /// The question HealthKit answers, as a seam for tests.
+        typealias TypedCall = @Sendable (Set<HKObjectType>) async throws -> [HKObjectType: Date]
 
-        /// **1.4.0 (297) crashed at launch on iOS 27.0 (24A437)** inside this
-        /// call: the shipped method does not have the shape the runtime cast
-        /// assumes, and the test double that does could not show it. Until the
-        /// project builds with the iOS 27 SDK and calls the typed API, the
-        /// shipped app never makes the call. Every type then reads as unlimited,
-        /// exactly as on iOS 26 and in 1.3. Tests opt in to exercise the code.
-        static let shipsRuntimeCall = false
+        /// **Emergency brake (1.5 HK-LIMIT, rule 16, decision 17).** On
+        /// because `HealthKitTypedHistorySimulatorTests` ran the real call on an
+        /// iOS 27.2 simulator for every type group the app reads or writes,
+        /// three runs in a row: no crash, an answer within 5 s, no error, no
+        /// date after now (report HK-LIMIT.md). Off means every type reads as
+        /// unlimited and Settings shows no line, exactly as 1.4. If a device
+        /// pass finds a fault, set this to `false` and ship a new build.
+        static let shipsTypedCall = true
 
-        let store: HKHealthStore
-        var usesRuntimeCall = Self.shipsRuntimeCall
+        /// `true` on iOS 27 and later, the only systems with the method.
+        static var systemHasTypedCall: Bool {
+            if #available(iOS 27.0, *) { return true }
+            return false
+        }
 
-        func earliestAuthorizedSampleDates(for types: Set<HKObjectType>) async -> [HKObjectType: Date]? {
-            guard usesRuntimeCall, !types.isEmpty, store.responds(to: Self.selector) else { return [:] }
-            typealias Completion = @convention(block) @Sendable (NSDictionary?, NSError?) -> Void
-            typealias Method = @convention(c) (AnyObject, Selector, NSSet, Completion) -> Void
-            let method = unsafeBitCast(store.method(for: Self.selector), to: Method.self)
-            return await withCheckedContinuation { continuation in
-                // HealthKit answers once. The guard keeps a second answer from
-                // trapping the continuation all the same.
-                let answered = OSAllocatedUnfairLock(initialState: false)
-                method(store, Self.selector, types as NSSet) { dates, error in
-                    let first = answered.withLock { done in
-                        defer { done = true }
-                        return !done
-                    }
-                    guard first else { return }
-                    continuation.resume(returning: error == nil ? Self.decode(dates) : nil)
-                }
+        var usesTypedCall: Bool
+        var systemHasTypedCall: Bool
+        let typedCall: TypedCall
+
+        init(
+            store: HKHealthStore,
+            usesTypedCall: Bool = Self.shipsTypedCall,
+            systemHasTypedCall: Bool = Self.systemHasTypedCall
+        ) {
+            self.init(usesTypedCall: usesTypedCall, systemHasTypedCall: systemHasTypedCall, typedCall: Self.liveCall(store))
+        }
+
+        /// The seam: tests hand in the call and the system's answer to
+        /// "is this iOS 27?".
+        init(usesTypedCall: Bool, systemHasTypedCall: Bool, typedCall: @escaping TypedCall) {
+            self.usesTypedCall = usesTypedCall
+            self.systemHasTypedCall = systemHasTypedCall
+            self.typedCall = typedCall
+        }
+
+        /// The real call. Before iOS 27 it never reaches HealthKit and answers
+        /// "nothing limited"; `earliestAuthorizedSampleDates` does not even
+        /// get that far there, because `systemHasTypedCall` is `false`.
+        static func liveCall(_ store: HKHealthStore) -> TypedCall {
+            { types in
+                guard #available(iOS 27.0, *) else { return [:] }
+                return try await store.earliestAuthorizedSampleDate(for: types)
             }
         }
 
-        /// The dictionary HealthKit hands back, typed. Entries of any other
-        /// shape are dropped rather than trusted.
-        static func decode(_ dates: NSDictionary?) -> [HKObjectType: Date] {
-            var result: [HKObjectType: Date] = [:]
-            for (key, value) in dates ?? [:] {
-                guard let type = key as? HKObjectType, let date = value as? Date else { continue }
-                result[type] = date
+        func earliestAuthorizedSampleDates(for types: Set<HKObjectType>) async -> [HKObjectType: Date]? {
+            guard usesTypedCall, systemHasTypedCall, !types.isEmpty else { return [:] }
+            do {
+                return try await typedCall(types)
+            } catch {
+                HLLog.healthKit.error(
+                    "HK-LIMIT earliest authorized date failed: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
+                )
+                return nil
             }
-            return result
         }
     }
 

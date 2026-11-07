@@ -81,6 +81,7 @@ struct MeasurementRow: View {
         case .polar: "Polar"
         case .nightscout: "Nightscout"
         case .healthConnect: "Health Connect"
+        case .garmin: "Garmin"
         case .telegram: "Telegram"
         case .mcp: "MCP"
         case .external: String(localized: "measurement.source.external")

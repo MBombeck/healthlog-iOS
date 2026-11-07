@@ -91,7 +91,7 @@ struct ServerFreshnessFacts: Equatable {
 
     /// The caption lines under the type name, in reading order.
     var detailLines: [String] {
-        [checkedLabel, newValueLabel, backgroundLabel, enteredHereLabel].compactMap { $0 }
+        [checkedLabel, newValueLabel, backgroundLabel, enteredHereLabel, backfillLabel].compactMap { $0 }
     }
 
     static func relative(_ date: Date) -> String {

@@ -29,11 +29,14 @@ public final class DoctorReportStore {
     ///   addressed to, or `nil` when the field is blank. Never invented here:
     ///   an absent value means the user left the box empty, which is a valid
     ///   answer and not a reason to reach for the last-used one.
+    /// - Parameter range: VISIT — a fixed window (`startDate`/`endDate`) in
+    ///   place of the look-back `days`; `nil` sends `days` as before.
     public func generate(
         days: Int,
         locale: String,
         selection: ReportSelection,
-        practiceName: String? = nil
+        practiceName: String? = nil,
+        range: HealthRecordExportRequest.Range? = nil
     ) async {
         isWorking = true
         error = nil
@@ -44,7 +47,8 @@ public final class DoctorReportStore {
                 days: days,
                 locale: locale,
                 selection: selection,
-                practiceName: practiceName
+                practiceName: practiceName,
+                range: range
             )
             // Vorheriges PDF aufräumen, damit der temporaryDirectory nicht wächst.
             if let prev = previousURL {

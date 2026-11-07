@@ -104,6 +104,9 @@ struct RootView: View {
             // *late* is refused publication by the session it captured. This is
             // the only statement every authenticated-phase transition reaches.
             ForegroundCoordinator.shared.retire()
+            // SET-ROUTE — the stacks live in the container's router; a sign-out
+            // starts the next session at the root, not on the last page.
+            if case .unauthenticated = authStore.phase { router.resetNavigationForSignOut() }
             await performInitialAuthIfNeeded()
             await loadProfileOnAuthenticationIfNeeded()
             await activateHealthKitBackgroundIfReady()

@@ -69,7 +69,7 @@ private struct DashboardAccountSheet: View {
 
     var body: some View {
         NavigationStack {
-            SettingsAccountScreen()
+            SettingsAccountScreen(showsIrreversibleActions: false)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(String(localized: "Done")) { dismiss() }

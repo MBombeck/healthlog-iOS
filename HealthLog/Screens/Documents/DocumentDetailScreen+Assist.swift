@@ -300,6 +300,11 @@ extension DocumentDetailScreen {
         if let hl = error as? HLError, case .rateLimited = hl {
             return String(localized: "documents.assist.errorRateLimited")
         }
+        // #151 — a busy reader or a read cut off before any value each
+        // get their own sentence instead of the generic one.
+        if let notice = DocumentReadNotice.from(error: error) {
+            return notice.message
+        }
         return String(localized: "documents.assist.errorGeneric")
     }
 }

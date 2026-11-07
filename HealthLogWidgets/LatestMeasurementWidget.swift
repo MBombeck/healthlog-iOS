@@ -91,7 +91,7 @@ private struct LatestMeasurementWidgetView: View {
             Spacer(minLength: 0)
             if let latest = entry.latest {
                 valueLine(latest)
-                Text(relativeLine(latest.recordedAt))
+                Text(relativeLine(latest))
                     .font(.caption2)
                     .foregroundStyle(LAColor.textSecondary)
                     .lineLimit(1)
@@ -151,7 +151,7 @@ private struct LatestMeasurementWidgetView: View {
                     // Lock-screen accessory: redact the measurement value when
                     // the device is locked (QA-b198 Sec-L-3 — PHI on lock).
                     .privacySensitive()
-                Text(relativeLine(latest.recordedAt))
+                Text(relativeLine(latest))
                     .font(.caption2)
                     .lineLimit(1)
             } else {
@@ -203,9 +203,10 @@ private struct LatestMeasurementWidgetView: View {
     }
 
     /// "vor 2 Std." — relative time since the reading. Uses the system relative
-    /// formatter so it localizes + abbreviates honestly.
-    private func relativeLine(_ date: Date) -> String {
-        date.formatted(.relative(presentation: .named))
+    /// formatter so it localizes + abbreviates honestly. A stamp after now
+    /// reads as now, never as a time still to come (POLISH-B B2).
+    private func relativeLine(_ latest: WidgetSnapshot.LatestMeasurement) -> String {
+        latest.shownDate(now: .now).formatted(.relative(presentation: .named))
     }
 
     /// Deep link the whole-tile tap opens — the SPECIFIC metric page in the

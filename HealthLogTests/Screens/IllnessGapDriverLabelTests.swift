@@ -23,6 +23,25 @@ struct IllnessGapDriverLabelTests {
             == String(localized: "illness.vital.functionalImpact"))
     }
 
+    /// 1.5 — every vital the server correlates (`src/lib/illness/correlation.ts`
+    /// at v1.47.1) has its own label; none falls through to the raw rendering.
+    @Test("Every server correlation vital has a label")
+    func serverCorrelationSet() {
+        let expected: [String: String.LocalizationValue] = [
+            "RESTING_HEART_RATE": "illness.vital.restingHeartRate", "HEART_RATE_VARIABILITY": "illness.vital.hrv",
+            "HRV_RMSSD": "illness.vital.hrvRmssd", "RECOVERY_SCORE": "illness.vital.recovery",
+            "OXYGEN_SATURATION": "illness.vital.spo2", "BODY_TEMPERATURE": "illness.vital.temperature",
+            "RESPIRATORY_RATE": "illness.vital.respiratoryRate", "BLOOD_PRESSURE_SYS": "illness.vital.bloodPressureSys",
+            "BLOOD_PRESSURE_DIA": "illness.vital.bloodPressureDia", "PULSE": "illness.vital.pulse",
+            "WEIGHT": "illness.vital.weight", "FUNCTIONAL_IMPACT": "illness.vital.functionalImpact"
+        ]
+        for (type, key) in expected {
+            let label = IllnessVitalLabel.label(for: type)
+            #expect(label == String(localized: key), "\(type)")
+            #expect(!label.hasPrefix("illness.vital."), "\(type) key missing in the catalog")
+        }
+    }
+
     @Test("An unknown driver string falls back to a title-cased rendering")
     func unknownDriverFallback() {
         #expect(IllnessVitalLabel.label(for: "SOME_FUTURE_METRIC") == "Some Future Metric")

@@ -6,6 +6,7 @@ import SwiftUI
 /// `referenceLow`/`referenceHigh` + neutral `rangeStatus` drive the display).
 struct LabResultDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let store: LabsStore
     let resultID: String
@@ -70,6 +71,8 @@ struct LabResultDetailScreen: View {
                     noteCard(note)
                 }
                 metaCard
+                // #141 — the records this one relates to (e.g. the scanned report).
+                RelatedRecordsSection(links: detail?.related?.items ?? [])
                 HLSyncStatusFooter(screenLoading: isLoading)
             }
             .padding(HLSpace.lg)
@@ -114,16 +117,28 @@ struct LabResultDetailScreen: View {
         )
     }
 
+    private var headerValue: some View {
+        Text(valueLabel)
+            .font(.hlMetric(.largeTitle))
+            .monospacedDigit()
+            .foregroundStyle(HLText.primary)
+    }
+
     private var headerCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack {
-                    Text(valueLabel)
-                        .font(.hlMetric(.largeTitle))
-                        .monospacedDigit()
-                        .foregroundStyle(HLText.primary)
-                    Spacer()
+                // A11Y (1.5) — at the accessibility sizes the badge goes
+                // under the value instead of breaking into three lines
+                // beside it (POLISH-C, "bleibt").
+                if dynamicTypeSize.isAccessibilitySize {
+                    headerValue
                     LabRangeBadge(status: status)
+                } else {
+                    HStack {
+                        headerValue
+                        Spacer()
+                        LabRangeBadge(status: status)
+                    }
                 }
                 // 1.4 B2-c — "linked to a catalog biomarker" was an
                 // implementation detail; the row is gone.
@@ -190,7 +205,7 @@ struct LabResultDetailScreen: View {
                 if let panel, !panel.isEmpty {
                     metaRow(label: String(localized: "labs.detail.panel"), value: panel)
                 }
-                metaRow(label: String(localized: "labs.detail.source"), value: source)
+                metaRow(label: String(localized: "labs.detail.source"), value: LabUnit.sourceName(source))
                 if let loadError {
                     HLFormErrorText(loadError)
                 }
@@ -218,10 +233,16 @@ struct LabResultDetailScreen: View {
     /// exists. Built from `String(format:)` over a single static localized
     /// template so the xcstrings keys stay static.
     private var band: String? {
+        Self.rangeText(low: referenceLow, high: referenceHigh, unit: unit)
+    }
+
+    /// The range line for given bounds; the unit follows the numbers, never
+    /// the unity "1" (#160). `nil` without any bound.
+    nonisolated static func rangeText(low referenceLow: Double?, high referenceHigh: Double?, unit: String) -> String? {
         func num(_ v: Double) -> String {
             v.formatted(.number.precision(.fractionLength(0 ... 2)))
         }
-        let unitSuffix = unit.isEmpty ? "" : " \(unit)"
+        let unitSuffix = LabUnit.suffix(unit).map { " \($0)" } ?? ""
         switch (referenceLow, referenceHigh) {
         case let (low?, high?):
             let template = String(localized: "labs.detail.range.both")

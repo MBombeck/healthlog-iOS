@@ -1,31 +1,34 @@
 import Foundation
 
-// v1.25 — DEFENSIVE client-bundled crisis-resource fallback for the PHQ-9 item-9
+// DEFENSIVE client-bundled crisis-resource fallback for the PHQ-9 item-9
 // safety path.
 //
 // On a positive item-9 the server returns the locale-resolved `crisis` set in the
 // POST response — that is the authoritative source and is rendered when present.
 // But a positive item-9 must NEVER go unsignposted, so the client ALSO bundles
-// the same three sets (verbatim from the server `crisis-resources.ts`, verified
-// 2026-06-28 against `release/v1.25.0`) and resolves one when:
+// every set of the server's `src/lib/mental-health/crisis-resources.ts`
+// (verbatim, server tag v1.46.6) and resolves one when:
 //
 //   - the upload fails / is offline (no 201 → no server `crisis`), OR
-//   - the server returns `item9Flagged == true` but omits `crisis` (deploy skew /
-//     older server), OR
+//   - the server fails the request or omits `crisis` despite `item9Flagged`
+//     (deploy skew / older server), OR
 //   - a flagged history row is re-opened (history never carries the set).
 //
-// Region detection mirrors the server's coarse locale-prefix logic EXACTLY
-// (`crisisResourcesForLocale`): "de-at"/"at" → AT, "de-ch"/"ch" → CH, any other
-// "de*" → the COMBINED DE/AT/CH set, "en-us" / "en_us*" / "us" → US, else
-// INTERNATIONAL. iOS sends + resolves the app's display language ("de" / "en"),
-// so a German-speaking user always gets TelefonSeelsorge and a plain-"en" user
-// gets the international set (NOT US 988) — identical to the web. The NAMES are
-// CLIENT i18n (`mentalHealth.crisisResource.<id>.name`); only the contact lines
-// + emergency numbers are literal here.
+// ``forLocale(_:)`` is a line-for-line copy of `crisisResourcesForLocale`,
+// including its `replace("_", "-")`, which in JavaScript replaces the FIRST
+// underscore only. The store sends and resolves ``AppLanguage/regionTag``
+// (`de-AT`, `nl-BE`, `en-US`, `en-PT`), so the fallback lands on the same set
+// the server would have sent: 142 in Austria, 1813 in Belgium, 988 in the US,
+// the international set for an English interface in Portugal (never the
+// Brazilian lines alone). The NAMES are CLIENT i18n
+// (`mentalHealth.crisisResource.<id>.name`, de, en and nl from the server's
+// `messages/*.json`); only the contact lines + emergency numbers are literal
+// here.
 //
 // ⚠️ MAINTENANCE: these phone numbers / URLs are a clinical-safety surface. They
 // duplicate server-owned data and must be kept in lockstep with
-// `crisis-resources.ts`. Stale numbers are a hazard — needs an owner.
+// `crisis-resources.ts` (`CrisisResourceFallbackLockstepTests` pins v1.46.6).
+// Stale numbers are a hazard.
 public enum CrisisResourceFallback {
     /// International fallback (default, incl. plain "en") — emergency 112.
     static let international = CrisisResourceSet(
@@ -99,22 +102,84 @@ public enum CrisisResourceFallback {
         ]
     )
 
-    /// Resolve a bundled set from a locale string, mirroring the server's coarse
-    /// region detection verbatim (`crisisResourcesForLocale`). Always returns
-    /// SOMETHING actionable (never `nil`).
-    ///
-    /// **Parity 1.6b** — the branch order now mirrors `crisisResourcesForLocale`
-    /// exactly: region-qualified German tags resolve to their own country set,
-    /// and a BARE "de" resolves to the combined DE/AT/CH set rather than
-    /// Germany-only. Before this, the offline card contradicted the online one
-    /// for every plain-"de" user — precisely the moment where the two surfaces
-    /// disagreeing matters most.
+    /// Brazil, reached only by the bare region code "br" — CVV by phone and
+    /// chat, SAMU (192) as the emergency number.
+    static let brazil = CrisisResourceSet(
+        emergencyNumber: "192",
+        resources: [
+            CrisisResource(id: "cvv", contacts: ["188", "cvv.org.br/chat"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Portugal ("pt-PT" / "pt_PT") — SNS 24 (option 4) and SOS Voz Amiga.
+    /// Emergency 112.
+    static let portugal = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(id: "sns24", contacts: ["808 24 24 24"]),
+            CrisisResource(id: "sosVozAmiga", contacts: ["213 544 545", "sosvozamiga.org"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Portuguese with no region signal ("pt", "pt-BR", "pt-AO", …): 112 and
+    /// the worldwide directory first, then Brazil's and Portugal's own lines,
+    /// each named with its country (server `PT_BR_AMBIGUOUS`).
+    static let portugueseSpeaking = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])]
+            + brazil.resources.filter { $0.id != "findahelpline" }
+            + [CrisisResource(id: "samu", contacts: ["192"])]
+            + portugal.resources.filter { $0.id != "findahelpline" }
+    )
+
+    /// The Netherlands ("nl-NL" / "nl_NL") — 113 Zelfmoordpreventie. Emergency 112.
+    static let netherlands = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(id: "zelfmoordpreventie113", contacts: ["113", "0800-0113", "113.nl"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Belgium ("nl-BE" / "nl_BE" / "be") — Zelfmoordlijn 1813. Emergency 112.
+    static let belgium = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(id: "zelfmoordlijn1813", contacts: ["1813", "zelfmoord1813.be"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Dutch with no region signal ("nl", "nl-SR", …): both countries' lines,
+    /// then the worldwide directory once (server `NL_BE`).
+    static let dutchSpeaking = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: netherlands.resources.filter { $0.id != "findahelpline" }
+            + belgium.resources.filter { $0.id != "findahelpline" }
+            + [CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])]
+    )
+
+    /// Resolve a bundled set from a locale string, line for line the server's
+    /// `crisisResourcesForLocale` (v1.46.6). Always returns SOMETHING
+    /// actionable (never `nil`).
     public static func forLocale(_ locale: String?) -> CrisisResourceSet {
-        let lc = (locale ?? "").lowercased()
-        if lc == "de-at" || lc == "de_at" || lc == "at" { return austria }
-        if lc == "de-ch" || lc == "de_ch" || lc == "ch" { return switzerland }
+        var lc = (locale ?? "").lowercased()
+        // JavaScript `String.replace("_", "-")` replaces the first match only.
+        if let underscore = lc.range(of: "_") {
+            lc.replaceSubrange(underscore, with: "-")
+        }
+        if lc == "de-at" || lc == "at" { return austria }
+        if lc == "de-ch" || lc == "ch" { return switzerland }
         if lc.hasPrefix("de") { return germanSpeaking }
-        if lc == "en-us" || lc.hasPrefix("en_us") || lc == "us" { return unitedStates }
+        if lc.hasPrefix("en-us") || lc == "us" { return unitedStates }
+        if lc == "br" { return brazil }
+        if lc == "pt-pt" { return portugal }
+        if lc == "pt" || lc.hasPrefix("pt-") { return portugueseSpeaking }
+        if lc == "nl-nl" { return netherlands }
+        if lc == "nl-be" || lc == "be" { return belgium }
+        if lc == "nl" || lc.hasPrefix("nl-") { return dutchSpeaking }
         return international
     }
 }

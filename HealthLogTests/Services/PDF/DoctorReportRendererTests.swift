@@ -142,6 +142,54 @@ struct DoctorReportRendererTests {
         #expect(pages.count == 6)
     }
 
+    /// POLISH-A F-PDF-1 — ten metrics used to print five and drop the rest.
+    @Test("paginate puts every chart on a page: ten series are two chart pages of five, in order")
+    @MainActor
+    func paginateChartsOverflowToFurtherPages() async {
+        let kinds: [MetricKind] = [
+            .weight, .bloodPressure, .pulse, .glucose, .bodyFat, .bodyTemperature, .spo2, .steps, .sleep, .hrv, .bmi
+        ]
+        let point = DoctorReportSpec.ChartsBlock.Point(at: Self.periodEnd, value: 1)
+        let full = Self.buildCoverOnlySpec()
+        for count in [1, 5, 6, 10, 11] {
+            let series = kinds.prefix(count).map { DoctorReportSpec.ChartsBlock.Series(kind: $0, points: [point]) }
+            let spec = DoctorReportSpec(
+                cover: full.cover,
+                vitals: nil,
+                charts: DoctorReportSpec.ChartsBlock(series: series),
+                medications: nil,
+                adherence: nil,
+                mood: nil,
+                labs: nil,
+                illnesses: nil,
+                footer: full.footer
+            )
+            let pages = await DoctorReportRenderer().paginate(spec: spec)
+            let chartPages: [[MetricKind]] = pages.compactMap { page in
+                if case let .charts(block, _) = page { return block.series.map(\.kind) }
+                return nil
+            }
+            #expect(chartPages.allSatisfy { $0.count <= DoctorReportRenderer.chartsPerPage })
+            #expect(chartPages.flatMap(\.self) == Array(kinds.prefix(count)), "every series printed once, \(count)")
+            #expect(chartPages.count == (count + 4) / 5)
+        }
+    }
+
+    #if canImport(UIKit)
+        /// POLISH-A F-PDF-2 — the chart axis marks whole days, about four of them.
+        @Test("the report chart axis steps in whole days: one day on a short window, about a quarter of a long one")
+        func chartAxisDayStride() {
+            func points(days: Double) -> [DoctorReportSpec.ChartsBlock.Point] {
+                [.init(at: Self.periodEnd.addingTimeInterval(-days * 86400), value: 1), .init(at: Self.periodEnd, value: 2)]
+            }
+            #expect(ChartTile.dayStride(for: []) == 1)
+            #expect(ChartTile.dayStride(for: points(days: 0.5)) == 1)
+            #expect(ChartTile.dayStride(for: points(days: 2)) == 1)
+            #expect(ChartTile.dayStride(for: points(days: 30)) == 8)
+            #expect(ChartTile.dayStride(for: points(days: 365)) == 92)
+        }
+    #endif
+
     @Test("paginate drops sections that are nil in the spec")
     @MainActor
     func paginateSkipsDeselectedSections() async {

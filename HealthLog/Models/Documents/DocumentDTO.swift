@@ -201,8 +201,18 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
     /// ISO instant the persisted ``summary`` was generated (muted meta under the
     /// prose). `nil` when there is no summary.
     public let summaryGeneratedAt: String?
+    /// #151 (server 1.46.0) — how the last automatic read ended, as the raw
+    /// server value (`resource-limit`, `provider-error`, …), `nil` when it
+    /// succeeded, never ran, or the server predates the field.
+    public let lastIndexOutcome: String?
     public let createdAt: String
     public let updatedAt: String
+
+    /// `lastIndexOutcome: resource-limit`: the file is too large or complex to
+    /// read. The server does not retry it, and neither does the app.
+    public var isTooLargeToRead: Bool {
+        lastIndexOutcome == "resource-limit"
+    }
 
     /// True when the content index came from an AI provider reading the original
     /// — the web's `hasContentIndex && isAiReadSource(contentIndexSource)`.
@@ -253,6 +263,7 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
         contentIndexSource: DocumentContentIndexSource? = nil,
         summary: String? = nil,
         summaryGeneratedAt: String? = nil,
+        lastIndexOutcome: String? = nil,
         createdAt: String,
         updatedAt: String
     ) {
@@ -275,6 +286,7 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
         self.contentIndexSource = contentIndexSource
         self.summary = summary
         self.summaryGeneratedAt = summaryGeneratedAt
+        self.lastIndexOutcome = lastIndexOutcome
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -305,6 +317,8 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
         contentIndexSource = Self.decodeTolerantSource(c)
         summary = try c.decodeIfPresent(String.self, forKey: .summary)
         summaryGeneratedAt = try c.decodeIfPresent(String.self, forKey: .summaryGeneratedAt)
+        // A wrong-typed value costs only this field, never the document.
+        lastIndexOutcome = try? c.decodeIfPresent(String.self, forKey: .lastIndexOutcome)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
     }
@@ -334,7 +348,7 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
         case id, kind, title, filename, mimeType, byteSize, status, providerType
         case reportDate, documentDate, errorReason, factCount, pendingCount
         case conditionLinks, servingClass, hasContentIndex, contentIndexSource
-        case summary, summaryGeneratedAt, createdAt, updatedAt
+        case summary, summaryGeneratedAt, lastIndexOutcome, createdAt, updatedAt
     }
 }
 
@@ -430,6 +444,9 @@ public struct DocumentUsage: Decodable, Sendable, Equatable {
     public let assistAvailable: Bool
     /// Phase 2: content-search index coverage, or `nil` on a pre-P2 server.
     public let contentIndex: DocumentContentIndex?
+    /// v1.46.0 (#151): deleted documents not purged yet; `nil` before, and
+    /// always 0 inside somebody else's record. Only a count above 0 offers the link.
+    public let deletedCount: Int?
 
     /// Remaining headroom in bytes (never negative).
     public var remainingBytes: Int {
@@ -450,7 +467,8 @@ public struct DocumentUsage: Decodable, Sendable, Equatable {
         acceptedExtensions: [String],
         linkedEpisodes: [DocumentConditionLink],
         assistAvailable: Bool = false,
-        contentIndex: DocumentContentIndex? = nil
+        contentIndex: DocumentContentIndex? = nil,
+        deletedCount: Int? = nil
     ) {
         self.usedBytes = usedBytes
         self.quotaBytes = quotaBytes
@@ -459,6 +477,7 @@ public struct DocumentUsage: Decodable, Sendable, Equatable {
         self.linkedEpisodes = linkedEpisodes
         self.assistAvailable = assistAvailable
         self.contentIndex = contentIndex
+        self.deletedCount = deletedCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -470,6 +489,7 @@ public struct DocumentUsage: Decodable, Sendable, Equatable {
         linkedEpisodes = try c.decodeIfPresent([DocumentConditionLink].self, forKey: .linkedEpisodes) ?? []
         assistAvailable = try c.decodeIfPresent(Bool.self, forKey: .assistAvailable) ?? false
         contentIndex = try c.decodeIfPresent(DocumentContentIndex.self, forKey: .contentIndex)
+        deletedCount = try? c.decodeIfPresent(Int.self, forKey: .deletedCount)
     }
 
     private static func flexInt(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) throws -> Int {
@@ -480,7 +500,7 @@ public struct DocumentUsage: Decodable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case usedBytes, quotaBytes, maxFileBytes, acceptedExtensions, linkedEpisodes
-        case assistAvailable, contentIndex
+        case assistAvailable, contentIndex, deletedCount
     }
 }
 
@@ -491,6 +511,12 @@ public struct DocumentUsage: Decodable, Sendable, Equatable {
 public struct InboundDocumentDetail: Decodable, Sendable, Equatable, Identifiable {
     public let document: InboundDocument
     public let facts: [ExtractedFact]
+    /// #151 (server 1.46.0) — the staged facts may leave part of the
+    /// document out (a part was cut or not read). Kept from the last
+    /// extraction; `false` for an older server or a document never extracted.
+    public internal(set) var extractionIncomplete: Bool
+    /// #141 (v1.43) — related records; `nil` from an older server.
+    public internal(set) var related: RelatedLinks?
 
     public var id: String {
         document.id
@@ -519,9 +545,10 @@ public struct InboundDocumentDetail: Decodable, Sendable, Equatable, Identifiabl
         facts.filter { $0.factType == .observation && $0.status != .rejected }.count
     }
 
-    public init(document: InboundDocument, facts: [ExtractedFact]) {
+    public init(document: InboundDocument, facts: [ExtractedFact], extractionIncomplete: Bool = false) {
         self.document = document
         self.facts = facts
+        self.extractionIncomplete = extractionIncomplete
     }
 
     public init(from decoder: Decoder) throws {
@@ -530,9 +557,11 @@ public struct InboundDocumentDetail: Decodable, Sendable, Equatable, Identifiabl
         document = try InboundDocument(from: decoder)
         let c = try decoder.container(keyedBy: CodingKeys.self)
         facts = try c.decodeIfPresent([ExtractedFact].self, forKey: .facts) ?? []
+        extractionIncomplete = (try? c.decodeIfPresent(Bool.self, forKey: .extractionIncomplete)) ?? false
+        related = try? c.decodeIfPresent(RelatedLinks.self, forKey: .related)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case facts
+        case facts, extractionIncomplete, related
     }
 }

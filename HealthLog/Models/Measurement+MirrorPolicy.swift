@@ -41,7 +41,7 @@ public extension MeasurementSource {
         switch self {
         case .withings, .import_, .manual: true
         case .appleHealth, .whoop, .fitbit, .googleHealth, .computed,
-             .strava, .oura, .polar, .nightscout, .healthConnect, .external, .telegram, .mcp,
+             .strava, .oura, .polar, .nightscout, .healthConnect, .garmin, .external, .telegram, .mcp,
              // Audit B-4 — the closed allowlist doing its job: a source this
              // build cannot name never writes into Apple Health.
              .unknown: false
@@ -54,6 +54,33 @@ public extension MeasurementSource {
 }
 
 public extension Measurement {
+    /// **MIRROR (1.5, #152, server #1272)** — whether the server allows this
+    /// row into Apple Health. The source half of the mirror decision; the kind,
+    /// the person's direction and the duplicate probes still follow.
+    ///
+    /// - The row carries `appleHealthMirror` (server 1.46.0 or later): its value.
+    ///   `true` lets an EXTERNAL reading from a token the person opted in reach
+    ///   Apple Health; `false` keeps even a Withings row out (the server wins).
+    /// - The key is missing (an older server, a synthesised row, a cached page
+    ///   from 1.4): the source rule ``MeasurementSource/isServerMirrorEligible``,
+    ///   exactly as before 1.5.
+    ///
+    /// An `APPLE_HEALTH` row never qualifies, whatever it carries: it came out of
+    /// Apple Health, and writing it back would duplicate it there. The server
+    /// says `false` for those rows anyway; this keeps the echo guard local.
+    ///
+    /// A row that turns `false` only stops future writes. Nothing here, and
+    /// nothing in the mirror, ever deletes a sample from Apple Health.
+    /// The first server that resolves `appleHealthMirror` per row and filters
+    /// the list by it (`?appleHealthMirror=true`). An older server ignores the
+    /// filter and returns every source, so the filter waits for this version.
+    static let appleHealthMirrorMinimumServerVersion = "1.46.0"
+
+    var isServerMirrorAllowed: Bool {
+        guard source != .appleHealth else { return false }
+        return appleHealthMirror ?? source.isServerMirrorEligible
+    }
+
     /// Every server id an Apple-Health sample for this row may carry in
     /// `HKMetadataKeyExternalUUID`. The row id first; for a merged blood
     /// pressure also the diastolic peer id, because builds before S1 stamped

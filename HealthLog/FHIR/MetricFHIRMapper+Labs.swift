@@ -68,6 +68,7 @@ public extension MetricFHIRMapper {
         "hemoglobin": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
         "hämoglobin": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
         "haemoglobin": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
+        "hemoglobine": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
         // #115 R3 — method-less LDL (server v1.39.3 `lab-loinc.ts`): a logged
         // value does not say whether it was measured directly (18262-6) or
         // calculated (13457-7), so neither method code may be asserted.
@@ -93,16 +94,27 @@ public extension MetricFHIRMapper {
             display: "Cholesterol [Mass/volume] in Serum or Plasma",
             physicianReviewPending: true
         ),
+        "totaal cholesterol": LOINCCode(
+            code: "2093-3",
+            display: "Cholesterol [Mass/volume] in Serum or Plasma",
+            physicianReviewPending: true
+        ),
         "triglycerides": LOINCCode(code: "2571-8", display: "Triglyceride [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
+        "triglyceriden": LOINCCode(code: "2571-8", display: "Triglyceride [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         "tsh": LOINCCode(code: "3016-3", display: "Thyrotropin [Units/volume] in Serum or Plasma", physicianReviewPending: true),
         "creatinine": LOINCCode(code: "2160-0", display: "Creatinine [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         "kreatinin": LOINCCode(code: "2160-0", display: "Creatinine [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         "ferritin": LOINCCode(code: "2276-4", display: "Ferritin [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
+        "ferritine": LOINCCode(code: "2276-4", display: "Ferritin [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         "crp": LOINCCode(code: "1988-5", display: "C reactive protein [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         // #115 R3 — total 25-OH vitamin D (D2 + D3) is what labs report; 1989-3
         // is D3 alone (server v1.39.3 `lab-loinc.ts`).
         "vitamin d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true),
-        "25-oh vitamin d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true)
+        "25-oh vitamin d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true),
+        // Dutch analyte names a Dutch lab prints (the German spellings above
+        // are the same kind of input alias).
+        "vitamine d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true),
+        "25-oh vitamine d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true)
     ]
 
     /// LOINC 62292-8 long name, shared by the two vitamin-D aliases above.
@@ -118,21 +130,19 @@ public extension MetricFHIRMapper {
     ///   no curated LOINC, returns `loinc == nil` → the assembler emits a
     ///   text-only `Observation.code` (review-pending, no fabricated code).
     ///
-    /// The UCUM unit is the row's own `unit` when non-empty (operator/server
-    /// truth), falling back to the curated table's UCUM, then to the
-    /// dimensionless `"1"` so `valueQuantity` always carries a unit code.
+    /// The UCUM unit is the row's own `unit` (operator/server truth). An empty
+    /// unit stays empty, so the `valueQuantity` carries the number alone.
     static func labMapping(analyte: String, unit: String, isLinked: Bool) -> LabAnalyteMapping {
         let normalized = analyte.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         // Only a linked row earns the LOINC code path — an unlinked free-text
         // row is deliberately text-only even when its name happens to match,
         // because we have no terminology binding to trust it (SPEC §A FHIR).
         let loinc = isLinked ? labAnalyteLOINCTable[normalized] : nil
-        let trimmedUnit = unit.trimmingCharacters(in: .whitespacesAndNewlines)
-        let ucum = if !trimmedUnit.isEmpty {
-            UCUMUnit(unit: trimmedUnit)
-        } else {
-            UCUMUnit(unit: "1")
-        }
+        // #160 — the UCUM unity "1" is a stated "no unit" and stays coded
+        // (`{ unit: "1", system: UCUM, code: "1" }`, like the server's export).
+        // An EMPTY unit is not that statement: it rides as a bare Quantity
+        // instead of being promoted to "1".
+        let ucum = UCUMUnit(unit: unit.trimmingCharacters(in: .whitespacesAndNewlines))
         return LabAnalyteMapping(loinc: loinc, ucum: ucum)
     }
 }

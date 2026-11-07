@@ -130,7 +130,7 @@ enum MeasurementListFilter {
         // same reason: the operator did not hand-enter it on this device.
         let canonical: [MeasurementSource] = [
             .appleHealth, .withings, .whoop, .fitbit, .googleHealth,
-            .strava, .oura, .polar, .nightscout, .healthConnect, .computed, .telegram, .mcp,
+            .strava, .oura, .polar, .nightscout, .healthConnect, .garmin, .computed, .telegram, .mcp,
             // Audit B-4 — last, next to the derived rows: it is the only chip
             // whose members can change meaning between releases.
             .external, .manual, .import_, .unknown
@@ -161,6 +161,7 @@ enum MeasurementListFilter {
         case .polar: "polar"
         case .nightscout: "nightscout"
         case .healthConnect: "health connect"
+        case .garmin: "garmin"
         case .telegram: "telegram"
         case .mcp: "mcp"
         case .external: "external extern"
@@ -225,6 +226,7 @@ struct SourceFilterChips: View {
         case .polar: String(localized: "Polar")
         case .nightscout: String(localized: "Nightscout")
         case .healthConnect: String(localized: "Health Connect")
+        case .garmin: String(localized: "Garmin")
         case .telegram: String(localized: "Telegram")
         case .mcp: String(localized: "MCP")
         case .external: String(localized: "measurement.source.external")

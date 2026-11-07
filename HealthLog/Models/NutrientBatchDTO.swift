@@ -33,6 +33,11 @@ public enum NutrientCode: String, Codable, Sendable, CaseIterable, Equatable {
     case iodine
     case water
     case caffeine
+    /// SUPP (v1.43, #131): omega-3 fatty acids only a supplement's
+    /// composition produces. Responses only: no HealthKit type carries them and
+    /// the batch never sends them (``isSyncable``, `NutrientBatchRequestDTO`).
+    case dha
+    case epa
     /// Audit B-4 — decode-only sentinel for a catalogue code this build cannot
     /// name. The server catalogue grows (this list matched it exactly at the
     /// time of writing, which is a snapshot, not a guarantee); before the
@@ -83,8 +88,10 @@ public struct NutrientIntakeEntryDTO: Codable, Sendable, Equatable {
 public struct NutrientBatchRequestDTO: Codable, Sendable, Equatable {
     public let entries: [NutrientIntakeEntryDTO]
 
+    /// SUPP — only syncable codes reach the body: `dha`, `epa` and the
+    /// decode-only sentinel are dropped here, whatever the caller collected.
     public init(entries: [NutrientIntakeEntryDTO]) {
-        self.entries = entries
+        self.entries = entries.filter(\.nutrient.isSyncable)
     }
 }
 

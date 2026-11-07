@@ -87,9 +87,9 @@ public struct HLDashboardTile: View {
     /// range-coloured averages + the Insights target tiles). `nil` → no band,
     /// exactly as BP omits it when no target is configured.
     let targetBand: RangeBand?
-    /// #115 · 1.1 — the server's weight verdict (`tiles.weightTrend.direction`);
-    /// read by the weight tile only, `nil` = no snapshot yet → no colour.
-    let weightTrendSentiment: TrendDirectionSentiment?
+    /// 1.5 VERDICTS — the server's verdicts the trend arrow is coloured from
+    /// (target, `tiles.directions`, the card's own `trendSentiment`).
+    let trendVerdicts: TileTrendVerdicts
 
     @ScaledMetric(relativeTo: .title2) private var primaryValueSize: CGFloat = 28
 
@@ -117,7 +117,7 @@ public struct HLDashboardTile: View {
         avg7: Double? = nil,
         avg30: Double? = nil,
         targetBand: RangeBand? = nil,
-        weightTrendSentiment: TrendDirectionSentiment? = nil
+        trendVerdicts: TileTrendVerdicts = .none
     ) {
         self.metric = metric
         descriptor = metric.kind.descriptor
@@ -128,7 +128,7 @@ public struct HLDashboardTile: View {
         self.avg7 = avg7
         self.avg30 = avg30
         self.targetBand = targetBand
-        self.weightTrendSentiment = weightTrendSentiment
+        self.trendVerdicts = trendVerdicts
     }
 
     public var body: some View {
@@ -194,11 +194,7 @@ public struct HLDashboardTile: View {
         // single tile-fragment code path); the polarity-aware `TrendChip` is the
         // trailing accessory (it itself renders via `HLTileTrendGlyph`).
         HLTileHeaderRow(icon: descriptor.sfSymbol, title: Text(descriptor.title)) {
-            TrendChip(
-                trend: metric.dashboardTrend,
-                polarity: descriptor.trendPolarity,
-                mode: metric.dashboardTrendMode(weightSentiment: weightTrendSentiment)
-            )
+            TrendChip(trend: metric.dashboardTrend, mode: trendVerdicts.mode(for: metric))
         }
     }
 
@@ -550,7 +546,7 @@ public struct HLDashboardTile: View {
         // now reads on the tile.
         let stats = statsSpokenClause
         // #135 — the server's verdict is spoken where the arrow is coloured.
-        let trend = trendDesc + metric.spokenVerdictSuffix
+        let trend = trendDesc + metric.spokenVerdictSuffix(trendVerdicts)
         if let cachedContextLine {
             return Text("\(title): \(value). \(trend). \(cachedContextLine).\(stats)")
         }

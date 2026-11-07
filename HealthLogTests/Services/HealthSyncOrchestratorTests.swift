@@ -60,7 +60,8 @@ struct HealthSyncOrchestratorTests {
             appleMedicationImport: make(.appleMedicationImport),
             cycleImport: make(.cycleImport),
             heartHealthEvents: make(.heartHealthEvents),
-            outboxDrain: make(.outboxDrain)
+            outboxDrain: make(.outboxDrain),
+            serverMirror: make(.serverMirror)
         )
     }
 
@@ -188,7 +189,8 @@ struct HealthSyncOrchestratorTests {
             appleMedicationImport: { _ in .disabled(.appleMedicationImport) },
             cycleImport: { _ in .disabled(.cycleImport) },
             heartHealthEvents: { _ in .disabled(.heartHealthEvents) },
-            outboxDrain: capture
+            outboxDrain: capture,
+            serverMirror: { _ in .disabled(.serverMirror) }
         )
         let orchestrator = HealthSyncOrchestrator(registry: registry)
         _ = await orchestrator.run(.appRefresh)

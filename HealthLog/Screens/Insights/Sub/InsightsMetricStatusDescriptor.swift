@@ -302,7 +302,7 @@ enum InsightsMetricStatusDescriptor {
             }
             break
         }
-        return (classification.category, tone)
+        return (InsightsTargetStatusLabel.label(for: classification.category), tone)
     }
 
     /// The in-target share from the target row's 30-day day-count window.

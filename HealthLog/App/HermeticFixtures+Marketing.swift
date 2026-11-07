@@ -68,6 +68,16 @@
             method: String,
             query: [URLQueryItem] = []
         ) -> (status: Int, body: Data)? {
+            // 1.5 DOCS-TRASH — Recently deleted documents (`-uitest-docs-trash`).
+            // 1.5 SHOTS — the LAB-DOC surfaces for the picture sweep (`-uitest-lab-doc`).
+            if let overlay = DocsTrashFixtures.response(forPath: path, method: method)
+                ?? LabDocFixtures.response(forPath: path, method: method) { return overlay }
+            // 1.5 VERDICTS — the server-judged trends (`-uitest-verdicts`).
+            if HermeticUITestSupport.isVerdictsOverlayActive,
+               let verdicts = VerdictFixtures.response(forPath: path, method: method, query: query)
+            {
+                return verdicts
+            }
             // iOS 1.4 B2-b — the medications-and-mood overlay of the sweep
             // (`-uitest-area-meds`) rides on this world and outranks it.
             if HermeticUITestSupport.isAreaMedsOverlayActive,
@@ -95,7 +105,13 @@
             }
             // Order matters: the intake route sits under the list route's prefix.
             if path.hasPrefix("/api/medications/intake") { return ok(todayIntakesJSON) }
-            if path == "/api/medications" { return ok(medicationsJSON) }
+            // POLISH-C (F-REL-1) — the list, and the single read behind a
+            // medication's "Related" section: the list's own row, without
+            // relations. Before, the list's prefix answered it with `[]` and
+            // the section showed its error.
+            if let medications = path == "/api/medications" ? medicationsJSON : singleMedicationJSON(forPath: path) {
+                return ok(medications)
+            }
             if path.hasPrefix("/api/user/avatar/") { return avatarResponse() }
             if path == "/api/user/profile" { return ok(profileJSON) }
             // Exact match — `/api/auth/me/modules` and the report-selection
@@ -111,6 +127,18 @@
         /// overlay is active; `nil` keeps the protocol's JSON default.
         static func contentType(forPath path: String) -> String? {
             path.hasPrefix("/api/user/avatar/") ? "image/png" : nil
+        }
+
+        /// `GET /api/medications/{id}` for an id of ``medicationsJSON``.
+        private static func singleMedicationJSON(forPath path: String) -> String? {
+            let prefix = "/api/medications/"
+            guard path.hasPrefix(prefix) else { return nil }
+            let id = String(path.dropFirst(prefix.count))
+            guard !id.isEmpty, !id.contains("/"),
+                  let rows = try? JSONSerialization.jsonObject(with: Data(medicationsJSON.utf8)) as? [[String: Any]],
+                  let row = rows.first(where: { $0["id"] as? String == id }),
+                  let data = try? JSONSerialization.data(withJSONObject: row) else { return nil }
+            return String(data: data, encoding: .utf8)
         }
 
         private static func ok(_ json: String) -> (Int, Data) {
@@ -170,7 +198,8 @@
         private static var trulicityDose: String {
             // The bundle's resolved localization, like the citations overlay:
             // it is what `Text()` renders from, so dose and chrome agree.
-            Bundle.main.preferredLocalizations.first?.hasPrefix("de") == true ? "1,5 mg" : "1.5 mg"
+            // German and Dutch both write a decimal comma.
+            AppLanguage.current == .en ? "1.5 mg" : "1,5 mg"
         }
 
         /// `/api/dashboard/summary` with the empty salutation, re-dated to the
@@ -187,7 +216,7 @@
         /// cannot be served honestly here: `InsightsStore.load` is gated on AI
         /// consent, and the marketing run declines it. Values fit the rest of
         /// the fixture (pulse 64 on the dashboard).
-        private static var summaryJSON: String {
+        static var summaryJSON: String {
             let iso = ISO8601DateFormatter()
             iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             let updatedAt = iso.string(from: morningSlot(hour: 7))

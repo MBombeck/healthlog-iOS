@@ -126,6 +126,7 @@ import Testing
                 .safetyRefused,
                 .generationFailed,
                 .frameworkUnavailable,
+                .languageUnsupported,
                 .emptyInput
             ]
         }

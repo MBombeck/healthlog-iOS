@@ -384,7 +384,11 @@ public final class LocalLLMService {
                 let model = SystemLanguageModel.default
                 switch model.availability {
                 case .available:
-                    return .available
+                    // The on-device Coach prompts in the interface language
+                    // (``PrivacyFirstPromptBuilder``). A language the model
+                    // or the MDR filter does not speak hides the on-device
+                    // card like an unsupported runtime does.
+                    return OnDeviceLanguageGate.allows(locale: AppLanguage.current.locale) ? .available : .unsupported
                 case let .unavailable(reason):
                     return map(unavailableReason: reason)
                 }

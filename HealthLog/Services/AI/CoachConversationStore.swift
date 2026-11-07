@@ -211,7 +211,7 @@ public final class CoachConversationStore {
     /// Server-side conversation id for the active server-fallback thread.
     /// `nil` until the first server turn returns one; reset on `reset()`
     /// so a fresh conversation starts a new server thread.
-    private var serverConversationID: String?
+    private(set) var serverConversationID: String?
 
     /// **A360 H1/H2 (v0156)** — the metric/correlation scope the user was looking
     /// at when they opened the Coach (per-tile "Ask the coach about this",
@@ -258,6 +258,9 @@ public final class CoachConversationStore {
     /// the submit path lives in `CoachMessageFeedback.swift`'s store
     /// extension. Cleared alongside the transcript.
     public let feedback = CoachMessageFeedback()
+
+    /// 1.5 COACH-R — status line, proposals and trails (`+Reasoning`).
+    public let live = CoachLiveTrail()
 
     /// **CO4 (v0154)** — provenance envelopes keyed by the appended assistant
     /// transcript-entity id, so the bubble can look up its "what I'm looking at"
@@ -656,21 +659,14 @@ public final class CoachConversationStore {
         // mid-stream dismiss (cancellation) stops mutating a gone view's transcript.
         let streamRender = ServerStreamRender()
         do {
-            let reply = try await serverService.respond(
-                message: userText,
-                conversationId: priorConversationID,
-                locale: serverLocaleCode(),
+            // 1.5 COACH-R — tokens pass the MDR filter before they paint; the
+            // activity frames drive the status line (`+Reasoning`).
+            let reply = try await respondOnServer(
+                serverService,
+                userText: userText,
+                conversationID: priorConversationID,
                 scope: turnScope,
-                onToken: { [weak self] token in
-                    guard let self else { return }
-                    if Task.isCancelled { return }
-                    streamRender.append(token)
-                    upsertStreamingAssistant(
-                        streamRender.text,
-                        isFirstPartial: streamRender.isFirstPartial
-                    )
-                    streamRender.markAppended()
-                }
+                render: streamRender
             )
             // AUD-5 H2 — the user dismissed the sheet while the SSE turn was in
             // flight. `URLSession` cancellation usually throws first (handled in
@@ -708,11 +704,8 @@ public final class CoachConversationStore {
             // but "cosmetic on an @Observable a view no longer owns" is the
             // kind of thing that stops being cosmetic quietly.
             if Task.isCancelled { return }
-            if streamRender.didAppend {
-                upsertStreamingAssistant(replyText, isFirstPartial: false)
-            } else {
-                appendAssistant(replyText)
-            }
+            // Replaces the streamed bubble, or appends when none painted.
+            upsertStreamingAssistant(replyText, isFirstPartial: !streamRender.didAppend)
             // v1.18.1 (§3) — surface the cadence suggestion (if the server emitted
             // one this turn) as an actionable card under the reply. A new turn
             // having no suggestion clears any stale one.
@@ -739,6 +732,7 @@ public final class CoachConversationStore {
                 if let usage = reply.usage, usage.totalTokens != nil {
                     usageByEntity[entityID] = usage
                 }
+                await live.settle(reply, entityID: entityID, filter: safetyFilter)
             }
             // BH-final-diff H4 — final cancellation re-check immediately before
             // the persist. If the user dismissed mid-block, do not write the
@@ -761,6 +755,7 @@ public final class CoachConversationStore {
             HLLog.api.error(
                 "CoachServerService turn failed: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
             )
+            dropPartialAnswer(streamRender)
             lastError = .serverFailed(error)
         }
     }
@@ -834,6 +829,7 @@ public final class CoachConversationStore {
         // ids they keyed are gone with the transcript).
         provenanceByEntity = [:]
         usageByEntity = [:]
+        live.clear()
         // Wipe the persisted transcript for the current partition.
         // `userIDProvider` returns the keychain user (or the
         // standalone sentinel) so the right partition is hit.
@@ -869,6 +865,7 @@ public final class CoachConversationStore {
         feedback.clear()
         provenanceByEntity = [:]
         usageByEntity = [:]
+        live.clear()
         let userID = partition ?? userIDProvider()
         persistence?.clear(userID: userID)
     }

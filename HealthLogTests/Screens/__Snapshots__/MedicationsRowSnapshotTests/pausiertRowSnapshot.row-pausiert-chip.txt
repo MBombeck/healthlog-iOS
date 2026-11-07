@@ -7,6 +7,16 @@
     - category: nil
     - categoryLabel: nil
     - remindersActive: nil
+    - endedAt: nil
+    - canEndCourse: nil
+    - canStartCourse: nil
+    - autoMarkTakenSince: nil
+    - related: nil
+    - ingredients: nil
+    - hasIngredients: nil
+    - autoMarkTaken: nil
+    - courseCount: nil
+    - previousCourseEndedOn: nil
     - dosesPerUnit: nil
     - unitsPerDose: nil
     ▿ schedule: HealthLog.MedicationSchedule

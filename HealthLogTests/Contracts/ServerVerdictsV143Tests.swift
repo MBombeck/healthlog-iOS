@@ -213,41 +213,42 @@ struct ServerVerdictsPresentationTests {
         // The server judged both; the app only paints what it was told.
         let aboveTarget = card(.bloodPressure, trend: .up, sentiment: .negative)
         let belowTarget = card(.bloodPressure, trend: .up, sentiment: .positive)
-        let chipAbove = TrendChip(trend: .up, polarity: .lowerIsBetter, mode: aboveTarget.dashboardTrendMode(weightSentiment: nil))
-        let chipBelow = TrendChip(trend: .up, polarity: .lowerIsBetter, mode: belowTarget.dashboardTrendMode(weightSentiment: nil))
+        let chipAbove = TrendChip(trend: .up, mode: TileTrendVerdicts.none.mode(for: aboveTarget))
+        let chipBelow = TrendChip(trend: .up, mode: TileTrendVerdicts.none.mode(for: belowTarget))
         #expect(chipAbove.colorRole == .statusBad)
         #expect(chipBelow.colorRole == .statusOK)
     }
 
-    @Test("The server's verdict wins over every client rule; a neutral or unknown one paints nothing")
+    @Test("The card's verdict colours when nothing ranks above it; a neutral or unknown one paints nothing")
     func verdictWins() {
-        #expect(card(.weight, trend: .down, sentiment: .positive).dashboardTrendMode(weightSentiment: .upGood) == .serverVerdict(.positive))
-        #expect(card(.steps, trend: .up, sentiment: .negative).dashboardTrendMode(weightSentiment: nil) == .serverVerdict(.negative))
+        #expect(TileTrendVerdicts.none.mode(for: card(.weight, trend: .down, sentiment: .positive)) == .serverVerdict(.positive))
+        #expect(TileTrendVerdicts.none.mode(for: card(.steps, trend: .up, sentiment: .negative)) == .serverVerdict(.negative))
         #expect(TrendChip.colorRole(for: .neutral) == .textSecondary)
         #expect(TrendChip.colorRole(for: .unknown) == .textSecondary)
-        #expect(TrendChip(trend: .unknown, polarity: .higherIsBetter, mode: .serverVerdict(.positive)).colorRole == .none)
+        #expect(TrendChip(trend: .unknown, mode: .serverVerdict(.positive)).colorRole == .none)
     }
 
-    @Test("An older server keeps the rendering it always had")
-    func olderServerUnchanged() {
-        #expect(card(.weight, trend: .up, sentiment: nil).dashboardTrendMode(weightSentiment: .upBad) == .serverSentiment(.upBad))
-        #expect(card(.steps, trend: .up, sentiment: nil).dashboardTrendMode(weightSentiment: nil) == .dashboardDirection)
-        #expect(card(.pulse, trend: .up, sentiment: nil).dashboardTrendMode(weightSentiment: nil) == .polarityAware)
-        #expect(card(.pulse, trend: .up, sentiment: .unknown).dashboardTrendMode(weightSentiment: nil) == .polarityAware)
-        #expect(card(.pulse, trend: .up, sentiment: nil).spokenVerdictSuffix.isEmpty)
-        #expect(card(.pulse, trend: .up, sentiment: nil).spokenTrendWithVerdict == nil)
+    @Test("An older server without any verdict: every arrow is neutral, weight keeps tiles.weightTrend")
+    func olderServerNeutral() {
+        let legacyWeight = TileTrendVerdicts(targets: [:], directions: [:], weightTrend: .upBad)
+        #expect(legacyWeight.mode(for: card(.weight, trend: .up, sentiment: nil)) == .serverSentiment(.upBad))
+        #expect(TileTrendVerdicts.none.mode(for: card(.steps, trend: .up, sentiment: nil)) == .neutral)
+        #expect(TileTrendVerdicts.none.mode(for: card(.pulse, trend: .up, sentiment: nil)) == .neutral)
+        #expect(TileTrendVerdicts.none.mode(for: card(.pulse, trend: .up, sentiment: .unknown)) == .neutral)
+        #expect(card(.pulse, trend: .up, sentiment: nil).spokenVerdictSuffix(.none).isEmpty)
+        #expect(card(.pulse, trend: .up, sentiment: nil).spokenTrendWithVerdict(.none) == nil)
     }
 
     @Test("VoiceOver hears the verdict the colour shows")
     func spokenVerdict() {
         let positive = card(.hrv, trend: .up, sentiment: .positive)
-        #expect(positive.spokenVerdictSuffix == ", " + String(localized: "trend.verdict.spoken.positive"))
-        #expect(positive.spokenTrendWithVerdict == String(localized: "Trend rising") + positive.spokenVerdictSuffix)
-        #expect(card(.hrv, trend: .flat, sentiment: .neutral).spokenVerdictSuffix.isEmpty)
+        #expect(positive.spokenVerdictSuffix(.none) == ", " + String(localized: "trend.verdict.spoken.positive"))
+        #expect(positive.spokenTrendWithVerdict(.none) == String(localized: "Trend rising") + positive.spokenVerdictSuffix(.none))
+        #expect(card(.hrv, trend: .flat, sentiment: .neutral).spokenVerdictSuffix(.none).isEmpty)
         #expect(TrendSentiment.negative.spokenClause != nil)
     }
 
-    @Test("Insights vitals: the verdict colours the chip; an older server keeps label and mode")
+    @Test("Insights vitals: the verdict colours the chip; an older server keeps label and stays neutral")
     func vitalsTiles() {
         let current = card(.restingHeartRate, trend: .down, sentiment: .positive)
         let older = card(.hrv, trend: .up, sentiment: nil)
@@ -256,7 +257,7 @@ struct ServerVerdictsPresentationTests {
         let hrv = tiles.first { $0.kind == .hrv }
         #expect(rhr?.mode == .serverVerdict(.positive))
         #expect(rhr?.accessibilityLabel.contains(String(localized: "trend.verdict.spoken.positive")) == true)
-        #expect(hrv?.mode == .polarityAware)
+        #expect(hrv?.mode == .neutral)
         #expect(hrv?.accessibilityLabel.contains(String(localized: "Trend rising")) == false)
     }
 
@@ -268,14 +269,14 @@ struct ServerVerdictsPresentationTests {
         )
     }
 
-    @Test("The range caption reads the series' own direction; VoiceOver hears it")
+    @Test("The range caption speaks the server's verdict; the own comparison adds nothing")
     func rangeCaption() throws {
-        let rising = [point(60, daysAgo: 6), point(61, daysAgo: 5), point(66, daysAgo: 1), point(67, daysAgo: 0)]
-        let adverse = try #require(MetricRangeDelta.resolve(points: rising, sentiment: .upBad))
+        let adverse = try #require(MetricRangeDelta.resolve(.server(delta: 6, unit: "bpm", sentiment: .negative)))
         #expect(adverse.sentiment == .adverse)
-        let spoken = MetricRangeDelta.accessibilityText(adverse, priorLabel: "vs prior week")
+        let spoken = MetricRangeDelta.accessibilityText(adverse, priorLabel: "since the first day in range")
         #expect(spoken.hasSuffix(String(localized: "trend.verdict.spoken.negative")))
-        let neutral = try #require(MetricRangeDelta.resolve(points: rising, sentiment: nil))
+        let rising = [point(60, daysAgo: 6), point(61, daysAgo: 5), point(66, daysAgo: 1), point(67, daysAgo: 0)]
+        let neutral = try #require(MetricRangeDelta.resolve(.ownComparison(rising)))
         #expect(MetricRangeDelta.accessibilityText(neutral, priorLabel: "vs prior week") == "\(neutral.deltaText) vs prior week")
     }
 
@@ -339,20 +340,6 @@ struct ServerVerdictsPresentationTests {
         let unknown = try makeStore(kind: .unknown)
         unknown.series = series(.unknown, unit: "", lines: [SeriesReferenceLine(value: 1, kind: .upper, source: .clinical, label: "x")])
         #expect(unknown.plotReferenceLines(units: AccountUnitDisplayTests.metric).isEmpty)
-    }
-
-    @Test("The range caption prefers the series' direction, weight falls back to the snapshot on older servers")
-    func rangeSentimentSource() throws {
-        let pulse = try makeStore(kind: .pulse)
-        pulse.series = series(.pulse, unit: "bpm", direction: TrendVerdict(direction: .upBad), lines: nil)
-        #expect(pulse.rangeDeltaSentiment(weightTrend: .legacyReading) == .upBad)
-        pulse.series = series(.pulse, unit: "bpm", lines: nil)
-        #expect(pulse.rangeDeltaSentiment(weightTrend: .legacyReading) == nil)
-        let weight = try makeStore(kind: .weight)
-        weight.series = series(.weight, unit: "kg", lines: nil)
-        #expect(weight.rangeDeltaSentiment(weightTrend: WeightTrendJudgement(direction: .hold, targetPosition: .inside)) == .hold)
-        weight.series = series(.weight, unit: "kg", direction: TrendVerdict(direction: .upGood), lines: nil)
-        #expect(weight.rangeDeltaSentiment(weightTrend: .legacyReading) == .upGood)
     }
 
     @Test("Clinical lines dashed, personal lines solid; edges keep the threshold tints; VoiceOver reads value and label")

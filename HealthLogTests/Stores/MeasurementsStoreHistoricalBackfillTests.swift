@@ -116,12 +116,17 @@
             }
             let outbox = try OutboxQueue(inMemory: true)
             let repo = MeasurementsRepository(api: api, outbox: outbox)
-            return MeasurementsStore(
+            // MIRROR (1.5) — an isolated, empty server-version store: these
+            // cases pin the per-source walk (v2), which is what an unknown
+            // server gets. A version another suite left in `.standard` must
+            // not switch them to the v3 walk.
+            return try MeasurementsStore(
                 repo: repo,
                 healthKit: hk,
                 isStandalone: { standalone },
                 userIDProvider: { userID },
-                backfillDefaults: defaults
+                backfillDefaults: defaults,
+                serverVersionDefaults: freshDefaults()
             )
         }
 
@@ -357,11 +362,12 @@
             let defaults = try freshDefaults()
             let registry = AuthenticatedSessionLeaseRegistry()
             _ = try #require(registry.activate(ownerID: "account-a"))
-            let store = MeasurementsStore(
+            let store = try MeasurementsStore(
                 repo: repo,
                 healthKit: hk,
                 userIDProvider: { "account-a" },
-                backfillDefaults: defaults
+                backfillDefaults: defaults,
+                serverVersionDefaults: freshDefaults()
             )
             store.bindAuthenticatedSessionRegistry(registry)
 

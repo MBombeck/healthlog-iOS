@@ -59,7 +59,12 @@ public actor DoctorReportRenderer {
             // Pre-render chart bitmaps on @MainActor.
             let chartImages: [ChartImage] = if let chartsBlock = spec.charts {
                 await MainActor.run {
-                    DoctorReportChartRenderer.renderImages(chartsBlock, glucoseUnit: spec.glucoseUnit, units: spec.printUnits)
+                    DoctorReportChartRenderer.renderImages(
+                        chartsBlock,
+                        glucoseUnit: spec.glucoseUnit,
+                        units: spec.printUnits,
+                        reportLocale: spec.cover.locale
+                    )
                 }
             } else {
                 []
@@ -88,6 +93,10 @@ public actor DoctorReportRenderer {
     /// Sections that overflow a single page get split here (Commit 2 ships
     /// single-page cover + vitals; Commit 3 adds the multi-page charts /
     /// medications / mood paths).
+    /// Chart tiles on one page: 110 pt each plus 12 pt gap, from 80 pt to
+    /// 60 pt above the bottom of a US Letter page (`drawCharts`).
+    public static let chartsPerPage = 5
+
     public func paginate(spec: DoctorReportSpec) -> [PageElement] {
         var elements: [PageElement] = []
         elements.append(.cover(spec.cover, footer: spec.footer))
@@ -95,7 +104,13 @@ public actor DoctorReportRenderer {
             elements.append(.vitals(vitals, footer: spec.footer))
         }
         if let charts = spec.charts {
-            elements.append(.charts(charts, footer: spec.footer))
+            // POLISH-A F-PDF-1 — the chart page holds five 110 pt tiles; the
+            // drawer used to stop there and drop every further metric without
+            // a word. Each further five get a page of their own.
+            for start in stride(from: 0, to: max(charts.series.count, 1), by: Self.chartsPerPage) {
+                let slice = Array(charts.series.dropFirst(start).prefix(Self.chartsPerPage))
+                elements.append(.charts(DoctorReportSpec.ChartsBlock(series: slice), footer: spec.footer))
+            }
         }
         if let medications = spec.medications {
             elements.append(.medications(medications, footer: spec.footer))
@@ -161,9 +176,6 @@ public enum PDFMeta {
     public static let author = "HealthLog"
 
     public static func title(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Arztbericht"
-        case .en: "Doctor Report"
-        }
+        DoctorReportStrings.text(.title, locale)
     }
 }

@@ -146,6 +146,34 @@ import Testing
             #expect(body?.keys.contains("liveActivityPushToken") == false)
         }
 
+        // MARK: - Locale follows the app language (POLISH-C, C4)
+
+        /// The push copy the server picks for this device must match the
+        /// interface the person reads. `Locale.current` is the device
+        /// language and can name one the app does not ship (or differ from a
+        /// per-app language), so the body carries ``AppLanguage`` with the
+        /// device region.
+        @Test("POST /api/devices sends the app language, not the device locale", arguments: AppLanguage.allCases)
+        func bodyLocaleIsAppLanguage(_ language: AppLanguage) async {
+            let recorder = BodyRecorder()
+            MockURLProtocol.install { req in
+                if let body = req.httpBody ?? req.bodyStreamData() {
+                    recorder.record(body)
+                }
+                return (Self.okResponse(req), Data())
+            }
+            let svc = makeService(api: makeAPI(), defaults: makeDefaults())
+
+            await AppLanguage.$pinned.withValue(language) {
+                await svc.didRegister(deviceToken: Data(repeating: 0xCD, count: 32))
+            }
+
+            #expect(recorder.count == 1)
+            let locale = recorder.decodedLast()?["locale"] as? String
+            #expect(locale == language.regionTag)
+            #expect(locale?.hasPrefix(language.rawValue) == true)
+        }
+
         // MARK: - Re-registration on token change
 
         @Test("A new LA token after APNs registration re-fires POST /api/devices")

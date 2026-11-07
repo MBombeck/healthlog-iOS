@@ -103,7 +103,7 @@ enum BiomarkerExplainer {
         let aliases: [String]
     }
 
-    /// The catalogue markers + their de/en names + common aliases. Kept in one
+    /// The catalogue markers + their de/en/nl names + common aliases. Kept in one
     /// place so the explainer set stays in lockstep with the web catalogue
     /// (`src/lib/labs/biomarker-catalog.ts`). v1.25 (GH iOS #38) added the
     /// longevity-panel markers — ApoB, Lp(a), Omega-3 index, fasting insulin (all
@@ -112,39 +112,60 @@ enum BiomarkerExplainer {
     /// still gets an explainer). hs-CRP / HbA1c / eGFR / GGT / ferritin / fasting
     /// glucose already shipped pre-v1.25 and keep their entries below.
     private static let catalogEntries: [CatalogEntry] = [
-        .init(slug: "total-cholesterol", aliases: ["Gesamtcholesterin", "Total cholesterol", "Cholesterin", "Cholesterol"]),
+        .init(
+            slug: "total-cholesterol",
+            aliases: ["Gesamtcholesterin", "Total cholesterol", "Cholesterin", "Cholesterol", "Totaal cholesterol"]
+        ),
         .init(slug: "ldl", aliases: ["LDL-Cholesterin", "LDL cholesterol", "LDL"]),
         .init(slug: "hdl", aliases: ["HDL-Cholesterin", "HDL cholesterol", "HDL"]),
-        .init(slug: "triglycerides", aliases: ["Triglyceride", "Triglycerides", "Trigs"]),
+        .init(slug: "triglycerides", aliases: ["Triglyceride", "Triglycerides", "Trigs", "Triglyceriden"]),
         // v1.25 longevity panel — atherogenic-particle burden + genetic + RBC EPA/DHA.
         .init(slug: "apob", aliases: ["Apolipoprotein B (ApoB)", "Apolipoprotein B", "ApoB", "Apo B"]),
         .init(slug: "lp-a", aliases: ["Lipoprotein(a)", "Lp(a)", "Lipoprotein a", "Lpa"]),
         .init(slug: "omega-3-index", aliases: ["Omega-3-Index", "Omega-3 index", "Omega 3 Index", "O3I"]),
-        .init(slug: "fasting-glucose", aliases: ["Nüchternglukose", "Fasting glucose", "Glukose", "Glucose", "Blutzucker"]),
+        .init(
+            slug: "fasting-glucose",
+            aliases: [
+                "Nüchternglukose", "Fasting glucose", "Glukose", "Glucose", "Blutzucker",
+                "Nuchtere glucose", "Nuchter glucose", "Bloedsuiker"
+            ]
+        ),
         .init(slug: "hba1c", aliases: ["HbA1c", "Langzeitzucker"]),
         // v1.25 longevity panel — fasting insulin (catalog seed) + HOMA-IR (derived).
-        .init(slug: "fasting-insulin", aliases: ["Nüchtern-Insulin", "Fasting insulin", "Nüchterninsulin", "Insulin (nüchtern)"]),
-        .init(slug: "homa-ir", aliases: ["HOMA-IR", "HOMA IR", "HOMA", "Insulinresistenz (HOMA-IR)"]),
+        .init(
+            slug: "fasting-insulin",
+            aliases: [
+                "Nüchtern-Insulin", "Fasting insulin", "Nüchterninsulin", "Insulin (nüchtern)",
+                "Nuchter insuline", "Nuchtere insuline"
+            ]
+        ),
+        .init(slug: "homa-ir", aliases: ["HOMA-IR", "HOMA IR", "HOMA", "Insulinresistenz (HOMA-IR)", "Insulineresistentie (HOMA-IR)"]),
         .init(slug: "tsh", aliases: ["TSH", "Thyreotropin"]),
-        .init(slug: "ft3", aliases: ["Freies T3", "Free T3", "FT3"]),
-        .init(slug: "ft4", aliases: ["Freies T4", "Free T4", "FT4"]),
-        .init(slug: "ferritin", aliases: ["Ferritin"]),
-        .init(slug: "transferrin-saturation", aliases: ["Transferrinsättigung", "Transferrin saturation", "TSAT"]),
-        .init(slug: "vitamin-d", aliases: ["Vitamin D (25-OH)", "Vitamin D", "25-OH-Vitamin-D", "Vitamin D3"]),
-        .init(slug: "vitamin-b12", aliases: ["Vitamin B12", "B12", "Cobalamin"]),
-        .init(slug: "folate", aliases: ["Folsäure", "Folate", "Folat", "Folsaeure"]),
-        .init(slug: "hs-crp", aliases: ["hs-CRP", "CRP", "C-reaktives Protein", "C-reactive protein"]),
+        .init(slug: "ft3", aliases: ["Freies T3", "Free T3", "FT3", "Vrij T3"]),
+        .init(slug: "ft4", aliases: ["Freies T4", "Free T4", "FT4", "Vrij T4"]),
+        .init(slug: "ferritin", aliases: ["Ferritin", "Ferritine"]),
+        .init(
+            slug: "transferrin-saturation",
+            aliases: ["Transferrinsättigung", "Transferrin saturation", "TSAT", "Transferrineverzadiging"]
+        ),
+        .init(
+            slug: "vitamin-d",
+            aliases: ["Vitamin D (25-OH)", "Vitamin D", "25-OH-Vitamin-D", "Vitamin D3", "Vitamine D", "Vitamine D (25-OH)"]
+        ),
+        .init(slug: "vitamin-b12", aliases: ["Vitamin B12", "B12", "Cobalamin", "Vitamine B12", "Cobalamine"]),
+        .init(slug: "folate", aliases: ["Folsäure", "Folate", "Folat", "Folsaeure", "Foliumzuur", "Folaat"]),
+        .init(slug: "hs-crp", aliases: ["hs-CRP", "CRP", "C-reaktives Protein", "C-reactive protein", "C-reactief proteïne"]),
         .init(slug: "creatinine", aliases: ["Kreatinin", "Creatinine"]),
         .init(slug: "egfr", aliases: ["eGFR", "GFR"]),
-        .init(slug: "alt", aliases: ["ALT (GPT)", "ALT", "GPT", "Alanin-Aminotransferase"]),
-        .init(slug: "ast", aliases: ["AST (GOT)", "AST", "GOT", "Aspartat-Aminotransferase"]),
-        .init(slug: "ggt", aliases: ["GGT", "Gamma-GT", "γ-GT", "Gamma-Glutamyltransferase"]),
+        .init(slug: "alt", aliases: ["ALT (GPT)", "ALT", "GPT", "Alanin-Aminotransferase", "Alanine-aminotransferase"]),
+        .init(slug: "ast", aliases: ["AST (GOT)", "AST", "GOT", "Aspartat-Aminotransferase", "Aspartaat-aminotransferase"]),
+        .init(slug: "ggt", aliases: ["GGT", "Gamma-GT", "γ-GT", "Gamma-Glutamyltransferase", "Gamma-glutamyltransferase"]),
         .init(slug: "sodium", aliases: ["Natrium", "Sodium", "Na"]),
         .init(slug: "potassium", aliases: ["Kalium", "Potassium", "K"]),
-        .init(slug: "hemoglobin", aliases: ["Hämoglobin", "Hemoglobin", "Hb", "Haemoglobin"]),
-        .init(slug: "hematocrit", aliases: ["Hämatokrit", "Hematocrit", "Hkt", "Haematokrit"]),
-        .init(slug: "wbc", aliases: ["Leukozyten", "White blood cells", "WBC", "Leukocytes"]),
-        .init(slug: "platelets", aliases: ["Thrombozyten", "Platelets", "PLT"])
+        .init(slug: "hemoglobin", aliases: ["Hämoglobin", "Hemoglobin", "Hb", "Haemoglobin", "Hemoglobine"]),
+        .init(slug: "hematocrit", aliases: ["Hämatokrit", "Hematocrit", "Hkt", "Haematokrit", "Hematocriet", "Ht"]),
+        .init(slug: "wbc", aliases: ["Leukozyten", "White blood cells", "WBC", "Leukocytes", "Leukocyten", "Witte bloedcellen"]),
+        .init(slug: "platelets", aliases: ["Thrombozyten", "Platelets", "PLT", "Trombocyten", "Bloedplaatjes"])
     ]
 
     /// Catalogue slugs that carry an authored explainer — exposed for tests so

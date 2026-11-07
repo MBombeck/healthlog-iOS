@@ -205,6 +205,9 @@ struct StepUpArmPicker: View {
     /// Whether the account has an active TOTP factor (drives the TOTP arm).
     /// Read from the live status, never assumed.
     let hasTotp: Bool
+    /// SEC — the proofs the account can give (`GET /api/auth/me/mfa`
+    /// `proofMethods`, without `oidc`); `nil` keeps the 1.4 choice.
+    let proofMethods: [String]?
     let onElevation: (ConsumableElevation) async -> Void
 
     /// The route this proof is for; its ``MfaManagementOperation/requiresFreshFactor``
@@ -214,21 +217,30 @@ struct StepUpArmPicker: View {
         hasTotp: Bool,
         onElevation: @escaping (ConsumableElevation) async -> Void
     ) {
-        self.init(requiresFresh: operation.requiresFreshFactor, hasTotp: hasTotp, onElevation: onElevation)
+        self.init(requiresFresh: operation.requiresFreshFactor, hasTotp: hasTotp, proofMethods: nil, onElevation: onElevation)
     }
 
     /// R2 / #115 A3 — for a gate whose strength depends on the account rather
     /// than on the route alone: adding a factor on an account that has one
     /// (`freshFactorIfEnrolled`), and the record actions (`requireRecentProof`),
     /// where an account with a second factor must prove that factor or a passkey.
+    ///
+    /// SEC — `proofMethods` (the account's own list, `nil` on an older server)
+    /// narrows the arms to the ones this account can give (``StepUpArms``).
     init(
         requiresFresh: Bool,
         hasTotp: Bool,
+        proofMethods: [String]? = nil,
         onElevation: @escaping (ConsumableElevation) async -> Void
     ) {
         self.requiresFresh = requiresFresh
         self.hasTotp = hasTotp
+        self.proofMethods = proofMethods
         self.onElevation = onElevation
+    }
+
+    private var arms: StepUpArms {
+        StepUpArms(requiresFresh: requiresFresh, hasTotp: hasTotp, proofMethods: proofMethods)
     }
 
     /// A picker error is either a catalog key (our own copy) or verbatim server
@@ -253,20 +265,33 @@ struct StepUpArmPicker: View {
             // says "Confirm with …", and the sheets around the picker carry
             // their own title or lead.
 
-            // Passkey is always offered — a 409 (no passkey on the account) is
-            // the honest discovery path and points the user at another arm.
-            HLButton(String(localized: "settings.security.twoFactor.stepUp.passkey"), variant: .primary, isLoading: busy) {
-                Task { await mintPasskey() }
+            // Without the account's list the passkey is always offered: a 409
+            // (no passkey on the account) is the honest discovery path and
+            // points the user at another arm. With it, only when it works.
+            if arms.nothingInApp {
+                // POLISH-C (C1) — with a second factor the only proof left is
+                // a security key, which the app cannot ask for; say that
+                // instead of the SSO sentence.
+                Text(requiresFresh ? "stepUp.record.securityKeyOnly" : "stepUp.record.noProofInApp")
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                webSecurityRow
             }
-            .disabled(busy)
+            if arms.passkey {
+                HLButton(String(localized: "settings.security.twoFactor.stepUp.passkey"), variant: .primary, isLoading: busy) {
+                    Task { await mintPasskey() }
+                }
+                .disabled(busy)
+            }
 
-            if hasTotp {
+            if arms.totp {
                 codeField("settings.security.twoFactor.stepUp.totpLabel", text: $totpCode)
                 HLButton(String(localized: "settings.security.twoFactor.stepUp.totpSubmit"), variant: .secondary, isLoading: busy) {
                     Task { await mint { try await store.mint(totp: totpCode) } }
                 }
                 .disabled(busy || totpCode.isEmpty)
-            } else if requiresFresh {
+            } else if requiresFresh, arms.passkey {
                 // Security-key-only account: the passkey arm above is the only
                 // native fresh factor. A security-key assertion would also work
                 // server-side, but that ceremony is web-only here — say so
@@ -276,19 +301,10 @@ struct StepUpArmPicker: View {
                 Text("settings.security.twoFactor.stepUp.freshOnWeb")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
-                HLSettingsActionRow(
-                    title: "settings.security.web.manage",
-                    presents: .external
-                ) {
-                    // Ohne eingerichteten Server gibt es keine Kontoflaeche zu oeffnen.
-                    if let url = AccountSecurityWebLink.url(keychain: container?.keychain) {
-                        openURL(url)
-                    }
-                }
-                .accessibilityIdentifier("settings.security.twoFactor.stepUp.webLink")
+                webSecurityRow
             }
 
-            if !requiresFresh {
+            if arms.password {
                 secureField("settings.security.twoFactor.stepUp.passwordLabel", text: $password)
                 HLButton(String(localized: "settings.security.twoFactor.stepUp.passwordSubmit"), variant: .secondary, isLoading: busy) {
                     Task { await mint { try await store.mint(password: password) } }
@@ -302,6 +318,19 @@ struct StepUpArmPicker: View {
                     .foregroundStyle(HLColor.statusBad)
             }
         }
+    }
+
+    private var webSecurityRow: some View {
+        HLSettingsActionRow(
+            title: "settings.security.web.manage",
+            presents: .external
+        ) {
+            // Ohne eingerichteten Server gibt es keine Kontoflaeche zu oeffnen.
+            if let url = AccountSecurityWebLink.url(keychain: container?.keychain) {
+                openURL(url)
+            }
+        }
+        .accessibilityIdentifier("settings.security.twoFactor.stepUp.webLink")
     }
 
     @ViewBuilder
@@ -344,6 +373,9 @@ struct StepUpArmPicker: View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             Text(label).font(.hlCaption).foregroundStyle(HLText.secondary)
             TextField("", text: text)
+                // A11Y (1.5) — the field says what it asks for; the caption
+                // above is a separate element VoiceOver reads first.
+                .accessibilityLabel(Text(label))
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
                 .font(.hlBody)
@@ -357,6 +389,9 @@ struct StepUpArmPicker: View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             Text(label).font(.hlCaption).foregroundStyle(HLText.secondary)
             SecureField("", text: text)
+                // A11Y (1.5) — the field says what it asks for; the caption
+                // above is a separate element VoiceOver reads first.
+                .accessibilityLabel(Text(label))
                 .textContentType(.password)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()

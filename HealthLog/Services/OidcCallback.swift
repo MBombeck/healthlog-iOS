@@ -31,6 +31,10 @@ public enum OidcErrorReason: Sendable, Equatable {
     /// no SSO identity yet. The server no longer links on the email alone: the
     /// account signs in once on the web with its own password or passkey.
     case linkRequired
+    /// KONTO (server 1.46.0) — `error=account_deletion_pending`: the account
+    /// is locked inside its deletion grace window. The native redirect carries
+    /// no date today; a `purgeAt` query item is read when one comes.
+    case accountDeletionPending(purgeAt: Date?)
     /// A reason outside the documented closed set (forward-compat) — surfaced
     /// with the generic SSO-failure copy. Carries the raw token for the log
     /// label only (the reason word is a closed vocabulary, not PII/secret).
@@ -48,6 +52,7 @@ public enum OidcErrorReason: Sendable, Equatable {
         case "registration-disabled": self = .registrationDisabled
         case "rate-limited": self = .rateLimited
         case "link-required": self = .linkRequired
+        case "account-deletion-pending": self = .accountDeletionPending(purgeAt: nil)
         default: self = .unknown(raw)
         }
     }
@@ -74,6 +79,7 @@ public enum OidcErrorReason: Sendable, Equatable {
         case .registrationDisabled: String(localized: "onboarding.sso.error.registrationDisabled")
         case .rateLimited: String(localized: "onboarding.sso.error.rateLimited")
         case .linkRequired: String(localized: "onboarding.sso.error.linkRequired")
+        case let .accountDeletionPending(purgeAt): AccountDeletionCopy.signInRefusal(purgeAt: purgeAt)
         case .unknown: String(localized: "onboarding.sso.error.generic")
         }
     }
@@ -92,12 +98,14 @@ public enum OidcErrorReason: Sendable, Equatable {
         case .registrationDisabled: "oidc_registration_disabled"
         case .rateLimited: "oidc_rate_limited"
         case .linkRequired: "oidc_link_required"
+        case .accountDeletionPending: "account_deletion_pending"
         case .unknown: "unknown"
         }
     }
 }
 
-/// The parsed outcome of a `healthlog://oidc-callback?…` redirect (#49). One of:
+/// The parsed outcome of a `healthlog://oidc-callback?…` redirect (#49), and,
+/// SEC, of the same query on an `https` return (``OidcReturnRoute``). One of:
 /// a one-time handoff `code`, an `mfa_ticket` (+ offered methods), a closed-set
 /// `error`, or an unrecognized shape.
 public enum OidcCallback: Sendable, Equatable {
@@ -123,7 +131,11 @@ public enum OidcCallback: Sendable, Equatable {
             items.first { $0.name == name }?.value?.nilIfEmpty
         }
         if let error = value("error") {
-            return .error(OidcErrorReason(raw: error))
+            let reason = OidcErrorReason(raw: error)
+            if case .accountDeletionPending = reason {
+                return .error(.accountDeletionPending(purgeAt: AccountDeletionWire.date(value("purgeAt"))))
+            }
+            return .error(reason)
         }
         if let code = value("code") {
             return .code(code)
@@ -148,8 +160,14 @@ public enum OidcNativeFlow {
     public static let callbackScheme = "healthlog"
 
     /// Builds `<baseURL>/api/auth/oidc/login?client=native&code_challenge=<S256>`
-    /// — the authorize entry opened inside the auth session.
-    public static func loginURL(baseURL: URL, codeChallenge: String) -> URL? {
+    /// — the authorize entry opened inside the auth session. SEC — with the
+    /// `https` return (``OidcReturnRoute``) it adds `return=https`; the scheme
+    /// return sends exactly what 1.4 sent.
+    public static func loginURL(
+        baseURL: URL,
+        codeChallenge: String,
+        returnRoute: OidcReturnRoute = .scheme
+    ) -> URL? {
         var comps = URLComponents(
             url: baseURL.appendingPathComponent("/api/auth/oidc/login"),
             resolvingAgainstBaseURL: false
@@ -158,6 +176,9 @@ public enum OidcNativeFlow {
             URLQueryItem(name: "client", value: "native"),
             URLQueryItem(name: "code_challenge", value: codeChallenge)
         ]
+        if case .https = returnRoute {
+            comps?.queryItems?.append(OidcReturnRoute.returnQueryItem)
+        }
         return comps?.url
     }
 }

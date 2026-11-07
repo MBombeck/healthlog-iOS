@@ -47,7 +47,15 @@ struct MetricFHIRMapperTests {
         // quantity to code (its five sibling events are unmapped for the same
         // reason), and `.unknown` is a reading this build cannot name, so no
         // LOINC could be stood behind. Both keep the count invariant.
-        .audioExposureEvent, .unknown
+        .audioExposureEvent, .unknown,
+        // #162 — the four Garmin types are vendor-scaled scores and a load
+        // with no LOINC to stand behind, exported like the WHOOP scores: not.
+        .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+        // POLISH-A A5 (1.5) — of the six server-v1.44 Apple Health types only
+        // the state-of-mind valence stays unexported: the server's table has no
+        // code for it (`loinc: null`), and a self-rated valence has no LOINC.
+        // The other five carry their HealthKit identifier like the server.
+        .stateOfMindValence
     ]
 
     @Test("Every MetricKind has a non-nil mapping")
@@ -82,7 +90,9 @@ struct MetricFHIRMapperTests {
         // deliberately unmapped (see `unmappedWHOOPKinds`) → still 51.
         // Audit B-4 — +2 kinds (audio-exposure event, unknown), both unmapped
         // → still 51. A clinical export never gains a code we invented.
-        #expect(MetricFHIRMapper.allMappings.count == 51)
+        // POLISH-A A5 — +5 server-v1.44 Apple Health types on the HealthKit
+        // CodeSystem, byte-aligned with the server's FHIR table → 56.
+        #expect(MetricFHIRMapper.allMappings.count == 56)
     }
 
     @Test("allMappings has one entry per FHIR-mapped kind, no duplicates")
@@ -313,6 +323,40 @@ struct MetricFHIRMapperTests {
             #expect(
                 mapping?.loinc.system.uri == "https://healthlog.dev/fhir/CodeSystem/healthkit"
             )
+        }
+    }
+
+    // MARK: - Server v1.44 Apple Health types (POLISH-A A5)
+
+    /// The server's FHIR rows for the six v1.44 types (`signals/registry.ts`,
+    /// `fhir`, v1.47.0). None has a LOINC term that means the same thing: the
+    /// Apple ring minutes are day totals (LOINC 55411-3 is one exercise
+    /// session's duration), stand hours, mindful sessions and the AFib burden
+    /// estimate have no term at all. So, like the server, each carries its
+    /// HealthKit identifier on the shared HealthKit CodeSystem.
+    @Test(
+        "the five v1.44 Apple Health types export with the server's HealthKit code, unit and category",
+        arguments: [
+            (MetricKind.exerciseMinutes, "HKQuantityTypeIdentifierAppleExerciseTime", "min", ObservationCategory.activity),
+            (.standMinutes, "HKQuantityTypeIdentifierAppleStandTime", "min", .activity),
+            (.standHours, "HKCategoryTypeIdentifierAppleStandHour", "h", .activity),
+            (.mindfulMinutes, "HKCategoryTypeIdentifierMindfulSession", "min", .activity),
+            (.afibBurden, "HKQuantityTypeIdentifierAtrialFibrillationBurden", "%", .vitalSigns)
+        ]
+    )
+    func server144Rows(kind: MetricKind, code: String, unit: String, category: ObservationCategory) throws {
+        let mapping = try #require(MetricFHIRMapper.mapping(for: kind))
+        #expect(mapping.loinc.code == code)
+        #expect(mapping.loinc.system == .healthKit)
+        #expect(mapping.loinc.physicianReviewPending)
+        #expect(mapping.ucum.unit == unit)
+        #expect(MetricFHIRMapper.category(for: kind) == category)
+    }
+
+    @Test("the valence and the four Garmin scores stay out of the export")
+    func server144AndGarminOmitted() {
+        for kind: MetricKind in [.stateOfMindValence, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad] {
+            #expect(MetricFHIRMapper.mapping(for: kind) == nil, "\(kind.rawValue)")
         }
     }
 }

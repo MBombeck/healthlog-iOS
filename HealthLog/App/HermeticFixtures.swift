@@ -97,7 +97,7 @@
                 // An MFA-enrolled account: password accepted, second factor
                 // required (`data: null` + `meta.mfaRequired`). Otherwise a full
                 // token bundle → the shell.
-                return args.contains("-uitest-mfa-challenge") ? ok(mfaChallengeJSON) : ok(sessionJSON)
+                return KontoFixtures.loginResponse() ?? (args.contains("-uitest-mfa-challenge") ? ok(mfaChallengeJSON) : ok(sessionJSON))
             }
             if path.hasPrefix("/api/auth/mfa/verify") {
                 // The server returns 401 for BOTH a wrong code and a dead ticket,
@@ -141,7 +141,8 @@
         /// (`-uitest-citations`, App Review 1.4.1), the 18-03 sharing family and
         /// the status routes (`+Integrations`): `nil` elsewhere, ONE branch.
         private static func overlayResponse(forPath path: String, method m: String) -> (status: Int, body: Data)? {
-            CitationFixtures.response(forPath: path, method: m) ?? sharingResponse(forPath: path, method: m)
+            CitationFixtures.response(forPath: path, method: m) ?? KontoFixtures.response(forPath: path)
+                ?? sharingResponse(forPath: path, method: m)
         }
 
         /// **18-03 — the sharing family.** The unified sharing journey needs a

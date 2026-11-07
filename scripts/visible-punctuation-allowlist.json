@@ -20,11 +20,6 @@
       "reason": "German instructions for the on-device tag-extraction model. Never rendered."
     },
     {
-      "path": "HealthLog/Services/AI/SmartReminderPhraseService.swift",
-      "contains": "Kurzer Reminder-Titel",
-      "reason": "@Guide description that steers the on-device model's generated reminder title. Never rendered."
-    },
-    {
       "path": "HealthLog/Models/CoachInsight.swift",
       "contains": "2-3 sentences that describe",
       "reason": "@Guide description for the on-device model (English half). Never rendered."

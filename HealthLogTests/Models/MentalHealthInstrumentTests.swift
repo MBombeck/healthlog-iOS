@@ -105,9 +105,8 @@ struct MentalHealthInstrumentTests {
         #expect(who5.actionThreshold == 50)
         #expect(who5.optionOrder == [5, 4, 3, 2, 1, 0])
         #expect(who5.optionGroups == nil)
-        #expect(who5.optionKeyPrefix(forItem: 0) == "mentalHealth.who5Options")
-        #expect(who5.stemKeys == Array(repeating: "who5.period", count: 5))
-        #expect(who5.stemKey(forItem: 0) == "mentalHealth.stems.who5.period")
+        #expect(who5.anchorGroup(forItem: 0) == "all")
+        #expect(who5.stemIDs == Array(repeating: "period", count: 5))
         #expect(!who5.showsFunctionalFollowUp)
         #expect(who5.hasValidatedItems(locale: "de-DE"))
     }
@@ -182,16 +181,15 @@ struct MentalHealthInstrumentTests {
             "duration", "duration", "nights", "quality",
             "impact", "impact", "impact", "problemDuration"
         ])
-        #expect(sci.stemKeys == [
-            "sci.night", "sci.night", "sci.night", "sci.night",
-            "sci.impact", "sci.impact", "sci.impact", "sci.finally"
+        #expect(sci.stemIDs == [
+            "night", "night", "night", "night",
+            "impact", "impact", "impact", "finally"
         ])
-        #expect(sci.optionKeyPrefix(forItem: 0) == "mentalHealth.sciOptions.duration")
-        #expect(sci.optionKeyPrefix(forItem: 2) == "mentalHealth.sciOptions.nights")
-        #expect(sci.optionKeyPrefix(forItem: 7) == "mentalHealth.sciOptions.problemDuration")
-        #expect(sci.stemKey(forItem: 0) == "mentalHealth.stems.sci.night")
-        #expect(sci.stemKey(forItem: 4) == "mentalHealth.stems.sci.impact")
-        #expect(sci.stemKey(forItem: 7) == "mentalHealth.stems.sci.finally")
+        #expect(sci.anchorGroup(forItem: 0) == "duration")
+        #expect(sci.anchorGroup(forItem: 2) == "nights")
+        #expect(sci.anchorGroup(forItem: 7) == "problemDuration")
+        #expect(MentalHealthInstrument.phq9.stemIDs == Array(repeating: "period", count: 9))
+        #expect(MentalHealthInstrument.phq9.anchorGroup(forItem: 8) == "all")
     }
 
     @Test("SCI scores 0–32, bands at 16/17, and follows up on the lower side")

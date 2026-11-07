@@ -269,6 +269,17 @@ struct DashboardSummaryDecodingTests {
         #expect(DashboardMetric.resolve(key: "", legacy: "Gewicht") == "Gewicht")
         // neither → empty, never a crash.
         #expect(DashboardMetric.resolve(key: nil, legacy: nil).isEmpty)
+        // 1.5 — a key the catalog lacks falls back to the legacy field.
+        #expect(DashboardMetric.resolve(key: "dashboard.metric.title.someFuture", legacy: "Neu") == "Neu")
+        // the server's mood and BMI keys (cards.ts at v1.47.1) resolve.
+        for key in [
+            "dashboard.metric.title.mood",
+            "dashboard.metric.title.bmi",
+            "dashboard.metric.unit.mood",
+            "dashboard.metric.unit.bmi"
+        ] {
+            #expect(DashboardMetric.resolve(key: key, legacy: nil) != key, "\(key) missing")
+        }
     }
 
     // MARK: - v0.14 / v1.11.5 — sleep dashboard reads the per-night total in HOURS (no ÷60)

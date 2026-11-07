@@ -249,6 +249,21 @@ public final class SourcePriorityStore {
     /// dass der Operator selbst dann die volle Auswahl sieht, wenn ein
     /// Datentyp z.B. heute nur `APPLE_HEALTH`-Werte hat, morgen aber ein
     /// `WITHINGS`-Sensor synced.
+    /// First server whose ladders take `GARMIN` (`source-priority.ts`,
+    /// v1.47.0). An older one refuses a saved ladder that names it.
+    static let garminLadderMinimumServerVersion = "1.47.0"
+
+    /// POLISH-C (C5) — the tokens the editor offers: the canonical set, plus
+    /// `GARMIN` after `POLAR` on a server known to be at least
+    /// ``garminLadderMinimumServerVersion`` (unknown counts as older).
+    public static func offeredSourceTokens(defaults: UserDefaults = .standard) -> [String] {
+        guard KnownServerVersion.isAtLeast(garminLadderMinimumServerVersion, defaults: defaults),
+              let polar = canonicalSourceTokens.firstIndex(of: "POLAR") else { return canonicalSourceTokens }
+        var tokens = canonicalSourceTokens
+        tokens.insert("GARMIN", at: polar + 1)
+        return tokens
+    }
+
     public static let canonicalSourceTokens: [String] = [
         "APPLE_HEALTH",
         "WITHINGS",
@@ -312,6 +327,7 @@ public struct SourcePriorityRow: Sendable, Equatable, Identifiable {
         "POLAR": "Polar",
         "NIGHTSCOUT": "Nightscout",
         "HEALTH_CONNECT": "Health Connect",
+        "GARMIN": "Garmin",
         "TELEGRAM": "Telegram",
         "MCP": "MCP",
         "MANUAL": "Manual",
@@ -338,6 +354,7 @@ public struct SourcePriorityRow: Sendable, Equatable, Identifiable {
         "POLAR": "heart.circle.fill",
         "NIGHTSCOUT": "drop.fill",
         "HEALTH_CONNECT": "link.circle.fill",
+        "GARMIN": "watch.analog",
         "MANUAL": "hand.tap.fill",
         "IMPORT": "square.and.arrow.down.fill",
         "COMPUTED": "function"

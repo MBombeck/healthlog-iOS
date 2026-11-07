@@ -22,18 +22,56 @@ struct StatsRow: View {
     /// it so weight/BP convert. Glucose stats are already server-converted.
     var kind: MetricKind?
     var units: UnitPreferences = .standard
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         if let stats {
-            HStack(spacing: HLSpace.sm) {
-                StatBox(label: String(localized: "Min"), value: format(stats.min), unit: unit)
-                StatBox(label: String(localized: "chart.stat.mean"), value: format(stats.mean), unit: unit)
-                StatBox(label: String(localized: "Max"), value: format(stats.max), unit: unit)
-                if let median {
-                    StatBox(label: String(localized: "chart.stat.median"), value: format(median), unit: unit)
+            let boxes = Self.boxes(stats: stats, median: median, format: format)
+            Group {
+                // POLISH-B (SHOTS F-AX-STATS) — four boxes in one row cut
+                // "Medi…" and "mm…" at the accessibility sizes; there they
+                // stand two by two and their text wraps.
+                if Self.stacks(dynamicTypeSize) {
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: HLSpace.sm), GridItem(.flexible())],
+                        alignment: .leading,
+                        spacing: HLSpace.sm
+                    ) {
+                        ForEach(boxes) { box in
+                            StatBox(label: box.label, value: box.value, unit: unit)
+                        }
+                    }
+                } else {
+                    HStack(spacing: HLSpace.sm) {
+                        ForEach(boxes) { box in
+                            StatBox(label: box.label, value: box.value, unit: unit)
+                        }
+                    }
                 }
             }
             .accessibilityElement(children: .contain)
+        }
+    }
+
+    /// From the accessibility sizes on the boxes stand two by two.
+    static func stacks(_ size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
+    }
+
+    /// Min, mean, max and, when there is one, the median, in that order.
+    static func boxes(stats: SeriesStats, median: Double?, format: (Double) -> String) -> [Box] {
+        [
+            Box(label: String(localized: "Min"), value: format(stats.min)),
+            Box(label: String(localized: "chart.stat.mean"), value: format(stats.mean)),
+            Box(label: String(localized: "Max"), value: format(stats.max))
+        ] + (median.map { [Box(label: String(localized: "chart.stat.median"), value: format($0))] } ?? [])
+    }
+
+    struct Box: Identifiable, Equatable {
+        let label: String
+        let value: String
+        var id: String {
+            label
         }
     }
 
@@ -73,20 +111,25 @@ struct StatBox: View {
     let label: String
     let value: String
     let unit: String
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // A2 (v0153 a11y MEDIUM) — up to 4 boxes share a 393 pt row (~90 pt
+        // each), doubled on the BP systolic/diastolic strip: one line each,
+        // scaled down rather than wrapped. POLISH-B (SHOTS F-AX-STATS) — from
+        // the accessibility sizes on the row is a 2×2 grid (``StatsRow``) and
+        // the text wraps instead, never cut.
+        let wraps = dynamicTypeSize.isAccessibilitySize
         VStack(spacing: HLSpace.xxs) {
-            // A2 (v0153 a11y MEDIUM) — up to 4 boxes share a 393 pt row (~90 pt
-            // each), doubled on the BP systolic/diastolic strip. At AX4/AX5 the
-            // caption/value/unit would wrap or clip silently; clamp to one line
-            // and scale down instead of truncating.
             Text(label).font(.hlCaption).foregroundStyle(HLText.secondary)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .lineLimit(wraps ? nil : 1).minimumScaleFactor(wraps ? 1 : 0.7)
             Text(value).font(.hlMetric(.headline)).foregroundStyle(HLText.primary).monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .lineLimit(wraps ? nil : 1).minimumScaleFactor(wraps ? 1 : 0.7)
             Text(unit).font(.hlCaption).foregroundStyle(HLText.tertiary)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .lineLimit(wraps ? nil : 1).minimumScaleFactor(wraps ? 1 : 0.7)
         }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: wraps)
         .frame(maxWidth: .infinity)
         .padding(.vertical, HLSpace.sm)
         .background(HLSurface.tertiary)

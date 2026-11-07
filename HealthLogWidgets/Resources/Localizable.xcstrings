@@ -15,6 +15,12 @@
             "state": "translated",
             "value": "Opens HealthLog straight to logging an entry."
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opent HealthLog direct om een registratie vast te leggen."
+          }
         }
       }
     },
@@ -31,6 +37,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Capture"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vastleggen"
           }
         }
       }
@@ -49,6 +61,12 @@
             "state": "translated",
             "value": "Capture"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vastleggen"
+          }
         }
       }
     },
@@ -65,6 +83,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "HealthLogs Stimmungs-Auswahl öffnen."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open de stemmingskiezer van HealthLog."
           }
         }
       },
@@ -84,6 +108,12 @@
             "state": "translated",
             "value": "Stimmung erfassen"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stemming vastleggen"
+          }
         }
       },
       "comment": "Log-mood control — name shown in the controls gallery"
@@ -101,6 +131,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stimmung erfassen"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stemming vastleggen"
           }
         }
       },
@@ -120,6 +156,12 @@
             "state": "translated",
             "value": "Marks your next due dose as taken."
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markeert je volgende dosis als ingenomen."
+          }
         }
       }
     },
@@ -136,6 +178,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Next dose: taken"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volgende dosis: ingenomen"
           }
         }
       }
@@ -154,6 +202,12 @@
             "state": "translated",
             "value": "Taken"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenomen"
+          }
         }
       }
     },
@@ -169,6 +223,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Due in %@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Over %@"
           }
         }
       }
@@ -186,6 +246,12 @@
             "state": "translated",
             "value": "Overdue by %@"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ te laat"
+          }
         }
       }
     },
@@ -201,6 +267,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Taken"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenomen"
           }
         }
       }
@@ -219,6 +291,12 @@
             "state": "translated",
             "value": "Taken"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenomen"
+          }
         }
       }
     },
@@ -235,6 +313,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tap again to confirm"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tik nogmaals om te bevestigen"
           }
         }
       }
@@ -253,6 +337,12 @@
             "state": "translated",
             "value": "Tap again to confirm the intake"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tik nogmaals om de inname te bevestigen"
+          }
         }
       }
     },
@@ -268,6 +358,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Records %@ as taken"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registreert %@ als ingenomen"
           }
         }
       }
@@ -286,6 +382,12 @@
             "state": "translated",
             "value": "due at %@"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "om %@"
+          }
         }
       }
     },
@@ -302,6 +404,12 @@
             "state": "translated",
             "value": "overdue"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "te laat"
+          }
         }
       }
     },
@@ -317,6 +425,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "remaining"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "resterend"
           }
         }
       }
@@ -335,6 +449,12 @@
             "state": "translated",
             "value": "Reminder snoozed"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herinnering gesluimerd"
+          }
         }
       }
     },
@@ -352,6 +472,12 @@
             "state": "translated",
             "value": "Taken"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenomen"
+          }
         }
       }
     },
@@ -367,6 +493,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Taken at %@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenomen om %@"
           }
         }
       }
@@ -385,6 +517,12 @@
             "state": "translated",
             "value": "Today’s medication adherence as a ring."
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je therapietrouw van vandaag als ring."
+          }
         }
       }
     },
@@ -401,6 +539,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld of %2$lld doses"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld van %2$lld doses"
           }
         }
       }
@@ -419,6 +563,12 @@
             "state": "translated",
             "value": "Adherence"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Therapietrouw"
+          }
         }
       }
     },
@@ -435,6 +585,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Today’s adherence"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Therapietrouw vandaag"
           }
         }
       }
@@ -453,6 +609,12 @@
             "state": "translated",
             "value": "today"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vandaag"
+          }
         }
       }
     },
@@ -469,6 +631,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fair"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matig"
           }
         }
       }
@@ -487,6 +655,12 @@
             "state": "translated",
             "value": "Low"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laag"
+          }
         }
       }
     },
@@ -503,6 +677,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Strong"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterk"
           }
         }
       }
@@ -522,6 +702,12 @@
             "state": "translated",
             "value": "Your selection"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigen selectie"
+          }
         }
       }
     },
@@ -538,6 +724,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shows your current health score as a ring."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toont je huidige gezondheidsscore als ring."
           }
         }
       }
@@ -556,6 +748,12 @@
             "state": "translated",
             "value": "No data"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen gegevens"
+          }
         }
       }
     },
@@ -569,6 +767,12 @@
           }
         },
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Score"
+          }
+        },
+        "nl": {
           "stringUnit": {
             "state": "translated",
             "value": "Score"
@@ -590,6 +794,12 @@
             "state": "translated",
             "value": "Health score"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gezondheidsscore"
+          }
         }
       }
     },
@@ -606,6 +816,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shows your most recent reading."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toont je meest recente meting."
           }
         }
       }
@@ -624,6 +840,12 @@
             "state": "translated",
             "value": "No reading yet"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen meting"
+          }
         }
       }
     },
@@ -640,6 +862,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Measurement"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meting"
           }
         }
       }
@@ -658,6 +886,12 @@
             "state": "translated",
             "value": "Latest measurement"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laatste meting"
+          }
         }
       }
     },
@@ -674,6 +908,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stimmung erfassen: %@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stemming vastleggen: %@"
           }
         }
       },
@@ -693,6 +933,12 @@
             "state": "translated",
             "value": "Sieh deine letzte Stimmung und erfasse mit einem Tipp eine neue."
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bekijk je laatste stemming en leg met één tik een nieuwe vast."
+          }
         }
       },
       "comment": "Mood widget — configuration description"
@@ -710,6 +956,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Heute noch nicht erfasst"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vandaag nog niet vastgelegd"
           }
         }
       },
@@ -729,6 +981,12 @@
             "state": "translated",
             "value": "Stimmung"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stemming"
+          }
         }
       },
       "comment": "Mood widget — header label"
@@ -746,6 +1004,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Erfasst %@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vastgelegd om %@"
           }
         }
       },
@@ -765,6 +1029,12 @@
             "state": "translated",
             "value": "Wie geht's dir?"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoe gaat het met je?"
+          }
         }
       },
       "comment": "Mood widget — quick-log prompt above the face row"
@@ -782,6 +1052,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zum Erfassen tippen"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tik om vast te leggen"
           }
         }
       },
@@ -801,6 +1077,12 @@
             "state": "translated",
             "value": "Stimmung"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stemming"
+          }
         }
       },
       "comment": "Mood widget — configuration display name"
@@ -819,6 +1101,12 @@
             "state": "translated",
             "value": "Your next scheduled medication with a one-tap “Taken” button."
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je volgende geplande medicijn met een knop ‘Ingenomen’ voor één tik."
+          }
         }
       }
     },
@@ -835,6 +1123,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "due at %@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "om %@"
           }
         }
       }
@@ -853,6 +1147,12 @@
             "state": "translated",
             "value": "Nothing due"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niets gepland"
+          }
         }
       }
     },
@@ -869,6 +1169,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Next dose"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volgende dosis"
           }
         }
       }
@@ -887,6 +1193,12 @@
             "state": "translated",
             "value": "Taken"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenomen"
+          }
         }
       }
     },
@@ -904,6 +1216,12 @@
             "state": "translated",
             "value": "Next dose"
           }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volgende dosis"
+          }
         }
       }
     },
@@ -920,6 +1238,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Out of date, open app"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verouderd, open de app"
           }
         }
       }

@@ -46,6 +46,10 @@ struct HealthSyncCapabilityRegistry: Sendable {
 
     private let adapters: [HealthSyncCapability: HealthSyncCapabilityAdapter]
 
+    // One arm per capability: the exhaustive binding switch IS the contract
+    // (rule 2 above), so its complexity grows by one with every capability.
+    // MIRROR (1.5) took it from twelve arms to thirteen.
+    // swiftlint:disable:next cyclomatic_complexity
     init(
         speziSampleCollection: @escaping Run,
         workoutImport: @escaping Run,
@@ -57,7 +61,8 @@ struct HealthSyncCapabilityRegistry: Sendable {
         appleMedicationImport: @escaping Run,
         cycleImport: @escaping Run,
         heartHealthEvents: @escaping Run,
-        outboxDrain: @escaping Run
+        outboxDrain: @escaping Run,
+        serverMirror: @escaping Run
     ) {
         var built: [HealthSyncCapability: HealthSyncCapabilityAdapter] = [:]
         for capability in HealthSyncCapability.allCases {
@@ -74,6 +79,7 @@ struct HealthSyncCapabilityRegistry: Sendable {
                 case .cycleImport: cycleImport
                 case .heartHealthEvents: heartHealthEvents
                 case .outboxDrain: outboxDrain
+                case .serverMirror: serverMirror
                 }
             built[capability] = HealthSyncCapabilityAdapter(
                 capability: capability,
@@ -100,7 +106,8 @@ struct HealthSyncCapabilityRegistry: Sendable {
             appleMedicationImport: { _ in .unsupported(.appleMedicationImport) },
             cycleImport: { _ in .unsupported(.cycleImport) },
             heartHealthEvents: { _ in .unsupported(.heartHealthEvents) },
-            outboxDrain: { _ in .unsupported(.outboxDrain) }
+            outboxDrain: { _ in .unsupported(.outboxDrain) },
+            serverMirror: { _ in .unsupported(.serverMirror) }
         )
     }
 
@@ -136,8 +143,8 @@ struct HealthSyncCapabilityRegistry: Sendable {
             && sampleTypeIdentifiers.count == HealthLogSampleTypeRegistry.expectedCount
     }
 
-    /// Every capability the registry knows, including the ten non-sample
-    /// importers, each present exactly once.
+    /// Every capability the registry knows, including the eleven non-sample
+    /// importers (the server mirror since 1.5), each present exactly once.
     var namesEveryCapability: Bool {
         capabilities == Set(HealthSyncCapability.allCases)
     }
@@ -191,7 +198,9 @@ struct HealthSyncCapabilityRegistry: Sendable {
              .heartHealthEvents,
              .outboxDrain:
             .sharedUpload
-        case .ecgUpload, .moodStateOfMindImport, .appleMedicationImport, .cycleImport:
+        // MIRROR (1.5) — the server mirror reads one list page and writes into
+        // Apple Health; it never posts through the batch uploader.
+        case .ecgUpload, .moodStateOfMindImport, .appleMedicationImport, .cycleImport, .serverMirror:
             .independent
         }
     }

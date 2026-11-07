@@ -96,7 +96,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
         HLSettingsCard(
             icon: "link.circle.fill",
             title: LocalizedStringKey(displayName),
-            footer: store.isConnected == true ? nil : "integration.oauth.howItWorks",
+            footer: store.isConnected == true || store.isRetired ? nil : "integration.oauth.howItWorks",
             trailing: { statusPill },
             content: { connectionBody }
         )
@@ -107,11 +107,24 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
     /// or while own credentials are stored (so they can be removed), never
     /// beside a connection that already works without them.
     private var showsCredentialsCard: Bool {
-        store.isConnected != true || store.hasOwnCredentials == true
+        // KONTO (#149) — after the Fitbit turndown there is nothing left
+        // to connect, so no own-app form either; stored credentials can still
+        // be removed.
+        if store.isRetired { return store.hasOwnCredentials == true }
+        return store.isConnected != true || store.hasOwnCredentials == true
     }
 
     @ViewBuilder
     private var statusPill: some View {
+        if store.isRetired {
+            HLStatusPill(.disconnected(label: String(localized: "integration.fitbit.retired.pill")))
+        } else {
+            connectionPill
+        }
+    }
+
+    @ViewBuilder
+    private var connectionPill: some View {
         switch store.isConnected {
         case .some(true):
             // #139 — a connected provider's pill follows `health.state`; a
@@ -133,6 +146,9 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
 
     private var connectionBody: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
+            if let retirement = store.retirement {
+                FitbitRetirementNotice(retirement: retirement)
+            }
             // R2 Folge/Status — die einzige Zeile, die der Kartenkopf nicht
             // schon trägt. Die frühere „Tippe unten, um zu verbinden."-Caption
             // im Nicht-verbunden-Zweig (Audit-Gruppe 3) ist ersatzlos gefallen:
@@ -141,7 +157,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                 Text("Last sync \(status.lastSync?.formatted(.relative(presentation: .named)) ?? "—")")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                if let health = status.health {
+                if let health = status.health, !store.isRetired {
                     ConnectionHealthSection(
                         health: health,
                         supportedActions: supportedHealthActions,
@@ -195,8 +211,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("integration.byo.clientId")
                 SecureField(String(localized: "integration.byo.clientSecret.placeholder"), text: $clientSecretDraft)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                    .hlSecretEntry()
                     .accessibilityIdentifier("integration.byo.clientSecret")
                 // R9 — nachgeordnete Vollbreiten-Aktion: das `.primary` dieses
                 // Screens ist „Verbinden" in der Karte darüber.
@@ -253,7 +268,15 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
 
     @ViewBuilder
     private var actions: some View {
-        if let status = store.status, status.connected {
+        if store.isRetired {
+            // KONTO (#149) — Google turned Fitbit off: connect, sync and
+            // test are gone for good. Disconnecting stays; the data stays too.
+            if store.status?.connected == true {
+                HLButton("Disconnect", variant: .destructive) {
+                    Task { await store.disconnect() }
+                }
+            }
+        } else if let status = store.status, status.connected {
             if store.supportsManualSync {
                 // CU-35 (1) — every server-OAuth provider has `POST
                 // /api/<provider>/sync` since v1.32.28, not just Fitbit.

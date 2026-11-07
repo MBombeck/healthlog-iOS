@@ -16,16 +16,22 @@ import Foundation
 struct ChatRequestBody: Encodable {
     let conversationId: String?
     let message: String
-    let locale: String
+    /// `nil` leaves the field out: servers before 1.46.2 accept only `de` /
+    /// `en` here and resolve any other reader's language themselves
+    /// (``AppLanguage/chatServerCode(defaults:)``).
+    let locale: String?
     /// Wire `scope` ({ sources, window }) — `nil` for an unscoped turn.
     let scope: CoachScopeWire?
     /// First-turn composer-seed nudge — `nil` when the turn carries none.
     let prefill: String?
+    /// 1.5 COACH-R (v1.41) — the answer to a fact or plan proposal, sent as
+    /// `memoryDecision` / `planDecision`. `nil` on every other turn.
+    var decision: CoachServerService.TurnDecision?
 
     init(
         conversationId: String?,
         message: String,
-        locale: String,
+        locale: String?,
         scope: CoachScopeWire? = nil,
         prefill: String? = nil
     ) {
@@ -42,14 +48,21 @@ struct ChatRequestBody: Encodable {
         case locale
         case scope
         case prefill
+        case memoryDecision
+        case planDecision
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(conversationId, forKey: .conversationId)
         try container.encode(message, forKey: .message)
-        try container.encode(locale, forKey: .locale)
+        try container.encodeIfPresent(locale, forKey: .locale)
         try container.encodeIfPresent(scope, forKey: .scope)
         try container.encodeIfPresent(prefill, forKey: .prefill)
+        switch decision {
+        case let .memory(answer): try container.encode(answer, forKey: .memoryDecision)
+        case let .plan(answer): try container.encode(answer, forKey: .planDecision)
+        case nil: break
+        }
     }
 }

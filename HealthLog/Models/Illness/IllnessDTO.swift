@@ -112,6 +112,9 @@ public struct IllnessEpisodeDTO: Codable, Sendable, Equatable, Identifiable, Has
     public let note: String?
     public let createdAt: String
     public let updatedAt: String
+    /// #141 (v1.43) — related records, sent by the single-episode read
+    /// only; `nil` on list rows and from an older server.
+    public internal(set) var related: RelatedLinks?
 
     /// True while the episode is open (unresolved) — drives the rest-mode
     /// `hasActiveEpisode` annotation and the journal's active/resolved filter.
@@ -155,6 +158,7 @@ public struct IllnessEpisodeDTO: Codable, Sendable, Equatable, Identifiable, Has
         note = try c.decodeIfPresent(String.self, forKey: .note)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
+        related = try? c.decodeIfPresent(RelatedLinks.self, forKey: .related)
     }
 }
 

@@ -46,6 +46,10 @@ struct SettingsAIScreen: View {
     /// Scrollbereich dieser Seite).
     @State private var refreshTick: Int = 0
 
+    /// 1.5 COACH-R — the Coach's thinking depth, read once per visit. `nil`
+    /// until the read lands; a server without `coachReasoning` shows nothing.
+    @State private var reasoning: CoachReasoningSettingsModel?
+
     var body: some View {
         // Bug 3 (RCA v0.14.8) — anchor the body to `AIConsentStore.revision` so
         // it re-renders on every mode/consent change. `displayedMode` reads
@@ -90,6 +94,11 @@ struct SettingsAIScreen: View {
                 coachCard
             }
 
+            // 1.5 COACH-R — rare, so it waits under „Erweitert".
+            if backend.hasServer, let reasoning, reasoning.state != nil {
+                CoachReasoningAdvanced(model: reasoning)
+            }
+
             if backend.hasServer, let usage = appContainer?.aiCapabilityGate.account?.usage {
                 AIUsageCard(usage: usage) { level in try await AIUsageCard.choose(level, in: appContainer) }
             }
@@ -117,6 +126,12 @@ struct SettingsAIScreen: View {
         }
         // POLISH-SWEEP: success-tick confirms pull-to-refresh round-trip.
         .sensoryFeedback(.success, trigger: refreshTick)
+        .task {
+            guard backend.hasServer, reasoning == nil, let container = appContainer else { return }
+            let model = CoachReasoningSettingsModel(repo: AICoachSettingsRepository(api: container.api))
+            await model.load()
+            reasoning = model
+        }
         .onAppear {
             // v0.13 W4 — if the screen opens already in "Own key" mode (prior
             // grant or pending intent), build the entry model so the card shows

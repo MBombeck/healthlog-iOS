@@ -143,6 +143,16 @@ public final class UnifiedSharingStore {
     /// field is the user's answer and rides as an omitted key, never as `null`.
     public var practiceName: String = ""
 
+    /// L10N-REPORT — the language the PDF is written in. PDF-only; starts as
+    /// the interface language and changes only under "Advanced".
+    public var reportLanguage: ReportLocale = .init(AppLanguage.current)
+
+    /// VISIT — a fixed window preset by "visit.next.report" on
+    /// the next visit (`preparation.from` to `.to`). While set it replaces the
+    /// look-back of ``periodDays``; choosing a look-back or FHIR clears it
+    /// (``UnifiedSharingStore+VisitWindow``).
+    public internal(set) var window: ReportWindow?
+
     /// Leaf ids dropped by the most recent ``setOutputForm(_:)`` because the
     /// newly chosen form may not carry them. Empty on every other path — a
     /// narrowing the user did not ask for has to be visible.
@@ -281,6 +291,7 @@ public final class UnifiedSharingStore {
     /// ``droppedForForm`` so the surface can say it out loud.
     public func setOutputForm(_ form: OutputForm) {
         outputForm = form
+        if !Self.formTakesWindow(form) { window = nil }
         let allowed = Set(offeredLeaves)
         let dropped = profile.chosen.subtracting(allowed)
         droppedForForm = dropped.sorted()

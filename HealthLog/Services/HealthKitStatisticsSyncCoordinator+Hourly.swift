@@ -144,9 +144,7 @@ public protocol HealthKitHourlyStatsBackfilling: AnyObject, Sendable {
                 if Task.isCancelled || allowance.isExpired() || ProcessInfo.processInfo.systemUptime >= deadline {
                     return finishBackfill(.expired, ledger: ledger, lease: lease, rows: sent)
                 }
-                let landed = await SyncTriggerContext.bindingBackfill {
-                    await self.postHours(batch.rows, requiring: lease)
-                }
+                let landed = await postHours(batch.rows, requiring: lease, asBackfill: true)
                 guard landed else {
                     return finishBackfill(.uploadFailed, ledger: ledger, lease: lease, rows: sent)
                 }
@@ -179,11 +177,16 @@ public protocol HealthKitHourlyStatsBackfilling: AnyObject, Sendable {
         /// One batch through the shared uploader (same throttle, backoff,
         /// idempotency key and acceptance gate as every measurement batch).
         /// `true` only when every row landed terminally for the same account.
-        func postHours(_ rows: [HealthKitHourlyStatRow], requiring lease: HealthSyncAuthenticatedLease) async -> Bool {
+        /// SYNC-TRIG (1.5) — `asBackfill` marks the batch on the upload call.
+        func postHours(
+            _ rows: [HealthKitHourlyStatRow],
+            requiring lease: HealthSyncAuthenticatedLease,
+            asBackfill: Bool = false
+        ) async -> Bool {
             do {
                 try lease.requireCurrent()
                 let authLease = try await uploader.captureAuthenticationLeaseIfConfigured()
-                _ = try await uploader.upload(rows.map(\.entry), requiring: authLease)
+                _ = try await uploader.upload(rows.map(\.entry), requiring: authLease, asBackfill: asBackfill)
                 try lease.requireCurrent()
                 return true
             } catch {

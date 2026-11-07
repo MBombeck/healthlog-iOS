@@ -87,6 +87,38 @@ extension MeasurementsRepository {
         return deleted
     }
 
+    /// `{ restored: n }` success body of the restore route.
+    struct RestoreResponse: Codable {
+        let restored: Int
+    }
+
+    /// Body of `POST /api/measurements/restore` (`{ ids }`, strict).
+    struct RestoreRequest: Codable {
+        let ids: [String]
+    }
+
+    /// 1.5 FIX-DATA — the delete-Undo counterpart of the bulk delete
+    /// (`POST /api/measurements/restore`, v1.16.4). From server 1.46.2 one
+    /// blood-pressure half brings back every row deleted with it (the other
+    /// half and the pulse). Not queued on failure: the caller shows the error
+    /// and the reading stays deleted, which a later restore can still undo.
+    ///
+    /// Returns the number of rows the server un-tombstoned.
+    @discardableResult
+    public func restore(ids requested: [String]) async throws -> Int {
+        let ids = requested.filter { !Measurement.isSyntheticServerRowID($0) }
+        guard !ids.isEmpty else { return 0 }
+        precondition(ids.count <= Self.bulkDeleteMaxIDsPerBatch, "measurement restore capped at 200")
+        let req: APIRequest<RestoreResponse> = try .post(
+            "/api/measurements/restore",
+            body: RestoreRequest(ids: ids),
+            idempotencyKey: IdempotencyKey()
+        )
+        let restored = try await api.send(req).restored
+        await invalidateAfterWriteAllKinds()
+        return restored
+    }
+
     // MARK: - Private
 
     private func postBulkDelete(_ ids: [String], idempotencyKey: IdempotencyKey) async throws -> Int {

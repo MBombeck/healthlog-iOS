@@ -11,7 +11,9 @@ import Testing
 /// number with NO other test failing.
 ///
 /// This suite is the lockstep guard. The canonical expected sets below are the
-/// pinned copy of the server data (`release/v1.25.0`, verified 2026-06-28). Every
+/// pinned copy of the server data (tag `v1.46.6`, re-pinned 2026-11-04 for
+/// L10N-MH: Brazil, Portugal, the Netherlands, Belgium and the two combined
+/// sets for a Portuguese or Dutch reader without a region). Every
 /// bundled emergency number, resource id, and contact line is asserted by FULL
 /// structural equality (`CrisisResourceSet: Equatable`) — so editing ANY digit,
 /// url, id, or ordering fails here loudly. It also pins the coarse locale→region
@@ -25,7 +27,7 @@ import Testing
 ///
 /// Pure (no network, no global `MockURLProtocol` handler) → no `.serialized`
 /// needed and immune to the cross-suite handler-stomping flakiness landmine.
-@Suite("Crisis-resource fallback lockstep (v1.25, verified 2026-06-28)")
+@Suite("Crisis-resource fallback lockstep (server v1.46.6)")
 struct CrisisResourceFallbackLockstepTests {
     // MARK: - Canonical expected fixtures (pinned copy of server `crisis-resources.ts`)
 
@@ -75,7 +77,67 @@ struct CrisisResourceFallbackLockstepTests {
         ]
     )
 
-    // MARK: - Full-set lockstep (every number pinned, all three regions)
+    /// Brazil (bare "br" only) — CVV + SAMU as emergency number.
+    private static let expectedBrazil = CrisisResourceSet(
+        emergencyNumber: "192",
+        resources: [
+            CrisisResource(id: "cvv", contacts: ["188", "cvv.org.br/chat"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Portugal ("pt-PT") — SNS 24 + SOS Voz Amiga. Emergency 112.
+    private static let expectedPortugal = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(id: "sns24", contacts: ["808 24 24 24"]),
+            CrisisResource(id: "sosVozAmiga", contacts: ["213 544 545", "sosvozamiga.org"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Portuguese without a region (`PT_BR_AMBIGUOUS`): 112 and the directory
+    /// first, then both countries' lines.
+    private static let expectedPortugueseSpeaking = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"]),
+            CrisisResource(id: "cvv", contacts: ["188", "cvv.org.br/chat"]),
+            CrisisResource(id: "samu", contacts: ["192"]),
+            CrisisResource(id: "sns24", contacts: ["808 24 24 24"]),
+            CrisisResource(id: "sosVozAmiga", contacts: ["213 544 545", "sosvozamiga.org"])
+        ]
+    )
+
+    /// The Netherlands ("nl-NL") — 113 Zelfmoordpreventie. Emergency 112.
+    private static let expectedNetherlands = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(id: "zelfmoordpreventie113", contacts: ["113", "0800-0113", "113.nl"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Belgium ("nl-BE" / "be") — Zelfmoordlijn 1813. Emergency 112.
+    private static let expectedBelgium = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(id: "zelfmoordlijn1813", contacts: ["1813", "zelfmoord1813.be"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Dutch without a region (`NL_BE`): both lines, the directory once at the end.
+    private static let expectedDutchSpeaking = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(id: "zelfmoordpreventie113", contacts: ["113", "0800-0113", "113.nl"]),
+            CrisisResource(id: "zelfmoordlijn1813", contacts: ["1813", "zelfmoord1813.be"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    // MARK: - Full-set lockstep (every number pinned, every region)
 
     @Test("International set matches the pinned server fixture byte-for-byte")
     func internationalSetInLockstep() {
@@ -161,7 +223,8 @@ struct CrisisResourceFallbackLockstepTests {
     }
 
     @Test("everything else → International (incl. plain en, en-GB, other langs, empty, nil)", arguments: [
-        "en", "en-GB", "en-CA", "en-AU", "fr", "fr-FR", "es", "pt-BR", "", "  ", "xx", "german"
+        "en", "en-GB", "en-CA", "en-AU", "en-PT", "en-BR", "en-BE", "en-NL", "fr", "fr-FR", "fr-BE", "es", "",
+        "  ", "xx", "german", "brazil", "nlx"
     ])
     func mapsOtherLocalesToInternational(_ locale: String) {
         #expect(CrisisResourceFallback.forLocale(locale) == Self.expectedInternational)
@@ -190,15 +253,104 @@ struct CrisisResourceFallbackLockstepTests {
         }
     }
 
-    @Test("every bundled region set is one of the three canonical fixtures (no fourth path)")
-    func onlyThreeCanonicalSets() {
-        let all = [
-            CrisisResourceFallback.forLocale("de"),
-            CrisisResourceFallback.forLocale("en-US"),
-            CrisisResourceFallback.forLocale("en")
+    // MARK: - v1.46.6 regions
+
+    @Test("Brazil, Portugal and Portuguese without a region match the pinned fixtures")
+    func portugueseSetsInLockstep() {
+        #expect(CrisisResourceFallback.forLocale("br") == Self.expectedBrazil)
+        #expect(CrisisResourceFallback.forLocale("BR") == Self.expectedBrazil)
+        for tag in ["pt-PT", "pt_PT", "pt-pt", "PT-PT"] {
+            #expect(CrisisResourceFallback.forLocale(tag) == Self.expectedPortugal, "\(tag)")
+        }
+        for tag in ["pt", "pt-BR", "pt_BR", "pt-AO", "pt-MZ"] {
+            #expect(CrisisResourceFallback.forLocale(tag) == Self.expectedPortugueseSpeaking, "\(tag)")
+        }
+    }
+
+    @Test("The Netherlands, Belgium and Dutch without a region match the pinned fixtures")
+    func dutchSetsInLockstep() {
+        for tag in ["nl-NL", "nl_NL", "NL-nl"] {
+            #expect(CrisisResourceFallback.forLocale(tag) == Self.expectedNetherlands, "\(tag)")
+        }
+        for tag in ["nl-BE", "nl_BE", "be", "BE"] {
+            #expect(CrisisResourceFallback.forLocale(tag) == Self.expectedBelgium, "\(tag)")
+        }
+        for tag in ["nl", "NL", "nl-SR", "nl-DE", "nl_AW"] {
+            #expect(CrisisResourceFallback.forLocale(tag) == Self.expectedDutchSpeaking, "\(tag)")
+        }
+    }
+
+    /// The server's `replace("_", "-")` touches the first underscore only;
+    /// the copy does the same, so `en_US_POSIX` stays US.
+    @Test("Only the first underscore becomes a hyphen, as in JavaScript")
+    func firstUnderscoreOnly() {
+        #expect(CrisisResourceFallback.forLocale("en_US_POSIX") == Self.expectedUnitedStates)
+        #expect(CrisisResourceFallback.forLocale("nl_BE_x") == Self.expectedDutchSpeaking)
+        #expect(CrisisResourceFallback.forLocale("pt_PT_x") == Self.expectedPortugueseSpeaking)
+    }
+
+    /// Acceptance (e): what each reader gets through the tag the app sends
+    /// (``AppLanguage/regionTag``), online from the server and offline from
+    /// this copy alike.
+    struct RegionCase: Sendable, CustomTestStringConvertible {
+        let language: AppLanguage
+        let region: String?
+        let mustReach: [String]
+
+        var testDescription: String {
+            language.regionTag(region: region)
+        }
+    }
+
+    @Test("The region tag the app sends picks the reader's country", arguments: [
+        RegionCase(language: .nl, region: "BE", mustReach: ["1813"]),
+        RegionCase(language: .nl, region: "NL", mustReach: ["113"]),
+        RegionCase(language: .nl, region: nil, mustReach: ["113", "1813"]),
+        RegionCase(language: .de, region: "AT", mustReach: ["142"]),
+        RegionCase(language: .de, region: "DE", mustReach: ["0800 111 0 111", "142", "143"]),
+        RegionCase(language: .en, region: "US", mustReach: ["988"]),
+        RegionCase(language: .en, region: "PT", mustReach: ["116 123"])
+    ])
+    func regionTagPicksTheCountry(_ probe: RegionCase) {
+        let (language, region, mustReach) = (probe.language, probe.region, probe.mustReach)
+        let set = CrisisResourceFallback.forLocale(language.regionTag(region: region))
+        let contacts = set.resources.flatMap(\.contacts)
+        for line in mustReach {
+            #expect(contacts.contains(line), "\(language.regionTag(region: region)) lacks \(line)")
+        }
+        if language == .nl, region == "BE" { #expect(!contacts.contains("113")) }
+        if language == .nl, region == "NL" { #expect(!contacts.contains("1813")) }
+        if language == .de, region == "AT" { #expect(!contacts.contains("0800 111 0 111")) }
+        if language == .en, region == "PT" { #expect(set == Self.expectedInternational) }
+    }
+
+    /// #150: a Portuguese phone must never get the Brazilian lines alone,
+    /// whatever the interface language.
+    @Test("A Portuguese device never sees only Brazilian numbers", arguments: AppLanguage.allCases)
+    func portugueseDeviceNeverBrazilOnly(language: AppLanguage) {
+        let set = CrisisResourceFallback.forLocale(language.regionTag(region: "PT"))
+        #expect(set != Self.expectedBrazil)
+        #expect(set.emergencyNumber == "112")
+        #expect(set.resources.contains { $0.id == "findahelpline" })
+    }
+
+    @Test("every bundled region set is one of the canonical fixtures (no extra path)")
+    func onlyCanonicalSets() {
+        let canonical = [
+            Self.expectedInternational, Self.expectedGermanSpeaking, Self.expectedUnitedStates,
+            Self.expectedBrazil, Self.expectedPortugal, Self.expectedPortugueseSpeaking,
+            Self.expectedNetherlands, Self.expectedBelgium, Self.expectedDutchSpeaking
         ]
-        #expect(Set([Self.expectedGermanSpeaking, Self.expectedUnitedStates, Self.expectedInternational].map(\.emergencyNumber))
-            == ["112", "911"])
-        #expect(all == [Self.expectedGermanSpeaking, Self.expectedUnitedStates, Self.expectedInternational])
+        let probes = [
+            "de", "de-AT", "de-CH", "en-US", "en", "br", "pt-PT", "pt", "nl-NL", "nl-BE", "nl",
+            "", "xx", "fr-CH", "en-GB"
+        ]
+        for probe in probes {
+            let set = CrisisResourceFallback.forLocale(probe)
+            let isCanonical = canonical.contains(set)
+                || set.resources.map(\.id) == ["telefonSeelsorgeAt", "findahelpline"]
+                || set.resources.map(\.id) == ["dargeboteneHand", "findahelpline"]
+            #expect(isCanonical, "\(probe)")
+        }
     }
 }

@@ -166,12 +166,8 @@ struct DashboardHeader: View {
     }
 
     private var avatarInitials: String {
-        if let profile = settings.profile {
-            return profile.avatarInitials
-        }
-        if case let .authenticated(user) = authStore.phase {
-            return user.avatarInitials
-        }
-        return "?"
+        var user: User?
+        if case let .authenticated(signedIn) = authStore.phase { user = signedIn }
+        return UserProfile.initials(profile: settings.profile, user: user)
     }
 }

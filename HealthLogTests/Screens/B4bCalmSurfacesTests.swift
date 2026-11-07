@@ -99,7 +99,10 @@ struct B4bCalmSurfacesTests {
         for gone in ["\"Open profile\"", "\"settings.security.open\"", "\"sessions.card.manage\"", "\"resetData.card.action\""] {
             #expect(!code.contains(gone), "\(gone) is back")
         }
-        #expect(code.components(separatedBy: "HLSettingsCard {").count - 1 == 6)
+        // 1.5: active sessions moved into Sicherheit, five cards stay on Konto.
+        #expect(code.components(separatedBy: "HLSettingsCard {").count - 1 == 5)
+        let security = try Self.source("HealthLog/Screens/Settings/SettingsSecurityScreen.swift")
+        #expect(security.contains("settings.security.sessionsRow"))
     }
 
     // MARK: - Sync diagnostics say an empty section once

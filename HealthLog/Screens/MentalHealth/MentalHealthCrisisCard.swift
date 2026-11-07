@@ -72,12 +72,15 @@ struct MentalHealthCrisisCard: View {
         // Resolve the dotted key as a plain String first, then wrap — inline
         // interpolation in `LocalizedStringKey("…\(id).name")` would derive a
         // `…%@.name` key that misses the catalogue and leak the raw resource id.
-        let nameKey = "mentalHealth.crisisResource.\(resource.id).name"
-        return VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text(LocalizedStringKey(nameKey))
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
+            // A resource a newer server adds before this build knows its name
+            // still shows its contact lines, never a raw catalogue key.
+            if let name = Self.name(for: resource.id) {
+                Text(name)
+                    .font(.hlSubhead.weight(.semibold))
+                    .foregroundStyle(HLText.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             ForEach(Array(resource.contacts.enumerated()), id: \.offset) { _, contact in
                 contactView(contact)
             }
@@ -105,25 +108,49 @@ struct MentalHealthCrisisCard: View {
         }
     }
 
+    /// The localized display name of a resource, or `nil` when this build has
+    /// no name for the id (a resource added by a newer server).
+    nonisolated static func name(for id: String, bundle: Bundle = .main) -> String? {
+        let key = "mentalHealth.crisisResource.\(id).name"
+        let missing = "\u{0}"
+        let value = bundle.localizedString(forKey: key, value: missing, table: nil)
+        return value == missing || value == key ? nil : value
+    }
+
     /// Resolve a tappable URL for a contact line, or `nil` for plain text.
-    /// - digits + spaces (e.g. "0800 111 0 111", "988", "116 123") → `tel:`
-    /// - a bare domain (e.g. "telefonseelsorge.de", "findahelpline.com") → `https:`
+    /// - digits with spaces or hyphens (e.g. "0800 111 0 111", "988",
+    ///   "0800-0113") → `tel:`
+    /// - a bare domain, optionally with a path (e.g. "telefonseelsorge.de",
+    ///   "113.nl", "cvv.org.br/chat") → `https:`
     /// - anything else (e.g. "Text HOME to 741741") → `nil` (plain text)
     nonisolated static func link(for contact: String) -> URL? {
         let trimmed = contact.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
 
-        let phoneChars = CharacterSet(charactersIn: "0123456789 ")
-        if trimmed.unicodeScalars.allSatisfy({ phoneChars.contains($0) }) {
-            let digits = trimmed.replacingOccurrences(of: " ", with: "")
+        let phoneChars = CharacterSet(charactersIn: "0123456789 -")
+        if trimmed.unicodeScalars.allSatisfy({ phoneChars.contains($0) }),
+           trimmed.unicodeScalars.contains(where: { CharacterSet.decimalDigits.contains($0) }),
+           trimmed.first?.isNumber == true, trimmed.last?.isNumber == true
+        {
+            let digits = trimmed.filter(\.isNumber)
             return URL(string: "tel:\(digits)")
         }
 
-        // Bare domain: no spaces, contains a dot, only domain-legal characters.
-        if !trimmed.contains(" "), trimmed.contains(".") {
-            let domainChars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
-            if trimmed.unicodeScalars.allSatisfy({ domainChars.contains($0) }) {
-                return URL(string: "https://\(trimmed.lowercased())")
+        // Bare domain with an optional path: no spaces, a dot in the host,
+        // only host-legal characters before the first slash and path-safe
+        // ones after it.
+        if !trimmed.contains(" ") {
+            let parts = trimmed.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
+            let host = String(parts[0])
+            let path = parts.count > 1 ? String(parts[1]) : nil
+            let hostChars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
+            let pathChars = hostChars.union(CharacterSet(charactersIn: "/_~"))
+            if host.contains("."), !host.hasPrefix("."), !host.hasSuffix("."),
+               host.unicodeScalars.allSatisfy({ hostChars.contains($0) }),
+               path?.unicodeScalars.allSatisfy({ pathChars.contains($0) }) ?? true
+            {
+                let suffix = path.map { "/\($0)" } ?? ""
+                return URL(string: "https://\(host.lowercased())\(suffix)")
             }
         }
         return nil

@@ -166,7 +166,7 @@ public final class MiniCoachStore: BoxBackedPHIStore {
     public func send(
         ask: String,
         context: MiniCoachContext,
-        locale: Locale = .current
+        locale: Locale = AppLanguage.current.locale
     ) async -> MiniCoachOutcome {
         let trimmed = ask.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {

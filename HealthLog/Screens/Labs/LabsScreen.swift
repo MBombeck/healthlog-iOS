@@ -423,9 +423,11 @@ struct BiomarkerIndexRow: View {
     let name: String
     let latest: LabResultDTO?
     let count: Int
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(spacing: HLSpace.md) {
+        let layout = LabRowLayout.stack(dynamicTypeSize)
+        layout {
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text(name)
                     .font(.hlHeadline)
@@ -434,9 +436,9 @@ struct BiomarkerIndexRow: View {
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
             }
-            Spacer(minLength: HLSpace.sm)
+            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: HLSpace.sm) }
             if let latest {
-                VStack(alignment: .trailing, spacing: HLSpace.xxs) {
+                VStack(alignment: LabRowLayout.valueAlignment(dynamicTypeSize), spacing: HLSpace.xxs) {
                     Text(valueLabel(latest))
                         .font(.hlMetric(.title3))
                         .monospacedDigit()
@@ -467,13 +469,29 @@ struct BiomarkerIndexRow: View {
     }
 }
 
+/// POLISH-A (SHOTS F-AX-LABLIST) — at an accessibility size a lab row stacks
+/// name, value and range instead of squeezing the range capsule to letters.
+enum LabRowLayout {
+    static func stack(_ size: DynamicTypeSize) -> AnyLayout {
+        size.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
+            : AnyLayout(HStackLayout(spacing: HLSpace.md))
+    }
+
+    static func valueAlignment(_ size: DynamicTypeSize) -> HorizontalAlignment {
+        size.isAccessibilitySize ? .leading : .trailing
+    }
+}
+
 /// Single lab-result list row: analyte + paneled value/unit + a NEUTRAL range
 /// badge. Linked rows (`biomarkerId != nil`) show a small link glyph.
 struct LabResultRow: View {
     let row: LabResultDTO
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(spacing: HLSpace.md) {
+        let layout = LabRowLayout.stack(dynamicTypeSize)
+        layout {
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 HStack(spacing: HLSpace.xs) {
                     Text(row.analyte)
@@ -497,8 +515,8 @@ struct LabResultRow: View {
                     .foregroundStyle(HLText.secondary)
                 LabConversionNote(conversion: LabConversion(row)) // #126 3.5
             }
-            Spacer(minLength: HLSpace.sm)
-            VStack(alignment: .trailing, spacing: HLSpace.xxs) {
+            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: HLSpace.sm) }
+            VStack(alignment: LabRowLayout.valueAlignment(dynamicTypeSize), spacing: HLSpace.xxs) {
                 Text(valueLabel)
                     // LR1 — match `MeasurementRow`'s `.hlMetric(.title3)` so the lab
                     // value reads at the same weight as a Messwerte value.

@@ -108,7 +108,9 @@ import Foundation
 
             // Column layout: kind | n | mean | median | min | max.
             let columns: [(title: String, width: CGFloat)] = [
-                (LocaleText.colKind(for: spec.cover.locale), 160),
+                // L10N-REPORT — the name column takes the rest of the 540 pt
+                // content width: Dutch and German metric names run long.
+                (LocaleText.colKind(for: spec.cover.locale), 190),
                 (LocaleText.colCount(for: spec.cover.locale), 50),
                 (LocaleText.colMean(for: spec.cover.locale), 80),
                 (LocaleText.colMedian(for: spec.cover.locale), 80),
@@ -132,19 +134,29 @@ import Foundation
             // #115 B5 / P2 — glucose, weight, temperature and waist print in
             // the account's unit.
             let units = spec.printUnits
+            // L10N-REPORT — decimals in the report language ("72,4" in DE/NL).
+            let numbers = spec.cover.locale.formattingLocale
             for row in vitals.rows {
-                let primaryMean = ValueFormatter.format(row.mean, kind: row.kind, units: units)
+                let primaryMean = ValueFormatter.format(row.mean, kind: row.kind, units: units, locale: numbers)
+                let secondaryMean = ValueFormatter.format(
+                    row.secondaryMean ?? 0,
+                    kind: row.kind,
+                    units: UnitPreferences(glucose: .mgdL),
+                    locale: numbers
+                )
+                // "121/81 mmHg": the unit once, after the pair (it used to print
+                // "121 mmHg/81 mmHg" and run into the median column).
                 let displayMean = row.kind == .bloodPressure
-                    ? "\(primaryMean)/\(ValueFormatter.format(row.secondaryMean ?? 0, kind: row.kind))"
+                    ? "\(Self.droppingUnit(primaryMean, of: row.kind))/\(secondaryMean)"
                     : primaryMean
                 drawTableRow(
                     [
-                        row.kind.displayName,
+                        DoctorReportStrings.metricName(row.kind, spec.cover.locale),
                         String(row.count),
                         displayMean,
-                        ValueFormatter.format(row.median, kind: row.kind, units: units),
-                        ValueFormatter.format(row.min, kind: row.kind, units: units),
-                        ValueFormatter.format(row.max, kind: row.kind, units: units)
+                        ValueFormatter.format(row.median, kind: row.kind, units: units, locale: numbers),
+                        ValueFormatter.format(row.min, kind: row.kind, units: units, locale: numbers),
+                        ValueFormatter.format(row.max, kind: row.kind, units: units, locale: numbers)
                     ],
                     widths: columns.map(\.width),
                     y: y,
@@ -181,8 +193,11 @@ import Foundation
                     // main run-loop). Lays down a text caption so the
                     // doctor still sees the series exists.
                     let labelFont = UIFont.systemFont(ofSize: 11, weight: .regular)
-                    let caption = "\(series.kind.displayName): \(series.points.count) " +
-                        LocaleText.dataPoints(for: spec.cover.locale)
+                    let caption = LocaleText.dataPoints(
+                        DoctorReportStrings.metricName(series.kind, spec.cover.locale),
+                        count: series.points.count,
+                        locale: spec.cover.locale
+                    )
                     draw(
                         text: caption,
                         at: CGPoint(x: PDFPage.margin, y: y),
@@ -252,15 +267,15 @@ import Foundation
             let locale = spec.cover.locale
             // #115 · 1.2 — every line below is the server's; the notes say
             // which window the figures cover, or why there are none.
+            // L10N-REPORT — notes and rows wrap inside the content width; the
+            // Dutch source note ran off the right edge of the page.
             for note in LocaleText.adherenceNotes(for: adherence, locale: locale) {
-                draw(text: note, at: CGPoint(x: PDFPage.margin, y: y), font: noteFont, color: .secondaryLabel)
-                y += 18
+                y += drawWrapped(text: note, y: y, font: noteFont, color: .secondaryLabel) + 4
             }
             if !adherence.perMedication.isEmpty { y += 8 }
             for row in adherence.perMedication {
                 let line = LocaleText.adherenceRow(row, windowDays: adherence.windowDays, locale: locale)
-                draw(text: line, at: CGPoint(x: PDFPage.margin, y: y), font: labelFont, color: .label)
-                y += 18
+                y += drawWrapped(text: line, y: y, font: labelFont, color: .label) + 4
             }
         }
 
@@ -274,17 +289,16 @@ import Foundation
             drawSectionHeader(LocaleText.moodTitle(for: spec.cover.locale), at: pageBounds)
             var y: CGFloat = 80
             let labelFont = UIFont.systemFont(ofSize: 12, weight: .regular)
-            let summary = String(
-                format: LocaleText.moodSummaryFormat(for: spec.cover.locale),
-                mood.count,
-                mood.averageScore
-            )
+            // The report locale's decimal separator ("3,5" in DE/NL), not the device's.
+            let summary = LocaleText.moodSummary(count: mood.count, average: mood.averageScore, locale: spec.cover.locale)
             draw(text: summary, at: CGPoint(x: PDFPage.margin, y: y), font: labelFont, color: .label)
             y += 22
             if !mood.dominantTags.isEmpty {
                 let tagsLine = LocaleText.moodTagsLabel(for: spec.cover.locale) + ": " +
-                    mood.dominantTags.map { "\($0.tag) (\($0.count))" }.joined(separator: ", ")
-                draw(text: tagsLine, at: CGPoint(x: PDFPage.margin, y: y), font: labelFont, color: .secondaryLabel)
+                    mood.dominantTags.map {
+                        "\(DoctorReportStrings.moodTagName($0.tag, spec.cover.locale)) (\($0.count))"
+                    }.joined(separator: ", ")
+                _ = drawWrapped(text: tagsLine, y: y, font: labelFont, color: .secondaryLabel)
             }
         }
 
@@ -306,6 +320,22 @@ import Foundation
             (text as NSString).draw(at: point, withAttributes: attrs)
         }
 
+        /// Draws `text` at the left margin, wrapped to the content width, and
+        /// returns the height it took.
+        private func drawWrapped(text: String, y: CGFloat, font: UIFont, color: UIColor) -> CGFloat {
+            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+            let bounds = CGSize(width: PDFPage.contentWidth, height: .greatestFiniteMagnitude)
+            let height = ceil((text as NSString).boundingRect(
+                with: bounds,
+                options: [.usesLineFragmentOrigin],
+                attributes: attrs,
+                context: nil
+            ).height)
+            let rect = CGRect(x: PDFPage.margin, y: y, width: PDFPage.contentWidth, height: height)
+            (text as NSString).draw(with: rect, options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
+            return max(height, 14)
+        }
+
         private func drawSectionHeader(_ title: String, at _: CGRect) {
             let font = UIFont.systemFont(ofSize: 20, weight: .bold)
             draw(text: title, at: CGPoint(x: PDFPage.margin, y: PDFPage.margin), font: font, color: .label)
@@ -319,179 +349,32 @@ import Foundation
             color: UIColor
         ) {
             var x = PDFPage.margin
+            let style = NSMutableParagraphStyle()
+            style.lineBreakMode = .byTruncatingTail
+            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: style]
             for (index, cell) in cells.enumerated() where index < widths.count {
-                draw(text: cell, at: CGPoint(x: x, y: y), font: font, color: color)
+                // A cell never runs into its neighbour: what does not fit
+                // ends in an ellipsis inside its own column.
+                let rect = CGRect(x: x, y: y, width: widths[index] - 6, height: font.lineHeight + 2)
+                (cell as NSString).draw(
+                    with: rect,
+                    options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+                    attributes: attrs,
+                    context: nil
+                )
                 x += widths[index]
             }
+        }
+
+        /// `value` without the trailing unit of `kind` ("121 mmHg" to "121").
+        static func droppingUnit(_ value: String, of kind: MetricKind) -> String {
+            let suffix = " \(kind.unit)"
+            guard !kind.unit.isEmpty, value.hasSuffix(suffix) else { return value }
+            return String(value.dropLast(suffix.count))
         }
     }
 
 #endif
-
-// MARK: - Locale text (DE/EN)
-
-enum LocaleText {
-    static func coverTitle(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Arztbericht"
-        case .en: "Doctor Report"
-        }
-    }
-
-    static func coverPatientLabel(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Patient"
-        case .en: "Patient"
-        }
-    }
-
-    static func coverFullNameLabel(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Voller Name"
-        case .en: "Full name"
-        }
-    }
-
-    static func coverInsurerLabel(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Krankenkasse"
-        case .en: "Health insurer"
-        }
-    }
-
-    static func coverInsuranceNumberLabel(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Versicherungsnummer"
-        case .en: "Insurance number"
-        }
-    }
-
-    static func coverPeriodLabel(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Berichtszeitraum"
-        case .en: "Report period"
-        }
-    }
-
-    static func coverGeneratedLabel(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Erstellt am"
-        case .en: "Generated"
-        }
-    }
-
-    static func coverVersionLabel(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "App-Version"
-        case .en: "App version"
-        }
-    }
-
-    static func vitalsTitle(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Vitalwerte"
-        case .en: "Vital signs"
-        }
-    }
-
-    static func colKind(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Metrik"
-        case .en: "Metric"
-        }
-    }
-
-    static func colCount(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Anzahl"
-        case .en: "Count"
-        }
-    }
-
-    static func colMean(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Mittelwert"
-        case .en: "Mean"
-        }
-    }
-
-    static func colMedian(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Median"
-        case .en: "Median"
-        }
-    }
-
-    static func colMin(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Min"
-        case .en: "Min"
-        }
-    }
-
-    static func colMax(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Max"
-        case .en: "Max"
-        }
-    }
-
-    static func chartsTitle(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Verlauf"
-        case .en: "Charts"
-        }
-    }
-
-    static func dataPoints(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Datenpunkte"
-        case .en: "data points"
-        }
-    }
-
-    static func medicationsTitle(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Medikamente"
-        case .en: "Medications"
-        }
-    }
-
-    static func medicationsArchived(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Frueher genommen"
-        case .en: "Previously taken"
-        }
-    }
-
-    static func adherenceTitle(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Einnahmetreue"
-        case .en: "Adherence"
-        }
-    }
-
-    static func moodTitle(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Stimmung"
-        case .en: "Mood"
-        }
-    }
-
-    static func moodSummaryFormat(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "%d Eintraege, Durchschnitt %.1f / 5"
-        case .en: "%d entries, average %.1f / 5"
-        }
-    }
-
-    static func moodTagsLabel(for locale: ReportLocale) -> String {
-        switch locale {
-        case .de: "Haeufigste Tags"
-        case .en: "Dominant tags"
-        }
-    }
-}
 
 // MARK: - Formatters
 
@@ -504,8 +387,11 @@ enum ValueFormatter {
     }
 
     /// #115 P2 — `value` is canonical; converted families print in `units`.
-    static func format(_ value: Double, kind: MetricKind, units: UnitPreferences) -> String {
+    /// L10N-REPORT — `locale` is the report language's; the default keeps the
+    /// device's, as before, for callers outside the report.
+    static func format(_ value: Double, kind: MetricKind, units: UnitPreferences, locale: Locale = .current) -> String {
         let formatter = NumberFormatter()
+        formatter.locale = locale
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = DoctorReportGlucoseDisplay.fractionDigits(for: kind, units: units)
             ?? digits(for: kind)
@@ -546,7 +432,7 @@ enum ValueFormatter {
         // waist render one decimal; waist-to-height ratio two decimals.
         case .painNRS: 0
         case .gripStrength, .waistCircumference: 1
-        case .waistToHeight: 2
+        case .waistToHeight, .stateOfMindValence: 2
         // Build 3 / item 3.3 — the 21 decoder catch-up types. Screener sums,
         // wearable scores, sleep percentages, sleep-need minutes, kJ and the
         // categorical events are all whole numbers; only HRV-RMSSD and the two
@@ -556,7 +442,8 @@ enum ValueFormatter {
              .sleepPerformance, .sleepEfficiency, .sleepConsistency,
              .sleepNeed, .energyExpenditureKJ, .resilience,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes,
              // Build 7 / item 7.3 — mood is a whole-number daily score.
              .mood,
              // Audit B-4 — the audio-exposure event is a whole occurrence count.
@@ -568,7 +455,7 @@ enum ValueFormatter {
         // and `makeCharts`), so no unknown row reaches this formatter. It stays
         // because the formatter is a general helper, not because the report
         // happens not to build such a row.
-        case .hrvRMSSD, .dayStrain, .workoutStrain, .unknown: 1
+        case .hrvRMSSD, .dayStrain, .workoutStrain, .afibBurden, .unknown: 1
         }
     }
 }
@@ -579,11 +466,7 @@ enum DateRangeFormatter {
         formatter.locale = Locale(identifier: locale.foundationIdentifier)
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        let joiner = switch locale {
-        case .de: "bis"
-        case .en: "to"
-        }
-        return "\(formatter.string(from: start)) \(joiner) \(formatter.string(from: end))"
+        return LocaleText.periodRange(formatter.string(from: start), formatter.string(from: end), locale: locale)
     }
 
     static func formatSingle(date: Date, locale: ReportLocale) -> String {

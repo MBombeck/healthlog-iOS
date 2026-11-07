@@ -44,6 +44,8 @@ enum HealthSyncCapability: String, CaseIterable, Sendable {
     case cycleImport
     case heartHealthEvents
     case outboxDrain
+    /// MIRROR (1.5) — server rows into Apple Health, App Refresh and Processing only.
+    case serverMirror
 
     var source: HealthSyncSource {
         switch self {
@@ -58,6 +60,7 @@ enum HealthSyncCapability: String, CaseIterable, Sendable {
         case .cycleImport: .cycle
         case .heartHealthEvents: .heartEvent
         case .outboxDrain: .outbox
+        case .serverMirror: .serverMirror
         }
     }
 
@@ -457,6 +460,9 @@ enum HealthSyncCompositionPlan {
     /// reached the server only on an app open or "Sync all". Bounded for a
     /// short wake: the sweep posts at most one bulk chunk and leaves the rest
     /// pending in the dose ledger for the next wake.
+    ///
+    /// **MIRROR (1.5, public #28)** — and the bounded server→Apple-Health mirror,
+    /// which itself runs on App Refresh only (``ServerMirrorBackgroundPass``).
     static let incrementalSet: Set<HealthSyncCapability> = [
         .speziSampleCollection,
         .workoutImport,
@@ -465,7 +471,8 @@ enum HealthSyncCompositionPlan {
         .heartHealthEvents,
         .moodStateOfMindImport,
         .appleMedicationImport,
-        .outboxDrain
+        .outboxDrain,
+        .serverMirror
     ]
 
     static func required(for trigger: HealthSyncTrigger) -> Set<HealthSyncCapability> {

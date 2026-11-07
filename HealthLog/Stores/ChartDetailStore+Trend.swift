@@ -17,16 +17,21 @@ public extension ChartDetailStore {
 
     /// Pure helper — `nonisolated` so unit tests can pin the slope ordering
     /// without a live store load. Returns 7/30/90 windows in fixed order,
-    /// skipping any the server omitted.
+    /// skipping any the server omitted or sent without a direction.
     nonisolated static func trendSlopes(
         from summary: MetricSummary?
     ) -> [(window: TrendWindow, slope: TrendSlope)] {
         guard let summary else { return [] }
-        var out: [(TrendWindow, TrendSlope)] = []
-        if let s = summary.slope7 { out.append((.week, s)) }
-        if let s = summary.slope30 { out.append((.month, s)) }
-        if let s = summary.slope90 { out.append((.quarter, s)) }
-        return out
+        // #151 (server v1.46) — a window with too few days answers `null`
+        // (or a slope object with `direction: null`): no trend, so no chip.
+        // Never read as "stable" and never as zero.
+        let windows: [(TrendWindow, TrendSlope?)] = [
+            (.week, summary.slope7), (.month, summary.slope30), (.quarter, summary.slope90)
+        ]
+        return windows.compactMap { window, slope in
+            guard let slope, slope.direction != nil else { return nil }
+            return (window, slope)
+        }
     }
 
     /// Window descriptor for a trend chip — drives the short label ("7T" /

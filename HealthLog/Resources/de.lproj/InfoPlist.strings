@@ -5,5 +5,5 @@
 "NSAlarmKitUsageDescription" = "HealthLog stellt laute Alarme für zeitkritische Medikamente, die du ausdrücklich aktivierst. Sie durchbrechen Stummschaltung und Fokus, damit du keine wichtige Dosis verpasst.";
 "NSSpeechRecognitionUsageDescription" = "HealthLog nutzt Spracherkennung, um deine diktierte Frage an den Coach in Text umzuwandeln, wo möglich direkt auf dem Gerät. Du prüfst den Text vor dem Senden.";
 "NSMicrophoneUsageDescription" = "HealthLog nutzt das Mikrofon, um deine Frage an den Coach zu diktieren. Die Aufnahme wird auf dem Gerät in Text umgewandelt und nicht gespeichert.";
-"NSCameraUsageDescription" = "HealthLog nutzt die Kamera, um Medikamenten-Packungen und Laborberichte auf dem Gerät auszulesen oder von dir ausgewählte Scans in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen.";
+"NSCameraUsageDescription" = "HealthLog nutzt die Kamera, um Medikamenten-Packungen und Laborberichte auf dem Gerät auszulesen oder von dir ausgewählte Scans in deinen Dokumententresor auf dem konfigurierten HealthLog-Server hochzuladen. Wenn du es auswählst, geht ein Foto von Laborbericht oder Etikett außerdem zum Lesen an deinen HealthLog-Server.";
 "NSBluetoothAlwaysUsageDescription" = "HealthLog koppelt Blutdruckmessgeräte über Bluetooth (derzeit die Omron-Profile), damit deine Messwerte automatisch in HealthLog landen.";

@@ -71,8 +71,8 @@ GitHub Actions (`.github/workflows/ci.yml`):
 7. `xcodebuild test` (alle Tests, Coverage gemessen)
 8. `swift build` (Core-Library standalone)
 
-Der `macos-26` Runner verwendet dabei exakt Xcode 26.6 wie in `project.yml`
-fuer Release und Archivierung festgelegt. Neue SwiftLint-Warnungen, Fehler und
-eine veraltete Warnungsbaseline brechen den Build geschlossen ab.
+Der Self-hosted-Runner auf dem Mac mini verwendet dabei exakt Xcode 27.2 wie in
+`project.yml` fuer Release und Archivierung festgelegt (bis 1.4.x: Xcode 26.6).
+Neue SwiftLint-Warnungen, Fehler und eine veraltete Warnungsbaseline brechen den Build geschlossen ab.
 
 Jeder Schritt ist Pflicht. Failure → kein Merge.

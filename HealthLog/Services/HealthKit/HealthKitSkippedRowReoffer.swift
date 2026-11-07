@@ -39,7 +39,9 @@ struct HealthKitSkippedRowReoffer: Sendable {
 
         let outcomes: [BatchUploadOutcome]
         do {
-            outcomes = try await upload(due.compactMap(\.entry))
+            // POLISH-B B6 — rows refused under a name the server never mapped
+            // (the noise event before REG) are offered under its name.
+            outcomes = try await upload(due.compactMap(\.entry).map { $0.withServerWireName() })
         } catch {
             return Summary(offered: due.count, stored: 0, stillRefused: 0, transportFailed: true)
         }
@@ -52,7 +54,9 @@ struct HealthKitSkippedRowReoffer: Sendable {
                 if verdict.isStored {
                     stored.insert(entry.externalId)
                 } else if verdict.status == .skipped {
-                    refused.append(HealthKitSkippedEntry(entry: entry, reason: verdict.reason ?? "unknown"))
+                    refused.append(
+                        HealthKitSkippedEntry(entry: entry, reason: verdict.reason ?? "unknown", detail: verdict.detail)
+                    )
                 }
             }
         }

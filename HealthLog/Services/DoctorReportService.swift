@@ -37,7 +37,8 @@ public actor DoctorReportService {
         days: Int,
         locale: String = "de",
         selection: ReportSelection,
-        practiceName: String? = nil
+        practiceName: String? = nil,
+        range: HealthRecordExportRequest.Range? = nil
     ) async throws -> Data {
         // Strict `exportSelectionSchema` body: `{ format: "pdf", selection,
         // range: { days }, locale }` + the optional `practiceName`. `range` and
@@ -47,7 +48,7 @@ public actor DoctorReportService {
         let request = HealthRecordExportRequest(
             format: .pdf,
             selection: selection,
-            range: HealthRecordExportRequest.Range(days: days),
+            range: range ?? HealthRecordExportRequest.Range(days: days),
             locale: locale,
             practiceName: practiceName
         )

@@ -17,6 +17,9 @@ struct UnifiedSharingScreen: View {
     /// Which output the entry point implied. The four old doors preselect
     /// their own form so a user who tapped "FHIR-Export" still lands on FHIR.
     let preselectedForm: UnifiedSharingStore.OutputForm
+    /// VISIT — the next visit's window, preset by "visit.next.report" on
+    /// "Nächster Termin"; `nil` from every other door.
+    let presetWindow: ReportWindow?
 
     @Environment(BackendAvailability.self) private var backend
     @Environment(AuthStore.self) private var authStore
@@ -35,8 +38,9 @@ struct UnifiedSharingScreen: View {
     /// have been a silent feature loss on the PDF path.
     @State private var practiceStore: ReportPracticeNameStore?
 
-    init(preselectedForm: UnifiedSharingStore.OutputForm = .link) {
+    init(preselectedForm: UnifiedSharingStore.OutputForm = .link, presetWindow: ReportWindow? = nil) {
         self.preselectedForm = preselectedForm
+        self.presetWindow = presetWindow
     }
 
     var body: some View {
@@ -60,6 +64,7 @@ struct UnifiedSharingScreen: View {
         .task {
             if store == nil {
                 store = container?.makeUnifiedSharingStore(form: preselectedForm)
+                store?.presetWindow(presetWindow)
             }
             if practiceStore == nil {
                 practiceStore = container?.makeReportPracticeNameStore()
@@ -99,22 +104,35 @@ struct UnifiedSharingScreen: View {
     // MARK: - 2. Period
 
     private func periodCard(_ store: UnifiedSharingStore) -> some View {
-        @Bindable var store = store
         // 1.4 B2-c — no footer: the expiry is its own card further down, so
         // "the period is content, not the link's life" needs no sentence.
-        return HLSettingsCard(
+        HLSettingsCard(
             icon: "calendar",
             title: "sharing.unified.period.title"
         ) {
-            Picker(selection: $store.periodDays) {
-                ForEach(UnifiedSharingStore.periodOptions, id: \.self) { days in
-                    Text(UnifiedSharingCopy.periodLabel(days)).tag(days)
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                // VISIT — the preset window reads as a line above the
+                // look-backs, none of which is selected; tapping one ends it.
+                if let window = store.window {
+                    Text(NextVisitFormat.windowLine(window))
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLText.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("sharing.unified.period.window")
                 }
-            } label: {
-                Text("sharing.unified.period.title")
+                Picker(selection: Binding(
+                    get: { store.window == nil ? store.periodDays : nil },
+                    set: { if let days = $0 { store.chooseLookBack(days) } }
+                )) {
+                    ForEach(UnifiedSharingStore.periodOptions, id: \.self) { days in
+                        Text(UnifiedSharingCopy.periodLabel(days)).tag(Int?.some(days))
+                    }
+                } label: {
+                    Text("sharing.unified.period.title")
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("sharing.unified.period")
             }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("sharing.unified.period")
         }
     }
 
@@ -169,6 +187,7 @@ struct UnifiedSharingScreen: View {
             expiryCard(store)
         case .pdf:
             practiceCard(store)
+            UnifiedSharingReportLanguageSection(store: store)
         case .zip:
             chartsCard(store)
         case .fhir:
@@ -330,7 +349,7 @@ struct UnifiedSharingScreen: View {
                 localReportStore: localReportStore,
                 linkStore: linkStore,
                 snapshot: makeSnapshot(),
-                locale: Locale.current.language.languageCode?.identifier ?? "de",
+                locale: store.reportLanguage.rawValue,
                 isBackendReachable: backend.isReachable
             )
         )

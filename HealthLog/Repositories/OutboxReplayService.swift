@@ -171,6 +171,9 @@ public actor OutboxReplayService {
     var runPhase = "idle"
     let runWatchdogTimeout: TimeInterval
     let updatePathDefaults: (@Sendable () -> UserDefaults)?
+    /// SYNC-TRIG (1.5) — decides whether a parked batch may replay under the
+    /// trigger it kept (``SyncTriggerContext/replayValue(_:)``).
+    let syncTriggerGate: SyncTriggerContext
 
     public init(
         outbox: OutboxQueue,
@@ -201,7 +204,8 @@ public actor OutboxReplayService {
         onDeadLettered: (@Sendable (Int) async -> Void)? = nil,
         onDiscarded: (@Sendable ([OutboxDiscardNotice]) async -> Void)? = nil,
         runWatchdogTimeout: TimeInterval = OutboxReplayService.defaultRunWatchdogTimeout,
-        updatePathDefaults: (@Sendable () -> UserDefaults)? = nil
+        updatePathDefaults: (@Sendable () -> UserDefaults)? = nil,
+        syncTriggerGate: SyncTriggerContext = .shared
     ) {
         self.outbox = outbox
         self.measurementsRepo = measurementsRepo
@@ -232,6 +236,7 @@ public actor OutboxReplayService {
         self.onDiscarded = onDiscarded
         self.runWatchdogTimeout = runWatchdogTimeout
         self.updatePathDefaults = updatePathDefaults
+        self.syncTriggerGate = syncTriggerGate
         // Single source of truth: `JSONDecoder.hlDefault`. Vorher hatte der
         // Replay-Service eine eigene Strategie (`.iso8601` ohne fractional +
         // `.convertFromSnakeCase`) — ein latenter Footgun (Outbox-Payload wird

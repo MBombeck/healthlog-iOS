@@ -12,6 +12,12 @@ struct BiomarkerEditorSheet: View {
 
     @State private var name: String
     @State private var unit: String
+    /// #160 — "No unit": the marker is a ratio or an index and is stored
+    /// with the unity `"1"`. ``unit`` keeps what was typed for the way back.
+    @State private var noUnit: Bool
+    /// Whether the "No unit" switch is offered (server 1.46.6, or a marker
+    /// that already has no unit).
+    private let offersNoUnit: Bool
     @State private var lowerBoundText: String
     @State private var upperBoundText: String
     @State private var panel: String
@@ -41,7 +47,10 @@ struct BiomarkerEditorSheet: View {
         self.store = store
         self.existing = existing
         _name = State(initialValue: existing?.name ?? "")
-        _unit = State(initialValue: existing?.unit ?? "")
+        let storedWithoutUnit = LabUnit.isUnity(existing?.unit)
+        _unit = State(initialValue: storedWithoutUnit ? "" : existing?.unit ?? "")
+        _noUnit = State(initialValue: storedWithoutUnit)
+        offersNoUnit = LabUnit.offersNoUnit(current: existing?.unit)
         _lowerBoundText = State(initialValue: existing?.lowerBound.map { $0.formatted() } ?? "")
         _upperBoundText = State(initialValue: existing?.upperBound.map { $0.formatted() } ?? "")
         _panel = State(initialValue: existing?.panel ?? "")
@@ -55,14 +64,19 @@ struct BiomarkerEditorSheet: View {
 
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
-            && !unit.trimmingCharacters(in: .whitespaces).isEmpty
+            && wireUnit != nil
+    }
+
+    /// The unit this form saves: the typed one, or the unity for "No unit".
+    private var wireUnit: String? {
+        LabUnit.wire(typed: unit, noUnit: noUnit)
     }
 
     /// FORM-1 — any field diverges from the initial (empty on create, prefilled
     /// on edit) value.
     private var isDirty: Bool {
         name != (existing?.name ?? "")
-            || unit != (existing?.unit ?? "")
+            || (wireUnit ?? "") != (existing?.unit ?? "")
             || lowerBoundText != (existing?.lowerBound.map { $0.formatted() } ?? "")
             || upperBoundText != (existing?.upperBound.map { $0.formatted() } ?? "")
             || panel != (existing?.panel ?? "")
@@ -84,10 +98,14 @@ struct BiomarkerEditorSheet: View {
                         .focused($focusedField, equals: .name)
                         .submitLabel(.next)
                         .onSubmit { focusedField = .unit }
-                    TextField("biomarker.editor.unit", text: $unit)
+                    TextField("biomarker.editor.unit", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
                         .focused($focusedField, equals: .unit)
                         .submitLabel(.next)
                         .onSubmit { focusedField = .panel }
+                        .disabled(noUnit)
+                    if offersNoUnit {
+                        LabNoUnitToggle(isOn: $noUnit)
+                    }
                     TextField("biomarker.editor.panel", text: $panel)
                         .focused($focusedField, equals: .panel)
                         .submitLabel(.next)
@@ -193,6 +211,7 @@ struct BiomarkerEditorSheet: View {
     private func applySeed(_ seed: BiomarkerSeed) {
         name = seed.displayName
         unit = seed.unit
+        noUnit = false
         lowerBoundText = seed.lowerBound.map { $0.formatted() } ?? ""
         upperBoundText = seed.upperBound.map { $0.formatted() } ?? ""
         panel = seed.panel.displayName
@@ -205,7 +224,7 @@ struct BiomarkerEditorSheet: View {
         defer { isSaving = false }
 
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
-        let trimmedUnit = unit.trimmingCharacters(in: .whitespaces)
+        let trimmedUnit = wireUnit ?? ""
         let trimmedPanel = panel.trimmingCharacters(in: .whitespaces)
         let trimmedContext = context.trimmingCharacters(in: .whitespaces)
         let lower = LocaleDecimalParser.parse(lowerBoundText)

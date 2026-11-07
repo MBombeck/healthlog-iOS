@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The lab-report scan flow: **choose a source → recognise on device → review
 /// every parsed row → save the batch**.
@@ -11,8 +12,14 @@ import SwiftUI
 /// Vision recognises, ``LabReportParser`` parses — all locally. The only network
 /// call in the whole flow is the batch `POST /api/labs` the user triggers from
 /// the review screen, and it carries exactly the rows they left switched on.
+///
+/// **LAB-OCR (#149 item 3).** When the server can read reports and the
+/// person has given the document AI consent, the chooser offers "Genauer lesen
+/// lassen" (``LabServerScanFlow``), off on every scan. Only while it is on does
+/// the photo or a PDF go to the server; its rows land in the same review list.
 struct LabScanSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appContainer) private var container
 
     let labsStore: LabsStore
 
@@ -20,6 +27,9 @@ struct LabScanSheet: View {
     @State private var showScanner = false
     @State private var showPhotos = false
     @State private var photoSelection: [PhotosPickerItem] = []
+    /// LAB-OCR — the server read, `nil` without a server.
+    @State private var server: LabServerScanFlow?
+    @State private var showPDFImporter = false
 
     var body: some View {
         NavigationStack {
@@ -40,6 +50,11 @@ struct LabScanSheet: View {
             .toolbar { toolbar }
             .task {
                 if scan == nil { scan = LabScanStore(labsStore: labsStore) }
+                await prepareServerRead()
+            }
+            .onDisappear { server?.stop() }
+            .fileImporter(isPresented: $showPDFImporter, allowedContentTypes: [.pdf]) { result in
+                handlePDF(result)
             }
             .photosPicker(
                 isPresented: $showPhotos,
@@ -56,7 +71,7 @@ struct LabScanSheet: View {
                 DocumentScannerView(
                     onScan: { images in
                         showScanner = false
-                        Task { await scan?.ingest(images: images) }
+                        Task { await ingest(images) }
                     },
                     onCancel: { showScanner = false },
                     onError: {
@@ -76,7 +91,9 @@ struct LabScanSheet: View {
         case .chooser:
             chooser(scan: scan)
         case .processing:
-            processing
+            LabScanProcessingView(isServerRead: server?.isReading ?? false) {
+                server?.cancel(scan: scan)
+            }
         case .review, .saving:
             LabScanReviewList(scan: scan)
         }
@@ -110,11 +127,17 @@ struct LabScanSheet: View {
                     Text("labs.scan.choose.title")
                         .font(.hlTitle3)
                         .foregroundStyle(HLText.primary)
-                    Text("labs.scan.choose.body")
+                    // The on-device promise ("never leaves your iPhone") only
+                    // stands while the server read is off.
+                    Text(usesServerRead ? "labs.ocr.choose.body" : "labs.scan.choose.body")
                         .font(.hlSubhead)
                         .foregroundStyle(HLText.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                if serverReadOffered, let server {
+                    LabServerReadToggle(flow: server)
+                }
 
                 VStack(spacing: HLSpace.sm) {
                     #if canImport(UIKit) && canImport(VisionKit)
@@ -129,6 +152,12 @@ struct LabScanSheet: View {
                         showPhotos = true
                     }
                     .accessibilityIdentifier("labs.scan.library")
+                    if usesServerRead, server?.acceptsPDF == true {
+                        HLButton("labs.ocr.choose.pdf", icon: "doc", variant: .secondary) {
+                            showPDFImporter = true
+                        }
+                        .accessibilityIdentifier("labs.ocr.choose.pdf")
+                    }
                 }
 
                 if let failure = scan.failure {
@@ -144,16 +173,46 @@ struct LabScanSheet: View {
         }
     }
 
-    // MARK: - Step 2 — on-device recognition
+    // MARK: - LAB-OCR — the server read
 
-    private var processing: some View {
-        VStack(spacing: HLSpace.md) {
-            ProgressView()
-            Text("labs.scan.processing")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    /// The server can read reports, the person consented to document AI, and
+    /// the `labsOcr` capability is on. Read in the body, so the switch follows
+    /// a consent change live.
+    private var serverReadOffered: Bool {
+        guard let server, server.serverCanRead, let container else { return false }
+        #if DEBUG
+            if LabOCRFixtures.isActive { return true }
+        #endif
+        return container.documentExternalAIConsentGranted && container.aiCapabilityGate.isAvailable(.labsOcr)
+    }
+
+    /// The person switched the server read on for this scan.
+    private var usesServerRead: Bool {
+        serverReadOffered && server?.isChosen == true
+    }
+
+    private func prepareServerRead() async {
+        guard server == nil, let container else { return }
+        #if DEBUG
+            if LabOCRFixtures.isActive {
+                let flow = LabServerScanFlow(repository: LabsOCRRepository(api: container.api, consent: .denied))
+                flow.useFixture(LabOCRFixtures.capability)
+                server = flow
+                if LabOCRFixtures.opensOnReview {
+                    flow.isChosen = true
+                    scan?.ingest(server: LabOCRFixtures.result)
+                }
+                return
+            }
+        #endif
+        guard container.backendAvailability.hasServer else { return }
+        let flow = LabServerScanFlow(repository: LabsOCRRepository(
+            api: container.api,
+            consent: container.makeDocumentAIConsentLeaseProvider(),
+            uploadGrace: UIKitLabUploadGrace()
+        ))
+        server = flow
+        await flow.loadCapability()
     }
 
     // MARK: - Actions
@@ -179,9 +238,38 @@ struct LabScanSheet: View {
                 scan?.report(.load)
                 return
             }
-            await scan?.ingest(images: images)
+            await ingest(images)
         #else
             scan?.report(.platform)
         #endif
+    }
+
+    #if canImport(UIKit)
+        /// Scanned or picked pages: to the server when the person chose it,
+        /// else recognised on the device as before.
+        private func ingest(_ images: [UIImage]) async {
+            guard let scan else { return }
+            if usesServerRead, let server {
+                server.read(images: images, into: scan)
+            } else {
+                await scan.ingest(images: images)
+            }
+        }
+    #endif
+
+    /// LAB-OCR — a picked PDF goes to the server unchanged.
+    private func handlePDF(_ result: Result<URL, Error>) {
+        guard let scan, let server, usesServerRead else { return }
+        guard case let .success(url) = result else {
+            scan.report(.load)
+            return
+        }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            scan.report(.load)
+            return
+        }
+        server.read(pdf: data, into: scan)
     }
 }

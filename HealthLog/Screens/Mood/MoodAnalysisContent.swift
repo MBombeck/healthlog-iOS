@@ -33,6 +33,9 @@ struct MoodAnalysisContent<Section: View>: View {
     /// Optional so a host without the store (previews, render tests) still
     /// draws; the section then shows no stability, never a computed one.
     @Environment(MoodRelationsStore.self) private var relationsStore: MoodRelationsStore?
+    /// POLISH-B B8 — the dashboard snapshot carries the server's mood verdict
+    /// (`tiles.directions["MOOD"]`). Optional for the same reason as above.
+    @Environment(DailyBriefingStore.self) private var briefingStore: DailyBriefingStore?
 
     /// The host-owned period selection (drives the windowed slice).
     let period: MoodPeriod
@@ -178,7 +181,7 @@ struct MoodAnalysisContent<Section: View>: View {
     private func heroSection(_ key: RenderKey) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             InsightsSectionHeader("Mood today", flush: true)
-            MoodHeroSummary(insights: insights)
+            MoodHeroSummary(insights: insights, verdict: briefingStore?.snapshotBriefing?.directions["MOOD"]?.direction)
         }
         .task(id: key) { await loadAnalysis(key) }
         // #115 · 1.3 — the server's day means and stability. Re-read when the

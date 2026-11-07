@@ -28,6 +28,9 @@ public final class LocalDoctorReportStore {
     public private(set) var error: HLError?
     public var selection: DoctorReportSectionSelection = .all
     public var periodDays: Int = 90
+    /// VISIT — a fixed window (already stopped at now) in place of the
+    /// look-back of ``periodDays``; `nil` keeps the look-back.
+    public var window: DateInterval?
 
     /// Returns the artifacts to hand to `ShareLink(items:)` — PDF first
     /// (operator-primary), FHIR second. Empty when nothing is generated.
@@ -90,9 +93,9 @@ public final class LocalDoctorReportStore {
         isWorking = true
         error = nil
         defer { isWorking = false }
-        let end = now()
-        let start = calendar.date(byAdding: .day, value: -periodDays, to: end) ?? end
-        let report = await complianceFetch(periodDays)
+        let end = window?.end ?? now()
+        let start = window?.start ?? calendar.date(byAdding: .day, value: -periodDays, to: end) ?? end
+        let report = await complianceFetch(complianceDays(from: start))
         let pulseDays = await pulseDaysFetch(start, end)
         let snapshot = makeSnapshot(serverComplianceReport: report, serverPulseDays: pulseDays)
         let spec = DoctorReportSpecBuilder.build(
@@ -124,6 +127,14 @@ public final class LocalDoctorReportStore {
         }
     }
 
+    /// The compliance read takes whole days back from today: the look-back
+    /// itself, or for a window the days its start lies back (at least one).
+    func complianceDays(from start: Date) -> Int {
+        guard window != nil else { return periodDays }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: start), to: now()).day ?? periodDays
+        return max(1, days)
+    }
+
     /// Reset all in-memory state on logout + remove the temp files.
     public func clearOnLogout() {
         if let url = pdfURL {
@@ -139,6 +150,7 @@ public final class LocalDoctorReportStore {
         error = nil
         selection = .all
         periodDays = 90
+        window = nil
     }
 
     // MARK: - Snapshot

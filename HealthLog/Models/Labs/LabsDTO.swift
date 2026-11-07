@@ -250,6 +250,8 @@ public struct LabResultDetailDTO: Codable, Sendable, Equatable, Identifiable, Ha
     public let sourceValue: Double?
     public let sourceUnit: String?
     public let printedReferenceText: String?
+    /// #141 (v1.43) — related records; `nil` from an older server.
+    public internal(set) var related: RelatedLinks?
 
     public var isLinked: Bool {
         biomarkerId != nil
@@ -329,6 +331,7 @@ public struct LabResultDetailDTO: Codable, Sendable, Equatable, Identifiable, Ha
         sourceValue = try? c.decodeIfPresent(Double.self, forKey: .sourceValue)
         sourceUnit = try? c.decodeIfPresent(String.self, forKey: .sourceUnit)
         printedReferenceText = try? c.decodeIfPresent(String.self, forKey: .printedReferenceText)
+        related = try? c.decodeIfPresent(RelatedLinks.self, forKey: .related)
     }
 }
 

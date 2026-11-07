@@ -373,6 +373,7 @@ struct AboutMeScreen: View {
                 SettingsAnamnesisScreen()
             }
             .accessibilityIdentifier("aboutMe.row.anamnesis")
+            LifeCircumstancesEntryRow()
         }
     }
 

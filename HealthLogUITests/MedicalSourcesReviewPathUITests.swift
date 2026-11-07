@@ -23,20 +23,10 @@ import XCTest
 /// gate: see `scripts/release-ui-tests.json`.
 @MainActor
 final class MedicalSourcesReviewPathUITests: XCTestCase {
-    /// The two languages HealthLog ships. Forced per launch with
-    /// `-AppleLanguages` / `-AppleLocale`, exactly like the marketing captures,
-    /// so one simulator produces both evidence sets.
-    private enum Language: String {
-        case en
-        case de
-
-        var locale: String {
-            switch self {
-            case .en: "en_US"
-            case .de: "de_DE"
-            }
-        }
-    }
+    /// The capture language, forced per launch through ``UITestLanguage``
+    /// (`-AppleLanguages` / `-AppleLocale`), exactly like the marketing
+    /// captures, so one simulator produces every evidence set.
+    private typealias Language = UITestLanguage
 
     /// Where the PNGs land on the host. Renamed into
     /// the chosen local evidence directory.
@@ -66,14 +56,14 @@ final class MedicalSourcesReviewPathUITests: XCTestCase {
     /// the first thing to read in the result bundle.
     private func finishCapture() {
         let summary = """
-        language: \(language.rawValue)
+        language: \(language.tag)
         captured (\(captured.count)):
         \(captured.map { "  - \($0)" }.joined(separator: "\n"))
         not captured (\(skipped.count)):
         \(skipped.map { "  - \($0)" }.joined(separator: "\n"))
         """
         let note = XCTAttachment(string: summary)
-        note.name = "\(language.rawValue)-capture-manifest"
+        note.name = "\(language.tag)-capture-manifest"
         note.lifetime = .keepAlways
         add(note)
     }
@@ -108,9 +98,7 @@ final class MedicalSourcesReviewPathUITests: XCTestCase {
         beginCapture(language)
         defer { finishCapture() }
         let app = XCUIApplication()
-        app.launchArguments += [
-            "-AppleLanguages", "(\(language.rawValue))",
-            "-AppleLocale", language.locale,
+        app.launchArguments += language.launchArguments + [
             "-uitest-hermetic",
             "-uitest-disable-biometric-lock",
             "-uitest-disclaimer-unacked"
@@ -396,9 +384,7 @@ extension MedicalSourcesReviewPathUITests {
     private func boot(_ language: Language) -> XCUIApplication {
         let app = XCUIApplication()
         let greeting = app.launchHermeticAndWaitForDashboard(
-            extraArguments: [
-                "-AppleLanguages", "(\(language.rawValue))",
-                "-AppleLocale", language.locale,
+            extraArguments: language.launchArguments + [
                 // 1.0.3 (1.4.1) — the citation-evidence fixture overlay
                 // (`HermeticFixtures+Citations`). Without it the correlation
                 // card, the classified blood pressure, the lab biomarker and the
@@ -515,7 +501,7 @@ extension MedicalSourcesReviewPathUITests {
         }
         if element.exists { return element }
         XCTFail("Missing \(what) (\(identifier))")
-        attachFailureDiagnostics(app: app, label: "\(language.rawValue)-\(identifier)")
+        attachFailureDiagnostics(app: app, label: "\(language.tag)-\(identifier)")
         return nil
     }
 
@@ -565,7 +551,7 @@ extension MedicalSourcesReviewPathUITests {
     private func capture(_ app: XCUIApplication, _ name: String) {
         dismissAIConsentSheet(app)
         let shot = XCUIScreen.main.screenshot()
-        let filename = "\(language.rawValue)-\(name)"
+        let filename = "\(language.tag)-\(name)"
         let attachment = XCTAttachment(screenshot: shot)
         attachment.name = filename
         attachment.lifetime = .keepAlways
@@ -586,7 +572,7 @@ extension MedicalSourcesReviewPathUITests {
     private func note(_ reason: String) {
         skipped.append(reason)
         let attachment = XCTAttachment(string: reason)
-        attachment.name = "\(language.rawValue)-skip-note"
+        attachment.name = "\(language.tag)-skip-note"
         attachment.lifetime = .keepAlways
         add(attachment)
     }

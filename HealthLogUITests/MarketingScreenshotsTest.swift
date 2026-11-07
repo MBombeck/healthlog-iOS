@@ -20,8 +20,8 @@ final class MarketingScreenshotsTest: XCTestCase {
     /// `TEST_RUNNER_HL_MARKETING_LANG=de` (forwarded by xcodebuild) switches the
     /// capture language; the output directory carries the language so an
     /// English and a German run never overwrite each other.
-    private static let language = ProcessInfo.processInfo.environment["HL_MARKETING_LANG"] ?? "en"
-    private let outputDir = "/tmp/marketing-shots-\(MarketingScreenshotsTest.language)-\(ProcessInfo.processInfo.environment["HL_MARKETING_TAG"] ?? "sim")"
+    private static let language = UITestLanguage(environmentValue: ProcessInfo.processInfo.environment["HL_MARKETING_LANG"])
+    private let outputDir = "/tmp/marketing-shots-\(MarketingScreenshotsTest.language.tag)-\(ProcessInfo.processInfo.environment["HL_MARKETING_TAG"] ?? "sim")"
 
     override func setUpWithError() throws {
         continueAfterFailure = true
@@ -295,9 +295,7 @@ final class MarketingScreenshotsTest: XCTestCase {
     /// it is and set no appearance override at all.
     func bootMarketingApp(extraArguments overlays: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        var extraArguments = [
-            "-AppleLanguages", "(\(Self.language))",
-            "-AppleLocale", Self.language == "de" ? "de_DE" : "en_US",
+        var extraArguments = Self.language.launchArguments + [
             "-uitest-phase8", "insightsAccessibility",
             "-uitest-marketing",
             "-hl.healthkit.requestedAt.hermetic-user", "true",

@@ -150,7 +150,7 @@
             // phase in `AuthStore.logout()` / `handleUnauthorized()` before
             // the cascade fires. Resetting it from inside the cascade would
             // recurse into the hooks that invoked it.
-            "authStore"
+            "authStore", "onboardingDraft" // #153: memory-only setup draft, reset when OnboardingFlow appears after sign-out
         ]
 
         /// Reflection sweep: every `AppContainer` property whose type is a

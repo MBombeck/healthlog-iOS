@@ -155,9 +155,12 @@ struct BiomarkerRow: View {
             }
             Spacer(minLength: HLSpace.sm)
             VStack(alignment: .trailing, spacing: HLSpace.xxs) {
-                Text(marker.unit)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                // #160 — a marker without a unit says so instead of "1".
+                if let unitLabel = LabUnit.standalone(marker.unit) {
+                    Text(verbatim: unitLabel)
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLText.secondary)
+                }
                 if let range = rangeLabel {
                     Text(range)
                         .font(.hlCaption)

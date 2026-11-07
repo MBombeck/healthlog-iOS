@@ -182,6 +182,10 @@ struct EditMedicationSheet: View {
 
                 deliverySection
 
+                if medication.offersAutoMarkTakenSwitch(canManage: canManageMedications) {
+                    MedicationAutoMarkTakenSection(value: $autoMarkTaken, since: medication.autoMarkTakenSince)
+                }
+
                 lifecycleSection
 
                 if let saveError {
@@ -221,6 +225,10 @@ struct EditMedicationSheet: View {
         .interactiveDismissDisabled(isSaving)
         .hlSheetPresentation(.form)
     }
+
+    /// MED-PLUS (v1.42.2) — "record doses automatically"; see `+AutoMarkTaken.swift`.
+    @State private var autoMarkTaken = MedicationAutoMarkTakenFormValue()
+    @Environment(AuthStore.self) private var authStore: AuthStore?
 
     /// 15-02 (B3) — the Zeitplan row became the interaction target, reported on
     /// the way DOWN so the picker's own tap handling stays untouched.
@@ -396,6 +404,7 @@ struct EditMedicationSheet: View {
         endsOn = state.endsOn
         isOneShot = state.isOneShot
         intake = MedicationTrackIntakeFormValue(tracked: state.trackIntake, server: state.serverTrackIntake)
+        autoMarkTaken = state.autoMarkTaken
         graceEnabled = state.graceMinutes != nil
         graceMinutes = state.graceMinutes ?? 60
         prefill = state
@@ -419,6 +428,13 @@ extension EditMedicationSheet {
         if kind == .asNeeded {
             graceEnabled = false
         }
+    }
+
+    /// The record in use lets the caller change medications (a signed-out or
+    /// unknown phase reads as the own record; the server refuses otherwise).
+    private var canManageMedications: Bool {
+        guard let authStore, case let .authenticated(user) = authStore.phase else { return true }
+        return user.accountAccess.canManageMedications
     }
 
     // MARK: - Validation
@@ -459,6 +475,7 @@ extension EditMedicationSheet {
         draft.graceMinutes = graceEnabled ? graceMinutes : nil
         draft.slotUnitsPerDose = resolvedSlotDoses
         draft.intake = intake
+        draft.autoMarkTaken = autoMarkTaken
         // The medication-level booleans ARE the user-level roaming default:
         // sent only for "Alle Geräte"; "Dieses Gerät" stays a local override.
         draft.liveActivityEnabled = liveActivityScope == .allDevices ? liveActivityEnabled : nil

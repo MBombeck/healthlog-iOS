@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 #if canImport(HealthKit)
     import HealthKit
 #endif
@@ -13,6 +14,12 @@ public protocol HealthKitHRBucketSyncing: AnyObject, Sendable {
     /// sweep's reach is decided by the per-day ledger (#12), not by it.
     func triggerHRBucketSync(lookbackHours: Int) async
 
+    /// SYNC-HR — the same sweep for a caller with a window. When `isExpired`
+    /// turns true while the caller waits (a background grant running out),
+    /// the sweep is abandoned and its HealthKit query stopped, so iOS never
+    /// suspends the app on a query nobody will collect.
+    func triggerHRBucketSync(lookbackHours: Int, isExpired: @escaping @Sendable () -> Bool) async
+
     /// #12 — fire-and-forget sweep request, issued whenever the per-sample
     /// path hands heart rate to the bucket path. Runs in its own task, so a
     /// foreground pass that is cancelled at its deadline cannot take the
@@ -20,18 +27,56 @@ public protocol HealthKitHRBucketSyncing: AnyObject, Sendable {
     func requestHRBucketSweep()
 
     /// **V1 (1.2)** — returns once no sweep is running. A HealthKit delivery
-    /// waits on it before it hands back its completion handler.
+    /// waits on it before it hands back its completion handler. SYNC-HR: never
+    /// longer than the sweep deadline, and not at all for a sweep already past
+    /// it.
     func awaitHRBucketSweep() async
 }
 
 public extension HealthKitHRBucketSyncing {
     func awaitHRBucketSweep() async {}
+
+    func triggerHRBucketSync(lookbackHours: Int, isExpired _: @escaping @Sendable () -> Bool) async {
+        await triggerHRBucketSync(lookbackHours: lookbackHours)
+    }
 }
 
 /// The HealthKit read the sweep depends on, behind a seam so the sweep's
 /// day logic is testable without a health store.
 public protocol HealthKitHRBucketReading: Sendable {
     func bucketRows(from: Date, to: Date) async throws -> [HealthKitHRBucketRow]
+}
+
+/// SYNC-HR — the heart-rate sweep this process is running right now, for
+/// Sync Diagnostics ("läuft seit …") and the copied report. Process memory
+/// only: a sweep of an earlier launch is gone with it.
+struct HRBucketSweepActivity: Equatable, Sendable {
+    let generation: UInt64
+    let startedAt: Date
+
+    /// Running longer than the deadline at `now`.
+    func isOverdue(now: Date, deadline: TimeInterval = 120) -> Bool {
+        now.timeIntervalSince(startedAt) >= deadline
+    }
+}
+
+enum HRBucketSweepActivityBoard {
+    private static let state = Mutex<(owner: ObjectIdentifier, activity: HRBucketSweepActivity)?>(nil)
+
+    static func current() -> HRBucketSweepActivity? {
+        state.withLock { $0?.activity }
+    }
+
+    static func begin(owner: ObjectIdentifier, generation: UInt64, startedAt: Date) {
+        state.withLock { $0 = (owner, HRBucketSweepActivity(generation: generation, startedAt: startedAt)) }
+    }
+
+    /// Clears the board only for the run that is on it.
+    static func end(owner: ObjectIdentifier, generation: UInt64) {
+        state.withLock { value in
+            if value?.owner == owner, value?.activity.generation == generation { value = nil }
+        }
+    }
 }
 
 #if canImport(HealthKit)
@@ -77,9 +122,27 @@ public protocol HealthKitHRBucketReading: Sendable {
         private let defaultsProvider: @Sendable () -> UserDefaults
 
         /// The sweep in flight, shared by every caller that arrives meanwhile.
-        private var running: Task<Int, Never>?
+        private var running: Run?
         /// A request arrived while a sweep was running; run once more after it.
         private var rerunRequested = false
+        /// Numbers every run. A run whose number is no longer ``running``'s
+        /// was abandoned: whatever it still gets back writes nothing.
+        private var generation: UInt64 = 0
+        /// How long one sweep may run before a request abandons it, and the
+        /// longest any caller waits for it (SYNC-HR).
+        let staleAfter: TimeInterval
+
+        private struct Run {
+            let task: Task<Int, Never>
+            let generation: UInt64
+            /// Start of the sweep the run is in now (a rerun restarts it).
+            var sweepStartedAt: Date
+        }
+
+        /// SYNC-HR — two minutes: twice the HealthKit query's own limit, far
+        /// above a healthy sweep (seconds), far below "until the app is
+        /// restarted".
+        public static let defaultStaleAfter: TimeInterval = 120
 
         private var defaults: UserDefaults {
             defaultsProvider()
@@ -103,7 +166,8 @@ public protocol HealthKitHRBucketReading: Sendable {
             keychain: KeychainStoring,
             isStandalone: @escaping @Sendable () -> Bool,
             clock: @escaping @Sendable () -> Date = { Date() },
-            defaultsProvider: @escaping @Sendable () -> UserDefaults = { .standard }
+            defaultsProvider: @escaping @Sendable () -> UserDefaults = { .standard },
+            staleAfter: TimeInterval = HealthKitHRBucketSyncCoordinator.defaultStaleAfter
         ) {
             self.service = service
             self.uploader = uploader
@@ -112,6 +176,7 @@ public protocol HealthKitHRBucketReading: Sendable {
             self.isStandalone = isStandalone
             self.clock = clock
             self.defaultsProvider = defaultsProvider
+            self.staleAfter = staleAfter
         }
 
         /// The UTC days one sweep reads, ascending.
@@ -136,27 +201,101 @@ public protocol HealthKitHRBucketReading: Sendable {
         }
 
         /// Runs one sweep, joining a sweep already in flight. Returns the number
-        /// of buckets the server accepted (0 when a gate suppressed the run).
+        /// of buckets the server accepted (0 when a gate suppressed the run,
+        /// when the caller stopped waiting, or when the sweep was abandoned).
+        ///
+        /// **SYNC-HR (#159 / HealthLog#1326):** a sweep older than
+        /// ``staleAfter`` is abandoned by the next request, which starts a new
+        /// one. No caller waits past the sweep's deadline, and a caller whose
+        /// `isExpired` turns true abandons the sweep it waits for.
         @discardableResult
-        public func sync(lookbackHours _: Int = 48) async -> Int {
-            if let running {
+        public func sync(
+            lookbackHours _: Int = 48,
+            isExpired: @escaping @Sendable () -> Bool = { false }
+        ) async -> Int {
+            let run: Run
+            if let current = running, !isStale(current) {
                 rerunRequested = true
-                return await running.value
+                run = current
+            } else {
+                if let stale = running { abandon(stale, reason: "stuck") }
+                run = start()
             }
+            switch await BoundedWait.value(of: run.task, limit: remainingWait(for: run), isExpired: isExpired) {
+            case let .finished(accepted):
+                return accepted
+            case .expired:
+                if running?.generation == run.generation { abandon(run, reason: "window closed") }
+                return 0
+            case .timedOut, .cancelled:
+                // Past the deadline the next request abandons it; a caller
+                // that went away leaves it to the others.
+                return 0
+            }
+        }
+
+        private func start() -> Run {
+            generation &+= 1
+            let id = generation
+            rerunRequested = false
+            let run = Run(task: Task { await self.drain(generation: id) }, generation: id, sweepStartedAt: clock())
+            running = run
+            HRBucketSweepActivityBoard.begin(owner: ObjectIdentifier(self), generation: id, startedAt: run.sweepStartedAt)
+            return run
+        }
+
+        /// The body of one run: a sweep, and one more for every request that
+        /// arrived meanwhile, until the run is abandoned.
+        private func drain(generation id: UInt64) async -> Int {
             var total = 0
+            var rerun = false
             repeat {
                 rerunRequested = false
-                let task = Task { await self.sweepOnce() }
-                running = task
-                total += await task.value
+                if rerun, isCurrent(id) {
+                    let now = clock()
+                    running?.sweepStartedAt = now
+                    HRBucketSweepActivityBoard.begin(owner: ObjectIdentifier(self), generation: id, startedAt: now)
+                }
+                rerun = true
+                total += await sweepOnce(generation: id)
+            } while rerunRequested && isCurrent(id) && !Task.isCancelled
+            if isCurrent(id) {
                 running = nil
-            } while rerunRequested
+                HRBucketSweepActivityBoard.end(owner: ObjectIdentifier(self), generation: id)
+            }
             return total
+        }
+
+        private func isCurrent(_ id: UInt64) -> Bool {
+            running?.generation == id
+        }
+
+        private func isStale(_ run: Run) -> Bool {
+            clock().timeIntervalSince(run.sweepStartedAt) >= staleAfter
+        }
+
+        private func remainingWait(for run: Run) -> Duration {
+            .seconds(max(0, staleAfter - clock().timeIntervalSince(run.sweepStartedAt)))
+        }
+
+        /// Gives up on `run`: cancels it (which stops its HealthKit query) and
+        /// frees the slot. What the run still gets back writes nothing.
+        private func abandon(_ run: Run, reason: StaticString) {
+            let age = Int(clock().timeIntervalSince(run.sweepStartedAt))
+            run.task.cancel()
+            running = nil
+            rerunRequested = false
+            HRBucketSweepActivityBoard.end(owner: ObjectIdentifier(self), generation: run.generation)
+            // Generation and age are counts; the reason a fixed literal.
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            HLLog.healthKit.error(
+                "HR-BUCKET sweep \(run.generation, privacy: .public) abandoned after \(age, privacy: .public)s: \(reason.description, privacy: .public)"
+            )
         }
 
         // MARK: - One sweep
 
-        private func sweepOnce() async -> Int {
+        private func sweepOnce(generation id: UInt64) async -> Int {
             let startedAt = clock()
             let userID = keychain.getString(forKey: KeychainKey.userID)
             // Gate 1 — standalone: no server in offline mode.
@@ -203,17 +342,27 @@ public protocol HealthKitHRBucketReading: Sendable {
                 let from = max(HRBucketSyncLedger.start(ofDay: firstDay), cutover)
                 rows = try await service.bucketRows(from: from, to: currentBucketStart)
             } catch {
+                // An abandoned run's query was stopped on purpose: nothing to
+                // record, the run that replaced it records its own outcome.
+                guard isCurrent(id) else { return 0 }
                 let gate: HRBucketGate = Self.isHealthDataLocked(error) ? .healthDataLocked : .queryFailed
+                if error is HealthKitQueryTimedOut {
+                    HLLog.healthKit.error("HR-BUCKET statistics query timed out and was stopped")
+                }
                 return finish(gate, userID: userID, startedAt: startedAt)
             }
+            // SYNC-HR — a late answer to an abandoned run changes nothing.
+            guard isCurrent(id), !Task.isCancelled else { return 0 }
 
             let byDay = Dictionary(grouping: rows.filter { $0.bucketStartUTC >= cutover && $0.bucketStartUTC < currentBucketStart }) {
                 HRBucketSyncLedger.day(of: $0.bucketStartUTC)
             }
             var progress = SweepProgress()
             for day in days {
-                await sweep(day: day, rows: byDay[day] ?? [], userID: userID, now: now, progress: &progress)
+                guard isCurrent(id), !Task.isCancelled else { return progress.accepted }
+                await sweep(day: day, rows: byDay[day] ?? [], userID: userID, now: now, generation: id, progress: &progress)
             }
+            guard isCurrent(id) else { return progress.accepted }
             return finish(progress, userID: userID, startedAt: startedAt, dayCount: days.count)
         }
 
@@ -230,6 +379,7 @@ public protocol HealthKitHRBucketReading: Sendable {
             rows: [HealthKitHRBucketRow],
             userID: String?,
             now: Date,
+            generation id: UInt64,
             progress: inout SweepProgress
         ) async {
             let defaults = defaults
@@ -242,6 +392,7 @@ public protocol HealthKitHRBucketReading: Sendable {
                 do {
                     try await uploader.upload(changed.map(Self.entry(for:)))
                 } catch {
+                    guard isCurrent(id) else { return }
                     let gate: HRBucketGate = Self.isTransient(error) ? .uploadDeferred : .uploadFailed
                     if progress.failure != .uploadFailed { progress.failure = gate }
                     // Gate name and the error's type only: a message with any
@@ -251,6 +402,9 @@ public protocol HealthKitHRBucketReading: Sendable {
                         .error("HR-BUCKET upload failed — gate=\(gate.rawValue, privacy: .public) error=\(errorType, privacy: .public)")
                     return
                 }
+                // Posted, but the run was abandoned meanwhile: the server rows
+                // are idempotent, the run that replaced it posts them again.
+                guard isCurrent(id) else { return }
                 progress.accepted += changed.count
                 // V1 — the persistent per-type record Sync Diagnostics shows.
                 HealthKitStatsUploadLogStore.recordUpload(
@@ -385,13 +539,21 @@ public protocol HealthKitHRBucketReading: Sendable {
             _ = await sync(lookbackHours: lookbackHours)
         }
 
+        public func triggerHRBucketSync(lookbackHours: Int, isExpired: @escaping @Sendable () -> Bool) async {
+            _ = await sync(lookbackHours: lookbackHours, isExpired: isExpired)
+        }
+
         public nonisolated func requestHRBucketSweep() {
             Task { await self.sync() }
         }
 
+        /// Waits for the sweep in flight and the reruns it owes, never past
+        /// its deadline, and not at all for a sweep already past it.
         public func awaitHRBucketSweep() async {
-            while let running {
-                _ = await running.value
+            while let run = running, !isStale(run), !Task.isCancelled {
+                guard case .finished = await BoundedWait.value(of: run.task, limit: remainingWait(for: run)) else {
+                    return
+                }
             }
         }
     }

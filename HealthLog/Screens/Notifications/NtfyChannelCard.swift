@@ -64,9 +64,7 @@ struct NtfyChannelCard: View {
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
                     SecureField(tokenPlaceholder, text: $authTokenDraft)
-                        .textContentType(.password)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        .hlSecretEntry()
                         .accessibilityIdentifier("notifications.ntfy.tokenField")
                 }
 

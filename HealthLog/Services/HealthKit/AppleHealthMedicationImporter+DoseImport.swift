@@ -123,10 +123,7 @@ extension AppleHealthMedicationImporter {
         do {
             // Check 1 of 2 — before the request.
             try lease.requireCurrent()
-            var trigger = syncTrigger.wireValue
-            if backfill {
-                trigger = await SyncTriggerContext.bindingBackfill { syncTrigger.wireValue }
-            }
+            let trigger = syncTrigger.wireValue(backfill: backfill)
             let response = try await repo.bulkImportAppleHealthDoses(
                 chunk.map(\.entry),
                 idempotencyKey: envelope?.idempotencyKey,

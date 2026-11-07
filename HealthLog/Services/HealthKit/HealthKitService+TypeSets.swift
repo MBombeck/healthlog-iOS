@@ -79,6 +79,19 @@ import Foundation
             set.insert(HKQuantityType(.stairAscentSpeed))
             set.insert(HKQuantityType(.stairDescentSpeed))
             set.insert(HKQuantityType(.numberOfTimesFallen))
+            // HK-NEW (1.5) — the exercise and stand rings, stand hours, mindful
+            // sessions and AFib burden, mapped by the server since v1.44.0
+            // (State of Mind is already here, see below). Read only. Like RMSSD
+            // they join the onboarding sheet unconditionally, so a new install
+            // is asked once and never again; nothing is collected or sent before
+            // the server maps them (`HealthKitServerTypeGate`). An installation
+            // that answered the sheet before is asked once, after an
+            // explanation (`HKReadinessStore.requestLateReadAuthorizationIfNeeded`).
+            set.insert(HKQuantityType(.appleExerciseTime))
+            set.insert(HKQuantityType(.appleStandTime))
+            set.insert(HKCategoryType(.appleStandHour))
+            set.insert(HKCategoryType(.mindfulSession))
+            set.insert(HKQuantityType(.atrialFibrillationBurden))
             // W-HKREAD — six categorical EVENT classes collected by the
             // dedicated `HeartHealthEventImporter` (not expressible in the
             // Spezi `CollectSamples` DSL the same way the importer needs).
@@ -162,6 +175,15 @@ import Foundation
             set.insert(HKCategoryType(.environmentalAudioExposureEvent))
             set.insert(HKCategoryType(.headphoneAudioExposureEvent))
             return set
+        }
+
+        /// **1.5 ROUTES (#149)** — the GPS track of a workout. Deliberately
+        /// NOT in ``defaultReadTypes``: routes are location data, so the app
+        /// asks for them only when the person switches "Send routes" on
+        /// (``HealthKitService/requestWorkoutRouteAuthorization()``), never in
+        /// the first sheet and never by itself after an update. Read-only.
+        static var workoutRouteReadTypes: Set<HKObjectType> {
+            [HKSeriesType.workoutRoute()]
         }
 
         /// v0.5.4 BF-5: write-types-set spans every kind that can be entered

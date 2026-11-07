@@ -162,35 +162,21 @@ struct HLDashboardTileStateTests {
         assertSnapshot(of: descriptor(for: metric, provenance: nil), as: .dump)
     }
 
-    @Test("trend chip dashboard-direction mode is literal across polarity")
-    func trendChipDashboardDirectionMatrix() {
-        // This is the requested literal dashboard indicator mode, independent
-        // of clinical polarity: up = green, down = red, flat = secondary,
-        // unknown = absent. Polarity-aware semantics elsewhere stay unchanged.
-        let polarities: [MetricKindDescriptor.TrendPolarity] = [.higherIsBetter, .lowerIsBetter, .neutral]
-        let trends: [TrendIndicator] = [.up, .down, .flat, .unknown]
-        var matrix: [String: String] = [:]
-        for polarity in polarities {
-            for trend in trends {
-                let color = TrendChip(
-                    trend: trend,
-                    polarity: polarity,
-                    mode: .dashboardDirection
-                ).colorRole.rawValue
-                matrix["\(polarity).\(trend.rawValue)"] = color
-            }
+    @Test("trend chip colours only from a server verdict (1.5 VERDICTS)")
+    func trendChipVerdictMatrix() {
+        // Without a verdict every direction is monochrome; with one the
+        // server's table decides; an unknown trend draws nothing.
+        for trend in [TrendIndicator.up, .down, .flat] {
+            #expect(TrendChip(trend: trend, mode: .neutral).colorRole == .textSecondary)
         }
-        assertSnapshot(of: matrix, as: .dump)
-    }
-
-    @Test("trend chip default mode preserves polarity-aware clinical semantics")
-    func trendChipDefaultPolarityMatrix() {
-        #expect(TrendChip(trend: .up, polarity: .lowerIsBetter).colorRole == .statusBad)
-        #expect(TrendChip(trend: .down, polarity: .higherIsBetter).colorRole == .statusBad)
-        #expect(TrendChip(trend: .up, polarity: .higherIsBetter).colorRole == .textSecondary)
-        #expect(TrendChip(trend: .down, polarity: .lowerIsBetter).colorRole == .textSecondary)
-        #expect(TrendChip(trend: .flat, polarity: .neutral).colorRole == .textSecondary)
-        #expect(TrendChip(trend: .unknown, polarity: .neutral).colorRole == .none)
+        #expect(TrendChip(trend: .unknown, mode: .neutral).colorRole == .none)
+        #expect(TrendChip(trend: .up, mode: .serverSentiment(.upGood)).colorRole == .statusOK)
+        #expect(TrendChip(trend: .up, mode: .serverSentiment(.upBad)).colorRole == .statusBad)
+        #expect(TrendChip(trend: .down, mode: .serverSentiment(.upBad)).colorRole == .statusOK)
+        #expect(TrendChip(trend: .up, mode: .serverSentiment(.hold)).colorRole == .textSecondary)
+        #expect(TrendChip(trend: .flat, mode: .serverSentiment(.hold)).colorRole == .statusOK)
+        #expect(TrendChip(trend: .up, mode: .serverSentiment(.unknown)).colorRole == .textSecondary)
+        #expect(TrendChip(trend: .unknown, mode: .serverVerdict(.positive)).colorRole == .none)
     }
 
     @Test("dashboard metric shows the server's trend only — no sparkline-derived arrow (#115 B7)")
@@ -220,12 +206,13 @@ struct HLDashboardTileStateTests {
 
         #expect(supported.dashboardTrend == .unknown)
         #expect(clinical.dashboardTrend == .up)
-        #expect(supported.dashboardTrendMode(weightSentiment: nil) == .dashboardDirection)
-        #expect(clinical.dashboardTrendMode(weightSentiment: nil) == .polarityAware)
+        // 1.5 VERDICTS — no verdict anywhere: neutral, also for a rising pulse
+        // the old polarity table painted red.
+        #expect(TileTrendVerdicts.none.mode(for: supported) == .neutral)
+        #expect(TileTrendVerdicts.none.mode(for: clinical) == .neutral)
         #expect(TrendChip(
             trend: clinical.dashboardTrend,
-            polarity: clinical.kind.descriptor.trendPolarity,
-            mode: clinical.dashboardTrendMode(weightSentiment: nil)
-        ).colorRole == .statusBad)
+            mode: TileTrendVerdicts.none.mode(for: clinical)
+        ).colorRole == .textSecondary)
     }
 }

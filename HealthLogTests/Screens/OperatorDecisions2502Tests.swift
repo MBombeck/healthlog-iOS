@@ -117,6 +117,9 @@ struct OperatorDecisions2502Tests {
             toolbar.contains("SettingsAccountScreen(") && !toolbar.contains("EditProfileSheet("),
             "EXPECTED_RED: 25-02 the dashboard avatar still opens the profile editor instead of Konto"
         )
+        // 1.5 (Alex, 07.11.): the avatar sheet signs out, but resetting data
+        // and deleting the account stay under Einstellungen > Konto only.
+        #expect(toolbar.contains("SettingsAccountScreen(showsIrreversibleActions: false)"))
     }
 
     /// Edit Profile stays reachable from inside Konto exactly as today — the

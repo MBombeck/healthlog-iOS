@@ -98,7 +98,7 @@ import Testing
 
         // MARK: - CumulativeTypeConfig
 
-        @Test("Default configs cover all 5 locked cumulative HK types")
+        @Test("Default configs cover the 5 locked cumulative HK types and the two ring minutes (HK-NEW)")
         func defaultsCoverLocked5() {
             let identifiers = HealthKitCumulativeTypeConfig.defaults.map(\.identifier)
             let expected: Set = [
@@ -106,10 +106,13 @@ import Testing
                 "HKQuantityTypeIdentifierActiveEnergyBurned",
                 "HKQuantityTypeIdentifierFlightsClimbed",
                 "HKQuantityTypeIdentifierDistanceWalkingRunning",
-                "HKQuantityTypeIdentifierTimeInDaylight"
+                "HKQuantityTypeIdentifierTimeInDaylight",
+                // HK-NEW (1.5) — server v1.44, collected only where the server maps them.
+                "HKQuantityTypeIdentifierAppleExerciseTime",
+                "HKQuantityTypeIdentifierAppleStandTime"
             ]
             #expect(Set(identifiers) == expected)
-            #expect(identifiers.count == 5)
+            #expect(identifiers.count == 7)
         }
 
         @Test("Default wire-units match server unitMap (steps/kcal/flights/m/minutes)")
@@ -122,6 +125,8 @@ import Testing
             #expect(map["HKQuantityTypeIdentifierFlightsClimbed"] == "flights")
             #expect(map["HKQuantityTypeIdentifierDistanceWalkingRunning"] == "m")
             #expect(map["HKQuantityTypeIdentifierTimeInDaylight"] == "minutes")
+            #expect(map["HKQuantityTypeIdentifierAppleExerciseTime"] == "minutes")
+            #expect(map["HKQuantityTypeIdentifierAppleStandTime"] == "minutes")
         }
 
         @Test("cumulativeIdentifiers Set matches defaults — drift guard")

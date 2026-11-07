@@ -30,8 +30,13 @@ struct FullscreenChartCover: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let series = store.displaySeries, series.points.count >= 2 {
-                    chart(for: series)
+                // Same points as the chart card it zoomed from (`chartCardPoints`):
+                // kinds without a server series (skin temperature, walking
+                // speed) draw from the raw readings there, so reading only
+                // `chartCardSeries` here showed "no measurements" over a
+                // drawn card.
+                if store.chartCardPoints.count >= 2 {
+                    chart(for: store.chartCardPoints)
                         .padding(.horizontal, HLSpace.md)
                         .padding(.vertical, HLSpace.lg)
                 } else {
@@ -62,8 +67,8 @@ struct FullscreenChartCover: View {
         }
     }
 
-    private func chart(for series: MeasurementSeries) -> some View {
-        let plotted = store.plotPoints(series.points, units: units)
+    private func chart(for points: [SeriesPoint]) -> some View {
+        let plotted = store.plotPoints(points, units: units)
         return Chart {
             MetricChartContent.marks(
                 for: kind,
@@ -73,7 +78,7 @@ struct FullscreenChartCover: View {
                 emphasisTint: HLColor.inkGraphite, references: store.referenceLineMarks(units: units)
             )
             if let selectedDate,
-               let selectedPoint = series.points.min(by: {
+               let selectedPoint = points.min(by: {
                    abs($0.at.timeIntervalSince(selectedDate)) < abs($1.at.timeIntervalSince(selectedDate))
                }),
                let plottedPoint = plotted.first(where: { $0.id == selectedPoint.id })
@@ -144,7 +149,7 @@ struct FullscreenChartCover: View {
         .accessibilityChartDescriptor(
             FullscreenChartDescriptor(
                 descriptor: ChartsAccessibility.makeDescriptor(
-                    for: store.accessibilitySeries(units: units),
+                    for: store.chartCardAccessibilitySeries(units: units),
                     kind: kind,
                     unit: store.displayUnit(units: units)
                 )

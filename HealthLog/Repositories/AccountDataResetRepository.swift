@@ -51,11 +51,22 @@ public actor AccountDataResetRepository {
     /// request body, not a query parameter). No outbox `Kind` is wired and no
     /// retry is desirable: this is a destructive, non-idempotent-feeling action
     /// the user must consciously re-trigger if it fails.
-    public func resetAllData() async throws {
-        let req: APIRequest<EmptyPayload> = try .delete(
-            "/api/settings/data",
-            body: AccountDataResetBody()
+    ///
+    /// KONTO (server 1.46.0): returns the receipt with `restorableUntil`, until
+    /// when an admin can restore the record from the copy taken first. Read raw
+    /// and tolerantly, like the account deletion: the wipe happened when the
+    /// server answered 2xx. One attempt only (`maxRetries: 0`): a 503
+    /// `data_wipe.copy_failed` deleted nothing and is the person's call to
+    /// repeat, not the transport's.
+    @discardableResult
+    public func resetAllData() async throws -> DataWipeReceipt {
+        let req = try APIRequest<Data>(
+            method: .delete,
+            path: "/api/settings/data",
+            body: JSONEncoder.hlDefault.encode(AccountDataResetBody()),
+            maxRetries: 0
         )
-        try await api.sendVoid(req)
+        let (body, _) = try await api.download(req)
+        return DataWipeReceipt.parse(body)
     }
 }

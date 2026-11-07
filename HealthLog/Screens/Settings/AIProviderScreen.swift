@@ -41,6 +41,7 @@ import SwiftUI
 struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     @Environment(AIProviderStore.self) private var store
     @Environment(\.appContainer) private var container
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var didPerformInitialLoad = false
 
@@ -144,21 +145,31 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
         }
     }
 
+    /// POLISH-C (C6) — at an accessibility text size the state pill moves
+    /// under the provider's name; beside it, it broke into four lines.
     private var statusRow: some View {
-        HStack(spacing: HLSpace.md) {
-            HLSettingsIconChip(
-                symbol: store.usesProviderOpaqueAIConsent ? "server.rack" : store.serverProvider.iconName,
-                tint: store.usesProviderOpaqueAIConsent ? HLColor.cyan : store.serverProvider.iconTint
-            )
-            // R3 — die Anbieter-Herkunft („API-Schlüssel von console.anthropic.com")
-            // stand dreimal in einer Ansicht: hier, in jeder Picker-Zeile und als
-            // Footer der Detail-Karte. Heimat ist die Detail-Karte, wo sie beim
-            // Eingabefeld steht; in der Status-Zeile trug sie nichts, was der
-            // Footer derselben Karte zwei Zeilen tiefer nicht sagt.
-            Text(store.usesProviderOpaqueAIConsent ? String(localized: "External AI") : store.serverProvider.label)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-            Spacer(minLength: HLSpace.sm)
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.sm))
+            : AnyLayout(HStackLayout(spacing: HLSpace.md))
+        return layout {
+            HStack(spacing: HLSpace.md) {
+                HLSettingsIconChip(
+                    symbol: store.usesProviderOpaqueAIConsent ? "server.rack" : store.serverProvider.iconName,
+                    tint: store.usesProviderOpaqueAIConsent ? HLColor.cyan : store.serverProvider.iconTint
+                )
+                // R3 — die Anbieter-Herkunft („API-Schlüssel von console.anthropic.com")
+                // stand dreimal in einer Ansicht: hier, in jeder Picker-Zeile und als
+                // Footer der Detail-Karte. Heimat ist die Detail-Karte, wo sie beim
+                // Eingabefeld steht; in der Status-Zeile trug sie nichts, was der
+                // Footer derselben Karte zwei Zeilen tiefer nicht sagt.
+                Text(store.usesProviderOpaqueAIConsent ? String(localized: "External AI") : store.serverProvider.label)
+                    .font(.hlSubhead.weight(.semibold))
+                    .foregroundStyle(HLText.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer(minLength: HLSpace.sm)
+            }
             statusBadge
         }
         .padding(.vertical, HLSpace.xs)
@@ -181,8 +192,9 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
             HLBadge(String(localized: "aiprovider.badge.configured"), icon: "checkmark.seal.fill", tone: .success)
                 .accessibilityIdentifier(Self.configuredBadgeIdentifier)
         } else if store.serverProvider == .unconfigured {
-            HLBadge(String(localized: "Not configured"), icon: "circle.slash", tone: .warning)
-                .accessibilityIdentifier(Self.notConfiguredBadgeIdentifier)
+            // POLISH-C (F-AI-1) — the row already reads "Not configured";
+            // a pill saying it again only crowded the line.
+            EmptyView()
         } else {
             HLBadge(String(localized: "Key missing"), icon: "exclamationmark.triangle.fill", tone: .warning)
                 .accessibilityIdentifier(Self.missingKeyBadgeIdentifier)
@@ -342,8 +354,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
                 }
             }
             SecureField(String(localized: "New API key"), text: $bindable.draftAPIKey)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+                .hlSecretEntry()
                 .accessibilityIdentifier(Self.apiKeyFieldIdentifier)
         }
     }
@@ -352,8 +363,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     private var localKeyField: some View {
         @Bindable var bindable = store
         SecureField(String(localized: "Local API key (optional)"), text: $bindable.draftAPIKey)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
+            .hlSecretEntry()
             .accessibilityIdentifier(Self.localKeyFieldIdentifier)
     }
 
@@ -485,7 +495,6 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     // MARK: - Accessibility identifiers
 
     static let configuredBadgeIdentifier = "aiProvider.status.configured"
-    static let notConfiguredBadgeIdentifier = "aiProvider.status.notConfigured"
     static let missingKeyBadgeIdentifier = "aiProvider.status.missingKey"
     static let savedBadgeIdentifier = "aiProvider.status.saved"
     static let keyPreviewIdentifier = "aiProvider.keyPreview"

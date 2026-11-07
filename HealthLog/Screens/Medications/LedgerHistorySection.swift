@@ -380,6 +380,9 @@ struct LedgerHistoryRow: View {
     /// Second line: the slot context. A late take shows its planned slot;
     /// an ad-hoc take shows the nearest slot it could have served.
     private var contextCaption: String? {
+        if row.intake?.isAutoRecordedTake == true {
+            return String(localized: "med.history.auto_recorded")
+        }
         if row.status == .takenLate {
             let planned = row.timeOfDay
                 ?? HLTimeFormat.time(row.at)

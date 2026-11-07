@@ -99,7 +99,7 @@ struct SmartReminderPhraseServiceTests {
         let cases: [ReminderPhraseOutcome.FallbackReason] = [
             .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady,
             .capabilityNotAllowed, .safetyRefused, .generationFailed,
-            .frameworkUnavailable, .emptyInput
+            .frameworkUnavailable, .languageUnsupported, .emptyInput
         ]
         for c in cases {
             #expect(ReminderPhraseOutcome.FallbackReason(rawValue: c.rawValue) == c)

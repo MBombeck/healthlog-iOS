@@ -56,7 +56,14 @@ enum HealthSampleReplayFloor {
         "HKQuantityTypeIdentifierStairAscentSpeed": "STAIR_ASCENT_SPEED",
         "HKQuantityTypeIdentifierStairDescentSpeed": "STAIR_DESCENT_SPEED",
         "HKQuantityTypeIdentifierNumberOfTimesFallen": "FALL_COUNT",
-        "HKQuantityTypeIdentifierTimeInDaylight": "TIME_IN_DAYLIGHT"
+        "HKQuantityTypeIdentifierTimeInDaylight": "TIME_IN_DAYLIGHT",
+        // HK-NEW (1.5) — server v1.44.
+        "HKQuantityTypeIdentifierAppleExerciseTime": "EXERCISE_MINUTES",
+        "HKQuantityTypeIdentifierAppleStandTime": "STAND_MINUTES",
+        "HKCategoryTypeIdentifierAppleStandHour": "STAND_HOURS",
+        "HKCategoryTypeIdentifierMindfulSession": "MINDFUL_MINUTES",
+        "HKDataTypeStateOfMind": "STATE_OF_MIND_VALENCE",
+        "HKQuantityTypeIdentifierAtrialFibrillationBurden": "AFIB_BURDEN"
     ]
 
     /// The replay floor for one type from the server's freshness list, or

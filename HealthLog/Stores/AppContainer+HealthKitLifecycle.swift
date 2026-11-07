@@ -162,10 +162,32 @@ public extension AppContainer {
         // inside the throttle window is suppressed; a forced run (pull-to-
         // refresh) always runs and re-arms the window.
         guard dailyStatsForegroundThrottle.shouldRun(force: force) else { return }
-        let pass = await DetachedHealthSyncRunner.shared.request(.foreground) { [weak self] trigger, isExpired in
+        await Self.requestForegroundPass(runner: .shared, force: force) { [weak self] trigger, isExpired in
             await self?.runForegroundHealthSync(trigger, isExpired: isExpired)
         }
-        if force { await pass.value }
+    }
+
+    /// SYNC-HR (1.5, #159 / HealthLog#1326) — the longest a pull to
+    /// refresh waits for the pass before the dashboard reloads anyway.
+    internal nonisolated static let pullToRefreshPassWait: Duration = .seconds(20)
+
+    /// Queues the foreground pass; a forced call (pull to refresh) waits for
+    /// it, but at most `wait`. Until 1.4.1 it waited without a limit, and a
+    /// pass stuck on the pulse sweep kept the dashboard stores from ever
+    /// reloading while the spinner still ended in a check mark. Returns
+    /// whether the pass finished inside the wait (always `true` unforced).
+    @discardableResult
+    internal nonisolated static func requestForegroundPass(
+        runner: DetachedHealthSyncRunner,
+        force: Bool,
+        wait: Duration = AppContainer.pullToRefreshPassWait,
+        pass: @escaping DetachedHealthSyncRunner.Pass
+    ) async -> Bool {
+        let task = await runner.request(.foreground, pass: pass)
+        guard force else { return true }
+        if case .finished = await BoundedWait.value(of: task, limit: wait) { return true }
+        HLLog.healthKit.notice("pull to refresh: pass still running, stores reload without it")
+        return false
     }
 
     /// The detached body: the live step read and the orchestrated pass.

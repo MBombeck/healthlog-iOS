@@ -112,7 +112,7 @@ struct MedicationExtractionServiceTests {
         let cases: [MedicationExtractionOutcome.FallbackReason] = [
             .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady,
             .capabilityNotAllowed, .safetyRefused, .generationFailed,
-            .frameworkUnavailable, .emptyInput
+            .frameworkUnavailable, .languageUnsupported, .emptyInput
         ]
         for c in cases {
             #expect(MedicationExtractionOutcome.FallbackReason(rawValue: c.rawValue) == c)

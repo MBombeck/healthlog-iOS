@@ -25,6 +25,15 @@ public struct MedicationWireDTO: Codable, Sendable, Identifiable, Hashable {
     public let notificationsEnabled: Bool?
     /// v1.42.2 `remindersActive` / `autoMarkTaken`, folded in `toDomain()`.
     public var remindersActive: Bool?, autoMarkTaken: Bool?
+    /// #1280 (v1.46.0) `endedAt` / `canEndCourse`, v1.40 `canStartCourse`, v1.42.2
+    /// `autoMarkTakenSince`. Read through `Medication+CourseActions.swift`.
+    public var endedAt: Date?, canEndCourse: Bool?, canStartCourse: Bool?, autoMarkTakenSince: Date?
+    /// #141 (v1.43) `related`, single-medication reads only. See `MedicationsRepository+Related.swift`.
+    public var related: RelatedLinks?
+    /// #131 (v1.43) composition; `ingredients` on single reads only. See `Medication+Ingredients.swift`.
+    public var ingredients: MedicationIngredients?, hasIngredients: Bool?
+    /// MED-PLUS (v1.40) course summary. See `Medication+Courses.swift`.
+    public var courseCount: Int?, previousCourseEndedOn: String?
     public let schedules: [MedicationScheduleDTO]?
     public let lastTakenAt: Date?
     public let todayEventCount: Int?
@@ -230,246 +239,6 @@ public struct MedicationWireDTO: Codable, Sendable, Identifiable, Hashable {
     }
 }
 
-public struct MedicationScheduleDTO: Codable, Sendable, Hashable {
-    /// `HH:mm` (24h, server-side validated).
-    public let windowStart: String
-    public let windowEnd: String?
-    public let label: String?
-    public let dose: String?
-
-    // MARK: - v1.37.10 / v1.37.19 per-slot inventory dose (#219)
-
-    /// **v1.37.10 `unitsPerDose` — the user's RAW per-slot override.**
-    /// `number | null`, and the `null` is a value in its own right: it means
-    /// "this slot inherits the medication-level `unitsPerDose`". Kept raw so an
-    /// edit surface can tell an explicit choice from inheritance. This is the
-    /// half that legitimately travels on a write; plan 08-21 owns the edit /
-    /// read-modify-write consumers and the tri-state clearing question.
-    public let unitsPerDose: Double?
-    /// **v1.37.19 `resolvedUnitsPerDose` — the server-EFFECTIVE per-slot dose.**
-    /// `schedule.unitsPerDose ?? medication.unitsPerDose`, resolved server-side
-    /// by the same resolver the intake consumption path uses. The published
-    /// schema marks it **required** and non-nullable; it is optional here only
-    /// so a legacy cache blob and a pre-v1.37.19 self-hosted server still
-    /// decode. Read-only in the strong sense — ``encode(to:)`` below drops it,
-    /// so it cannot enter a create or update body through any caller.
-    public let resolvedUnitsPerDose: Double?
-
-    /// Server emits `daysOfWeek` as the raw Prisma column value — a
-    /// **String** like `"1,2,3"` (legacy days-only) or `"i2;1,2,3"`
-    /// (interval-prefix encoding `iN;` + days, mirrors
-    /// `src/lib/medication-schedule.ts` `parseScheduleRecurrence`).
-    ///
-    /// Pre-v0.4.0 iOS expected `[Int]?` and decoded `typeMismatch`
-    /// on every medication that had a non-null schedule (A4-Audit
-    /// row 2). Parsing happens client-side via `Domain.toDomain()`.
-    public let daysOfWeek: String?
-
-    // MARK: - v1.5 first-class schedule fields (R1 §3.1)
-
-    /// First-class points-in-time the dose is taken (`HH:mm`, user local).
-    /// Up to 8 entries. Empty / absent falls back to `[windowStart]`.
-    public let timesOfDay: [String]?
-    /// RFC-5545 RRULE subset for calendar-anchored cadences. Mutually
-    /// exclusive with `rollingIntervalDays`.
-    public let rrule: String?
-    /// Flexible-rolling interval in days, counted forward from the latest
-    /// non-skipped intake. Mutually exclusive with `rrule`. Range 1..365.
-    public let rollingIntervalDays: Int?
-    /// Reminder grace window in minutes (1..1440). `nil` falls back to the
-    /// legacy `windowEnd - windowStart` span.
-    public let reminderGraceMinutes: Int?
-
-    // MARK: - v1.7.0 PRN + cyclic schedule fields (W-Meds-A2, SB-SCHED-5)
-
-    /// **Cyclic ON-week count (`cyclicOnWeeks`).** N weeks on, 1…52 on the
-    /// input schema, `integer | null` and **required** on the output schema
-    /// (null unless `scheduleType` is CYCLIC).
-    ///
-    /// **09-14 — this used to be spelled `cycleWeeksOn` and no such key exists.**
-    /// `cycleWeeksOn`, `cycleWeeksOff` and `cycleAnchor` occur **zero** times in
-    /// the accepted v1.37.24 contract, so the decode guard could never hold and
-    /// every CYCLIC schedule fell through to rolling/rrule/legacy, while every
-    /// cyclic write was Zod-stripped into a plain SCHEDULED row.
-    public let cyclicOnWeeks: Int?
-    /// **Cyclic OFF-week count (`cyclicOffWeeks`).** M weeks off, 0…52.
-    ///
-    /// There is deliberately **no anchor beside these two.** The server anchors
-    /// the on/off phase on the MEDICATION's `startsOn ?? createdAt`, snapped to
-    /// the Sunday-rooted UTC week; it publishes no per-schedule anchor and has
-    /// nowhere to store one. The absence is structural rather than a nullable
-    /// field that happens to always be nil, because a nullable field that is
-    /// always nil is an invitation to repopulate it.
-    public let cyclicOffWeeks: Int?
-    /// **Authoritative cadence discriminator (`scheduleType`, v1.7.0).**
-    /// `SCHEDULED|PRN|CYCLIC`. **Required and non-nullable on the output
-    /// schema**, so on a read it is the only dispatch input needed — the old
-    /// field-presence fallbacks were dead against a schema that always sends it.
-    /// On the input schema it is optional with a documented `SCHEDULED` default,
-    /// and it must still be sent for CYCLIC: the two week counts are explicitly
-    /// "ignored otherwise". Optional here only so a legacy cache blob decodes.
-    public let scheduleType: ScheduleType?
-
-    // MARK: - v1.15.18 per-dose intake windows (W3-MEDCONTRACT, v0.14.8)
-
-    /// Explicit per-dose on-time windows (`doseWindowEntrySchema`): each
-    /// entry keys a `timesOfDay` dose time and carries the `[start, end]`
-    /// on-time band (HH:mm, user local). Absent / `nil` → the server's
-    /// default ±1 h derivation applies. **RMW caution:** a `schedules`
-    /// REPLACE re-creates the rows server-side — a rebuilt schedule that
-    /// omits this field resets the user's configured windows to NULL, so
-    /// schedule-editing callers must echo the decoded windows for every
-    /// surviving dose time (see `MedicationCadenceLogic.buildSchedules`).
-    public let doseWindows: [MedicationDoseWindowDTO]?
-
-    public init(
-        windowStart: String,
-        windowEnd: String? = nil,
-        label: String? = nil,
-        dose: String? = nil,
-        unitsPerDose: Double? = nil,
-        resolvedUnitsPerDose: Double? = nil,
-        daysOfWeek: String? = nil,
-        timesOfDay: [String]? = nil,
-        rrule: String? = nil,
-        rollingIntervalDays: Int? = nil,
-        reminderGraceMinutes: Int? = nil,
-        cyclicOnWeeks: Int? = nil,
-        cyclicOffWeeks: Int? = nil,
-        scheduleType: ScheduleType? = nil,
-        doseWindows: [MedicationDoseWindowDTO]? = nil
-    ) {
-        self.windowStart = windowStart
-        self.windowEnd = windowEnd
-        self.label = label
-        self.dose = dose
-        self.unitsPerDose = unitsPerDose
-        self.resolvedUnitsPerDose = resolvedUnitsPerDose
-        self.daysOfWeek = daysOfWeek
-        self.timesOfDay = timesOfDay
-        self.rrule = rrule
-        self.rollingIntervalDays = rollingIntervalDays
-        self.reminderGraceMinutes = reminderGraceMinutes
-        self.cyclicOnWeeks = cyclicOnWeeks
-        self.cyclicOffWeeks = cyclicOffWeeks
-        self.scheduleType = scheduleType
-        self.doseWindows = doseWindows
-    }
-
-    /// **09-14 — every key here is declared by `MedicationScheduleInput`, and
-    /// every key the output publishes that iOS reads is here.** The three that
-    /// used to be listed and are not — `cycleWeeksOn`, `cycleWeeksOff`,
-    /// `cycleAnchor` — occur zero times in the accepted contract. A
-    /// schedule-level `asNeeded` is gone for the same reason: PRN is spelled
-    /// `scheduleType: PRN` on a row, and a whole-medication PRN is the
-    /// medication-level `asNeeded` flag with an empty `schedules` array.
-    private enum CodingKeys: String, CodingKey {
-        case windowStart, windowEnd, label, dose
-        case unitsPerDose, resolvedUnitsPerDose
-        case daysOfWeek, timesOfDay, rrule, rollingIntervalDays, reminderGraceMinutes
-        case cyclicOnWeeks, cyclicOffWeeks, scheduleType
-        case doseWindows
-    }
-
-    /// **The one place `resolvedUnitsPerDose` is kept out of a write.**
-    ///
-    /// This type is both the read row and the payload of every `schedules`
-    /// REPLACE (`MedicationsRepository.MedicationCreate` / `.MedicationPatch`
-    /// carry `[MedicationScheduleDTO]` verbatim), so a schedule edit is a
-    /// read-modify-write over decoded server rows. A synthesised encoder would
-    /// therefore echo the server's own resolved figure straight back as if the
-    /// user had chosen it — promoting inheritance into an explicit per-slot
-    /// override nobody asked for, and doing it silently. Excluding the key here
-    /// rather than at each call site means no future caller can reintroduce it.
-    ///
-    /// Every other key keeps the synthesised behaviour exactly: `encodeIfPresent`
-    /// for the optionals, so an omitted field stays omitted rather than becoming
-    /// an explicit `null`.
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(windowStart, forKey: .windowStart)
-        try container.encodeIfPresent(windowEnd, forKey: .windowEnd)
-        try container.encodeIfPresent(label, forKey: .label)
-        try container.encodeIfPresent(dose, forKey: .dose)
-        try container.encodeIfPresent(unitsPerDose, forKey: .unitsPerDose)
-        // `resolvedUnitsPerDose` is deliberately absent — read-only truth.
-        try container.encodeIfPresent(daysOfWeek, forKey: .daysOfWeek)
-        try container.encodeIfPresent(timesOfDay, forKey: .timesOfDay)
-        try container.encodeIfPresent(rrule, forKey: .rrule)
-        try container.encodeIfPresent(rollingIntervalDays, forKey: .rollingIntervalDays)
-        try container.encodeIfPresent(reminderGraceMinutes, forKey: .reminderGraceMinutes)
-        try container.encodeIfPresent(cyclicOnWeeks, forKey: .cyclicOnWeeks)
-        try container.encodeIfPresent(cyclicOffWeeks, forKey: .cyclicOffWeeks)
-        // Audit B-4 — the sentinel is dropped here rather than refused: this
-        // encoder also writes the SWR cache blob, and a cached medication whose
-        // schedule carried an unnameable tag must not fail the cache write. The
-        // key simply goes missing, which is what it meant on the way in.
-        try container.encodeIfPresent(scheduleType == .unknown ? nil : scheduleType, forKey: .scheduleType)
-        try container.encodeIfPresent(doseWindows, forKey: .doseWindows)
-    }
-}
-
-/// One explicit per-dose on-time intake window (server v1.15.18,
-/// `doseWindowEntrySchema`). `timeOfDay` matches a schedule dose time;
-/// `[start, end]` (HH:mm, user local, `start <= end` same-day) is the
-/// on-time band. Outside it the cadence-derived late tail applies.
-public struct MedicationDoseWindowDTO: Codable, Sendable, Hashable {
-    /// The dose time this window applies to (`HH:mm`, matches a
-    /// `timesOfDay` entry — server-validated).
-    public let timeOfDay: String
-    /// On-time band lower bound (`HH:mm`, user local).
-    public let start: String
-    /// On-time band upper bound (`HH:mm`, user local, `>= start`).
-    public let end: String
-
-    public init(timeOfDay: String, start: String, end: String) {
-        self.timeOfDay = timeOfDay
-        self.start = start
-        self.end = end
-    }
-}
-
-/// Mirror of `src/lib/medication-schedule.ts` `parseScheduleRecurrence`.
-/// Decodes the server's serialised schedule string into weekday-set +
-/// interval. Stable forward-compat: unknown patterns fall back to
-/// `(daysOfWeek: [], intervalWeeks: 1)`.
-public enum MedicationScheduleRecurrence {
-    /// Result tuple — same field semantics as the server interface.
-    public struct Parsed: Sendable, Equatable {
-        public let daysOfWeek: [Int]
-        public let intervalWeeks: Int
-    }
-
-    public static func parse(_ value: String?) -> Parsed {
-        guard let raw = value, !raw.isEmpty else {
-            return Parsed(daysOfWeek: [], intervalWeeks: 1)
-        }
-        // Encoded format: `iN;1,2,3` where N ∈ 1..4.
-        if let encoded = parseEncoded(raw) {
-            return encoded
-        }
-        // Legacy format: `1,2,3` — interval defaults to 1.
-        let days = normalizeDays(raw.split(separator: ",").compactMap { Int($0) })
-        return Parsed(daysOfWeek: days, intervalWeeks: 1)
-    }
-
-    private static func parseEncoded(_ raw: String) -> Parsed? {
-        guard raw.hasPrefix("i"),
-              let semicolonIndex = raw.firstIndex(of: ";") else { return nil }
-        let intervalString = raw[raw.index(after: raw.startIndex) ..< semicolonIndex]
-        guard let interval = Int(intervalString), (1 ... 4).contains(interval) else {
-            return nil
-        }
-        let daysSubstring = raw[raw.index(after: semicolonIndex)...]
-        let days = normalizeDays(daysSubstring.split(separator: ",").compactMap { Int($0) })
-        return Parsed(daysOfWeek: days, intervalWeeks: interval)
-    }
-
-    private static func normalizeDays(_ days: [Int]) -> [Int] {
-        Array(Set(days.filter { (0 ... 6).contains($0) })).sorted()
-    }
-}
-
 /// Domain-Type, den die UI konsumiert. Wird aus `MedicationWireDTO` gebaut —
 /// behält das vorher genutzte `schedule.times`/`schedule.weekdays`-Surface,
 /// damit die bestehenden Screens (MedicationsScreen, ActiveMedicationsSection)
@@ -484,12 +253,22 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
     /// v1.40: server label of a custom category; `nil` for a built-in one.
     public var categoryLabel: String?
     public var remindersActive: Bool?
+    /// MED (1.5.0): the server's course-action fields, verbatim (`nil` from a
+    /// server or cache blob that predates them). See `Medication+CourseActions.swift`.
+    public var endedAt: Date?, canEndCourse: Bool?, canStartCourse: Bool?, autoMarkTakenSince: Date?
+    /// RELATED (1.5.0, #141): records related to this one; `nil` on list rows.
+    public var related: RelatedLinks?
+    /// SUPP (1.5.0, #131): composition per unit; see `Medication+Ingredients.swift`.
+    public var ingredients: MedicationIngredients?, hasIngredients: Bool?
+    /// MED-PLUS (1.5.0): the server's `autoMarkTaken` verbatim and the course summary
+    /// (v1.40); `nil` from an older server or a 1.4.1 cache blob. See `Medication+AutoMarkTaken.swift`.
+    public var autoMarkTaken: Bool?, courseCount: Int?, previousCourseEndedOn: String?
     public let dosesPerUnit: Int?
     /// **v1.16.10/.12 `unitsPerDose`.** Inventory units one dose consumes
     /// (whole 1–100 or a curated split-pill fraction). `nil` → 1.0. See
     /// ``effectiveUnitsPerDose``.
     public let unitsPerDose: Double?
-    public let schedule: MedicationSchedule
+    public internal(set) var schedule: MedicationSchedule
     public let lastTakenAt: Date?
     public let todayEventCount: Int?
     public let notificationsEnabled: Bool
@@ -523,7 +302,7 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
     /// wire `YYYY-MM-DD`). Anchors RRULE / rolling and floors every cadence.
     public let startsOn: Date?
     /// Course-window end as a midnight-anchored `Date`. `nil` = chronic.
-    public let endsOn: Date?
+    public internal(set) var endsOn: Date?
     /// Single-administration medication. The engine surfaces it once and the
     /// server auto-deactivates after the first non-skipped intake.
     public let oneShot: Bool
@@ -589,10 +368,10 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
     /// HealthKit medication; `nil` for app-managed meds. Drives the
     /// source-exclusive policy (``isAppleHealthMirrored`` /
     /// ``allowsManualDoseLogging``).
-    public let externalSource: String?
+    public internal(set) var externalSource: String?
     /// The HK `medicationConceptIdentifier` the mirror keys on (present only
     /// alongside ``externalSource``).
-    public let externalId: String?
+    public internal(set) var externalId: String?
 
     // MARK: - v1.37.19 slot-aware supply truth (#25)
 
@@ -607,8 +386,8 @@ public struct Medication: Codable, Sendable, Identifiable, Hashable {
 
     /// v1.39.4 (#1040) — the server's `courseStatus` / `intakeActionable`,
     /// verbatim (`nil` from an older server). Read through ``isIntakeActionable``.
-    public let courseStatus: MedicationCourseStatus?
-    public let intakeActionable: Bool?
+    public internal(set) var courseStatus: MedicationCourseStatus?
+    public internal(set) var intakeActionable: Bool?
 
     public init(
         id: String,
@@ -767,234 +546,17 @@ public enum Weekday: Int, Codable, Sendable, CaseIterable, Hashable {
     case sun = 0, mon, tue, wed, thu, fri, sat
 }
 
-public extension MedicationWireDTO {
-    /// Build the domain-shape consumed by the UI. **v0.10 R1:** decodes every
-    /// server schedule row non-lossily into a ``ScheduleEntry`` (cadence +
-    /// times-of-day + grace), applying the server dispatch precedence
-    /// (one-shot → rolling → rrule → legacy), and threads the medication-level
-    /// course window (`startsOn`/`endsOn`/`oneShot`/`deliveryForm`). The legacy
-    /// flattened `times`/`weekdays`/`intervalWeeks` surface is derived from the
-    /// entries for the pre-v0.10 render paths.
-    func toDomain() -> Medication {
-        let isOneShot = oneShot ?? false
-        // v1.39.1 (#1033) — a medication kept as a record plans nothing. The
-        // server already serves it with `schedules: []`; the domain schedule
-        // is emptied here as well, so no reminder, alarm, Live Activity or
-        // synthesised dose can ever be derived from a row that says otherwise.
-        let tracked = trackIntake != false
-        let entries = tracked ? (schedules ?? []).map { ScheduleEntry.fromDTO($0, oneShot: isOneShot) } : []
-        let schedule: MedicationSchedule = entries.isEmpty
-            ? MedicationSchedule(times: [])
-            : MedicationSchedule(entries: entries)
-        let recordedEntries = (recordedSchedules ?? []).map { ScheduleEntry.fromDTO($0, oneShot: isOneShot) }
-        let recordedSchedule: MedicationSchedule? = tracked || recordedEntries.isEmpty
-            ? nil
-            : MedicationSchedule(entries: recordedEntries)
-
-        var medication = Medication(
-            id: id,
-            name: name,
-            dose: dose,
-            treatmentClass: treatmentClass,
-            category: category,
-            dosesPerUnit: dosesPerUnit,
-            unitsPerDose: unitsPerDose,
-            schedule: schedule,
-            lastTakenAt: lastTakenAt,
-            todayEventCount: todayEventCount,
-            notificationsEnabled: notificationsEnabled ?? true,
-            active: active ?? true,
-            startsOn: Self.parseCourseDate(startsOn),
-            endsOn: Self.parseCourseDate(endsOn),
-            oneShot: isOneShot,
-            asNeeded: asNeeded ?? false,
-            trackIntake: trackIntake,
-            recordedSchedule: recordedSchedule,
-            deliveryForm: deliveryForm,
-            createdAt: createdAt,
-            // Nothing is due on a record; the server sends null here already.
-            nextDueAt: tracked ? Self.parseNextDueAt(nextDueAt) : nil,
-            nextDueOverdue: tracked ? nextDueOverdue : nil,
-            liveActivityEnabled: liveActivityEnabled,
-            criticalAlarmEnabled: criticalAlarmEnabled,
-            trackInjectionSites: trackInjectionSites ?? false,
-            allowedInjectionSites: (allowedInjectionSites ?? []).compactMap(InjectionSite.parseAllowedEntry),
-            externalSource: externalSource,
-            externalId: externalId,
-            pausedAt: pausedAt,
-            // Propagated verbatim: nil stays nil, 0 stays 0, and nothing here
-            // substitutes a derived figure for an absent one.
-            stockDosesRemaining: stockDosesRemaining,
-            runwayDays: runwayDays,
-            courseStatus: courseStatus,
-            intakeActionable: intakeActionable
-        )
-        medication.categoryLabel = categoryLabel
-        medication.remindersActive = autoMarkTaken == true ? false : remindersActive
-        return medication
-    }
-
-    /// Parse the wire `nextDueAt` ISO8601 timestamp (a full instant, not a
-    /// `@db.Date` day boundary) into a `Date`. Accepts fractional + plain
-    /// ISO8601. Returns `nil` for absent / malformed values (engine fallback).
-    static func parseNextDueAt(_ raw: String?) -> Date? {
-        guard let raw, !raw.isEmpty else { return nil }
-        if let date = ISO8601DateFormatter.fractional.date(from: raw) {
-            return date
-        }
-        return ISO8601DateFormatter.plain.date(from: raw)
-    }
-
-    /// Parse a wire `YYYY-MM-DD` course-window date into a UTC-midnight
-    /// `Date`. The engine interprets these as day boundaries, so a fixed UTC
-    /// midnight anchor matches the server's `@db.Date` semantics. Returns
-    /// `nil` for absent / malformed values.
-    static func parseCourseDate(_ raw: String?) -> Date? {
-        guard let raw, !raw.isEmpty else { return nil }
-        // Accept both the bare `YYYY-MM-DD` and a full ISO-8601 timestamp
-        // (the server may emit either depending on the serializer).
-        if let date = ISO8601DateFormatter.plain.date(from: raw) {
-            return date
-        }
-        let parts = raw.prefix(10).split(separator: "-")
-        guard parts.count == 3,
-              let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]) else
-        {
-            return nil
-        }
-        var components = DateComponents()
-        components.year = year
-        components.month = month
-        components.day = day
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
-        return calendar.date(from: components)
-    }
-}
-
-public struct MedicationIntake: Codable, Sendable, Identifiable, Hashable {
-    public let id: String
-    public let medicationId: String
-    public let scheduledAt: Date
-    public let takenAt: Date?
-    public let status: IntakeStatus
-    public let snoozedUntil: Date?
-
-    public init(
-        id: String,
-        medicationId: String,
-        scheduledAt: Date,
-        takenAt: Date? = nil,
-        status: IntakeStatus,
-        snoozedUntil: Date? = nil
-    ) {
-        self.id = id
-        self.medicationId = medicationId
-        self.scheduledAt = scheduledAt
-        self.takenAt = takenAt
-        self.status = status
-        self.snoozedUntil = snoozedUntil
-    }
-}
-
-/// Wire envelope of `POST /api/medications/intake` (raw Prisma row).
-/// Server source: `src/app/api/medications/intake/route.ts:204` —
-/// `apiSuccess(updated)` where `updated` is the bare `MedicationIntakeEvent`
-/// (no synthesised status, field name `scheduledFor` not `scheduledAt`).
-///
-/// Pre-v0.4.0 the iOS POST decoded into `MedicationIntake` directly →
-/// `keyNotFound("scheduledAt")` after the write succeeded. Optimistic
-/// store updates were masked by the fake error (A4-Audit row 4).
-///
-/// The GET `?scope=today` (route lines 94-108) **does** synthesize
-/// `scheduledAt` + `status`, so the today-list decodes cleanly via
-/// `MedicationIntake` directly; this wire wrapper is only for the POST
-/// reply path.
-public struct MedicationIntakeWireDTO: Codable, Sendable {
-    public let id: String
-    public let medicationId: String
-    public let scheduledFor: Date
-    public let takenAt: Date?
-    public let skipped: Bool
-    public let snoozedUntil: Date?
-
-    public init(
-        id: String,
-        medicationId: String,
-        scheduledFor: Date,
-        takenAt: Date? = nil,
-        skipped: Bool = false,
-        snoozedUntil: Date? = nil
-    ) {
-        self.id = id
-        self.medicationId = medicationId
-        self.scheduledFor = scheduledFor
-        self.takenAt = takenAt
-        self.skipped = skipped
-        self.snoozedUntil = snoozedUntil
-    }
-
-    /// Derive `status` from the Prisma flags the same way the GET endpoint
-    /// synthesises it server-side (route lines 99-106): skipped → skipped,
-    /// takenAt non-null → taken, snoozedUntil in future → snoozed, else
-    /// pending. The snoozedUntil sits on the parent `Medication` row in
-    /// the schema; for POST responses we only have the column on the
-    /// intake event so we approximate.
-    public func toDomain(now: Date = .now) -> MedicationIntake {
-        let status: IntakeStatus = if skipped {
-            .skipped
-        } else if takenAt != nil {
-            .taken
-        } else if let snooze = snoozedUntil, snooze > now {
-            .snoozed
-        } else {
-            .pending
-        }
-        return MedicationIntake(
-            id: id,
-            medicationId: medicationId,
-            scheduledAt: scheduledFor,
-            takenAt: takenAt,
-            status: status,
-            snoozedUntil: snoozedUntil
-        )
-    }
-}
-
-/// Server intake status. Today's ledger also returns terminal `missed`; write
-/// routes accept only user dispositions, so read states fail closed on writes.
-/// Keeping the read value prevents one terminal row from atomically dropping
-/// a valid pending sibling during `[MedicationIntake]` decoding.
-public enum IntakeStatus: String, Codable, Sendable {
-    case pending
-    case taken
-    case skipped
-    case snoozed
-    case missed
-    /// Audit B-5 — decode-only sentinel for a status this build cannot name
-    /// (`IntakeStatus+Unknown.swift`). Never taken, never sent, never counted.
-    case unknown = "__UNKNOWN__"
-}
-
 // The medication compliance payload types (`ComplianceDay`, `MedicationCompliancePayload`,
 // `ComplianceWindowResult`, `DailyComplianceBucket`) live in `MedicationCompliance.swift`
 // (extracted v0.10 W-Meds-A2 for the length budget + the v1.7.0 SB-SCHED-2 `due` additions).
 
-// MARK: - T-5 GLP-1 fields
+// MARK: - Where new server fields go (MED, 1.5.0)
 
-//
-// Reserved coordination marker for the T-5 GLP-1 Detail Stack. The T-5
-// architectural decision (see `.planning/v05x-marathon/PB-T5-report.md`)
-// is **Option C** — four separate SwiftData entities under
-// `HealthLog/Screens/GLP1/GLP1LocalEntities.swift` keyed by
-// `medication.id`. No fields are added to `Medication` itself because
-// the model is a Codable struct shared with the server wire-shape;
-// adding fields would force a wire-DTO change without server support.
-//
-// When server-sync for the four GLP-1 sub-features lands (future
-// SB-T5-* items in `SERVER-BACKLOG.md`), the iOS side will mirror the
-// new wire-fields into `MedicationWireDTO` + `Medication` here under
-// the same `// MARK: - T-5 GLP-1 fields` heading.
-//
-// Coordination with T-3: this marker sits **after** the T-3 archive fields
-// (when they land). Both T-3 and T-5 are APPEND-ONLY to this model file.
+// This file holds the stored shape only. A new server field is one `var` line
+// in `MedicationWireDTO` and, if the UI reads it, one in `Medication` (both
+// optional, so a 1.4.1 cache blob and an older server still decode). Its
+// adoption goes into `toDomain()` in `Medication+Decoding.swift`, its reading
+// logic into a `Medication+<Topic>.swift` extension. Copies keep every `var`
+// field because they start from `var copy = self` (`replacingSchedule`,
+// `withAppleHealthProvenance`, `endingCourse`). The GLP-1 detail stack keeps
+// its own SwiftData entities (`Screens/GLP1/GLP1LocalEntities.swift`).

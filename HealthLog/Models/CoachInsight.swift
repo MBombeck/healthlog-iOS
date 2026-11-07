@@ -34,7 +34,10 @@ import Foundation
 // so it cannot branch on the session locale the way
 // ``PrivacyFirstPromptBuilder`` does; carrying both languages is how the
 // guardrail reaches an English session too (the App-Review reviewer's). The
-// prompt supplies the locale-selected instruction on top.
+// prompt supplies the locale-selected instruction on top. A Dutch session
+// gets a Dutch prompt ("Schrijf ALTIJD in het Nederlands"); every
+// description says "in the language of the prompt" so the German half does
+// not pull that answer into German.
 #if canImport(FoundationModels)
     @available(iOS 26.0, *)
     @Generable
@@ -44,7 +47,7 @@ import Foundation
         public var title: String
 
         @Guide(description: "2-3 sentences that describe and place the value in context — "
-            + "no diagnosis, no therapy or dose recommendation. "
+            + "no diagnosis, no therapy or dose recommendation. In the language of the prompt. "
             + "2-3 Sätze, die den Wert beschreibend einordnen — keine Diagnose, "
             + "keine Therapie- oder Dosisempfehlung.")
         public var body: String
@@ -63,7 +66,7 @@ import Foundation
         /// same as dictating the content, which is the distinction R11 turned on.
         @Guide(
             description: "1-3 questions or observations the person can discuss with their doctor. "
-                + "Never an instruction to act. "
+                + "Never an instruction to act. In the language of the prompt. "
                 + "1-3 Fragen oder Beobachtungen, die die Person mit Ärztin oder Arzt besprechen kann. "
                 + "Niemals eine Handlungsanweisung.",
             .count(1 ... 3)

@@ -51,6 +51,11 @@ struct SettingsIntegrationsScreen: View {
     // v1.28.11 (#46) — Strava workout/activity connector.
     @Environment(StravaIntegrationStore.self) private var strava
     @Environment(NightscoutIntegrationStore.self) private var nightscout
+    @Environment(\.appContainer) private var container
+    /// 1.5 MOVE (#133) — the `dawarich` entry of the consolidated status,
+    /// display only. `nil` until read, on a server that does not list it, and
+    /// after a failed read: the row then stays away.
+    @State private var dawarich: DawarichIntegrationPayload.Entry?
     @State private var refreshTick: Int = 0
 
     var body: some View {
@@ -94,6 +99,9 @@ struct SettingsIntegrationsScreen: View {
         await fitbit.loadStatus()
         await strava.loadStatus()
         await nightscout.loadStatus()
+        if let api = container?.api {
+            dawarich = try? await MovementRepository(api: api).integrationEntry()
+        }
     }
 
     // MARK: - Apple Health
@@ -127,8 +135,9 @@ struct SettingsIntegrationsScreen: View {
             title: "Apple Health",
             subtitle: "Read and write access to vitals",
             presents: .push,
-            trailing: { appleHealthPill },
-            destination: { AppleHealthIntegrationDetailScreen() }
+            // POLISH-C (C2) — a value, so the page survives the privacy shield.
+            value: SettingsRoute.appleHealthDetail,
+            trailing: { appleHealthPill }
         )
         .accessibilityIdentifier("settings.integrations.appleHealthRow")
     }
@@ -191,65 +200,67 @@ struct SettingsIntegrationsScreen: View {
     /// name, its pill, the chevron. The names say what they are.
     private var servicesCard: some View {
         HLSettingsCard(icon: "link.circle.fill", title: "settings.integrations.services") {
-            serviceRow("Withings", icon: "link.circle.fill", identifier: "settings.integrations.withingsRow") {
+            serviceRow("Withings", icon: "link.circle.fill", identifier: "settings.integrations.withingsRow", route: .withings) {
                 connectedPill(isConnected: withingsConnected, health: withings.status?.health, failed: withings.error != nil)
-            } destination: {
-                WithingsIntegrationScreen()
             }
-            serviceRow("WHOOP", icon: "link.circle.fill", identifier: "settings.integrations.whoopRow") {
+            serviceRow("WHOOP", icon: "link.circle.fill", identifier: "settings.integrations.whoopRow", route: .whoop) {
                 connectedPill(isConnected: whoopConnected, health: whoop.status?.health, failed: whoop.error != nil)
-            } destination: {
-                WhoopIntegrationScreen()
             }
-            serviceRow("Oura", icon: "moon.fill", identifier: "settings.integrations.ouraRow") {
+            serviceRow("Oura", icon: "moon.fill", identifier: "settings.integrations.ouraRow", route: .oura) {
                 connectedPill(isConnected: oura.isConnected, health: oura.status?.health, failed: oura.error != nil)
-            } destination: {
-                OAuthIntegrationScreen<OuraIntegrationStore>(
-                    displayName: "Oura",
-                    placeholderSurface: String(localized: "cloud_derived.surface.oura")
-                )
             }
-            serviceRow("Polar", icon: "figure.run", identifier: "settings.integrations.polarRow") {
+            serviceRow("Polar", icon: "figure.run", identifier: "settings.integrations.polarRow", route: .polar) {
                 connectedPill(isConnected: polar.isConnected, health: polar.status?.health, failed: polar.error != nil)
-            } destination: {
-                OAuthIntegrationScreen<PolarIntegrationStore>(
-                    displayName: "Polar",
-                    placeholderSurface: String(localized: "cloud_derived.surface.polar")
-                )
             }
-            serviceRow("Fitbit", icon: "figure.walk", identifier: "settings.integrations.fitbitRow") {
-                connectedPill(isConnected: fitbit.isConnected, health: fitbit.status?.health, failed: fitbit.error != nil)
-            } destination: {
-                OAuthIntegrationScreen<FitbitIntegrationStore>(
-                    displayName: "Fitbit",
-                    placeholderSurface: String(localized: "cloud_derived.surface.fitbit")
-                )
+            // KONTO (#149) — after the turndown the row says so; an account
+            // that never had Fitbit is not offered the row at all.
+            if fitbit.isOffered {
+                serviceRow("Fitbit", icon: "figure.walk", identifier: "settings.integrations.fitbitRow", route: .fitbit) {
+                    if fitbit.isRetired, backend.hasServer {
+                        HLStatusPill(.disconnected(label: String(localized: "integration.fitbit.retired.pill")))
+                    } else {
+                        connectedPill(isConnected: fitbit.isConnected, health: fitbit.status?.health, failed: fitbit.error != nil)
+                    }
+                }
             }
-            serviceRow("Strava", icon: "figure.outdoor.cycle", identifier: "settings.integrations.stravaRow") {
+            serviceRow("Strava", icon: "figure.outdoor.cycle", identifier: "settings.integrations.stravaRow", route: .strava) {
                 connectedPill(isConnected: strava.isConnected, health: strava.status?.health, failed: strava.error != nil)
-            } destination: {
-                OAuthIntegrationScreen<StravaIntegrationStore>(
-                    displayName: "Strava",
-                    placeholderSurface: String(localized: "cloud_derived.surface.strava")
-                )
             }
-            serviceRow("Nightscout", icon: "drop.circle.fill", identifier: "settings.integrations.nightscoutRow") {
+            serviceRow("Nightscout", icon: "drop.circle.fill", identifier: "settings.integrations.nightscoutRow", route: .nightscout) {
                 connectedPill(isConnected: nightscout.isConnected, health: nightscout.status?.health, failed: nightscout.error != nil)
-            } destination: {
-                NightscoutIntegrationScreen()
             }
+            dawarichRow
+        }
+    }
+
+    /// 1.5 MOVE (#133) — Dawarich is connected on the web; the app shows
+    /// its state and nothing to tap. Its days appear under Environment.
+    @ViewBuilder
+    private var dawarichRow: some View {
+        if backend.hasServer, let dawarich {
+            HLSettingsRow(
+                icon: "location.circle.fill",
+                title: "Dawarich",
+                subtitle: dawarich.connected ? nil : "integration.dawarich.webOnly"
+            ) {
+                connectedPill(isConnected: dawarich.connected, health: dawarich.health)
+            }
+            .accessibilityIdentifier("settings.integrations.dawarichRow")
         }
     }
 
     /// One provider: chip, name, status pill, chevron into its detail screen.
+    /// POLISH-C (C2) — pushed as a value (``IntegrationRoute``), resolved by
+    /// ``IntegrationRouteDestination`` on the More stack, so the provider page
+    /// comes back after the privacy shield.
     private func serviceRow(
         _ name: LocalizedStringKey,
         icon: String,
         identifier: String,
-        @ViewBuilder pill: () -> some View,
-        @ViewBuilder destination: @escaping () -> some View
+        route: IntegrationRoute,
+        @ViewBuilder pill: () -> some View
     ) -> some View {
-        HLSettingsActionRow(icon: icon, title: name, presents: .push, trailing: pill, destination: destination)
+        HLSettingsActionRow(icon: icon, title: name, presents: .push, value: SettingsRoute.integration(route), trailing: pill)
             .accessibilityIdentifier(identifier)
     }
 
@@ -258,4 +269,40 @@ struct SettingsIntegrationsScreen: View {
     // primitives at `hlSubhead` (description) and `hlCaption` (status
     // line) directly. Withings + Apple-Health-Import + HK-Diagnostics
     // surfaces don't render stat-rows.
+}
+
+/// POLISH-C (C2) — the page behind each provider row of Integrations.
+struct IntegrationRouteDestination: View {
+    let route: IntegrationRoute
+
+    var body: some View {
+        switch route {
+        case .withings:
+            WithingsIntegrationScreen()
+        case .whoop:
+            WhoopIntegrationScreen()
+        case .oura:
+            OAuthIntegrationScreen<OuraIntegrationStore>(
+                displayName: "Oura",
+                placeholderSurface: String(localized: "cloud_derived.surface.oura")
+            )
+        case .polar:
+            OAuthIntegrationScreen<PolarIntegrationStore>(
+                displayName: "Polar",
+                placeholderSurface: String(localized: "cloud_derived.surface.polar")
+            )
+        case .fitbit:
+            OAuthIntegrationScreen<FitbitIntegrationStore>(
+                displayName: "Fitbit",
+                placeholderSurface: String(localized: "cloud_derived.surface.fitbit")
+            )
+        case .strava:
+            OAuthIntegrationScreen<StravaIntegrationStore>(
+                displayName: "Strava",
+                placeholderSurface: String(localized: "cloud_derived.surface.strava")
+            )
+        case .nightscout:
+            NightscoutIntegrationScreen()
+        }
+    }
 }

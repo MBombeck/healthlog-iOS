@@ -116,7 +116,7 @@ extension QASweepScreenshotsTest {
         if confirm.exists, confirm.isHittable { confirm.tap()
             settle(1)
         }
-        for label in ["Decline", "Ablehnen"] {
+        for label in ["Decline", "Ablehnen", "Weigeren"] {
             let button = app.buttons[label]
             if button.exists, button.isHittable { button.tap()
                 settle(1)

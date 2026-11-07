@@ -247,7 +247,10 @@ enum NotificationEventLocalization {
         "CYCLE_OVULATION": "Ovulation",
         "REST_DAY": "Rest day",
         "VORSORGE_DUE": "Preventive care due",
-        "SCREENING_DUE": "Preventive care due"
+        "SCREENING_DUE": "Preventive care due",
+        // KONTO (#151, server 1.46.0) — admins only; the server lists the
+        // event for admins alone (`eventTypesForRole`).
+        "BACKUP_HEALTH": "notifications.event.backupHealth"
     ]
 
     /// Server event-code → localized toggle hint (subtitle). Optional: codes
@@ -269,7 +272,8 @@ enum NotificationEventLocalization {
     /// `DAILY_BRIEFING` bleibt, weil „Tägliches Briefing" weder Takt noch
     /// Tageszeit nennt — der Hint trägt Information, die der Titel nicht hat.
     private static let hintByEvent: [String: LocalizedStringResource] = [
-        "DAILY_BRIEFING": "1 morning banner with your day."
+        "DAILY_BRIEFING": "1 morning banner with your day.",
+        "BACKUP_HEALTH": "notifications.event.backupHealth.hint"
     ]
 
     static func title(for eventType: String) -> String {
@@ -364,6 +368,7 @@ enum NotificationEventPriority {
         case "COMPLIANCE_LOW": 70
         case "WITHINGS_SYNC_FAILED": 80
         case "SYSTEM_ALERT": 90
+        case "BACKUP_HEALTH": 95
         default: 1000
         }
     }

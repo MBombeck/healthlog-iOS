@@ -77,6 +77,12 @@ struct IntakeHistoryRow: View {
                     .font(.hlSubhead.weight(.semibold))
                     .foregroundStyle(HLText.primary)
                     .lineLimit(1)
+                if event.isAutoRecordedTake {
+                    Text("med.history.auto_recorded")
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.tertiary)
+                        .lineLimit(1)
+                }
                 if let site = event.injectionSite {
                     Text(siteLabel(site))
                         .font(.hlCaption)

@@ -87,8 +87,9 @@ public final class MeasurementsStore {
     let healthKit: AnyHealthKitWriter?
     /// Optional undo affordance — set when the composition-root wires the
     /// shared `UndoCoordinator`. `nil` in tests + headless contexts so the
-    /// delete-undo wiring stays inert outside the live app.
-    private let undoCoordinator: UndoCoordinator?
+    /// delete-undo wiring stays inert outside the live app. Internal for
+    /// `MeasurementsStore+ReadingDelete.swift`.
+    let undoCoordinator: UndoCoordinator?
     /// v0.5.5.6 RECONCILE-CELEBRATE — optional PR celebration channel +
     /// snapshot source. When the composition-root wires both, the
     /// capture-success path compares the freshly-saved value against the
@@ -130,6 +131,8 @@ public final class MeasurementsStore {
     /// isolated suite store. Defaults to `.standard`. Internal so the
     /// `+HistoricalBackfill.swift` extension reaches it.
     let backfillDefaults: UserDefaults
+    /// 1.5 FIX-DATA: where ``KnownServerVersion`` is read for the reading delete.
+    let serverVersionDefaults: UserDefaults
     private(set) var authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry?
 
     public init(
@@ -141,7 +144,8 @@ public final class MeasurementsStore {
         swr: SWRCoordinator? = nil,
         isStandalone: (@Sendable () -> Bool)? = nil,
         userIDProvider: (@Sendable () -> String?)? = nil,
-        backfillDefaults: UserDefaults = .standard
+        backfillDefaults: UserDefaults = .standard,
+        serverVersionDefaults: UserDefaults = .standard
     ) {
         self.repo = repo
         self.healthKit = healthKit
@@ -152,6 +156,7 @@ public final class MeasurementsStore {
         self.isStandalone = isStandalone
         self.userIDProvider = userIDProvider
         self.backfillDefaults = backfillDefaults
+        self.serverVersionDefaults = serverVersionDefaults
     }
 
     func bindAuthenticatedSessionRegistry(_ registry: AuthenticatedSessionLeaseRegistry) {
@@ -398,91 +403,7 @@ public final class MeasurementsStore {
         lastUpdatedAt = nil
     }
 
-    /// Optimistic delete — drops the row immediately, restores it on
-    /// network failure. Server returns 204 on success.
-    ///
-    /// **Undo (v0.5.5.1):** if an `UndoCoordinator` was injected, the
-    /// optimistic remove is paired with an undo affordance enqueued BEFORE
-    /// the network call. Tapping `Rückgängig` re-inserts the snapshot row
-    /// locally and re-posts it via the standard create path — the server
-    /// allocates a fresh id and the original id is lost (documented
-    /// trade-off, see W-IMPL-UNDO brief). On a non-retriable failure we
-    /// roll back the optimistic remove AND dismiss the toast (the row
-    /// still lives on the server, so the undo affordance would do harm).
-    public func delete(_ measurement: Measurement) async -> Bool {
-        guard let lease = captureAuthenticatedSessionLease() else { return false }
-        let snapshot = recent
-        let removed = measurement
-        // audit-v0162 H-3 — bump BEFORE the optimistic removal so an in-flight
-        // `.fresh` (fetched before this delete) is dropped instead of re-adding
-        // the row. Ordering matters: bump-then-mutate, so any observe emission
-        // that lands after this point sees the advanced generation.
-        bumpMutationGeneration()
-        recent.removeAll { $0.id == measurement.id }
-        // Queue undo BEFORE the network round-trip so a fast double-tap can
-        // recover even while the DELETE is still in flight.
-        undoCoordinator?.enqueue(
-            message: String(localized: "undo.measurement.removed")
-        ) { [weak self] in
-            await self?.restoreDeletedMeasurement(removed)
-        }
-        do {
-            try lease.requireCurrent()
-            try await repo.delete(id: measurement.id)
-            try lease.requireCurrent()
-            return true
-        } catch let err as HLError {
-            guard authenticatedEffectIsCurrent(lease) else { return false }
-            error = err
-            // A durably-enqueued DELETE (retriable OR a transient-refresh 401
-            // the repo just queued) keeps the optimistic removal — the row is
-            // gone from the UI and the Outbox replays the DELETE later. Leave
-            // the undo affordance live so the user can still recover. Only a
-            // genuinely-dropped DELETE resurrects the row + dismisses undo.
-            if !err.shouldPersistToOutbox {
-                recent = snapshot
-                undoCoordinator?.dismiss(reason: .cancelled)
-            }
-            return false
-        } catch {
-            guard authenticatedEffectIsCurrent(lease) else { return false }
-            self.error = .unknown(String(describing: error))
-            recent = snapshot
-            undoCoordinator?.dismiss(reason: .cancelled)
-            return false
-        }
-    }
-
-    /// Re-inserts a deleted measurement at its original chronological slot
-    /// and re-posts it through the standard create path. The new server
-    /// row carries a fresh id; the original id is gone for good. This is
-    /// the acceptable trade-off documented in the v0.5.5.1 undo brief.
-    private func restoreDeletedMeasurement(_ measurement: Measurement) async {
-        guard let lease = captureAuthenticatedSessionLease() else { return }
-        // audit-v0162 H-3 — a re-insert is an optimistic mutation too; bump so a
-        // stale `.fresh` from before the restore can't drop the row again.
-        bumpMutationGeneration()
-        // Local re-insert: drop the prior row if it somehow stuck around,
-        // then insert in newest-first order based on recordedAt.
-        recent.removeAll { $0.id == measurement.id }
-        let insertIndex = recent.firstIndex { $0.recordedAt < measurement.recordedAt } ?? recent.endIndex
-        recent.insert(measurement, at: insertIndex)
-        // Re-post via the create path so the server gets the row back.
-        // Errors land on `self.error` exactly like a fresh capture would;
-        // we deliberately swallow the bool result (re-post outcome already
-        // surfaced through error binding for the banner).
-        _ = await capture(
-            kind: measurement.kind,
-            value: measurement.value,
-            note: measurement.note,
-            glucoseContext: measurement.glucoseContext
-        )
-        guard authenticatedEffectIsCurrent(lease) else { return }
-        // The new row from `capture` carries a different id than the
-        // restored snapshot. Drop the snapshot copy now that the real row
-        // is in place so the list doesn't show a duplicate.
-        recent.removeAll { $0.id == measurement.id }
-    }
+    // Delete and its undo live in `MeasurementsStore+ReadingDelete.swift`.
 
     /// Optimistic update — swaps the row immediately with a synthesized
     /// version, replaces with the server response on success, restores the

@@ -73,8 +73,11 @@ struct LabQualitativeSuggestionChips: View {
     @Binding var text: String
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: HLSpace.sm) {
+        // POLISH-A (SHOTS F-PSEUDO-LABOCR) — the chips wrap onto further lines
+        // instead of a sideways scroll that hid "borderline" past the edge at
+        // longer translations and large text.
+        HLWrapLayout(spacing: HLSpace.sm) {
+            Group {
                 ForEach(LabQualitativeSuggestion.allCases) { suggestion in
                     let label = suggestion.text
                     Button {

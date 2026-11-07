@@ -24,6 +24,8 @@ public extension UnifiedSharingStore {
         public let locale: String
         public let selection: ReportSelection
         public let practiceName: String?
+        /// VISIT — the preset window; `nil` sends the look-back `days`.
+        public var window: ReportWindow?
     }
 
     /// Server bound on a share-link label (`createShareLinkSchema`).
@@ -46,7 +48,8 @@ public extension UnifiedSharingStore {
             days: periodDays,
             locale: locale,
             selection: selection,
-            practiceName: trimmed.isEmpty ? nil : trimmed
+            practiceName: trimmed.isEmpty ? nil : trimmed,
+            window: window
         )
     }
 
@@ -63,7 +66,7 @@ public extension UnifiedSharingStore {
         return HealthRecordExportRequest(
             format: .package,
             selection: selection,
-            range: HealthRecordExportRequest.Range(days: periodDays),
+            range: exportRange,
             includeCharts: includeCharts
         )
     }
@@ -87,7 +90,8 @@ public extension UnifiedSharingStore {
               validateExpiry().isEmpty,
               ShareLinkSelectionPolicy.forbiddenLeaves(in: selection).isEmpty else { return nil }
         let reference = now()
-        let start = calendar.date(byAdding: .day, value: -periodDays, to: reference) ?? reference
+        let start = windowInterval?.start
+            ?? calendar.date(byAdding: .day, value: -periodDays, to: reference) ?? reference
         return CreateShareLinkBody(
             label: trimmed,
             rangeStart: ShareLinkDateFormat.string(from: start),

@@ -58,6 +58,10 @@ public enum RefreshOutcome: Sendable, Equatable {
             return .authFailure
         case let .server(status, _, _):
             return (400 ... 499).contains(status) ? .authFailure : .transient
+        // KONTO (1.46.0) — `403 auth.account.deletion_pending`: the account is
+        // locked for deletion, the same 4xx auth verdict as above.
+        case .accountDeletionPending:
+            return .authFailure
         // `.writeConflictUnresolved` is a CU-20 write-path verdict and can
         // never originate on the refresh route; classified transient so it
         // could never log the user out.

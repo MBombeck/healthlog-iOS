@@ -21,8 +21,11 @@ import Foundation
 //      and never persisted locally. Online, the server values win.
 //
 // Re-wording the items invalidates the score, so the human wording lives only in
-// `Localizable.xcstrings` (mirrored verbatim from the server `messages/*.json`),
-// never here. This file owns the NUMERIC contract only.
+// `Resources/Questionnaires/` (copied from the server's wording modules by
+// `scripts/l10n/sync-questionnaire-wording.py`, read through
+// ``QuestionnaireWordingCatalog``), never here and never in a string catalogue.
+// This file owns the NUMERIC contract and the item-to-text addressing
+// (``stemIDs``, ``anchorGroup(forItem:)``) only.
 
 /// Client-side registry for the server-authoritative mental-health instruments.
 /// Unknown wire values throw so lossy list decoders can omit a future instrument
@@ -92,15 +95,6 @@ public enum MentalHealthInstrument: String, Codable, Sendable, CaseIterable, Ide
         }
     }
 
-    /// Namespace below `mentalHealth` for this instrument's response labels.
-    public var optionNamespace: String {
-        switch self {
-        case .phq9, .gad7: "options"
-        case .who5: "who5Options"
-        case .sci: "sciOptions"
-        }
-    }
-
     /// Optional per-item response groups. SCI uses four different anchor scales.
     public var optionGroups: [String]? {
         switch self {
@@ -114,34 +108,38 @@ public enum MentalHealthInstrument: String, Codable, Sendable, CaseIterable, Ide
         }
     }
 
-    /// Per-item stem key segments below `mentalHealth.stems`.
-    public var stemKeys: [String] {
+    /// The anchor group an item's answer labels come from in the wording:
+    /// `all` for a single-scale instrument, the SCI's group per item
+    /// (server `anchorGroup`, `instrument-wording.ts`).
+    public func anchorGroup(forItem index: Int) -> String {
+        guard let optionGroups, optionGroups.indices.contains(index) else {
+            return Self.singleAnchorGroup
+        }
+        return optionGroups[index]
+    }
+
+    /// The anchor group of every single-scale instrument (server
+    /// `SINGLE_ANCHOR_GROUP`).
+    static let singleAnchorGroup = "all"
+
+    /// Stem id per item, naming the text in the wording's `stems` that stands
+    /// above the item (server `stemIds`, `instruments.ts`): the "Over the last
+    /// 2 weeks" question of the PHQ-9, GAD-7 and WHO-5, the SCI's section stems.
+    public var stemIDs: [String] {
         switch self {
-        case .phq9, .gad7:
-            []
-        case .who5:
-            Array(repeating: "who5.period", count: 5)
+        case .phq9, .gad7, .who5:
+            Array(repeating: "period", count: itemCount)
         case .sci:
             [
-                "sci.night", "sci.night", "sci.night", "sci.night",
-                "sci.impact", "sci.impact", "sci.impact", "sci.finally"
+                "night", "night", "night", "night",
+                "impact", "impact", "impact", "finally"
             ]
         }
     }
 
-    /// Full localized response-key prefix for one item.
-    public func optionKeyPrefix(forItem index: Int) -> String {
-        let base = "mentalHealth.\(optionNamespace)"
-        guard let optionGroups, optionGroups.indices.contains(index) else {
-            return base
-        }
-        return "\(base).\(optionGroups[index])"
-    }
-
-    /// Full localized stem key for one item, or nil when the item is standalone.
-    public func stemKey(forItem index: Int) -> String? {
-        guard stemKeys.indices.contains(index) else { return nil }
-        return "mentalHealth.stems.\(stemKeys[index])"
+    /// This instrument's text in `language` (``QuestionnaireWordingCatalog``).
+    public func wording(in language: AppLanguage) -> QuestionnaireWording? {
+        QuestionnaireWordingCatalog.wording(for: self, language: language)
     }
 
     public var scoreMultiplier: Int {
@@ -205,15 +203,13 @@ public enum MentalHealthInstrument: String, Codable, Sendable, CaseIterable, Ide
         }
     }
 
-    /// Item wording is validated in all bundled server locales except SCI,
-    /// whose redistributed validated wording is English only.
+    /// The interface languages whose bundled text is a published validated
+    /// translation, read from the server's own `validated` flag in the wording
+    /// files rather than kept by hand. Server v1.46.6: every instrument in
+    /// German, English and Dutch except the SCI, which is validated only in the
+    /// English original.
     public var validatedItemLocales: Set<String> {
-        switch self {
-        case .sci:
-            ["en"]
-        case .phq9, .gad7, .who5:
-            ["de", "en", "es", "fr", "it", "pl"]
-        }
+        Set(AppLanguage.allCases.filter { wording(in: $0)?.validated == true }.map(\.rawValue))
     }
 
     public func hasValidatedItems(locale: String) -> Bool {

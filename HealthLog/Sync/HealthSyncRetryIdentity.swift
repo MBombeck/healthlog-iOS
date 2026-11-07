@@ -26,6 +26,8 @@ enum HealthSyncSource: String, CaseIterable, Sendable, Codable {
     case cycle
     case heartEvent
     case outbox
+    /// MIRROR (1.5) — the server→Apple-Health mirror (`ServerMirrorBackgroundPass`).
+    case serverMirror
 }
 
 // MARK: - Stable retry identity

@@ -74,7 +74,11 @@ public actor RecoveryInsightsRepository {
     /// has its own Insights page, like on the web.
     static let familyOrder: [MetricKind] = [
         .recoveryScore,
-        .ansCharge, .dayStrain, .workoutStrain, .cardioLoad,
+        // #162 — Garmin's scores sit with the recharge signals and its
+        // acute load with the loads, in the web's order. A server before
+        // v1.47.0 never summarises them, so they never become members there.
+        .ansCharge, .bodyBattery, .trainingReadiness, .stressLevel,
+        .dayStrain, .workoutStrain, .cardioLoad, .acuteTrainingLoad,
         .averageHeartRate, .maxHeartRate, .energyExpenditureKJ
     ]
 

@@ -68,7 +68,9 @@ struct BiomarkerMergeSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: marker.name).foregroundStyle(HLText.primary)
-                    Text(verbatim: marker.unit).font(.hlCaption).foregroundStyle(HLText.secondary)
+                    if let unitLabel = LabUnit.standalone(marker.unit) {
+                        Text(verbatim: unitLabel).font(.hlCaption).foregroundStyle(HLText.secondary)
+                    }
                 }
                 Spacer()
                 if selected.contains(marker.id) {

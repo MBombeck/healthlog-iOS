@@ -54,6 +54,7 @@ struct MedicationHeroSection: View {
     /// detail screen so the hero reads through the SAME recurrence engine the
     /// list card + reminders use). Defaults to `.current` for previews.
     var profileTimeZone: TimeZone = .current
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HLCard {
@@ -71,7 +72,7 @@ struct MedicationHeroSection: View {
                         Text(medication.name)
                             .font(.hlTitle2)
                             .foregroundStyle(HLText.primary)
-                        Text(medication.dose)
+                        Text(verbatim: Self.subtitle(medication))
                             .font(.hlSubhead)
                             .foregroundStyle(HLText.secondary)
                     }
@@ -122,17 +123,33 @@ struct MedicationHeroSection: View {
         }
     }
 
+    /// The dose, and, when the server sends no reminders for a medication that
+    /// would otherwise remind (MED-PLUS, v1.42.2 `remindersActive`), "erinnert
+    /// nicht" in the same line.
+    static func subtitle(_ medication: Medication) -> String {
+        guard medication.saysNoReminders else { return medication.dose }
+        let dose = medication.dose.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !dose.isEmpty else { return String(localized: "med.hero.noReminders") }
+        return String(localized: "med.hero.dose.noReminders \(dose)")
+    }
+
+    /// POLISH-A (SHOTS F-AX-MEDCARD) — side by side, and label over value at
+    /// an accessibility size, where two columns cut "morgen, 8…".
     private func heroScheduleRow(labelKey: String.LocalizationValue, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+        let stacked = dynamicTypeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: HLSpace.sm))
+        return layout {
             Text(String(localized: labelKey))
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
-            Spacer(minLength: HLSpace.sm)
+            if !stacked { Spacer(minLength: HLSpace.sm) }
             Text(value)
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
+                .multilineTextAlignment(stacked ? .leading : .trailing)
+                .lineLimit(stacked ? nil : 2)
         }
         .accessibilityElement(children: .combine)
     }

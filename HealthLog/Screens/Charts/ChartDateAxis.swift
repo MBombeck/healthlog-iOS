@@ -129,6 +129,15 @@ enum ChartDateAxis {
         return index == count - 1 ? .topTrailing : .top
     }
 
+    /// POLISH-B B3 — whether the tick at `index` carries its label at this
+    /// text size. Four centred labels fit the plot up to XL; from XXL on the
+    /// wider glyphs ran into each other (also under the main metric chart),
+    /// so there every other tick keeps its grid line but no label. The first
+    /// tick always keeps its label.
+    static func showsLabel(index: Int, dynamicTypeSize: DynamicTypeSize) -> Bool {
+        dynamicTypeSize < .xxLarge || index.isMultiple(of: 2)
+    }
+
     /// The x-axis for a chart plotting `dates`.
     static func marks(for dates: [Date]) -> some AxisContent {
         let first = dates.min() ?? .distantPast
@@ -143,11 +152,26 @@ enum ChartDateAxis {
                 // one ran past the plot's edge ("Oct…" for Oct 18 in English,
                 // where weeks start on Sunday and that tick sits later).
                 AxisValueLabel(anchor: .top) {
-                    Text(date, format: format)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                    ChartDateAxisLabel(date: date, format: format, index: value.index)
                 }
             }
+        }
+    }
+}
+
+/// One date label under a chart. It reads the text size itself, so the axis
+/// follows a change of Dynamic Type without its chart re-deriving the marks.
+private struct ChartDateAxisLabel: View {
+    let date: Date
+    let format: Date.FormatStyle
+    let index: Int
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        if ChartDateAxis.showsLabel(index: index, dynamicTypeSize: dynamicTypeSize) {
+            Text(date, format: format)
+                .font(.hlCaption)
+                .foregroundStyle(HLText.secondary)
         }
     }
 }

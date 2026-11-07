@@ -90,4 +90,93 @@ public extension MeasurementsRepository {
         let merged = MeasurementAggregator.mergeBloodPressure(wires)
         return merged.filter { $0.kind == .bloodPressure && $0.source == source }
     }
+
+    // MARK: - MIRROR (1.5, #152, server #1272) — the server's own answer
+
+    /// Rows per page of the v3 history walk, and the most pages one kind may
+    /// take (200 000 rows), so a server that ignored `offset` cannot loop.
+    private static var mirrorHistoryPageSize: Int {
+        1000
+    }
+
+    private static var mirrorHistoryMaxPages: Int {
+        200
+    }
+
+    /// The full history of `kind` that the server marks for Apple Health
+    /// (`appleHealthMirror=true`, server 1.46.0 or later), paged with `offset`,
+    /// uncached like the per-source walk. BP pages both halves and merges them.
+    ///
+    /// Only for a server known to be 1.46.0 or later: an older one ignores the
+    /// filter and returns every source of the type, Apple Health rows included.
+    /// The caller still runs every row through the mirror's own decision, so
+    /// even then nothing from Apple Health is written back.
+    func historyForMirrorBackfill(kind: MetricKind) async throws -> [Measurement] {
+        if standalone?.isActive == true { return [] }
+        let typeKeys: [String]
+        if kind == .bloodPressure {
+            typeKeys = ["BLOOD_PRESSURE_SYS", "BLOOD_PRESSURE_DIA"]
+        } else if let key = kind.availabilitySummaryKey {
+            typeKeys = [key]
+        } else {
+            return []
+        }
+        var wires: [MeasurementWireDTO] = []
+        for typeKey in typeKeys {
+            wires += try await mirrorHistoryPages(typeKey: typeKey)
+        }
+        return MeasurementAggregator.mergeBloodPressure(wires).filter { $0.kind == kind }
+    }
+
+    private func mirrorHistoryPages(typeKey: String) async throws -> [MeasurementWireDTO] {
+        let pageSize = Self.mirrorHistoryPageSize
+        var rows: [MeasurementWireDTO] = []
+        var offset = 0
+        for _ in 0 ..< Self.mirrorHistoryMaxPages {
+            try Task.checkCancellation()
+            let request: APIRequest<MeasurementListWireResponse> = .get(
+                "/api/measurements",
+                query: [
+                    ("appleHealthMirror", "true"),
+                    ("type", typeKey),
+                    ("limit", String(pageSize)),
+                    ("offset", String(offset))
+                ]
+            )
+            let page = try await api.send(request)
+            rows += page.measurements
+            // The server's page size, not the decoded count: a row the tolerant
+            // decoder dropped still took a slot.
+            let served = page.meta?.limit ?? page.measurements.count
+            offset += max(1, served)
+            if page.measurements.isEmpty { break }
+            if let total = page.meta?.total, offset >= total { break }
+            if page.meta?.total == nil, page.measurements.count < pageSize { break }
+        }
+        return rows
+    }
+
+    /// **MIRROR (1.5, public #28)** — the one request of the background mirror:
+    /// the rows the server marks for Apple Health, measured since `since`,
+    /// newest first, at most `limit`. Uncached; `[]` in standalone.
+    ///
+    /// A blood-pressure half whose partner fell outside the page is dropped
+    /// rather than written as a reading with a zero half; a later window, or
+    /// the measurement list, sees the pair whole.
+    func rowsForServerMirror(since: Date, limit: Int) async throws -> [Measurement] {
+        if standalone?.isActive == true { return [] }
+        let request: APIRequest<MeasurementListWireResponse> = .get(
+            "/api/measurements",
+            query: [
+                ("appleHealthMirror", "true"),
+                ("from", ISO8601DateFormatter.plain.string(from: since)),
+                ("limit", String(limit))
+            ]
+        )
+        let response = try await api.send(request)
+        return MeasurementAggregator.mergeBloodPressure(response.measurements).filter { measurement in
+            guard measurement.kind == .bloodPressure else { return true }
+            return measurement.bloodPressureDiastolicId != nil
+        }
+    }
 }

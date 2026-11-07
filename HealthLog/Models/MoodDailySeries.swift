@@ -9,6 +9,11 @@ import Foundation
 /// (`{ slope, direction, confidence }`); the decoder used to expect bare
 /// numbers and failed on every real payload. It now reads the object's
 /// `slope` and still accepts a bare number.
+///
+/// 1.5 VERDICTS (#151, server v1.46) — a window with too few days answers
+/// `null` (no slope, no `direction`). That is "no trend", never zero; the
+/// server's own `direction` is kept so the mood card points where the server
+/// says and nowhere else.
 struct MoodAnalyticsEnrichment: Codable, Equatable, Hashable, Sendable {
     /// One server day.
     struct Day: Codable, Equatable, Hashable, Sendable {
@@ -22,6 +27,10 @@ struct MoodAnalyticsEnrichment: Codable, Equatable, Hashable, Sendable {
     let slope7: Double?
     let slope30: Double?
     let slope90: Double?
+    /// The server's direction for the 7- and 30-day slopes; `nil` with the
+    /// slope (and on a cached body from before 1.5).
+    let direction7: TrendDirection?
+    let direction30: TrendDirection?
     let avg30LastMonth: Double?
     let avg30LastYear: Double?
     /// Oldest first. Empty on a payload without entries.
@@ -34,11 +43,15 @@ struct MoodAnalyticsEnrichment: Codable, Equatable, Hashable, Sendable {
         slope90: Double?,
         avg30LastMonth: Double?,
         avg30LastYear: Double?,
-        days: [Day] = []
+        days: [Day] = [],
+        direction7: TrendDirection? = nil,
+        direction30: TrendDirection? = nil
     ) {
         self.slope7 = slope7
         self.slope30 = slope30
         self.slope90 = slope90
+        self.direction7 = direction7
+        self.direction30 = direction30
         self.avg30LastMonth = avg30LastMonth
         self.avg30LastYear = avg30LastYear
         self.days = days
@@ -53,15 +66,17 @@ struct MoodAnalyticsEnrichment: Codable, Equatable, Hashable, Sendable {
         let root = try decoder.container(keyedBy: RootKeys.self)
         days = try root.decodeLossyArray(Day.self, forKey: .entries)
         if let summary = try? root.nestedContainer(keyedBy: SummaryKeys.self, forKey: .summary) {
-            slope7 = Self.slope(summary, .slope7)
-            slope30 = Self.slope(summary, .slope30)
-            slope90 = Self.slope(summary, .slope90)
+            (slope7, direction7) = Self.slope(summary, .slope7)
+            (slope30, direction30) = Self.slope(summary, .slope30)
+            slope90 = Self.slope(summary, .slope90).slope
             avg30LastMonth = try? summary.decodeIfPresent(Double.self, forKey: .avg30LastMonth)
             avg30LastYear = try? summary.decodeIfPresent(Double.self, forKey: .avg30LastYear)
         } else {
             slope7 = nil
             slope30 = nil
             slope90 = nil
+            direction7 = nil
+            direction30 = nil
             avg30LastMonth = nil
             avg30LastYear = nil
         }
@@ -71,16 +86,24 @@ struct MoodAnalyticsEnrichment: Codable, Equatable, Hashable, Sendable {
         var root = encoder.container(keyedBy: RootKeys.self)
         try root.encode(days, forKey: .entries)
         var summary = root.nestedContainer(keyedBy: SummaryKeys.self, forKey: .summary)
-        try summary.encodeIfPresent(slope7, forKey: .slope7)
-        try summary.encodeIfPresent(slope30, forKey: .slope30)
+        try summary.encodeIfPresent(slope7.map { TrendSlope(slope: $0, direction: direction7) }, forKey: .slope7)
+        try summary.encodeIfPresent(slope30.map { TrendSlope(slope: $0, direction: direction30) }, forKey: .slope30)
         try summary.encodeIfPresent(slope90, forKey: .slope90)
         try summary.encodeIfPresent(avg30LastMonth, forKey: .avg30LastMonth)
         try summary.encodeIfPresent(avg30LastYear, forKey: .avg30LastYear)
     }
 
-    /// A `TrendSlope` object's `slope`, or a bare number (cache round trip).
-    private static func slope(_ c: KeyedDecodingContainer<SummaryKeys>, _ key: SummaryKeys) -> Double? {
-        if let object = try? c.decodeIfPresent(TrendSlope.self, forKey: key) { return object.slope }
-        return try? c.decodeIfPresent(Double.self, forKey: key)
+    /// A `TrendSlope` object's `slope` and `direction`, or a bare number (a
+    /// cache from before 1.5: slope only, no direction). A direction without a
+    /// slope is dropped with it: `null` is no trend.
+    private static func slope(
+        _ c: KeyedDecodingContainer<SummaryKeys>,
+        _ key: SummaryKeys
+    ) -> (slope: Double?, direction: TrendDirection?) {
+        if let object = try? c.decodeIfPresent(TrendSlope.self, forKey: key) {
+            guard let slope = object.slope else { return (nil, nil) }
+            return (slope, object.direction)
+        }
+        return (try? c.decodeIfPresent(Double.self, forKey: key), nil)
     }
 }

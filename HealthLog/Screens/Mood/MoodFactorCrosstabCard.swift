@@ -195,6 +195,6 @@ private extension FactorMetricCrosstabRow {
     /// 1.4 B4: in German a noun keeps its capital; "arbeit-Tagen" was wrong.
     var labelKeyHumanFallback: String {
         let label = MoodTagCatalogL10n.resolve(labelKey)
-        return Bundle.main.preferredLocalizations.first?.hasPrefix("de") == true ? label : label.lowercased()
+        return AppLanguage.current == .de ? label : label.lowercased()
     }
 }

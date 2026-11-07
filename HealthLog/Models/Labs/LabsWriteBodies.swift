@@ -332,7 +332,8 @@ public enum LabValueDisplay {
     public static func text(value: Double?, valueText: String?, unit: String) -> String {
         if let value {
             let formatted = value.formatted(.number.precision(.fractionLength(0 ... 2)))
-            return unit.isEmpty ? formatted : "\(formatted) \(unit)"
+            // #160 — the unity "1" (a ratio or index) prints nothing.
+            return LabUnit.appending(unit, to: formatted)
         }
         if let valueText, !valueText.isEmpty {
             return valueText

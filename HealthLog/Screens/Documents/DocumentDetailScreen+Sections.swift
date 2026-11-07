@@ -43,18 +43,36 @@ extension DocumentDetailScreen {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
                     HLSectionLabel("documents.detail.summary.aiTitle")
-                    HStack(spacing: HLSpace.sm) {
-                        ProgressView().controlSize(.small)
-                        Text("documents.detail.summary.pending")
+                    // #151 — a read that cannot finish here says why
+                    // instead of spinning forever.
+                    if let notice = summaryNotice {
+                        Text(notice.message)
                             .font(.hlSubhead)
                             .foregroundStyle(HLText.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        HStack(spacing: HLSpace.sm) {
+                            ProgressView().controlSize(.small)
+                            Text("documents.detail.summary.pending")
+                                .font(.hlSubhead)
+                                .foregroundStyle(HLText.secondary)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("documents.detail.summary.pending")
+            .accessibilityIdentifier(
+                summaryNotice == nil ? "documents.detail.summary.pending" : "documents.detail.summary.notice"
+            )
         }
+    }
+
+    /// The sentence that replaces the pending spinner: "too large" from the
+    /// stored outcome (no new attempt), else what the automatic read hit.
+    var summaryNotice: DocumentReadNotice? {
+        if document.isTooLargeToRead, !document.hasContentIndex { return .tooLarge }
+        return readNotice
     }
 
     // MARK: - Lab-values jump (Wave 4.5)
@@ -66,6 +84,15 @@ extension DocumentDetailScreen {
     @ViewBuilder
     var labValuesLink: some View {
         let count = InboundDocumentDetail.labFactCount(in: facts)
+        // #151 — the read stopped before the end of the document, so the
+        // values below may be incomplete. One line above them, no badge.
+        if extractionIncomplete, labsModuleEnabled {
+            Text("documents.detail.extractIncomplete")
+                .font(.hlSubhead)
+                .foregroundStyle(HLText.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("documents.detail.extractIncomplete")
+        }
         if count > 0, labsModuleEnabled {
             NavigationLink {
                 LabsScreen()
@@ -120,18 +147,8 @@ extension DocumentDetailScreen {
                     .accessibilityIdentifier("documents.detail.kind")
                 }
                 // Filing date — a direct inline DatePicker (no toggle).
-                HStack {
-                    fieldLabel("documents.detail.dateLabel")
-                    Spacer()
-                    DatePicker(
-                        "documents.detail.dateLabel",
-                        selection: $filingDate,
-                        displayedComponents: .date
-                    )
-                    .labelsHidden()
+                DocumentFilingDateRow(date: $filingDate)
                     .onChange(of: filingDate) { _, _ in Task { await commitDate() } }
-                    .accessibilityIdentifier("documents.detail.date")
-                }
                 // 1.4 B2-c — when and how big, as the card's last line.
                 Text(uploadedText)
                     .font(.hlCaption)
@@ -367,3 +384,39 @@ struct HLWrapLayout: Layout {
         func updateUIViewController(_: UIActivityViewController, context _: Context) {}
     }
 #endif
+
+/// The filing date row of the metadata card. A11Y (1.5): at the
+/// accessibility sizes the label stands over the date button instead of
+/// being squeezed into a column of letters beside it (F-AX-DATEROW, the case
+/// `HLAdaptiveDatePickerStyle` cannot reach because the label is drawn here).
+/// Its own small view with its own `dynamicTypeSize`, as POLISH-C advised:
+/// a generic wrapper around the row crashed the page at XXXL.
+struct DocumentFilingDateRow: View {
+    @Binding var date: Date
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: HLSpace.xs) {
+                label
+                picker
+            }
+        } else {
+            HStack {
+                label
+                Spacer()
+                picker
+            }
+        }
+    }
+
+    private var label: some View {
+        HLSectionLabel("documents.detail.dateLabel")
+    }
+
+    private var picker: some View {
+        DatePicker("documents.detail.dateLabel", selection: $date, displayedComponents: .date)
+            .labelsHidden()
+            .accessibilityIdentifier("documents.detail.date")
+    }
+}

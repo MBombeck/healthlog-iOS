@@ -152,8 +152,8 @@ struct MetricsGrid: View {
     /// keep compiling with the pre-7.1 tile shape.
     var digest: ComprehensiveDigest?
     var targets: InsightsTargetsResponseDTO?
-    /// #115 · 1.1 — server weight verdict (`tiles.weightTrend.direction`).
-    var weightTrendSentiment: TrendDirectionSentiment?
+    /// 1.5 VERDICTS — the snapshot's trend verdicts (`tiles.directions`).
+    var snapshot: DashboardSnapshotBriefing?
     let onTap: (MetricKind) -> Void
 
     /// v0.14 A — needed for the long-press "remove from Home" affordance on
@@ -185,7 +185,7 @@ struct MetricsGrid: View {
                 liveTodayStepsOverride: liveTodayStepsOverride,
                 digest: digest,
                 targets: targets,
-                weightTrendSentiment: weightTrendSentiment
+                snapshot: snapshot
             )
             // v0.11 perf: mark tile cache-paint so the ≤100 ms p95 budget is
             // measurable in Instruments. No behavioural effect.

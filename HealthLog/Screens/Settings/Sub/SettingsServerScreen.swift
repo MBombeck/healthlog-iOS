@@ -34,7 +34,14 @@ struct SettingsServerScreen: View {
     @Environment(AuthStore.self) private var authStore
 
     @State private var versionState: VersionState = .loading
-    @State private var presentChangeServerSheet = false
+    @Environment(\.scenePhase) private var scenePhase
+    /// Only without a container (previews). Otherwise the sheet is open while
+    /// the container's draft holds an address (#153), so it reopens with
+    /// what was typed after the privacy shield rebuilt the window.
+    @State private var localSheetPresented = false
+    /// GH-iOS #27 — how many proxy headers are stored; read on every appear
+    /// (also after Access headers pops), so a body evaluation never hits the Keychain.
+    @State private var accessHeaderCount = 0
     @State private var refreshTick: Int = 0
 
     enum VersionState: Equatable {
@@ -64,9 +71,14 @@ struct SettingsServerScreen: View {
         }
         // POLISH-SWEEP: success-tick confirms pull-to-refresh round-trip.
         .sensoryFeedback(.success, trigger: refreshTick)
-        .sheet(isPresented: $presentChangeServerSheet) {
+        .onAppear {
+            if let container {
+                accessHeaderCount = ServerAccessHeaders.load(keychain: container.keychain).count
+            }
+        }
+        .sheet(isPresented: changeServerPresented) {
             ChangeServerSheet(onCommitted: {
-                presentChangeServerSheet = false
+                changeServerPresented.wrappedValue = false
             })
             .hlSheetPresentation(.form)
         }
@@ -83,6 +95,7 @@ struct SettingsServerScreen: View {
                 .accessibilityIdentifier("settings.server.hostRow")
             statRow(label: "Region", value: regionLabel)
                 .accessibilityIdentifier("settings.server.regionRow")
+            accessHeadersRow
             // 1.4 B2-c — the switch is a row of the card it changes; its own
             // card repeated "Change server" as title and row.
             if isPairedAuth {
@@ -170,12 +183,50 @@ struct SettingsServerScreen: View {
             title: "Change server",
             presents: .sheet
         ) {
-            presentChangeServerSheet = true
+            changeServerPresented.wrappedValue = true
         }
         .accessibilityIdentifier("settings.server.changeServerButton")
     }
 
+    /// GH-iOS #27 — proxy credentials for a server behind Cloudflare Access,
+    /// Pangolin or a similar gate. Shown in every mode: a standalone install
+    /// may need them before it can pair at all.
+    private var accessHeadersRow: some View {
+        HLSettingsActionRow(
+            title: "Access headers",
+            subtitle: accessHeaderCount == 0
+                ? "For Cloudflare Access, Pangolin and similar proxies"
+                : "Headers set: \(accessHeaderCount)",
+            presents: .push,
+            // #153 follow-up (SET-ROUTE) — a value on the More stack, so the
+            // page comes back after the privacy shield. The count above is
+            // re-read from the Keychain when this page appears again.
+            value: SettingsRoute.serverAccessHeaders
+        )
+        .accessibilityIdentifier("settings.server.accessHeadersRow")
+    }
+
     // MARK: - Helpers
+
+    private var changeServerPresented: Binding<Bool> {
+        Binding(
+            get: { container.map { $0.onboardingDraft.changeServerAddress != nil } ?? localSheetPresented },
+            set: { shown in
+                guard let draft = container?.onboardingDraft else {
+                    localSheetPresented = shown
+                    return
+                }
+                if shown {
+                    if draft.changeServerAddress == nil {
+                        draft.changeServerAddress = currentBaseURL?.absoluteString ?? ""
+                    }
+                } else if scenePhase == .active {
+                    // A dismissal by the privacy shield keeps the draft.
+                    draft.changeServerAddress = nil
+                }
+            }
+        )
+    }
 
     /// 09-03 — one in-memory read of the already-resolved configured server.
     /// The host row, the region row and the version task's identity all derive
@@ -270,7 +321,8 @@ private struct ChangeServerSheet: View {
 
     let onCommitted: () -> Void
 
-    @State private var urlString: String = ""
+    /// Only without a container (previews); otherwise the draft holds it.
+    @State private var localURLString: String = ""
     @State private var probeState: ProbeState = .idle
     @State private var validationError: AppEnvironment.URLValidationError?
     @FocusState private var urlFocused: Bool
@@ -308,13 +360,24 @@ private struct ChangeServerSheet: View {
             }
         }
         .onAppear {
-            urlString = currentHostHint
             urlFocused = true
         }
     }
 
-    private var currentHostHint: String {
-        container?.configuredServer.baseURL?.absoluteString ?? ""
+    /// #153 — the typed address, kept in the container's draft.
+    private var urlString: String {
+        get { container?.onboardingDraft.changeServerAddress ?? localURLString }
+        nonmutating set {
+            if let draft = container?.onboardingDraft {
+                draft.changeServerAddress = newValue
+            } else {
+                localURLString = newValue
+            }
+        }
+    }
+
+    private var urlBinding: Binding<String> {
+        Binding(get: { urlString }, set: { urlString = $0 })
     }
 
     private var urlInputCard: some View {
@@ -323,7 +386,7 @@ private struct ChangeServerSheet: View {
             title: "Address",
             subtitle: "https:// is added automatically."
         ) {
-            TextField("e.g. myserver.example.com", text: $urlString)
+            TextField("e.g. myserver.example.com", text: urlBinding)
                 .focused($urlFocused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -445,7 +508,11 @@ private struct ChangeServerSheet: View {
         // v0.7.1 H-1 — transport + cert-pinning extracted to the shared
         // `ServerReachabilityProbe` (Services layer). The View only maps
         // the typed outcome onto its own localized copy.
-        let outcome = await ServerReachabilityProbe().probe(url: url, userAgent: "HealthLog-iOS-Settings/1")
+        let outcome = await ServerReachabilityProbe().probe(
+            url: url,
+            userAgent: "HealthLog-iOS-Settings/1",
+            accessHeaders: container.map { ServerAccessHeaders.load(keychain: $0.keychain) } ?? []
+        )
         switch outcome {
         case .malformedURL:
             return .unreachable(String(localized: "URL could not be expanded."))
@@ -453,8 +520,16 @@ private struct ChangeServerSheet: View {
             return .reachable
         case .notHealthLogServer:
             return .unreachable(String(localized: "This server does not appear to be a HealthLog server."))
+        case .serverStarting:
+            return .unreachable(String(localized: "Your server is starting up. Try again in a moment."))
         case let .unexpectedStatus(code):
             return .unreachable(String(localized: "Server responded with status \(code)."))
+        case let .redirectedToOtherHost(host):
+            return .unreachable(
+                String(
+                    localized: "The server forwarded to \(host). If it sits behind Cloudflare Access or Pangolin, set up the access headers first."
+                )
+            )
         case .nonHTTPResponse:
             return .unreachable(String(localized: "Received a response without an HTTP status."))
         case let .transportFailure(description):

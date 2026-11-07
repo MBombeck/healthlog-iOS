@@ -573,24 +573,23 @@ public actor APIClient: APIClientProtocol {
     /// the URLSession (the session config is bundle-ID + version + UA only; none
     /// of those change when the user just retargets a different host).
     ///
-    /// **Safe to call only before the first authenticated request fires** —
-    /// switching mid-session would invalidate Cert-Pin SPKI hashes (those are
-    /// bundle-pinned to the managed host). v0.4.1 onboarding only calls
-    /// this BEFORE login, so Cert-Pinning is not affected for the managed cloud;
-    /// self-hosted instances run against a Self-Signed-Cert workflow that we
-    /// document separately.
+    /// **Runtime guard (M-2, v0.6.2):** a HOST CHANGE while an auth token is in
+    /// the Keychain is refused (logged, the live session continues against the
+    /// previous environment): switching mid-session would invalidate the
+    /// Cert-Pin SPKI contract of the host the token was issued for. The one
+    /// switch-server path (`AppContainer.switchServer(to:)`) wipes the token
+    /// first, so the guard never fires on purpose.
     ///
-    /// **Runtime guard (M-2, v0.6.2):** if an auth token is already in the
-    /// Keychain when this is called, the swap is rejected (Debug:
-    /// `assertionFailure` to surface the bug loudly during development;
-    /// Release: log + return early so the live session continues against
-    /// the previous environment instead of silently breaking the SPKI-pin
-    /// contract). The current onboarding call-site fires BEFORE login so
-    /// the guard never triggers in production; a future "switch server"
-    /// affordance in Settings would be caught here before it can corrupt
-    /// the trust chain.
+    /// Self-hosted instances run against default server trust; the pin set
+    /// only covers hosts the build carries pins for. A refused swap leaves
+    /// the container's own `environment` ahead of the client's, which is why
+    /// header edits no longer travel this way (they never change the host).
     ///
-    /// **Ausnahme: die Ersteinrichtung (R1).** Siehe die Begründung am Wächter.
+    /// **Ausnahmen, beide ohne Hostwechsel:** die Ersteinrichtung (R1, keine
+    /// bisherige Adresse) und eine unveränderte Adresse (#153: nur die
+    /// Zugangs-Header oder die App-Metadaten sind neu). Die zweite hat in 1.4
+    /// geänderte Header bis zum nächsten Start verschluckt und in DEBUG eine
+    /// `assertionFailure` ausgelöst. Header allein tauscht ``setAccessHeaders(_:)``.
     public func setEnvironment(_ newEnvironment: AppEnvironment) {
         // R1 — Ersteinrichtung ist kein Hostwechsel. Ohne bisherige Adresse
         // gibt es keinen vorherigen Host, dessen Pins verletzt werden könnten,
@@ -599,7 +598,8 @@ public actor APIClient: APIClientProtocol {
         // die Adresse in den Schlüsselbund, der APIClient behielt `nil`, und
         // jeder Anmeldeversuch warf danach `serverNotConfigured` — beliebig oft.
         let isInitialConfiguration = environment.baseURL == nil
-        if !isInitialConfiguration, keychain.getString(forKey: KeychainKey.authToken) != nil {
+        let isSameAddress = environment.baseURL == newEnvironment.baseURL
+        if !isInitialConfiguration, !isSameAddress, keychain.getString(forKey: KeychainKey.authToken) != nil {
             HLLog.security.error(
                 "setEnvironment refused: auth-token present — environment swap would break Cert-Pin SPKI contract."
             )
@@ -1052,12 +1052,8 @@ public actor APIClient: APIClientProtocol {
             req.setValue(device, forHTTPHeaderField: "X-Device-Id")
         }
 
-        if let id = environment.cfAccessClientID {
-            req.setValue(id, forHTTPHeaderField: "cf-access-client-id")
-        }
-        if let token = environment.cfAccessClientToken {
-            req.setValue(token, forHTTPHeaderField: "cf-access-client-token")
-        }
+        // GH-iOS #27 — Cloudflare Access, Pangolin and other proxy headers.
+        environment.applyAccessHeaders(to: &req)
 
         // An EMPTY key means "this route does not evaluate one"
         // (``IdempotencyKey/notSent``) — omit the header entirely rather than
@@ -1140,6 +1136,7 @@ public actor APIClient: APIClientProtocol {
             ("/api/anamnesis", .profile), ("/api/encounters", .profile),
             ("/api/vaccinations", .profile),
             ("/api/illness", .illness),
+            ("/api/symptoms", .illness),
             ("/api/mood", .mind), ("/api/mental-health", .mind),
             ("/api/cycle", .cycle),
             ("/api/documents", .documents)
@@ -1147,7 +1144,9 @@ public actor APIClient: APIClientProtocol {
         if let section = sections.first(where: { path == $0.0 || path.hasPrefix($0.0 + "/") })?.1 {
             return .section(section)
         }
-        let wholeRecordPrefixes = ["/api/dashboard", "/api/insights", "/api/export/health-record"]
+        // POLISH-A A6 — the timeline admits the whole record only (server
+        // v1.47.0 `requireRecordAuth("read", "record")`), never a scoped grant.
+        let wholeRecordPrefixes = ["/api/dashboard", "/api/insights", "/api/export/health-record", "/api/timeline"]
         if wholeRecordPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
             return .wholeRecord
         }
@@ -1313,6 +1312,19 @@ public actor APIClient: APIClientProtocol {
         guard mapped == .canceled, !Task.isCancelled, request.method != .get,
               !request.failFast, !request.streaming else { return mapped }
         return .network(.writeCancelled)
+    }
+
+    /// #153 (public #27) — swaps only the access headers, signed in or not.
+    /// The address, and with it the pinned host and the session the token was
+    /// issued on, stays as it is, so there is nothing for the M-2 guard of
+    /// ``setEnvironment(_:)`` to protect. Every request built after this
+    /// returns carries the new list: the API calls, the health probe and the
+    /// web-login probe all read it from ``environment``.
+    ///
+    /// - Parameter stored: the user's list as stored in the Keychain; it is
+    ///   merged over the build-time Cloudflare pair again.
+    public func setAccessHeaders(_ stored: [ServerAccessHeader]) {
+        environment = environment.replacingStoredAccessHeaders(stored)
     }
 }
 

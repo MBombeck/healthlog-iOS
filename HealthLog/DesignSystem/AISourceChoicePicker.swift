@@ -95,17 +95,17 @@ private struct AISourceCard: View {
         Button(action: onSelect) {
             cardContent
         }
-        .buttonStyle(.plain)
+        // 1.5 COACH-R — the press idiom comes from the button itself. A
+        // zero-distance drag gesture on every card used to swallow the
+        // scroll that starts on a card, so Settings, Assistant could not be
+        // scrolled from its upper half and what sits below the cards stayed
+        // under the tab bar.
+        .buttonStyle(PressReportingButtonStyle(pressed: $pressed))
         .disabled(isDisabled)
         .accessibilityIdentifier("aiSourceChoice.\(mode.rawValue)")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(accessibilityTraits)
         .accessibilityHint(accessibilityHint)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !isDisabled { pressed = true } }
-                .onEnded { _ in pressed = false }
-        )
     }
 
     private var cardContent: some View {
@@ -278,5 +278,16 @@ extension AIMode {
                 comment: "AI source choice — subtitle for the external/server-AI option"
             )
         }
+    }
+}
+
+/// A plain button that reports its pressed state, so the card can play its
+/// press idiom without a gesture of its own competing with the scroll view.
+private struct PressReportingButtonStyle: ButtonStyle {
+    @Binding var pressed: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .onChange(of: configuration.isPressed) { _, isPressed in pressed = isPressed }
     }
 }

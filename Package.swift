@@ -111,6 +111,9 @@ let package = Package(
                 // R2 / #115 A6 — the refresh's device-id read lives beside
                 // `AuthService.refresh()`; Foundation only.
                 "Services/AuthService+RefreshDeviceID.swift",
+                // 1.5 KONTO — the account deletion path, moved out of
+                // `AuthService.swift`; Foundation only.
+                "Services/AuthService+Account.swift",
                 "Services/OidcStatus.swift",
                 // 09-15 — `EcgRepository` and `WorkoutsRepository` (both in the
                 // wholesale-globbed `Repositories/`) build their routes from

@@ -130,8 +130,7 @@ private struct EfficacyTargetCard: View {
         }
     }
 
-    /// 1.4 B2 — the card's one foot line: the conservative level-shift note
-    /// and, when no start date is set, that the first reading stands in for it.
+    /// 1.4 B2 / MED: one foot line, the level shift, the start fallback and the carry-over caveat (#149).
     private var footNote: String? {
         var parts: [String] = []
         if let shift = target.levelShift, shift.isNearStart, let at = shift.at {
@@ -140,6 +139,7 @@ private struct EfficacyTargetCard: View {
         if markers.startFromFirstReading {
             parts.append(String(localized: "med.wirkung.startFallback"))
         }
+        parts += [target.autocorrelationCaveatText].compactMap(\.self)
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 

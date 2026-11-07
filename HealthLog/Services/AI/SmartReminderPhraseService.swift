@@ -107,6 +107,10 @@ public struct ReminderPhraseOutcome: Sendable {
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
+        /// ``OnDeviceLanguageGate`` is closed for the interface language:
+        /// the model or the MDR filter does not speak it. Never answered in
+        /// another language instead.
+        case languageUnsupported
         /// Medication name was empty after trim — the prompt cannot be
         /// built. Caller routes to the static template.
         case emptyInput
@@ -162,7 +166,7 @@ public actor SmartReminderPhraseService {
     /// should hand off to the static template.
     public func generate(
         context: ReminderPhraseContext,
-        locale: Locale = .current
+        locale: Locale = AppLanguage.current.locale
     ) async -> ReminderPhraseOutcome {
         let trimmedName = context.medicationName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
@@ -202,6 +206,9 @@ public actor SmartReminderPhraseService {
                 return .fallback(mapAvailabilityReason(reason))
             @unknown default:
                 return .fallback(.deviceIneligible)
+            }
+            guard OnDeviceLanguageGate.allows(locale: locale) else {
+                return .fallback(.languageUnsupported)
             }
 
             let prompt = SmartReminderPhrasePrompt.build(context: context, locale: locale)
@@ -265,16 +272,23 @@ private extension ReminderPhraseContext {
     /// `canImport(FoundationModels)` + `@available(iOS 26.0, *)` gate
     /// because Apple's macro requires both. Converted to the always-available
     /// POD shell via `toReminderPhrase()`.
+    ///
+    /// The `@Guide` descriptions are language-neutral English (they are baked
+    /// in at compile time and cannot follow the session locale); the
+    /// instructions name the output language.
     @available(iOS 26.0, *)
     @Generable
     struct GenerableReminderPhrase {
         @Guide(
-            description: "Kurzer Reminder-Titel, maximal 40 Zeichen. Nur eine zeitliche Erinnerung an die geplante Dosis — keine Anweisung, keine medizinische Aussage."
+            description: "Short reminder title, at most 40 characters, in the language the instructions require. "
+                + "Only a time reminder for the scheduled dose, no instruction, no medical statement."
         )
         var title: String
 
         @Guide(
-            description: "Unterstützender Satz, maximal 80 Zeichen. Wenn streakDays>0: positive Verstärkung in Frageform. Wenn missedPrevious: sanfter Nachhol-Hinweis. Sonst leer."
+            description: "Supporting sentence, at most 80 characters, in the language the instructions require. "
+                + "If streakDays>0: positive reinforcement phrased as a question. "
+                + "If missedPrevious: a gentle catch-up note. Otherwise empty."
         )
         var body: String
 
@@ -294,11 +308,25 @@ private extension ReminderPhraseContext {
 /// template pattern).
 enum SmartReminderPhrasePrompt {
     static func build(context: ReminderPhraseContext, locale: Locale) -> String {
-        let language = locale.language.languageCode?.identifier ?? "de"
+        let language = AppLanguage.resolve(locale)
         let cappedStreak = max(0, min(context.streakDays, 7))
         let slotLabel = slotLabel(context.slot, language: language)
         switch language {
-        case "en":
+        case .nl:
+            return """
+            Herinneringscontext:
+            - medicijn: \(context.medicationName)
+            - moment van de dag: \(slotLabel)
+            - reeksdagen (maximaal 7): \(cappedStreak)
+            - vorige dosis gemist: \(context.missedPrevious ? "ja" : "nee")
+
+            Schrijf een korte herinneringstitel en een optionele ondersteunende zin. \
+            Blijf strikt een tijdsherinnering. Geen doseringsadvies, geen therapiewijziging, \
+            geen diagnose, geen voorspelling, geen interpretatie van medicijnspiegels. \
+            Als de reeks groter is dan 0, is een zachte, positieve opmerking toegestaan. Als de vorige \
+            dosis gemist is, is een zachte inhaalherinnering toegestaan. Anders mag de body leeg blijven.
+            """
+        case .en:
             return """
             Reminder context:
             - medication: \(context.medicationName)
@@ -312,7 +340,7 @@ enum SmartReminderPhrasePrompt {
             If streakDays>0, you may use a gentle positive note. If missedPrevious, you may \
             use a gentle catch-up note. Otherwise the body may be empty.
             """
-        default:
+        case .de:
             return """
             Reminder-Kontext:
             - Medikament: \(context.medicationName)
@@ -329,72 +357,86 @@ enum SmartReminderPhrasePrompt {
         }
     }
 
+    /// The system-instruction text for one interface language. Outside the
+    /// `FoundationModels` gate so tests can pin every language's guardrails.
+    static func instructionText(for language: AppLanguage) -> String {
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+    }
+
     #if canImport(FoundationModels)
         @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
-            let language = locale.language.languageCode?.identifier ?? "de"
-            switch language {
-            case "en":
-                return Instructions {
-                    """
-                    You write short scheduling-reminder notifications for a German/English health-journal app. \
-                    Your only job: produce a brief title and an optional supporting body for a medication time-reminder.
-
-                    NON-NEGOTIABLE:
-                    - This is a SCHEDULING reminder, not clinical advice.
-                    - Never tell the user what dose to take or when to change therapy.
-                    - Never diagnose or imply a condition.
-                    - Never predict outcomes ("will rise", "will fall").
-                    - Never interpret drug levels, half-life, or pharmacokinetics.
-                    - Never invent a number that wasn't in the context.
-                    - Title ≤ 40 chars, body ≤ 80 chars.
-
-                    STYLE: calm, friendly, second-person (you). Mention the medication by name. \
-                    Use the time-of-day slot to anchor the phrase. Empty body is preferred over filler.
-                    """
-                }
-            default:
-                return Instructions {
-                    """
-                    Du schreibst kurze Termin-Erinnerungs-Benachrichtigungen für eine deutsche \
-                    Gesundheits-Tagebuch-App. Du schreibst IMMER auf Deutsch in du-Form.
-
-                    Deine einzige Aufgabe: kurzer Titel plus optionaler Unterstützungssatz für eine \
-                    Medikamenten-Zeit-Erinnerung.
-
-                    UNVERHANDELBAR:
-                    - Dies ist eine TERMIN-Erinnerung, keine medizinische Empfehlung.
-                    - Sage niemals, welche Dosis genommen werden soll, oder dass die Therapie geändert wird.
-                    - Diagnostiziere niemals eine Erkrankung.
-                    - Sage niemals einen Verlauf voraus ("wird steigen", "wird sinken").
-                    - Interpretiere niemals Wirkstoffspiegel, Halbwertszeit oder Pharmakokinetik.
-                    - Erfinde niemals Zahlen, die nicht im Kontext stehen.
-                    - Titel höchstens 40 Zeichen, Body höchstens 80 Zeichen.
-
-                    STIL: ruhig, freundlich, du-Form. Medikament beim Namen nennen. \
-                    Tageszeit-Slot zum Verankern verwenden. Leerer Body ist besser als Füllwerk.
-                    """
-                }
+            let text = instructionText(for: AppLanguage.resolve(locale))
+            return Instructions {
+                text
             }
         }
     #endif
 
-    private static func slotLabel(_ slot: ReminderPhraseContext.Slot, language: String) -> String {
-        if language == "en" {
-            switch slot {
-            case .morning: return "morning"
-            case .noon: return "noon"
-            case .afternoon: return "afternoon"
-            case .evening: return "evening"
-            case .night: return "night"
-            }
-        }
+    private static let englishInstructions = """
+    You write short scheduling-reminder notifications for a German/English health-journal app. \
+    Your only job: produce a brief title and an optional supporting body for a medication time-reminder.
+
+    NON-NEGOTIABLE:
+    - This is a SCHEDULING reminder, not clinical advice.
+    - Never tell the user what dose to take or when to change therapy.
+    - Never diagnose or imply a condition.
+    - Never predict outcomes ("will rise", "will fall").
+    - Never interpret drug levels, half-life, or pharmacokinetics.
+    - Never invent a number that wasn't in the context.
+    - Title ≤ 40 chars, body ≤ 80 chars.
+
+    STYLE: calm, friendly, second-person (you). Mention the medication by name. \
+    Use the time-of-day slot to anchor the phrase. Empty body is preferred over filler.
+    """
+
+    private static let germanInstructions = """
+    Du schreibst kurze Termin-Erinnerungs-Benachrichtigungen für eine deutsche \
+    Gesundheits-Tagebuch-App. Du schreibst IMMER auf Deutsch in du-Form.
+
+    Deine einzige Aufgabe: kurzer Titel plus optionaler Unterstützungssatz für eine \
+    Medikamenten-Zeit-Erinnerung.
+
+    UNVERHANDELBAR:
+    - Dies ist eine TERMIN-Erinnerung, keine medizinische Empfehlung.
+    - Sage niemals, welche Dosis genommen werden soll, oder dass die Therapie geändert wird.
+    - Diagnostiziere niemals eine Erkrankung.
+    - Sage niemals einen Verlauf voraus ("wird steigen", "wird sinken").
+    - Interpretiere niemals Wirkstoffspiegel, Halbwertszeit oder Pharmakokinetik.
+    - Erfinde niemals Zahlen, die nicht im Kontext stehen.
+    - Titel höchstens 40 Zeichen, Body höchstens 80 Zeichen.
+
+    STIL: ruhig, freundlich, du-Form. Medikament beim Namen nennen. \
+    Tageszeit-Slot zum Verankern verwenden. Leerer Body ist besser als Füllwerk.
+    """
+
+    private static let dutchInstructions = """
+    Je schrijft korte herinneringsmeldingen voor een gezondheidsdagboek-app. \
+    Schrijf ALTIJD in het Nederlands, in je-vorm.
+
+    Je enige taak: een korte titel plus een optionele ondersteunende zin voor een \
+    herinnering aan het innamemoment van een medicijn.
+
+    NIET ONDERHANDELBAAR:
+    - Dit is een TIJDS-herinnering, geen medisch advies.
+    - Zeg nooit welke dosis ingenomen moet worden of dat de therapie gewijzigd wordt.
+    - Stel nooit een diagnose en suggereer geen aandoening.
+    - Voorspel nooit een verloop ("gaat stijgen", "gaat dalen").
+    - Interpreteer nooit medicijnspiegels, halfwaardetijd of farmacokinetiek.
+    - Verzin nooit getallen die niet in de context staan.
+    - Titel maximaal 40 tekens, body maximaal 80 tekens.
+
+    STIJL: rustig, vriendelijk, je-vorm. Noem het medicijn bij naam. \
+    Gebruik het moment van de dag als anker. Een lege body is beter dan opvulling.
+    """
+
+    private static func slotLabel(_ slot: ReminderPhraseContext.Slot, language: AppLanguage) -> String {
         switch slot {
-        case .morning: return "Morgen"
-        case .noon: return "Mittag"
-        case .afternoon: return "Nachmittag"
-        case .evening: return "Abend"
-        case .night: return "Nacht"
+        case .morning: language.pick(de: "Morgen", en: "morning", nl: "ochtend")
+        case .noon: language.pick(de: "Mittag", en: "noon", nl: "middag")
+        case .afternoon: language.pick(de: "Nachmittag", en: "afternoon", nl: "namiddag")
+        case .evening: language.pick(de: "Abend", en: "evening", nl: "avond")
+        case .night: language.pick(de: "Nacht", en: "night", nl: "nacht")
         }
     }
 }

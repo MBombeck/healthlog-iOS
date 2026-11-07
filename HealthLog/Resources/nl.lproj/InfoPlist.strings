@@ -1,0 +1,9 @@
+"NSHealthShareUsageDescription" = "HealthLog leest de gezondheidsgegevens uit Apple Health die je vrijgeeft (waaronder vitale waarden, activiteit, voeding, slaap, stemming, cyclusgegevens, ECG's, trainings- en hartslaggegevens en medicijnen) om ze te tonen, te synchroniseren en trends te berekenen.";
+"NSHealthUpdateUsageDescription" = "HealthLog bewaart metingen, stemmings- en cyclusregistraties die je zelf invoert, en metingen van apparaten of imports die je koppelt, in Apple Health als je HealthLog schrijftoegang geeft.";
+"NSFaceIDUsageDescription" = "HealthLog gebruikt Face ID om je gegevens te beschermen.";
+"NSUserNotificationsUsageDescription" = "HealthLog herinnert je aan medicijnen en metingen.";
+"NSAlarmKitUsageDescription" = "HealthLog geeft luide alarmen voor tijdkritische medicijnen die je daarvoor zelf inschakelt. Ze komen door de stille modus en Focus heen, zodat je geen belangrijke dosis mist.";
+"NSSpeechRecognitionUsageDescription" = "HealthLog gebruikt spraakherkenning om je ingesproken vraag aan de Coach om te zetten in tekst, waar mogelijk op het apparaat zelf. Je controleert de tekst voordat je hem verstuurt.";
+"NSMicrophoneUsageDescription" = "HealthLog gebruikt de microfoon zodat je een vraag aan de Coach kunt inspreken. De opname wordt op het apparaat omgezet in tekst en niet bewaard.";
+"NSCameraUsageDescription" = "HealthLog gebruikt de camera om medicijnverpakkingen en labuitslagen op het apparaat te lezen, of om scans die je kiest te uploaden naar je documentenkluis op je ingestelde HealthLog-server. Als je daarvoor kiest, gaat een foto van een labuitslag of etiket ook naar je HealthLog-server om te worden gelezen.";
+"NSBluetoothAlwaysUsageDescription" = "HealthLog maakt via Bluetooth verbinding met bloeddrukmeters (op dit moment Omron-manchetten), zodat je metingen automatisch binnenkomen.";

@@ -19,6 +19,7 @@ public final class AuthStore {
             let currentOwner = Self.sessionOwner(in: phase)
             guard currentOwner != previousOwner else { return }
             if let currentOwner {
+                deletionReceipt = nil // KONTO: belongs to the account that left
                 authSessionGeneration &+= 1
                 activateAuthenticatedSession(ownerID: currentOwner)
             } else {
@@ -28,6 +29,8 @@ public final class AuthStore {
     }
 
     public private(set) var lastError: HLError?
+    /// KONTO — the last deletion's receipt, until the onboarding has shown it.
+    public var deletionReceipt: AccountDeletionReceipt?
     public private(set) var isWorking: Bool = false
 
     /// **13-02 (K7 client half).** A web-handoff leg ended without a session,
@@ -529,8 +532,9 @@ public final class AuthStore {
         ///
         /// The PKCE `codeVerifier` lives only in this stack frame until the one-shot
         /// token exchange — never persisted, never logged. A user-cancelled sheet is
-        /// benign (no banner), mirroring the passkey-cancel handling.
-        public func loginWithSSO(anchor: ASPresentationAnchorProvider) async {
+        /// benign (no banner). SEC — `returnPath` is the `https` return a server
+        /// announced (none does yet); ``OidcReturnRoute`` decides, else the scheme.
+        public func loginWithSSO(anchor: ASPresentationAnchorProvider, returnPath: String? = nil) async {
             guard let authenticator = oidcAuthenticator else {
                 lastError = .unknown(String(localized: "onboarding.sso.unavailable"))
                 HLLog.auth.error("SSO login requested but no OIDC authenticator is wired.")
@@ -542,8 +546,7 @@ public final class AuthStore {
             let attempt = beginAuthAttempt()
             defer { finishAuthAttempt(attempt) }
 
-            // App-generated PKCE (S256). The verifier is held in memory only.
-            let pkce = OidcPKCE.generate()
+            let pkce = OidcPKCE.generate() // S256, the verifier is held in memory only.
             // Ohne eingerichteten Server gibt es keine Origin, gegen die der
             // Flow laufen koennte. Das ist ein ANDERER Zustand als eine nicht
             // baubare URL: "bitte erneut versuchen" waere hier eine Luege, denn
@@ -553,17 +556,14 @@ public final class AuthStore {
                 HLLog.auth.error("SSO login requested without a configured server.")
                 return
             }
-            guard let loginURL = OidcNativeFlow.loginURL(baseURL: baseURL, codeChallenge: pkce.codeChallenge) else {
+            let route = OidcReturnRoute.resolve(serverURL: baseURL, serverReturnPath: returnPath)
+            guard let loginURL = OidcNativeFlow.loginURL(baseURL: baseURL, codeChallenge: pkce.codeChallenge, returnRoute: route) else {
                 failAttempt(.unknown(String(localized: "onboarding.sso.error.generic")), for: attempt)
                 HLLog.auth.error("SSO login could not build the authorize URL.")
                 return
             }
 
-            let outcome = await authenticator.authenticate(
-                loginURL: loginURL,
-                callbackScheme: OidcNativeFlow.callbackScheme,
-                anchor: anchor
-            )
+            let outcome = await authenticator.authenticate(loginURL: loginURL, returnRoute: route, anchor: anchor)
             switch outcome {
             case .canceled:
                 // Benign user dismissal — no banner (mirrors the passkey cancel).
@@ -720,26 +720,20 @@ public final class AuthStore {
     /// (no credentials left) or on account deletion (nothing left to tell).
     public var onBeforeRemoteSignOut: (@Sendable () async -> Void)?
 
-    /// GDPR-style account deletion. Workflow:
-    /// 1. `AuthService.deleteAccount` ruft den Server-DELETE auf und wiped
-    ///    bei Erfolg den Keychain (Bearer + Refresh + Expiries + UserID +
-    ///    DeviceID).
-    /// 2. Bei Server-Erfolg läuft der `localCleanupHook` (von AppContainer
-    ///    gesetzt — leert Outbox + Stores), dann transition `phase =
-    ///    .unauthenticated` so dass `RootView` zurück auf `OnboardingFlow`
-    ///    schaltet.
-    /// 3. Bei Fehler bleibt der Phase-Status unverändert. `lastError` wird
-    ///    via `runWorkable` in die UI durchgereicht.
+    /// GDPR-style account deletion: the server DELETE wipes the Keychain on
+    /// success, then the `localCleanupHook` (Outbox + Stores) runs and `phase`
+    /// goes `.unauthenticated`, so `RootView` shows `OnboardingFlow`. On error
+    /// the phase stays and `lastError` reaches the UI via `runWorkable`.
+    /// KONTO (1.46.0) — the receipt waits in ``deletionReceipt`` for the
+    /// onboarding to say when the locked account is erased.
     ///
-    /// - Returns: `true` wenn der Account tatsächlich gelöscht wurde, sonst
-    ///   `false` — die UI nutzt das Signal, um die Confirm-Sheet zu schließen
-    ///   bzw. die Fehlermeldung zu zeigen.
+    /// - Returns: `true` when the account was actually deleted.
     public func deleteAccount() async -> Bool {
         guard await beginDeletedAccountTransition() else { return false }
         defer { finishDeletedAccountTransition() }
         var ok = false
         await runWorkable {
-            try await self.auth.deleteAccount()
+            self.deletionReceipt = try await self.auth.deleteAccount()
             // 06-05 (step 1) — the deletion is committed server-side (a thrown
             // error above skips ALL terminal teardown, preserving the live
             // lease): stale the shared authenticated-session lease before the

@@ -145,9 +145,25 @@ public enum MedicationDraftHeuristic {
     /// the transcript, return the canonical form ("Tablette", "Spritze",
     /// "Kapsel", ...). The first match in keyword-priority order wins so
     /// "Tablette" beats "Filmtablette" beats "Retard".
-    static func guessDoseForm(lines: [String]) -> String? {
+    ///
+    /// The word goes into the dose-form field as typed, so the interface
+    /// language's lexicon is searched first: a Dutch reader scanning
+    /// "Tabletten" gets "Tablet", not the German "Tablette" that the same
+    /// letters also contain. Injectable with `language` for the tests, which
+    /// otherwise run in the runner's language.
+    static func guessDoseForm(lines: [String], language: AppLanguage = AppLanguage.current) -> String? {
         let combined = lines.joined(separator: " ").lowercased()
-        return Self.doseFormKeywords.first { combined.contains($0.lowercased()) }
+        return doseFormLexicon(for: language).first { combined.contains($0.lowercased()) }
+    }
+
+    /// Every dose-form lexicon, the interface language's own first. One row
+    /// per `AppLanguage`, so a new language does not compile without an
+    /// answer here (an empty own list is a valid, deliberate answer).
+    static func doseFormLexicon(for language: AppLanguage) -> [String] {
+        switch language {
+        case .de, .en: doseFormKeywords + dutchDoseFormKeywords
+        case .nl: dutchDoseFormKeywords + doseFormKeywords
+        }
     }
 
     /// Manufacturer guess: any line ending in one of the recognised
@@ -182,7 +198,27 @@ public enum MedicationDraftHeuristic {
         "Suppositorium"
     ]
 
-    /// Corporate suffixes that hint a manufacturer line (DE-primary, EN-secondary).
+    /// The Dutch dose forms a Dutch pack prints, most-specific first like the
+    /// German list. "Tablet" is a substring of the German "Tablette", which
+    /// is why ``guessDoseForm(lines:language:)`` orders the two lists by the
+    /// interface language instead of merging them.
+    static let dutchDoseFormKeywords: [String] = [
+        "Tablet met verlengde afgifte",
+        "Filmomhulde tablet",
+        "Bruistablet",
+        "Tablet",
+        "Capsule",
+        "Injectie",
+        "Druppels",
+        "Drank",
+        "Zalf",
+        "Pleister",
+        "Inhalatie",
+        "Zetpil"
+    ]
+
+    /// Corporate suffixes that hint a manufacturer line (DE-primary, EN and
+    /// NL secondary).
     static let manufacturerSuffixes: [String] = [
         "GmbH",
         "AG",
@@ -195,7 +231,11 @@ public enum MedicationDraftHeuristic {
         "Ltd",
         "Ltd.",
         "Corp",
-        "Corp."
+        "Corp.",
+        "B.V.",
+        "BV",
+        "N.V.",
+        "NV"
     ]
 
     /// Lexical noise: dose-strength + lot-number + expiry-date prefixes
@@ -212,6 +252,13 @@ public enum MedicationDraftHeuristic {
         "MFG",
         "Apotheker",
         "Reg.-Nr",
-        "Zul.-Nr"
+        "Zul.-Nr",
+        // Dutch pack metadata: the active substance line, the RVG
+        // registration number, the batch and the expiry line.
+        "Werkzame stof",
+        "RVG",
+        "Partij",
+        "Houdbaar",
+        "Apotheek"
     ]
 }

@@ -129,8 +129,22 @@ struct MeasurementTypeCAT1Tests {
         // sie `serverCases`: `__UNKNOWN__` ist kein Server-Wert, sondern der
         // Sammelfall, auf dem ein 78. Server-Typ landet statt verworfen zu
         // werden. `allCases` ist um genau diesen einen Fall größer.
-        #expect(Set(ServerMeasurementType.serverCases.map(\.rawValue)).count == 77)
-        #expect(all.count == 78)
+        //
+        // #162 — + 4 Garmin-Typen aus Server v1.47.0 (BODY_BATTERY,
+        // STRESS_LEVEL, TRAINING_READINESS, ACUTE_TRAINING_LOAD) = 81.
+        #expect(all.contains("BODY_BATTERY"))
+        #expect(all.contains("STRESS_LEVEL"))
+        #expect(all.contains("TRAINING_READINESS"))
+        #expect(all.contains("ACUTE_TRAINING_LOAD"))
+        //
+        // HK-NEW (1.5) — + 6 Apple-Health-Typen, die der Server seit v1.44.0
+        // abbildet (EXERCISE_MINUTES, STAND_MINUTES, STAND_HOURS,
+        // MINDFUL_MINUTES, STATE_OF_MIND_VALENCE, AFIB_BURDEN) = 87.
+        for wire in ["EXERCISE_MINUTES", "STAND_MINUTES", "STAND_HOURS", "MINDFUL_MINUTES", "STATE_OF_MIND_VALENCE", "AFIB_BURDEN"] {
+            #expect(all.contains(wire))
+        }
+        #expect(Set(ServerMeasurementType.serverCases.map(\.rawValue)).count == 87)
+        #expect(all.count == 88)
         #expect(all.contains("__UNKNOWN__"))
     }
 }

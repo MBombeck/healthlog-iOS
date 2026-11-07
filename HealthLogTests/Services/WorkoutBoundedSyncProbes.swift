@@ -16,16 +16,6 @@ import Testing
 #if canImport(HealthKit)
     import HealthKit
 
-    /// **22-02 (D-14-02-A, coordinator half)** — "the later callers have
-    /// entered `coordinator.run`", as a barrier instead of a hope.
-    ///
-    /// Honest about what it does and does not buy. It closes the large window
-    /// (a child task that had not been scheduled at all when the first pass was
-    /// released) and leaves a small one: the actor hop between arriving here and
-    /// the join decision inside the coordinator. Closing THAT would need an
-    /// observable edge on the join itself, which the shipped coordinator does
-    /// not expose — recorded as the deferred half of D-14-02-A rather than
-    /// papered over with a sleep.
     /// Capturing sink for the overrun demonstration — see
     /// `probeOverrunRecordsAFailureInsteadOfTrapping`.
     final class ReportedIssues: @unchecked Sendable {
@@ -45,7 +35,21 @@ import Testing
         }
     }
 
-    actor ArrivalGate {
+    /// **22-02 (D-14-02-A), closed in REG (1.5)** — "the later callers have
+    /// made their join decision", as a barrier instead of a hope.
+    ///
+    /// The 22-02 gate was an actor of its own: a caller arrived there and only
+    /// then hopped to the coordinator. Under load that hop could outlast the
+    /// whole released pass (short pass, follow-up pass, slot cleared), and the
+    /// late caller then rightly started one pass more than the case seeded.
+    /// The arrival now happens inside the coordinator's isolation, see
+    /// ``WorkoutSyncPassCoordinator/run(signalling:partition:mode:operation:)``:
+    /// the caller holds the actor from `arrive()` to its join decision, and the
+    /// pass it may join can only clear its slot on that same actor, afterwards.
+    /// `arrive()` is synchronous on purpose; an `await` there would hand the
+    /// actor back before the decision.
+    final class ArrivalGate: @unchecked Sendable {
+        private let lock = NSLock()
         private let expected: Int
         private var arrived = 0
         private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -55,18 +59,40 @@ import Testing
         }
 
         func arrive() {
-            arrived += 1
-            guard arrived >= expected else { return }
-            let pending = waiters
-            waiters.removeAll()
-            for waiter in pending {
-                waiter.resume()
+            let pending: [CheckedContinuation<Void, Never>] = lock.withLock {
+                arrived += 1
+                guard arrived >= expected else { return [] }
+                defer { waiters.removeAll() }
+                return waiters
             }
+            pending.forEach { $0.resume() }
         }
 
         func waitForArrival() async {
-            if arrived >= expected { return }
-            await withCheckedContinuation { waiters.append($0) }
+            await withCheckedContinuation { continuation in
+                let ready = lock.withLock {
+                    guard arrived < expected else { return true }
+                    waiters.append(continuation)
+                    return false
+                }
+                if ready { continuation.resume() }
+            }
+        }
+    }
+
+    extension WorkoutSyncPassCoordinator {
+        /// `run`, entered with an arrival signal raised on the coordinator's
+        /// own executor. Calling an isolated method from the same actor does
+        /// not suspend, so nothing else runs on the coordinator between
+        /// `arrive()` and the join decision at the top of `run`.
+        func run(
+            signalling gate: ArrivalGate,
+            partition: String,
+            mode: WorkoutSyncPassMode,
+            operation: @escaping @Sendable (WorkoutSyncPassMode) async -> Bool
+        ) async -> Bool {
+            gate.arrive()
+            return await run(partition: partition, mode: mode, operation: operation)
         }
     }
 

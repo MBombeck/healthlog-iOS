@@ -1,0 +1,4 @@
+{
+  "_doc": "Key prefixes whose gaps in a `pending` language stay open instead of carrying an English placeholder (see scripts/l10n/l10n_common.py, docs/localization.md). Only for keys another unit of the same wave is removing or rewriting, so a placeholder here would collide in the merge. Each prefix must still match a key with a gap; once that unit is merged and the gaps are gone, check-catalog-format.py fails on the stale prefix and the entry is deleted. The list only shrinks.",
+  "prefixes": []
+}

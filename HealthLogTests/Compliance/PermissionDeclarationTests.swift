@@ -9,6 +9,7 @@
 // Separate from `AppReviewConfigurationTests` only because that file already
 // sits two lines under the 600-line lint ceiling.
 import Foundation
+@testable import HealthLog
 import Testing
 
 @Suite("Permission declarations match the code that would prompt")
@@ -33,9 +34,8 @@ struct PermissionDeclarationTests {
     @Test("no photo-library permission is declared while every picker is out-of-process")
     func photoLibraryPermissionStaysUndeclared() throws {
         let project = try text("project.yml")
-        let german = try text("HealthLog/Resources/de.lproj/InfoPlist.strings")
-        let english = try text("HealthLog/Resources/en.lproj/InfoPlist.strings")
-        for file in [project, german, english] {
+        let purposeFiles = try CatalogLanguages.listed.map { try text("HealthLog/Resources/\($0).lproj/InfoPlist.strings") }
+        for file in [project] + purposeFiles {
             #expect(!file.contains("NSPhotoLibraryUsageDescription: ") && !file.contains("\"NSPhotoLibraryUsageDescription\" ="))
         }
 
@@ -72,5 +72,28 @@ struct PermissionDeclarationTests {
         #expect(english.contains("Omron"))
         #expect(!german.contains("Glukose-Sensoren und Waagen"))
         #expect(!english.contains("glucose sensors, and scales"))
+        for language in CatalogLanguages.listed {
+            #expect(try text("HealthLog/Resources/\(language).lproj/InfoPlist.strings").contains("Omron"), "\(language) omits Omron")
+        }
+    }
+
+    /// 1.5 L10N-NL — a language in `CFBundleLocalizations` without its own
+    /// purpose string shows the English one in the system prompt. Every
+    /// listed language (also a `pending` one) carries every key English has.
+    @Test("every listed language declares the same purpose strings as English")
+    func everyListedLanguageHasEveryPurposeString() throws {
+        let english = try purposeKeys("en")
+        #expect(english.count >= 9)
+        #expect(CatalogLanguages.listed.contains("nl"))
+        for language in CatalogLanguages.listed {
+            #expect(try purposeKeys(language) == english, "\(language).lproj/InfoPlist.strings differs from English")
+        }
+    }
+
+    private func purposeKeys(_ language: String) throws -> Set<String> {
+        let body = try text("HealthLog/Resources/\(language).lproj/InfoPlist.strings")
+        return Set(body.split(separator: "\n").compactMap { line in
+            line.hasPrefix("\"") ? line.split(separator: "\"").first.map(String.init) : nil
+        })
     }
 }

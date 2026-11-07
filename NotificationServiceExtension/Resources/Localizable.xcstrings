@@ -15,6 +15,12 @@
             "state" : "translated",
             "value" : "Medication reminder"
           }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medicatieherinnering"
+          }
         }
       }
     },
@@ -31,6 +37,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "It's time for your medication."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het is tijd voor je medicijn."
           }
         }
       }

@@ -142,6 +142,12 @@ public actor MeasurementBatchUploader {
         syncTrigger.wireValue
     }
 
+    /// SYNC-TRIG (1.5) — the same, for a batch the caller marked as a history
+    /// catch-up (``upload(_:requiring:asBackfill:)``).
+    nonisolated func wireSyncTrigger(asBackfill: Bool) -> SyncTrigger {
+        syncTrigger.wireValue(backfill: asBackfill)
+    }
+
     /// Sendet alle `entries` als ein oder mehrere Batches. Liefert einen Outcome
     /// pro tatsächlich abgesetztem Batch. Wirf nur wenn der Server-Call **für den
     /// aktuellen Batch** unwiederbringlich fehlschlägt — vorherige Batches in
@@ -183,10 +189,15 @@ public actor MeasurementBatchUploader {
         )
     }
 
+    /// - Parameter asBackfill: SYNC-TRIG (1.5, #138) — the mark for a
+    ///   history catch-up. It belongs to this call and its chunks only;
+    ///   anything the upload hands off (the success stamp, a sweep someone
+    ///   starts from there) runs unmarked.
     @discardableResult
     func upload(
         _ entries: [HealthKitBatchEntryDTO],
-        requiring authLease: MeasurementUploadAuthenticationLease?
+        requiring authLease: MeasurementUploadAuthenticationLease?,
+        asBackfill: Bool = false
     ) async throws -> [BatchUploadOutcome] {
         guard !entries.isEmpty else { return [] }
         try authLease?.validate()
@@ -202,14 +213,14 @@ public actor MeasurementBatchUploader {
             do {
                 let response: HealthKitBatchResponseDTO
                 do {
-                    response = try await post(chunk, requiring: authLease)
+                    response = try await post(chunk, requiring: authLease, asBackfill: asBackfill)
                 } catch let invalid as MeasurementBatchInvalid {
                     // E1 — v1.39.1 named the entries it refused: they go into
                     // the skip register, the rest goes out once more on its own.
                     response = try await invalid.split(chunk, ownerID: authLease?.ownerUserID) { rest in
                         try await throttle.acquire()
                         try authLease?.validate()
-                        return try await post(rest, requiring: authLease)
+                        return try await post(rest, requiring: authLease, asBackfill: asBackfill)
                     }
                 }
                 outcomes.append(BatchUploadOutcome(chunk: chunk, response: response))
@@ -238,7 +249,8 @@ public actor MeasurementBatchUploader {
     /// key, validated by the acceptance gate.
     private func post(
         _ chunk: [HealthKitBatchEntryDTO],
-        requiring authLease: MeasurementUploadAuthenticationLease?
+        requiring authLease: MeasurementUploadAuthenticationLease?,
+        asBackfill: Bool
     ) async throws -> HealthKitBatchResponseDTO {
         // CU-21 (1): der tatsächliche Auslöser DIESES Sweeps. Nicht geraten —
         // `SyncTriggerContext` trägt das Fenster, das der auslösende Pfad
@@ -246,7 +258,8 @@ public actor MeasurementBatchUploader {
         // Delivery) um seine Arbeit gelegt hat; ohne offenes Fenster ist der
         // Sweep per Restmenge ein Vordergrund-Pull. V1: `wireValue` sendet
         // `manual` nur an einen Server, der den Wert kennt (v1.42+).
-        let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: syncTrigger.wireValue)
+        // SYNC-TRIG: a history catch-up says so here, from the call's mark.
+        let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: syncTrigger.wireValue(backfill: asBackfill))
         let base: APIRequest<HealthKitBatchResponseDTO> = try .post(
             "/api/measurements/batch",
             body: payload,

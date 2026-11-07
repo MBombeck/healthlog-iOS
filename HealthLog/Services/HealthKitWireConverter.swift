@@ -22,7 +22,9 @@ import Foundation
         /// Liefert eine oder mehrere Wire-Entries für ein einzelnes HK-Sample.
         /// - Quantity-Samples: genau eine Entry.
         /// - Category-Sleep-Sample: genau eine Entry mit `sleepStage`.
-        /// - Andere Category-Types werden derzeit übersprungen (Server kennt sie nicht;
+        /// - Stehstunden und Achtsamkeit (HK-NEW, Server v1.44): siehe
+        ///   `server144CategoryEntries`; State of Mind über `StateOfMindValencePolicy`.
+        /// - Andere Category-Types werden übersprungen (Server kennt sie nicht;
         ///   der Cursor-Advance kümmert sich darum, dass wir nicht endlos retryen).
         public static func entries(from sample: HKSample) -> [HealthKitBatchEntryDTO] {
             if let quantity = sample as? HKQuantitySample {
@@ -31,10 +33,16 @@ import Foundation
                 }
                 return []
             }
-            if let category = sample as? HKCategorySample,
-               category.categoryType.identifier == HKCategoryTypeIdentifier.sleepAnalysis.rawValue
-            {
-                return [sleepEntry(category)]
+            if let category = sample as? HKCategorySample {
+                if category.categoryType.identifier == HKCategoryTypeIdentifier.sleepAnalysis.rawValue {
+                    return [sleepEntry(category)]
+                }
+                // HK-NEW (1.5) — stand hours and mindful sessions (server v1.44).
+                return server144CategoryEntries(category)
+            }
+            // HK-NEW (1.5) — State of Mind as valence, under the loop guard.
+            if let stateOfMind = sample as? HKStateOfMind {
+                return StateOfMindValencePolicy.entry(for: stateOfMind).map { [$0] } ?? []
             }
             return []
         }
@@ -285,7 +293,8 @@ import Foundation
                 return WireUnit(hkUnit: .count(), wireSymbol: "count", scale: 1)
 
             default:
-                return nil
+                // HK-NEW (1.5) — the server-v1.44 quantity types, or nil.
+                return server144Unit(for: identifier)
             }
         }
 

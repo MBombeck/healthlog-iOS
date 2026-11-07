@@ -22,6 +22,10 @@ public struct TrendObservationOutcome: Sendable {
         case safetyRefused
         case generationFailed
         case frameworkUnavailable
+        /// ``OnDeviceLanguageGate`` is closed for the interface language:
+        /// the model or the MDR filter does not speak it. Never answered in
+        /// another language instead.
+        case languageUnsupported
         case insufficientData
     }
 
@@ -187,6 +191,9 @@ public actor TrendObservationsService {
             @unknown default:
                 return .fallback(.deviceIneligible)
             }
+            guard OnDeviceLanguageGate.allows(locale: locale) else {
+                return .fallback(.languageUnsupported)
+            }
 
             let prompt = TrendObservationPrompt.build(
                 metric: metric,
@@ -251,15 +258,20 @@ public actor TrendObservationsService {
     /// because Apple's macro requires both. Converted to the
     /// always-available POD shell via `toTrendObservation(...)` for
     /// storage + rendering.
+    ///
+    /// The `@Guide` descriptions are language-neutral English (they are baked
+    /// in at compile time and cannot follow the session locale); the
+    /// instructions name the output language.
     @available(iOS 26.0, *)
     @Generable
     struct GenerableTrendObservation {
         @Guide(
-            description: "Ein ruhiger, beobachtender Satz, der den Trend faktisch beschreibt. 1 Satz. Niemals diagnostisch, niemals prädiktiv, niemals prescriptiv."
+            description: "One calm, observational sentence that describes the trend factually, "
+                + "in the language the instructions require. Never diagnostic, never predictive, never prescriptive."
         )
         var observation: String
 
-        @Guide(description: "Selbsteinschätzung der Datenbasis: 0.0 wenn Daten dünn, 1.0 wenn umfangreich.")
+        @Guide(description: "Self-assessment of the data basis: 0.0 when data is thin, 1.0 when it is ample.")
         var confidence: Float
 
         func toTrendObservation(
@@ -291,7 +303,7 @@ enum TrendObservationPrompt {
         seriesCount: Int,
         locale: Locale
     ) -> String {
-        let language = locale.language.languageCode?.identifier ?? "de"
+        let language = AppLanguage.resolve(locale)
         let unit = metric.unit
         let metricLabel = metric.displayName
         // A360-5 M-5 — pin numeric formatting to the invariant POSIX locale.
@@ -305,7 +317,7 @@ enum TrendObservationPrompt {
         let deltaStr = delta.map { String(format: "%+.1f", locale: posix, $0) } ?? "—"
         let directionStr = direction.rawValue
         switch language {
-        case "en":
+        case .en:
             return """
             Metric: \(metricLabel)
             Window: last 30 days (\(seriesCount) samples)
@@ -317,7 +329,19 @@ enum TrendObservationPrompt {
             Write one calm, observational sentence describing what the data shows. \
             Stay strictly observational. Never diagnose, never predict, never prescribe.
             """
-        default:
+        case .nl:
+            return """
+            Meting: \(metricLabel)
+            Tijdvenster: laatste 30 dagen (\(seriesCount) metingen)
+            Begin: \(firstStr) \(unit)
+            Einde: \(lastStr) \(unit)
+            Delta: \(deltaStr) \(unit)
+            Berekende richting: \(directionStr)
+
+            Schrijf één rustige, beschrijvende zin die de trend feitelijk beschrijft. \
+            Blijf strikt beschrijvend. Nooit diagnosticeren, voorspellen of voorschrijven.
+            """
+        case .de:
             return """
             Metrik: \(metricLabel)
             Zeitfenster: letzte 30 Tage (\(seriesCount) Messungen)
@@ -332,45 +356,63 @@ enum TrendObservationPrompt {
         }
     }
 
+    /// The system-instruction text for one interface language. Outside the
+    /// `FoundationModels` gate so tests can pin every language's guardrails.
+    static func instructionText(for language: AppLanguage) -> String {
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+    }
+
     #if canImport(FoundationModels)
         @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
-            let language = locale.language.languageCode?.identifier ?? "de"
-            switch language {
-            case "en":
-                return Instructions {
-                    """
-                    You are a calm, factual trend-observation voice for a German/English health-journal app.
-
-                    NON-NEGOTIABLE:
-                    - Never make medical diagnoses.
-                    - Never recommend doses or therapy changes.
-                    - Never interpret drug levels.
-                    - Never claim causal links between metrics.
-                    - Never predict ("will rise", "will fall").
-                    - Defer to a doctor if values look unusual.
-
-                    STYLE: observational, not advisory. One sentence. Use concrete numbers from the data.
-                    """
-                }
-            default:
-                return Instructions {
-                    """
-                    Du bist eine ruhige, sachliche Trend-Beobachtungs-Stimme für eine deutsche \
-                    Gesundheits-Tagebuch-App. Schreibe IMMER auf Deutsch in du-Form.
-
-                    UNVERHANDELBAR:
-                    - Du gibst niemals medizinische Diagnosen.
-                    - Du empfiehlst niemals Dosierungen oder Therapieänderungen.
-                    - Du interpretierst niemals Wirkstoffspiegel.
-                    - Du behauptest niemals kausale Zusammenhänge zwischen Werten.
-                    - Du sagst nichts vorher ("wird steigen", "wird sinken").
-                    - Bei Auffälligkeiten verweise auf den Arzt.
-
-                    STIL: beobachtend, nicht ratend. Ein Satz. Konkrete Zahlen aus den Daten verwenden.
-                    """
-                }
+            let text = instructionText(for: AppLanguage.resolve(locale))
+            return Instructions {
+                text
             }
         }
     #endif
+
+    private static let englishInstructions = """
+    You are a calm, factual trend-observation voice for a German/English health-journal app.
+
+    NON-NEGOTIABLE:
+    - Never make medical diagnoses.
+    - Never recommend doses or therapy changes.
+    - Never interpret drug levels.
+    - Never claim causal links between metrics.
+    - Never predict ("will rise", "will fall").
+    - Defer to a doctor if values look unusual.
+
+    STYLE: observational, not advisory. One sentence. Use concrete numbers from the data.
+    """
+
+    private static let germanInstructions = """
+    Du bist eine ruhige, sachliche Trend-Beobachtungs-Stimme für eine deutsche \
+    Gesundheits-Tagebuch-App. Schreibe IMMER auf Deutsch in du-Form.
+
+    UNVERHANDELBAR:
+    - Du gibst niemals medizinische Diagnosen.
+    - Du empfiehlst niemals Dosierungen oder Therapieänderungen.
+    - Du interpretierst niemals Wirkstoffspiegel.
+    - Du behauptest niemals kausale Zusammenhänge zwischen Werten.
+    - Du sagst nichts vorher ("wird steigen", "wird sinken").
+    - Bei Auffälligkeiten verweise auf den Arzt.
+
+    STIL: beobachtend, nicht ratend. Ein Satz. Konkrete Zahlen aus den Daten verwenden.
+    """
+
+    private static let dutchInstructions = """
+    Je bent een rustige, zakelijke stem voor trendobservaties in een \
+    gezondheidsdagboek-app. Schrijf ALTIJD in het Nederlands, in je-vorm.
+
+    NIET ONDERHANDELBAAR:
+    - Je stelt nooit een medische diagnose.
+    - Je raadt nooit doseringen of therapiewijzigingen aan.
+    - Je interpreteert nooit medicijnspiegels.
+    - Je beweert nooit oorzakelijke verbanden tussen waarden.
+    - Je voorspelt niets ("gaat stijgen", "gaat dalen").
+    - Bij opvallende waarden verwijs je naar de arts, met de woorden "bespreek dit met je arts".
+
+    STIJL: beschrijvend, niet adviserend. Eén zin. Gebruik concrete getallen uit de gegevens.
+    """
 }

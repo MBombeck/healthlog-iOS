@@ -82,6 +82,8 @@ public final class ChartDetailStore {
     /// steps) where linear hides everyday detail under the peaks. The
     /// segmented toggle lives in the chart toolbar; UI-only, no re-fetch.
     public var useLogScale: Bool = false
+    /// 1.5 LAB-LINES — the blood pressure chart card narrowed to one part of the day (`+PartOfDay`).
+    public internal(set) var partOfDayChart = PartOfDayChart()
 
     // MARK: - Outputs
 
@@ -241,7 +243,7 @@ public final class ChartDetailStore {
         measurementsRepo: MeasurementsRepository,
         insightsRepo: MetricInsightsRepository,
         resolveLocale: @escaping @Sendable () -> String = {
-            Locale.autoupdatingCurrent.language.languageCode?.identifier ?? "de"
+            AppLanguage.current.serverCode
         },
         consentGate: (@MainActor () -> Bool)? = nil,
         preLoadHook: (@Sendable () async -> Void)? = nil,
@@ -461,17 +463,21 @@ public final class ChartDetailStore {
 
     /// Delta of the latest point against the average of the prior window.
     /// Returns `nil` when there's not enough data to compute meaningfully.
+    /// 1.5 VERDICTS — only the fallback for servers before v1.43; the hero
+    /// reads ``rangeChange``.
     public var deltaVsPriorWindow: Double? {
-        guard let points = series?.points, points.count >= 4 else { return nil }
-        let half = points.count / 2
-        let priorAvg = points.prefix(half).map(\.value).reduce(0, +) / Double(half)
-        let recentAvg = points.suffix(points.count - half).map(\.value).reduce(0, +) / Double(points.count - half)
-        return recentAvg - priorAvg
+        Self.priorHalfDelta(series?.points ?? [])
     }
 
-    /// Stats are server-computed — we just expose them.
+    /// Stats are server-computed — we just expose them. 1.5: a kind without a
+    /// server series (skin temperature, walking speed) draws its chart from
+    /// the raw readings (``chartPoints``); its min / mean / max come from the
+    /// same drawn points, as the audio graph's already do, so the row under
+    /// the chart no longer vanishes while the chart shows data.
     public var stats: SeriesStats? {
-        series?.stats
+        if let series { return series.stats }
+        let points = chartPoints
+        return points.isEmpty ? nil : MetricChartMath.statsFor(points)
     }
 
     /// BP-only: aggregate stats over the diastolic peer (`SeriesPoint.secondary`).
@@ -505,7 +511,7 @@ public final class ChartDetailStore {
     /// for exactly that reason. We compute it on-device from `series.points`
     /// for the rendered window (cheap: ≤ 365 points * one sort).
     public var median: Double? {
-        Self.median(of: series?.points.map(\.value) ?? [])
+        Self.median(of: (series?.points ?? chartPoints).map(\.value))
     }
 
     /// Pure median helper — public so tests can pin the math against

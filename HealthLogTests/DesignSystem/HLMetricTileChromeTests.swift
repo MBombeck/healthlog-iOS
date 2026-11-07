@@ -61,17 +61,14 @@ struct HLMetricTileChromeTests {
 
     // MARK: - Adverse-trend colour-signal parity across the two variants
 
-    @Test("Dashboard TrendChip maps polarity to the same adverse flag the glyph consumes")
-    func dashboardAdverseMapping() {
-        // up on lowerIsBetter → adverse; down on higherIsBetter → adverse;
-        // everything else mono. This is the single source the shared
-        // `HLTileTrendGlyph` reads for its colour signal.
-        #expect(TrendChip(trend: .up, polarity: .lowerIsBetter).isAdverse)
-        #expect(TrendChip(trend: .down, polarity: .higherIsBetter).isAdverse)
-        #expect(TrendChip(trend: .down, polarity: .lowerIsBetter).isAdverse == false)
-        #expect(TrendChip(trend: .up, polarity: .higherIsBetter).isAdverse == false)
-        #expect(TrendChip(trend: .flat, polarity: .neutral).isAdverse == false)
-        #expect(TrendChip(trend: .unknown, polarity: .neutral).isAdverse == false)
+    @Test("Dashboard TrendChip without a server verdict is monochrome in every direction (1.5 VERDICTS)")
+    func dashboardNeutralMapping() {
+        // The per-metric polarity table is no colour source any more: an
+        // arrow without a verdict reads in one quiet colour.
+        for trend in [TrendIndicator.up, .down, .flat] {
+            #expect(TrendChip(trend: trend).colorRole == .textSecondary)
+        }
+        #expect(TrendChip(trend: .unknown).colorRole == .none)
     }
 
     @Test("Sleep composite renders through the shared chrome (glyph + fallback sparkline)")

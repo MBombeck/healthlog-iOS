@@ -47,6 +47,11 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
     private let encoder: JSONEncoder
     private let cacheTTL: TimeInterval
     private let clock: @Sendable () -> Date
+    /// 1.5 ROUTES — whether the routes of this owner may go on the wire now
+    /// (``WorkoutRouteOptIn/allowsUpload(ownerUserID:defaults:)``). Asked for
+    /// every POST, the outbox replay included, so switching routes off stops
+    /// them at once, also for a batch queued earlier.
+    private let routeUploadAllowed: @Sendable (String?) -> Bool
 
     private struct CachedList {
         let payload: WorkoutListResponseDTO
@@ -68,8 +73,10 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
         outbox: OutboxQueue,
         encoder: JSONEncoder = .hlDefault,
         cacheTTL: TimeInterval = 60,
-        clock: @escaping @Sendable () -> Date = Date.init
+        clock: @escaping @Sendable () -> Date = Date.init,
+        routeUploadAllowed: (@Sendable (String?) -> Bool)? = nil
     ) {
+        self.routeUploadAllowed = routeUploadAllowed ?? { WorkoutRouteOptIn.allowsUpload(ownerUserID: $0) }
         self.api = api
         self.outbox = outbox
         self.encoder = encoder
@@ -253,12 +260,19 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
         idempotencyKey: IdempotencyKey,
         authLease: OutboxQueue.AuthLease?
     ) async throws -> WorkoutBatchResponseDTO {
-        let payload = WorkoutBatchPayload(workouts: workouts)
+        // 1.5 ROUTES — no route leaves without the opt-in. A batch that had
+        // to lose its routes is a different body, so it takes a fresh key
+        // rather than colliding with a stored envelope of the old one.
+        let gated = WorkoutRouteOptIn.enforce(
+            workouts,
+            allowed: routeUploadAllowed(authLease?.ownerUserID)
+        )
+        let payload = WorkoutBatchPayload(workouts: gated.workouts)
         let base: APIRequest<WorkoutBatchResponseDTO> = try .post(
             HealthIngestRoute.workoutsBatch,
             body: payload,
             encoder: .hlBatch,
-            idempotencyKey: idempotencyKey
+            idempotencyKey: gated.stripped ? IdempotencyKey() : idempotencyKey
         )
         if let authLease {
             try await outbox.validateAuthLease(authLease)

@@ -124,9 +124,15 @@
         func stringCatalogueCarriesNoResearchModeCopy() throws {
             let catalogue = try Self.stringCatalogue()
             let languages = Self.languages(in: catalogue)
+            // 1.5 L10N-CORE: the census covers every language the code knows;
+            // a catalogue language outside `AppLanguage` would be skipped.
             #expect(
-                languages == ["de", "en"],
-                "the catalogue's language set moved; extend this census before shipping"
+                Set(languages).isSubset(of: Set(AppLanguage.allCases.map(\.rawValue))),
+                "the catalogue carries a language AppLanguage does not know: \(languages)"
+            )
+            #expect(
+                Set(CatalogLanguages.required).isSubset(of: Set(languages)),
+                "a required language is missing from the catalogue"
             )
 
             var offenders: [String] = []
@@ -245,7 +251,7 @@
                 let entry = try #require(catalogue[key], "the MDR chart copy was deleted with the gate: \(key)")
                 let localizations = try #require(entry["localizations"] as? [String: Any])
                 #expect(
-                    Set(localizations.keys) == ["de", "en"],
+                    Set(CatalogLanguages.required).isSubset(of: Set(localizations.keys)),
                     "the MDR chart copy lost a language: \(key)"
                 )
             }

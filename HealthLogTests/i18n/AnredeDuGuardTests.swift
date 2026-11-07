@@ -140,19 +140,19 @@ struct AnredeDuGuardTests {
         )
     }
 
-    @Test("Validierte Instrument-Keys existieren + dürfen weiter siezen (Ausnahmeliste nicht verrottet)")
-    func validatedInstrumentsRemainExempt() throws {
+    /// 1.5.0 (L10N-MH): the validated instruments left the catalogue for
+    /// `Resources/Questionnaires/` (server wording, siezend by design), so the
+    /// sweep no longer meets them. The exemption list stays as a tripwire: a
+    /// key under it coming back means instrument text slipped into the
+    /// catalogue, which `check-strings.sh` also rejects.
+    @Test("Validierte Instrument-Texte stehen nicht mehr im Katalog (Ausnahmeliste greift ins Leere)")
+    func validatedInstrumentsLeftTheCatalog() throws {
         let catalog = try ParityCatalog.load()
-        // Sanity: the exact stem keys and at least the PHQ-9/GAD-7 item prefixes
-        // still resolve to catalog entries — so the exemption list cannot silently
-        // point at renamed/removed keys while the guard "passes" vacuously.
-        for key in Self.validatedInstrumentExactKeys {
-            #expect(catalog.strings[key] != nil, "Validated-instrument exempt key vanished: \(key)")
+        let leftovers = catalog.strings.keys.filter { key in
+            Self.validatedInstrumentExactKeys.contains(key)
+                || Self.validatedInstrumentKeyPrefixes.contains { key.hasPrefix($0) }
         }
-        let hasPhq9 = catalog.strings.keys.contains { $0.hasPrefix("mentalHealth.items.phq9.") }
-        let hasGad7 = catalog.strings.keys.contains { $0.hasPrefix("mentalHealth.items.gad7.") }
-        #expect(hasPhq9, "PHQ-9 item keys vanished — exemption list is stale")
-        #expect(hasGad7, "GAD-7 item keys vanished — exemption list is stale")
+        #expect(leftovers.isEmpty, "Instrument-Wortlaut im Katalog: \(leftovers.sorted())")
     }
 
     @Test("Heuristik-Selbsttest: anaphorisches sentence-initial 'Sie' ist erlaubt, mid-sentence nicht")

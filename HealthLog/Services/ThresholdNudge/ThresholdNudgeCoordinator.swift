@@ -75,6 +75,18 @@ struct ThresholdNudgeCoordinator {
         }
         return decision
     }
+
+    /// **POLISH-B B5 (1.5, server #1216, REG §8).** Whether the server is
+    /// escalating right now: its own Rest Mode flag on the Health Score
+    /// (`restMode.active`), nothing the app derives. Until 1.5 the probe was
+    /// "any illness episode without `resolvedAt`", and a chronic, ongoing
+    /// episode is never resolved, so the nudges stayed off for good for
+    /// exactly the people the server keeps out of Rest Mode. A score that is
+    /// not loaded yet, or a server that does not send the flag, is no
+    /// escalation.
+    static func serverHasEscalated(score: HealthScore?) -> Bool {
+        score?.activeRestMode != nil
+    }
 }
 
 #if canImport(UserNotifications) && canImport(UIKit)
@@ -84,22 +96,21 @@ struct ThresholdNudgeCoordinator {
     extension ThresholdNudgeCoordinator {
         /// Production wiring: opt-in from ``ThresholdNudgePrefStore``, debounce
         /// from ``ThresholdNudgeDebounceStore``, the server-escalation probe from
-        /// the live ``IllnessStore`` (an active episode means the server is
-        /// already in an escalated posture — defer), and delivery via
+        /// the server's Rest Mode flag on the live Health Score
+        /// (``serverHasEscalated(score:)``, POLISH-B B5), and delivery via
         /// ``NotificationService/scheduleThresholdNudge(_:breachKey:)``.
         static func live(
             notifications: NotificationService,
-            illnessStore: IllnessStore?,
+            healthScoreStore: HealthScoreStore?,
             defaults: UserDefaults = .standard
         ) -> ThresholdNudgeCoordinator {
             ThresholdNudgeCoordinator(
                 isOptedIn: { ThresholdNudgePrefStore.isEnabled(defaults: defaults) },
-                serverHasEscalated: { [weak illnessStore] _ in
-                    // Conservative app-wide deference: while the server is
-                    // escalating an illness episode, suppress the client nudge so
-                    // the two never stack. (A future kind-specific map can narrow
-                    // this; deferring more than necessary is the MDR-safe error.)
-                    illnessStore?.hasActiveEpisode ?? false
+                serverHasEscalated: { [weak healthScoreStore] _ in
+                    // App-wide deference while the server holds the account in
+                    // Rest Mode, so its own softening and a client nudge never
+                    // stack. The flag is the server's; the app derives nothing.
+                    Self.serverHasEscalated(score: healthScoreStore?.score)
                 },
                 isDebounced: { ThresholdNudgeDebounceStore.isDebounced(key: $0, defaults: defaults) },
                 recordNudge: { ThresholdNudgeDebounceStore.recordNudge(key: $0, defaults: defaults) },
