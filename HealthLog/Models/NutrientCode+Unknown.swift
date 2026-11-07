@@ -50,6 +50,17 @@ public extension NutrientCode {
         allCases.filter { $0 != .unknown }
     }
 
+    /// SUPP (v1.43) — whether HealthKit may send this code in the nutrient
+    /// batch (the catalogue's `syncable`). `dha` and `epa` come only from a
+    /// supplement's composition and appear in responses only; the sentinel is
+    /// never sent at all.
+    var isSyncable: Bool {
+        switch self {
+        case .dha, .epa, .unknown: false
+        default: true
+        }
+    }
+
     /// Audit B-4 — refuses to put ``unknown`` back on the wire. It rides the
     /// `POST /api/nutrients/batch` body and the `/daily` query string, and a
     /// client that sent `__UNKNOWN__` there would be inventing a catalogue

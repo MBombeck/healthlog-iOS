@@ -13,6 +13,12 @@ struct EditLabResultSheet: View {
 
     @State private var analyte: String
     @State private var unit: String
+    /// #160 — "No unit" on a free-text row (the unity `"1"`). ``unit``
+    /// keeps what was typed for the way back.
+    @State private var noUnit: Bool
+    /// Whether the "No unit" switch is offered (server 1.46.6, or a row that
+    /// already has no unit).
+    private let offersNoUnit: Bool
     @State private var valueText: String
     @State private var qualitativeText: String
     @State private var backdateBound = Date.now
@@ -56,7 +62,10 @@ struct EditLabResultSheet: View {
         self.store = store
         self.result = result
         _analyte = State(initialValue: result.analyte)
-        _unit = State(initialValue: result.unit)
+        let storedWithoutUnit = LabUnit.isUnity(result.unit)
+        _unit = State(initialValue: storedWithoutUnit ? "" : result.unit)
+        _noUnit = State(initialValue: storedWithoutUnit)
+        offersNoUnit = LabUnit.offersNoUnit(current: result.unit)
         // Item 1.5 — an absent / qualitative row prefills an EMPTY numeric field
         // instead of the old fabricated "0".
         let seededValueText = result.value.map { $0.formatted(.number.precision(.fractionLength(0 ... 2))) } ?? ""
@@ -104,7 +113,7 @@ struct EditLabResultSheet: View {
         if note != initialNote { return true }
         if !isLinked {
             if analyte != result.analyte { return true }
-            if unit != result.unit { return true }
+            if (LabUnit.wire(typed: unit, noUnit: noUnit) ?? "") != result.unit { return true }
             if panel != (result.panel ?? "") { return true }
             if referenceLowText != (result.referenceLow.map { $0.formatted() } ?? "") { return true }
             if referenceHighText != (result.referenceHigh.map { $0.formatted() } ?? "") { return true }
@@ -168,7 +177,7 @@ struct EditLabResultSheet: View {
     private var linkedReadOnlySection: some View {
         Section {
             LabeledContent("labs.add.analyte", value: result.analyte)
-            LabeledContent("labs.add.unit", value: result.unit)
+            LabeledContent("labs.add.unit", value: LabUnit.standalone(result.unit) ?? "")
             if let lower = result.referenceLow {
                 LabeledContent("labs.add.referenceLow", value: lower.formatted())
             }
@@ -188,10 +197,14 @@ struct EditLabResultSheet: View {
                 .focused($focusedField, equals: .analyte)
                 .submitLabel(.next)
                 .onSubmit { focusedField = .unit }
-            TextField("labs.add.unit", text: $unit)
+            TextField("labs.add.unit", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
                 .focused($focusedField, equals: .unit)
                 .submitLabel(.next)
                 .onSubmit { focusedField = .panel }
+                .disabled(noUnit)
+            if offersNoUnit {
+                LabNoUnitToggle(isOn: $noUnit)
+            }
             TextField("labs.add.panel", text: $panel)
                 .focused($focusedField, equals: .panel)
                 .submitLabel(.next)
@@ -219,8 +232,8 @@ struct EditLabResultSheet: View {
                     TextField("labs.add.value", text: $valueText)
                         .keyboardType(.decimalPad)
                         .focused($focusedField, equals: .value)
-                    if !result.unit.isEmpty {
-                        Text(result.unit).foregroundStyle(HLText.secondary)
+                    if let shown = LabUnit.suffix(result.unit) {
+                        Text(verbatim: shown).foregroundStyle(HLText.secondary)
                     }
                 }
             case .qualitative:
@@ -303,9 +316,8 @@ struct EditLabResultSheet: View {
         )
         if !isLinked {
             let trimmedAnalyte = analyte.trimmingCharacters(in: .whitespaces)
-            let trimmedUnit = unit.trimmingCharacters(in: .whitespaces)
             patch.analyte = trimmedAnalyte.isEmpty ? nil : trimmedAnalyte
-            patch.unit = trimmedUnit.isEmpty ? nil : trimmedUnit
+            patch.unit = LabUnit.wire(typed: unit, noUnit: noUnit)
             // Panel + both reference bounds are clearable too — same class of
             // bug, same fix. A cleared bound sends `null`, a typo'd bound sends
             // nothing (see `RecordPatchField.fromEditor`) so a slip of the

@@ -9,10 +9,11 @@ import AppIntents
 /// speak to Siri; the `\(.applicationName)` token is required by the
 /// framework and resolves to the app's display name.
 ///
-/// Phrases are localized via `LocalizedStringResource` so the German
-/// (source) and English (translation) phrasings both register. The
-/// strings live in the same `Localizable.xcstrings` catalogue as the
-/// rest of the app.
+/// Phrases are localized only through `Resources/AppShortcuts.xcstrings`
+/// (key = the English phrase with `${applicationName}` / `${parameter}`
+/// tokens); Siri never reads them from `Localizable.xcstrings`. Short titles
+/// stay in `Localizable`. `AppShortcutPhraseCatalogTests` keeps code and
+/// catalog in step (1.5 SIRI-L10N).
 struct HealthLogAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -43,6 +44,19 @@ struct HealthLogAppShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Log a measurement",
             systemImageName: "square.and.pencil"
+        )
+        // 1.5 SHORTCUT (#155, public #1295) — a value for one of the
+        // person's own metrics. `\(\.$metric)` lets Siri fill the metric by
+        // name from `CustomMetricEntityQuery`.
+        AppShortcut(
+            intent: LogCustomMetricValueIntent(),
+            phrases: [
+                "Log a value in \(.applicationName)",
+                "Log \(\.$metric) in \(.applicationName)",
+                "Add a value to \(\.$metric) in \(.applicationName)"
+            ],
+            shortTitle: "Log a value",
+            systemImageName: "slider.horizontal.3"
         )
         AppShortcut(
             intent: LogBloodPressureIntent(),

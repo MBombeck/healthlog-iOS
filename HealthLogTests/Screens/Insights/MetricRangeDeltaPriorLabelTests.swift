@@ -21,6 +21,20 @@ struct MetricRangeDeltaPriorLabelTests {
         #expect(MetricRangeDelta.priorLabel(for: .all, bundle: bundle) == "ggü. früheren Daten")
     }
 
+    @Test("1.5 VERDICTS — the server's change says it runs from the first day of the range")
+    func serverChangeSuffix() throws {
+        let german = try Self.lprojBundle("de")
+        let english = try Self.lprojBundle("en")
+        let server = try #require(MetricRangeDelta.resolve(serverDelta: 2, unit: "kg", sentiment: .neutral))
+        #expect(MetricRangeDelta.suffix(for: server, range: .month, bundle: german) == "seit dem ersten Tag im Zeitraum")
+        #expect(MetricRangeDelta.suffix(for: server, range: .month, bundle: english) == "since the first day in range")
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        let own = try #require(MetricRangeDelta.resolve(points: [100, 100, 110, 110].enumerated().map { index, value in
+            SeriesPoint(id: "\(index)", at: day.addingTimeInterval(Double(index) * 86400), value: value, secondary: nil)
+        }))
+        #expect(MetricRangeDelta.suffix(for: own, range: .month, bundle: english) == "vs. prior month")
+    }
+
     @Test("English keeps its wording")
     func english() throws {
         let bundle = try Self.lprojBundle("en")

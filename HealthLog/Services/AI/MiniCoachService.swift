@@ -205,6 +205,12 @@ public actor MiniCoachService {
             @unknown default:
                 return .unsupported(MiniCoachPrompt.unsupportedFallback(locale: locale))
             }
+            // A closed language gate reads like an unsupported device: the
+            // reply is app copy in the interface language, never model output
+            // in another one.
+            guard OnDeviceLanguageGate.allows(locale: locale) else {
+                return .unsupported(MiniCoachPrompt.unsupportedFallback(locale: locale))
+            }
 
             let userTurn = MiniCoachPrompt.userTurn(
                 ask: ask,

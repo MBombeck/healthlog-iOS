@@ -24,13 +24,17 @@
     /// running system resolves the type, so the contract is 36 on iOS 26 and
     /// older and 37 on iOS 27 and later; the fixed literal holds 36 since
     /// B5 (1.4) added waist circumference.
+    ///
+    /// **HK-NEW (1.5) — six server-gated members** (``HealthKitServer144Types``),
+    /// so the literal holds 42. They are collected only where the configured
+    /// server maps them (`AppOwnedHealthCollectionCoordinator.serverCollectable`).
     enum HealthLogSampleTypeRegistry {
         /// How many server-bound sample types the fixed literal below holds.
         ///
         /// Declared separately from the set so a duplicated or dropped line in the
         /// literal below fails a test instead of quietly changing what the app
         /// syncs.
-        static let baseExpectedCount = 36
+        static let baseExpectedCount = 42
 
         /// Exactly how many server-bound sample types the app collects on the
         /// running system: the fixed literal plus the OS-gated types this
@@ -105,6 +109,10 @@
             // across SDK levels even when the symbol is unavailable so we
             // can list it directly without an availability guard.
             identifiers.insert("HKQuantityTypeIdentifierTimeInDaylight")
+            // HK-NEW (1.5) — server v1.44: exercise and stand minutes, stand
+            // hours, mindful sessions, State of Mind (as valence) and AFib
+            // burden. State of Mind by its run-time identifier, the cursor key.
+            identifiers.formUnion(HealthKitServer144Types.registryIdentifiers)
             return identifiers
         }()
 

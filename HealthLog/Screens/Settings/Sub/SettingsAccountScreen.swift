@@ -21,6 +21,22 @@ import SwiftUI
 /// surface on a server-paired install; a standalone install has no server
 /// account to sign out of or delete.
 struct SettingsAccountScreen: View {
+    /// POLISH-C (C2) — on the More stack the pushes below are values, so the
+    /// page under the privacy shield comes back. The avatar sheet on Today
+    /// hosts this screen in its own stack without those destinations and
+    /// keeps the view pushes.
+    private let routesByValue: Bool
+
+    /// 1.5 (Alex, 07.11.) — the avatar sheet on Today is the quick account
+    /// door: profile, security, sessions and sign-out. Resetting data and
+    /// deleting the account live only under Einstellungen > Konto.
+    let showsIrreversibleActions: Bool
+
+    init(routesByValue: Bool = false, showsIrreversibleActions: Bool = true) {
+        self.routesByValue = routesByValue
+        self.showsIrreversibleActions = showsIrreversibleActions
+    }
+
     @Environment(AuthStore.self) private var authStore
     @Environment(SyncModeStore.self) private var syncMode
 
@@ -62,12 +78,14 @@ struct SettingsAccountScreen: View {
             // no token, so surfacing them there would fire doomed server calls
             // and drop the user into a dead-end delete flow. Hidden until the
             // install is paired. Parity 2.2 (sessions) and 2.5 (data reset) are
-            // server actions for the same reason and join the same gate.
+            // server actions for the same reason and join the same gate. 1.5
+            // (Alex, 07.11.): active sessions moved into Sicherheit.
             if !syncMode.isStandalone {
-                sessionsCard
                 signOutCard
-                resetDataCard
-                deleteAccountCard
+                if showsIrreversibleActions {
+                    resetDataCard
+                    deleteAccountCard
+                }
             }
         }
         .navigationTitle("Account")
@@ -141,27 +159,25 @@ struct SettingsAccountScreen: View {
     /// ID instead of a password.", "Manage passkeys") flagged by audit C12.
     private var securityCard: some View {
         HLSettingsCard {
-            HLSettingsActionRow(
-                title: "settings.security.title",
-                subtitle: "settings.security.subtitle",
-                presents: .push
-            ) {
-                SettingsSecurityScreen()
+            Group {
+                if routesByValue {
+                    HLSettingsActionRow(
+                        title: "settings.security.title",
+                        subtitle: "settings.security.subtitle",
+                        presents: .push,
+                        value: SettingsRoute.security
+                    )
+                } else {
+                    HLSettingsActionRow(
+                        title: "settings.security.title",
+                        subtitle: "settings.security.subtitle",
+                        presents: .push
+                    ) {
+                        SettingsSecurityScreen()
+                    }
+                }
             }
             .accessibilityIdentifier("settings.account.securityRow")
-        }
-    }
-
-    /// Parity 2.2 — active sessions. Sits directly above sign-out: both answer
-    /// "who is signed in to my account", and the single-device answer
-    /// (sign myself out here) belongs next to the all-devices one. 1.4 B2-c:
-    /// title and row say it, the subtitle that said it again is gone.
-    private var sessionsCard: some View {
-        HLSettingsCard {
-            HLSettingsActionRow(title: "sessions.title", presents: .push) {
-                SessionsScreen()
-            }
-            .accessibilityIdentifier("settings.account.sessionsRow")
         }
     }
 

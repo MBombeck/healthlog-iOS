@@ -249,14 +249,12 @@
 
         // MARK: - Efficacy
 
-        private static var isGerman: Bool {
-            Bundle.main.preferredLocalizations.first?.hasPrefix("de") == true
-        }
-
         /// `GET /api/medications/{id}/efficacy` for Lisinopril: systolic pressure
         /// a little lower in the weeks after the start than before it.
         static var efficacyJSON: String {
-            let label = isGerman ? "Systolischer Blutdruck" : "Systolic blood pressure"
+            let label = AppLanguage.current.pick(
+                de: "Systolischer Blutdruck", en: "Systolic blood pressure", nl: "Systolische bloeddruk"
+            )
             let before = [141, 139, 140, 138, 137, 139]
             let after = [135, 133, 131, 132, 130, 129, 130, 128]
             func week(_ index: Int) -> String {

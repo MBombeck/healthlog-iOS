@@ -160,6 +160,14 @@ struct DocumentCardRow: View {
     /// that was already indexed when the list loaded.
     @State private var sawProcessing = false
     @State private var isReady = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// POLISH-A (SHOTS F-AX-DOCLIST) — one line each at the default size; at an
+    /// accessibility size the lines wrap instead of cutting "Befund…",
+    /// "28.10.2026…".
+    private var lineCap: Int? {
+        dynamicTypeSize.isAccessibilitySize ? nil : 1
+    }
 
     private var isProcessing: Bool {
         DocumentFormat.isProcessing(document)
@@ -178,26 +186,28 @@ struct DocumentCardRow: View {
             Image(systemName: DocumentKindMeta.icon(document.kind))
                 .font(.hlHeadline)
                 .foregroundStyle(HLText.secondary)
-                .frame(width: 24)
+                // POLISH-A — a fixed 24 pt column let the glyph run into the
+                // title at an accessibility size; it grows with the text there.
+                .frame(minWidth: 24)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 // Primary line: the document title.
                 Text(titleText)
                     .font(.hlHeadline)
                     .foregroundStyle(HLText.primary)
-                    .lineLimit(1)
+                    .lineLimit(lineCap)
                 // Secondary line: the filename (only when it adds information).
                 if let secondaryName {
                     Text(verbatim: secondaryName)
                         .font(.hlSubhead)
                         .foregroundStyle(HLText.secondary)
-                        .lineLimit(1)
+                        .lineLimit(lineCap)
                 }
                 // Tertiary line: the muted date · size meta.
                 Text(metaLine)
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
-                    .lineLimit(1)
+                    .lineLimit(lineCap)
                 if !document.conditionLinks.isEmpty || document.servingClass == .attachment
                     || isProcessing || isReady
                 {

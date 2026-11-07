@@ -30,8 +30,10 @@ struct MoodInsights: Equatable, Sendable {
     let mean: Double?
     /// 30-day average of daily averages (trailing from `now`), `nil` when none.
     let avg30: Double?
-    /// Linear-regression slopes (score units/day) over the trailing 7/30/90 day
-    /// windows. `nil` when the window has < 2 daily points.
+    /// The server's regression slopes (score units/day) over the trailing
+    /// 7/30/90 day windows (`/api/mood/analytics`). 1.5 VERDICTS (#151):
+    /// `nil` when the server sends none, offline and in standalone too; the
+    /// app no longer fits its own line.
     let slope7: Double?
     let slope30: Double?
     let slope90: Double?
@@ -44,6 +46,9 @@ struct MoodInsights: Equatable, Sendable {
     let entryCount: Int
     /// Distinct days with at least one entry.
     let dayCount: Int
+    /// The server's direction of the 30-day trend, else of the 7-day one.
+    /// `nil` → no trend arrow (#151).
+    var trendDirection: TrendDirection?
 
     /// The all-nil insight set. This is the value ``compute(entries:now:calendar:enrichment:)``
     /// has always returned for an empty history; naming it lets a render that is
@@ -138,10 +143,6 @@ extension MoodInsights {
             daily, fromDaysAgo: 60, toDaysAgo: 30, now: now, calendar: calendar
         )
 
-        let clientSlope7 = slope(daily, days: 7, now: now, calendar: calendar)
-        let clientSlope30 = slope(daily, days: 30, now: now, calendar: calendar)
-        let clientSlope90 = slope(daily, days: 90, now: now, calendar: calendar)
-
         let tagDeltas = makeTagDeltas(entries: entries)
 
         return MoodInsights(
@@ -149,14 +150,15 @@ extension MoodInsights {
             latestScore: latest,
             mean: mean,
             avg30: avg30,
-            // Prefer the authoritative server slopes/prior-period when online.
-            slope7: enrichment?.slope7 ?? clientSlope7,
-            slope30: enrichment?.slope30 ?? clientSlope30,
-            slope90: enrichment?.slope90 ?? clientSlope90,
+            // 1.5 VERDICTS (#151) — the trend is the server's or none.
+            slope7: enrichment?.slope7,
+            slope30: enrichment?.slope30,
+            slope90: enrichment?.slope90,
             avg30PriorPeriod: enrichment?.avg30LastMonth ?? avg30Prior,
             tagDeltas: tagDeltas,
             entryCount: entries.count,
-            dayCount: daily.count
+            dayCount: daily.count,
+            trendDirection: enrichment.flatMap { $0.slope30 != nil ? $0.direction30 : $0.direction7 }
         )
     }
 
@@ -207,32 +209,6 @@ extension MoodInsights {
         let slice = daily.filter { $0.day >= lowerBound && $0.day < upperBound }
         guard !slice.isEmpty else { return nil }
         return slice.map(\.average).reduce(0, +) / Double(slice.count)
-    }
-
-    /// Least-squares slope (score units/day) of the trailing `days` daily
-    /// averages, x = days since the window start. `nil` for < 2 points.
-    static func slope(
-        _ daily: [MoodDailyAverage],
-        days: Int,
-        now: Date,
-        calendar: Calendar
-    ) -> Double? {
-        let today = calendar.startOfDay(for: now)
-        guard let lowerBound = calendar.date(byAdding: .day, value: -days, to: today) else { return nil }
-        let slice = daily.filter { $0.day >= lowerBound }
-        guard slice.count >= 2 else { return nil }
-        let points: [(x: Double, y: Double)] = slice.map { avg in
-            let dayOffset = calendar.dateComponents([.day], from: lowerBound, to: avg.day).day ?? 0
-            return (Double(dayOffset), avg.average)
-        }
-        let n = Double(points.count)
-        let sumX = points.map(\.x).reduce(0, +)
-        let sumY = points.map(\.y).reduce(0, +)
-        let sumXY = points.map { $0.x * $0.y }.reduce(0, +)
-        let sumXX = points.map { $0.x * $0.x }.reduce(0, +)
-        let denom = n * sumXX - sumX * sumX
-        guard abs(denom) > .ulpOfOne else { return nil }
-        return (n * sumXY - sumX * sumY) / denom
     }
 
     /// Port of MoodLog `computeTagStats` (L174-216) + the tag-correlation gate

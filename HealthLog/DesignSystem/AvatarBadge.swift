@@ -63,6 +63,19 @@ public extension UserProfile {
     }
 }
 
+public extension UserProfile {
+    /// KONTO (#149, server 1.43.11) — `/api/auth/me` carries the
+    /// `displayName` a person can change on the web. The badge takes the first
+    /// non-empty name: the profile's, then the signed-in account's, then the
+    /// username. Without a `displayName` anywhere (older server) it reads as
+    /// before.
+    static func initials(profile: UserProfile?, user: User?) -> String {
+        let name = [profile?.displayName, user?.displayName].lazy.compactMap { $0?.trimmedNonEmpty }.first
+        let username = [profile?.username, user?.username].lazy.compactMap { $0?.trimmedNonEmpty }.first
+        return makeInitials(from: name, username: username)
+    }
+}
+
 public extension User {
     /// Convenience that mirrors `UserProfile.avatarInitials` so the
     /// `AuthStore.User` (which is the available identity during cold-launch

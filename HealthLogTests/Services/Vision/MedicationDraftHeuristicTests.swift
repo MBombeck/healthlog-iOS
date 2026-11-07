@@ -85,8 +85,10 @@ struct MedicationDraftHeuristicTests {
 
     @Test("extract — finds Filmtablette before Tablette (most-specific wins)")
     func picksMostSpecificDoseForm() {
+        // A German package read under a German interface: the German lexicon
+        // goes first (a Dutch interface would take "tablet" from it first).
         let ocr = "Naproxen 400\nFilmtablette"
-        let draft = MedicationDraftHeuristic.extract(from: ocr)
+        let draft = AppLanguage.$pinned.withValue(.de) { MedicationDraftHeuristic.extract(from: ocr) }
         #expect(draft?.doseForm == "Filmtablette")
     }
 
@@ -158,5 +160,39 @@ struct MedicationDraftHeuristicTests {
         """
         let draft = MedicationDraftHeuristic.extract(from: ocr)
         #expect(draft?.name == "Metformin Hexal")
+    }
+
+    // MARK: - Dutch packs
+
+    @Test("guessDoseForm — a Dutch interface reads \"Tabletten\" as Tablet, a German one as Tablette")
+    func dutchDoseFormFollowsInterfaceLanguage() {
+        let lines = ["Metformine Sandoz", "500 mg", "Tabletten"]
+        #expect(MedicationDraftHeuristic.guessDoseForm(lines: lines, language: .nl) == "Tablet")
+        // "tabletten" contains "tablette", which is why the order matters.
+        #expect(MedicationDraftHeuristic.guessDoseForm(lines: lines, language: .de) == "Tablette")
+        #expect(MedicationDraftHeuristic.guessDoseForm(lines: ["Zetpillen 100 mg"], language: .nl) == "Zetpil")
+        #expect(MedicationDraftHeuristic.guessDoseForm(lines: ["Filmomhulde tabletten"], language: .nl) == "Filmomhulde tablet")
+    }
+
+    @Test("every interface language searches every dose-form lexicon", arguments: AppLanguage.allCases)
+    func everyLanguageSearchesEveryLexicon(language: AppLanguage) {
+        let lexicon = MedicationDraftHeuristic.doseFormLexicon(for: language)
+        let all = MedicationDraftHeuristic.doseFormKeywords + MedicationDraftHeuristic.dutchDoseFormKeywords
+        #expect(lexicon.count == all.count)
+        #expect(Set(lexicon) == Set(all))
+    }
+
+    @Test("extract — a B.V. line is the manufacturer and a Werkzame stof line never the name")
+    func dutchManufacturerAndMetadata() {
+        let ocr = """
+        Werkzame stof: metformine
+        Metformine Sandoz
+        500 mg
+        Sandoz B.V.
+        RVG 12345
+        """
+        let draft = MedicationDraftHeuristic.extract(from: ocr)
+        #expect(draft?.name == "Metformine Sandoz")
+        #expect(draft?.manufacturerHint == "Sandoz B.V.")
     }
 }

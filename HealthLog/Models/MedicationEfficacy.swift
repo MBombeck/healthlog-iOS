@@ -97,6 +97,9 @@ public struct MedicationEfficacyDTO: Decodable, Sendable {
         public let series: [Point]
         public let beforeAfter: BeforeAfter
         public let levelShift: LevelShift?
+        /// Server v1.46 segmented regression; only its caveat is read
+        /// (`MedicationEfficacy+Segmented.swift`). `nil` from an older server.
+        public let segmented: Segmented?
 
         public var id: String {
             "\(kind):\(key)"

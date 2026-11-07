@@ -153,6 +153,12 @@ enum HKSyncDiagnosticsVocabulary {
         }
     }
 
+    /// SYNC-HR — "Läuft seit 14:05": a heart-rate sweep past its deadline.
+    static func heartRateBucketRunningSince(_ start: Date) -> String {
+        let time = start.formatted(.dateTime.day().month().hour().minute())
+        return String(localized: "settings.hkdiag.hrbuckets.running_since \(time)")
+    }
+
     /// The neutral word for a value this build cannot name.
     static var unknown: String {
         String(localized: "settings.hkdiag.verdict_unknown")

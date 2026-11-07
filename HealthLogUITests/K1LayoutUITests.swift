@@ -84,9 +84,7 @@ final class K1LayoutUITests: XCTestCase {
     private func boot(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchHermeticAndWaitForDashboard(
-            extraArguments: [
-                "-AppleLanguages", "(de)",
-                "-AppleLocale", "de_DE",
+            extraArguments: UITestLanguage.de.launchArguments + [
                 "-uitest-phase8", "insightsAccessibility",
                 "-uitest-marketing",
                 "-uitest-sweep",

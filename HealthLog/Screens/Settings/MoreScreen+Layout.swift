@@ -340,7 +340,7 @@ extension MoreScreen {
             id: "delete_account",
             icon: "trash.fill",
             title: "Delete account",
-            subtitle: "Irreversible, the server removes all data"
+            subtitle: "more.deleteAccount.subtitle"
         )
 
         /// v0.14.1 (#134) — rows in the combined "Records & achievements"

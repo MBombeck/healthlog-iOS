@@ -39,7 +39,7 @@ extension AskCoachSheet {
         case let serverError as CoachServerError:
             switch serverError {
             case let .provider(code):
-                providerErrorCopy(code)
+                Self.providerErrorCopy(code)
             case .decode, .emptyReply:
                 String(localized: "Response failed. Please try again.")
             }
@@ -53,7 +53,7 @@ extension AskCoachSheet {
     /// Maps a server `coach.provider.*` / `coach.budget.*` error code to curated
     /// user copy. Never renders the raw code; an unknown code falls through to the
     /// generic retry.
-    private func providerErrorCopy(_ code: String) -> String {
+    static func providerErrorCopy(_ code: String) -> String {
         switch code {
         case "coach.provider.none":
             String(
@@ -69,6 +69,11 @@ extension AskCoachSheet {
             // A360 M3 — the server provider's credential expired (e.g. an OAuth
             // token lapsed). Point at where the user can fix it.
             String(localized: "Your AI provider needs reconnecting. Check Settings → Assistant.")
+        case "coach.provider.reasoning_only":
+            // KONTO (#151, server 1.46.0) — every provider in the chain
+            // answered with reasoning and no reply, even after a second ask.
+            // Retrying may help; another model usually does.
+            String(localized: "coach.error.reasoningOnly")
         default:
             String(localized: "The Coach couldn't answer right now. Try again shortly.")
         }

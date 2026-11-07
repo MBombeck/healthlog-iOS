@@ -38,6 +38,12 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
     public let latestAmount: Double
     /// Count of distinct days inside the window carrying data (≥ 1).
     public let daysWithData: Int
+    /// SUPP (v1.43): `latestAmount` split by source, the nutrient's upper
+    /// intake level and the server's verdict on the latest day. `nil` from an
+    /// older server. See `NutrientSources.swift`.
+    public let latestBySource: NutrientAmountBySource?
+    public let upperLimit: NutrientUpperLimit?
+    public let latestAboveUpperLimit: Bool?
 
     /// Audit B-4 — keyed on the RAW code, not the case: two rows carrying two
     /// different unnameable codes are two rows, and a `ForEach` over the case
@@ -52,7 +58,10 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
         latestDay: String,
         latestAmount: Double,
         daysWithData: Int,
-        rawNutrient: String? = nil
+        rawNutrient: String? = nil,
+        latestBySource: NutrientAmountBySource? = nil,
+        upperLimit: NutrientUpperLimit? = nil,
+        latestAboveUpperLimit: Bool? = nil
     ) {
         self.nutrient = nutrient
         self.rawNutrient = rawNutrient ?? nutrient.rawValue
@@ -60,10 +69,14 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
         self.latestDay = latestDay
         self.latestAmount = latestAmount
         self.daysWithData = daysWithData
+        self.latestBySource = latestBySource
+        self.upperLimit = upperLimit
+        self.latestAboveUpperLimit = latestAboveUpperLimit
     }
 
     private enum CodingKeys: String, CodingKey {
         case nutrient, unit, latestDay, latestAmount, daysWithData
+        case latestBySource, upperLimit, latestAboveUpperLimit
     }
 
     /// **Audit B-4** — the raw code is decoded first and kept; the case is
@@ -79,6 +92,9 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
         latestDay = try c.decodeIfPresent(String.self, forKey: .latestDay) ?? ""
         latestAmount = try c.decodeIfPresent(Double.self, forKey: .latestAmount) ?? 0
         daysWithData = try c.decodeIfPresent(Int.self, forKey: .daysWithData) ?? 0
+        latestBySource = (try? c.decodeIfPresent(NutrientAmountBySource.self, forKey: .latestBySource)).flatMap { $0 }
+        upperLimit = (try? c.decodeIfPresent(NutrientUpperLimit.self, forKey: .upperLimit)).flatMap { $0 }
+        latestAboveUpperLimit = (try? c.decodeIfPresent(Bool.self, forKey: .latestAboveUpperLimit)).flatMap { $0 }
     }
 
     /// **Audit B-4** — writes the RAW code back, never the case.
@@ -95,6 +111,9 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
         try c.encode(latestDay, forKey: .latestDay)
         try c.encode(latestAmount, forKey: .latestAmount)
         try c.encode(daysWithData, forKey: .daysWithData)
+        try c.encodeIfPresent(latestBySource, forKey: .latestBySource)
+        try c.encodeIfPresent(upperLimit, forKey: .upperLimit)
+        try c.encodeIfPresent(latestAboveUpperLimit, forKey: .latestAboveUpperLimit)
     }
 }
 
@@ -193,22 +212,30 @@ public struct NutrientReferenceDTO: Codable, Sendable, Equatable {
 public struct NutrientDayPointDTO: Codable, Sendable, Equatable, Identifiable {
     public let day: String
     public let amount: Double
+    /// SUPP (v1.43): the day's amount split by source and the server's verdict
+    /// against the upper limit; `nil` from an older server.
+    public let bySource: NutrientAmountBySource?
+    public let aboveUpperLimit: Bool?
 
     public var id: String {
         day
     }
 
-    public init(day: String, amount: Double) {
+    public init(day: String, amount: Double, bySource: NutrientAmountBySource? = nil, aboveUpperLimit: Bool? = nil) {
         self.day = day
         self.amount = amount
+        self.bySource = bySource
+        self.aboveUpperLimit = aboveUpperLimit
     }
 
-    private enum CodingKeys: String, CodingKey { case day, amount }
+    private enum CodingKeys: String, CodingKey { case day, amount, bySource, aboveUpperLimit }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         day = try c.decodeIfPresent(String.self, forKey: .day) ?? ""
         amount = try c.decodeIfPresent(Double.self, forKey: .amount) ?? 0
+        bySource = (try? c.decodeIfPresent(NutrientAmountBySource.self, forKey: .bySource)).flatMap { $0 }
+        aboveUpperLimit = (try? c.decodeIfPresent(Bool.self, forKey: .aboveUpperLimit)).flatMap { $0 }
     }
 }
 
@@ -223,6 +250,9 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
     public let windowDays: Int
     public let days: [NutrientDayPointDTO]
     public let reference: NutrientReferenceDTO?
+    /// SUPP (v1.43): the nutrient's upper intake level; `nil` without one or
+    /// from an older server.
+    public let upperLimit: NutrientUpperLimit?
 
     public init(
         nutrient: NutrientCode,
@@ -230,7 +260,8 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         windowDays: Int,
         days: [NutrientDayPointDTO],
         reference: NutrientReferenceDTO?,
-        rawNutrient: String? = nil
+        rawNutrient: String? = nil,
+        upperLimit: NutrientUpperLimit? = nil
     ) {
         self.nutrient = nutrient
         self.rawNutrient = rawNutrient ?? nutrient.rawValue
@@ -238,10 +269,11 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         self.windowDays = windowDays
         self.days = days
         self.reference = reference
+        self.upperLimit = upperLimit
     }
 
     private enum CodingKeys: String, CodingKey {
-        case nutrient, unit, windowDays, days, reference
+        case nutrient, unit, windowDays, days, reference, upperLimit
     }
 
     public init(from decoder: Decoder) throws {
@@ -258,6 +290,7 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         // unknown direction still nils the reference: target vs. ceiling is a
         // claim, and guessing it would colour the progress wrongly.
         reference = (try? c.decodeIfPresent(NutrientReferenceDTO.self, forKey: .reference)).flatMap { $0 }
+        upperLimit = (try? c.decodeIfPresent(NutrientUpperLimit.self, forKey: .upperLimit)).flatMap { $0 }
     }
 
     /// Audit B-4 — writes the RAW code back; see
@@ -269,6 +302,7 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         try c.encode(windowDays, forKey: .windowDays)
         try c.encode(days, forKey: .days)
         try c.encodeIfPresent(reference, forKey: .reference)
+        try c.encodeIfPresent(upperLimit, forKey: .upperLimit)
     }
 
     /// The latest day carrying data (highest non-empty `day`), or `nil` when the

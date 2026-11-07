@@ -399,7 +399,7 @@ public final class MoodStore {
     public func suggestTags(
         forNote note: String,
         existingTags: [String] = [],
-        locale: Locale = .current
+        locale: Locale = AppLanguage.current.locale
     ) async -> MoodTagSuggestionOutcome? {
         guard let tagExtraction else { return nil }
         return await tagExtraction.suggestTags(

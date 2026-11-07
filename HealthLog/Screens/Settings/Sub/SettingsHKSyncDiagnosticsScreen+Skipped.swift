@@ -126,7 +126,7 @@ struct SettingsHKSkippedRowsScreen: View {
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
                 Spacer()
-                Text(Self.reasonText(row.reason))
+                Text(Self.reasonText(row))
                     .font(.hlCaption)
                     .foregroundStyle(HLColor.statusWarn)
                     .multilineTextAlignment(.trailing)
@@ -193,6 +193,38 @@ struct SettingsHKSkippedRowsScreen: View {
             return HLNumberFormat.percent(formattedNumber: number)
         }
         return entry.value.formatted(.number.precision(.fractionLength(0 ... 2))) + " " + entry.unit
+    }
+
+    /// 1.5 FIX-DATA (#126) — an out-of-range refusal says which value the
+    /// server checked and which band it broke, when the server said so (v1.39.1);
+    /// without that detail the general sentence stays.
+    static func reasonText(_ row: HealthKitSkippedRow) -> String {
+        guard row.reason == MeasurementBatchAcceptance.Reason.valueOutOfRange, let detail = row.detail else {
+            return reasonText(row.reason)
+        }
+        let unit = detail.range?.unit ?? ""
+        switch (detail.convertedValue, detail.range) {
+        case let (value?, range?):
+            let shown = bandText(value, unit: unit)
+            let low = bandText(range.min, unit: unit)
+            let high = bandText(range.max, unit: unit)
+            return String(localized: "settings.hkdiag.skipped_reason_out_of_range_detail \(shown) \(low) \(high)")
+        case let (nil, range?):
+            let low = bandText(range.min, unit: unit)
+            let high = bandText(range.max, unit: unit)
+            return String(localized: "settings.hkdiag.skipped_reason_out_of_range_band \(low) \(high)")
+        case let (value?, nil):
+            return String(localized: "settings.hkdiag.skipped_reason_out_of_range_value \(bandText(value, unit: unit))")
+        case (nil, nil):
+            return reasonText(row.reason)
+        }
+    }
+
+    /// A value in the server's stored unit, as the server named it.
+    static func bandText(_ value: Double, unit: String) -> String {
+        let number = value.formatted(.number.precision(.fractionLength(0 ... 2)))
+        if unit == "%" { return HLNumberFormat.percent(formattedNumber: number) }
+        return unit.isEmpty ? number : number + " " + unit
     }
 
     static func reasonText(_ reason: String) -> String {

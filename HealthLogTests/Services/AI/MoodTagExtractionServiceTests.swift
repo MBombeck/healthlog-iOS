@@ -154,7 +154,7 @@ struct MoodTagExtractionServiceTests {
         let cases: [MoodTagSuggestionOutcome.FallbackReason] = [
             .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady,
             .capabilityNotAllowed, .safetyRefused, .generationFailed,
-            .frameworkUnavailable, .emptyInput
+            .frameworkUnavailable, .languageUnsupported, .emptyInput
         ]
         for c in cases {
             #expect(MoodTagSuggestionOutcome.FallbackReason(rawValue: c.rawValue) == c)

@@ -89,6 +89,10 @@ public enum ServerMeasurementSource: String, Codable, Sendable, CaseIterable {
     /// names it (not in `WRITABLE_MEASUREMENT_SOURCES`). Read-only here like
     /// every other external source.
     case healthConnect = "HEALTH_CONNECT"
+    /// Garmin Connect (Personal API), server v1.47.0 (#162, public #1333).
+    /// The server pulls with a per-user key; no client write path names it.
+    /// Read-only here, never mirrored into Apple Health.
+    case garmin = "GARMIN"
     case import_ = "IMPORT"
     /// Audit B-4 — a `MeasurementSource` this build does not know.
     ///
@@ -118,6 +122,7 @@ public extension ServerMeasurementSource {
         case .polar: .polar
         case .nightscout: .nightscout
         case .healthConnect: .healthConnect
+        case .garmin: .garmin
         case .telegram: .telegram
         case .mcp: .mcp
         case .external: .external
@@ -143,6 +148,7 @@ public extension MeasurementSource {
         case .polar: .polar
         case .nightscout: .nightscout
         case .healthConnect: .healthConnect
+        case .garmin: .garmin
         case .telegram: .telegram
         case .mcp: .mcp
         case .external: .external

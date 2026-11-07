@@ -11,6 +11,11 @@ struct AddLabResultSheet: View {
     @State private var selectedBiomarkerID: String?
     @State private var analyte = ""
     @State private var unit = ""
+    /// #160 — "No unit" for a free-text ratio or index (the unity `"1"`).
+    /// ``unit`` keeps what was typed for the way back.
+    @State private var noUnit = false
+    /// Read once per sheet: the switch is offered from server 1.46.6 on.
+    @State private var offersNoUnit = LabUnit.offersNoUnit()
     /// #126 3.5 (v1.42.3) — a linked reading printed in another unit. The
     /// server converts it when it knows the pair, else refuses with a reason.
     @State private var printedUnit = ""
@@ -65,7 +70,7 @@ struct AddLabResultSheet: View {
     private var isDirty: Bool {
         selectedBiomarkerID != nil
             || !analyte.trimmingCharacters(in: .whitespaces).isEmpty
-            || !unit.trimmingCharacters(in: .whitespaces).isEmpty
+            || LabUnit.wire(typed: unit, noUnit: noUnit) != nil
             || !valueText.isEmpty
             || !trimmedQualitative.isEmpty
             || !referenceLowText.isEmpty
@@ -154,9 +159,13 @@ struct AddLabResultSheet: View {
                 Text("labs.add.biomarker.label")
             }
             if let marker = linkedMarker {
-                LabeledContent("labs.add.unit", value: marker.unit)
-                TextField("labs.add.printedUnit", text: $printedUnit)
-                    .accessibilityIdentifier("labs.add.printedUnit")
+                LabeledContent("labs.add.unit", value: LabUnit.standalone(marker.unit) ?? "")
+                // #160 — a marker without a unit converts nothing, so
+                // there is no printed unit to ask for.
+                if !LabUnit.isUnity(marker.unit) {
+                    TextField("labs.add.printedUnit", text: $printedUnit)
+                        .accessibilityIdentifier("labs.add.printedUnit")
+                }
                 if let lower = marker.lowerBound {
                     LabeledContent("labs.add.referenceLow", value: lower.formatted())
                 }
@@ -177,10 +186,14 @@ struct AddLabResultSheet: View {
                 .focused($focusedField, equals: .analyte)
                 .submitLabel(.next)
                 .onSubmit { focusedField = .unit }
-            TextField("labs.add.unit", text: $unit)
+            TextField("labs.add.unit", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
                 .focused($focusedField, equals: .unit)
                 .submitLabel(.next)
                 .onSubmit { focusedField = .panel }
+                .disabled(noUnit)
+            if offersNoUnit {
+                LabNoUnitToggle(isOn: $noUnit)
+            }
             TextField("labs.add.panel", text: $panel)
                 .focused($focusedField, equals: .panel)
                 .submitLabel(.next)
@@ -205,12 +218,8 @@ struct AddLabResultSheet: View {
                     TextField("labs.add.value", text: $valueText)
                         .keyboardType(.decimalPad)
                         .focused($focusedField, equals: .value)
-                    if isLinked, let shown = LabPrintedUnit.sent(printedUnit, markerUnit: linkedMarker?.unit) {
-                        Text(shown).foregroundStyle(HLText.secondary)
-                    } else if isLinked, let marker = linkedMarker, !marker.unit.isEmpty {
-                        Text(marker.unit).foregroundStyle(HLText.secondary)
-                    } else if !unit.isEmpty {
-                        Text(unit).foregroundStyle(HLText.secondary)
+                    if let shown = valueUnitSuffix {
+                        Text(verbatim: shown).foregroundStyle(HLText.secondary)
                     }
                 }
             case .qualitative:
@@ -226,6 +235,17 @@ struct AddLabResultSheet: View {
                 displayedComponents: [.date, .hourAndMinute]
             )
         }
+    }
+
+    /// The unit printed next to the value field: the printed unit of a linked
+    /// reading, else the marker's or the typed unit. Nothing for "No unit".
+    private var valueUnitSuffix: String? {
+        if isLinked {
+            if let marker = linkedMarker, LabUnit.isUnity(marker.unit) { return nil }
+            return LabPrintedUnit.sent(printedUnit, markerUnit: linkedMarker?.unit)
+                ?? LabUnit.suffix(linkedMarker?.unit)
+        }
+        return LabUnit.suffix(LabUnit.wire(typed: unit, noUnit: noUnit))
     }
 
     /// Build 3 / item 3.2 — "Save & next value". A real lab report is ten to
@@ -309,7 +329,8 @@ struct AddLabResultSheet: View {
                 biomarkerId: selectedBiomarkerID,
                 value: numericValue,
                 valueText: qualitativeValue,
-                unit: numericValue == nil ? nil : LabPrintedUnit.sent(printedUnit, markerUnit: linkedMarker?.unit),
+                unit: numericValue == nil || LabUnit.isUnity(linkedMarker?.unit)
+                    ? nil : LabPrintedUnit.sent(printedUnit, markerUnit: linkedMarker?.unit),
                 takenAt: iso.string(from: takenAt),
                 note: trimmedNote.isEmpty ? nil : trimmedNote
             )
@@ -319,7 +340,7 @@ struct AddLabResultSheet: View {
                 analyte: analyte.trimmingCharacters(in: .whitespaces),
                 value: numericValue,
                 valueText: qualitativeValue,
-                unit: unit.trimmingCharacters(in: .whitespaces).isEmpty ? nil : unit.trimmingCharacters(in: .whitespaces),
+                unit: LabUnit.wire(typed: unit, noUnit: noUnit),
                 referenceLow: LocaleDecimalParser.parse(referenceLowText),
                 referenceHigh: LocaleDecimalParser.parse(referenceHighText),
                 takenAt: iso.string(from: takenAt),
@@ -351,6 +372,7 @@ struct AddLabResultSheet: View {
         selectedBiomarkerID = next.selectedBiomarkerID
         analyte = next.analyte
         unit = next.unit
+        noUnit = next.noUnit
         printedUnit = ""
         valueText = next.valueText
         qualitativeText = next.qualitativeText
@@ -372,6 +394,7 @@ struct AddLabResultSheet: View {
             selectedBiomarkerID: selectedBiomarkerID,
             analyte: analyte,
             unit: unit,
+            noUnit: noUnit,
             valueText: valueText,
             qualitativeText: qualitativeText,
             referenceLowText: referenceLowText,

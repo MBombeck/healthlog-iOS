@@ -6,8 +6,8 @@ import Foundation
 /// 1.2 / V4 (healthlog-iOS#14, HealthLog#1110, ios-dev#123 point 2): heart-rate
 /// variability as RMSSD, which iOS and watchOS 27 add to HealthKit.
 ///
-/// **Why a runtime identifier.** The app builds with Xcode 26.6 against the
-/// iOS 26 SDK, which has no `HKQuantityTypeIdentifier.heartRateVariabilityRMSSD`
+/// **Why a runtime identifier.** Up to 1.4 the app built with Xcode 26.6 against
+/// the iOS 26 SDK, which has no `HKQuantityTypeIdentifier.heartRateVariabilityRMSSD`
 /// symbol. Apple documents the property as
 /// `HKQuantityTypeIdentifier.heartRateVariabilityRMSSD`, precise symbol
 /// `c:@HKQuantityTypeIdentifierHeartRateVariabilityRMSSD`, introduced in iOS,
@@ -82,13 +82,27 @@ enum HealthKitServerTypeGate {
     /// The one stored server version (INT-N), shared with `syncTrigger: manual`.
     static let defaultsKey = KnownServerVersion.defaultsKey
 
-    /// Identifier to the first server version that maps it.
-    static let minimumServerVersionByIdentifier: [String: String] = [
-        HeartRateVariabilityRMSSD.identifier: HeartRateVariabilityRMSSD.minimumServerVersion
-    ]
+    /// Identifier to the first server version that maps it. HK-NEW (1.5):
+    /// the six v1.44 types (``HealthKitServer144Types``).
+    static let minimumServerVersionByIdentifier: [String: String] = {
+        var map = [HeartRateVariabilityRMSSD.identifier: HeartRateVariabilityRMSSD.minimumServerVersion]
+        for identifier in HealthKitServer144Types.registryIdentifiers {
+            map[identifier] = HealthKitServer144Types.minimumServerVersion
+        }
+        return map
+    }()
 
     /// `true` when the configured server is known to store `identifier`.
+    ///
+    /// HK-NEW (1.5): a server that publishes `acceptedTypes`
+    /// (``HealthKitAcceptedTypes``) decides on its own; without the field the
+    /// table decides: a deferred type never, a type with a minimum version
+    /// from that version on, every other type always.
     static func serverAccepts(_ identifier: String, defaults: UserDefaults = .standard) -> Bool {
+        if let accepted = HealthKitAcceptedTypes.recorded(defaults: defaults) {
+            return accepted.contains(HealthKitServer144Types.wireIdentifier(forRegistry: identifier))
+        }
+        if HealthKitAcceptedTypes.deferredIdentifiers.contains(identifier) { return false }
         guard let minimum = minimumServerVersionByIdentifier[identifier] else { return true }
         return KnownServerVersion.isAtLeast(minimum, defaults: defaults)
     }
@@ -103,5 +117,6 @@ enum HealthKitServerTypeGate {
     /// The app was pointed at another server; the old answer says nothing.
     static func forget(defaults: UserDefaults = .standard) {
         KnownServerVersion.forget(defaults: defaults)
+        HealthKitAcceptedTypes.forget(defaults: defaults)
     }
 }

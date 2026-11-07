@@ -31,6 +31,10 @@ struct DeleteAccountScreen: View {
     /// is cookie-only and thus web-first. Non-nil ⇒ render the web-routing card
     /// (the destructive in-app path cannot complete) instead of a retry banner.
     @State private var stepUpWebURL: URL?
+    /// KONTO (#151) — whether the server erases at once or locks first and
+    /// erases after its grace window (1.46.0+). Decides every sentence that
+    /// says "irreversible", so the copy is true for both server generations.
+    @State private var policy: AccountDeletionPolicy = .initial()
 
     /// Pro Locale fest: `LÖSCHEN` (DE) bzw. `DELETE` (EN). Exakt und
     /// Case-Sensitive; B5 (1.4): „LOESCHEN“ aus 1.3 gilt weiter
@@ -62,6 +66,7 @@ struct DeleteAccountScreen: View {
         .navigationTitle("Delete account")
         .navigationBarTitleDisplayMode(.inline)
         .interactiveDismissDisabled(isDeleting)
+        .task { policy = await authStore.accountDeletionPolicy() }
     }
 
     // MARK: - Header
@@ -78,29 +83,43 @@ struct DeleteAccountScreen: View {
                 // colour is sanctioned — this IS a destructive-action warning.
                 .font(.hlIcon(HLIconSize.display, weight: .bold))
                 .foregroundStyle(HLColor.statusBad)
-            Text("Delete account permanently")
+            Text(headerTitle)
                 .font(.hlTitle2)
                 .foregroundStyle(HLText.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    // MARK: - Copy by deletion policy (KONTO, #151)
+
+    private var headerTitle: LocalizedStringKey {
+        policy.isImmediate ? "Delete account permanently" : "Delete account"
+    }
+
+    private var introText: LocalizedStringKey {
+        policy.isImmediate ? "If you continue, all your data will be permanently removed from the server:" : "deleteAccount.grace.intro"
+    }
+
+    private var consentText: LocalizedStringKey {
+        policy.isImmediate ? "I understand that all data will be permanently deleted." : "deleteAccount.grace.consent"
+    }
+
     // MARK: - Step 1
 
     private var explainStep: some View {
         VStack(alignment: .leading, spacing: HLSpace.lg) {
-            Text("If you continue, all your data will be permanently removed from the server:")
+            Text(introText)
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
 
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 bullet("All your measurements, insights and medications.")
                 bullet("Local caches, tokens and device identifiers will be wiped too.")
-                bullet("This action cannot be undone.")
+                bullet(Text(verbatim: AccountDeletionCopy.deleteFinalLine(policy)))
             }
 
             Toggle(isOn: $consentChecked) {
-                Text("I understand that all data will be permanently deleted.")
+                Text(consentText)
                     .font(.hlBody)
                     .foregroundStyle(HLText.primary)
             }
@@ -136,6 +155,10 @@ struct DeleteAccountScreen: View {
     }
 
     private func bullet(_ text: LocalizedStringKey) -> some View {
+        bullet(Text(text))
+    }
+
+    private func bullet(_ text: Text) -> some View {
         HStack(alignment: .top, spacing: HLSpace.sm) {
             Image(systemName: "circle.fill")
                 // 6pt bullet dot — micro list-marker geometry, fixed by design.
@@ -143,7 +166,7 @@ struct DeleteAccountScreen: View {
                 .font(.system(size: 6))
                 .foregroundStyle(HLText.secondary)
                 .padding(.top, HLSpace.sm)
-            Text(text)
+            text
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
         }

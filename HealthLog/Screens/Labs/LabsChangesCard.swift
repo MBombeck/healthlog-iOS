@@ -101,7 +101,7 @@ private struct ChangeRow: View {
 
     private var valueLabel: String {
         let value = Self.format(change.latest)
-        return change.unit.isEmpty ? value : "\(value) \(change.unit)"
+        return LabUnit.appending(change.unit, to: value)
     }
 
     /// Signed delta with an explicit +/− and, when it moved, the direction

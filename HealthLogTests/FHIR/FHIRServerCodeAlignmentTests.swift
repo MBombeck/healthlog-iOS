@@ -143,6 +143,17 @@ struct FHIRServerCodeAlignmentTests {
         #expect(MetricFHIRMapper.labMapping(analyte: "25-OH Vitamin D", unit: "ng/mL", isLinked: true).loinc?.code == "62292-8")
     }
 
+    @Test("Dutch analyte names reach the same LOINC codes as their German and English spellings")
+    func dutchLabNames() {
+        #expect(MetricFHIRMapper.labMapping(analyte: "Hemoglobine", unit: "g/dL", isLinked: true).loinc?.code == "718-7")
+        #expect(MetricFHIRMapper.labMapping(analyte: "Totaal cholesterol", unit: "mg/dL", isLinked: true).loinc?.code == "2093-3")
+        #expect(MetricFHIRMapper.labMapping(analyte: "Triglyceriden", unit: "mg/dL", isLinked: true).loinc?.code == "2571-8")
+        #expect(MetricFHIRMapper.labMapping(analyte: "Ferritine", unit: "ng/mL", isLinked: true).loinc?.code == "2276-4")
+        #expect(MetricFHIRMapper.labMapping(analyte: "Vitamine D", unit: "ng/mL", isLinked: true).loinc?.code == "62292-8")
+        // Unlinked rows stay text-only in every language.
+        #expect(MetricFHIRMapper.labMapping(analyte: "Hemoglobine", unit: "g/dL", isLinked: false).loinc == nil)
+    }
+
     // MARK: - Bundle output
 
     @Test("Resting heart rate carries 40443-4 plus the vital-signs code 8867-4")

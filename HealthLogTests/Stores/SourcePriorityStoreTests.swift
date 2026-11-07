@@ -173,6 +173,27 @@ struct SourcePriorityStoreTests {
             == ["APPLE_HEALTH", "WITHINGS", "WHOOP", "FITBIT", "OURA", "POLAR", "NIGHTSCOUT", "STRAVA", "MANUAL", "IMPORT"])
     }
 
+    /// POLISH-C (C5) — Garmin joins the editor only on a server that takes
+    /// it in a ladder (v1.47.0, `source-priority.ts`). An older or unknown
+    /// server would refuse a saved ladder with `GARMIN`, so it is not offered.
+    @Test("the editor offers Garmin only on a server from v1.47.0", arguments: [
+        (String?.none, false), ("1.46.6", false), ("1.47.0", true), ("1.48.2", true)
+    ])
+    func garminOfferedFromV147(_ version: String?, _ offered: Bool) throws {
+        let suite = "polish-c.sources.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        if let version {
+            KnownServerVersion.record(ServerVersionInfo(version: version), defaults: defaults)
+        }
+        let tokens = SourcePriorityStore.offeredSourceTokens(defaults: defaults)
+        #expect(tokens.contains("GARMIN") == offered)
+        #expect(tokens.filter { $0 != "GARMIN" } == SourcePriorityStore.canonicalSourceTokens)
+        if offered {
+            #expect(tokens.firstIndex(of: "GARMIN") == tokens.firstIndex(of: "POLAR").map { $0 + 1 })
+        }
+    }
+
     @Test("DTO round-trips respiratoryRate/skinTemperature/recovery — no silent drop")
     func dtoRoundTripsWhoopMetrics() {
         let store = makeStore()

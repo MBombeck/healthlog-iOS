@@ -36,9 +36,8 @@ struct LabConversion: Equatable {
     /// "converted from 5.4 mmol/L", only for a reading the server converted.
     var convertedLine: String? {
         guard converted == true, let sourceValue else { return nil }
-        let unit = sourceUnit?.trimmingCharacters(in: .whitespaces) ?? ""
         let value = sourceValue.formatted(.number.precision(.fractionLength(0 ... 4)))
-        let printed = unit.isEmpty ? value : "\(value) \(unit)"
+        let printed = LabUnit.appending(sourceUnit, to: value)
         return String(localized: "labs.conversion.from \(printed)")
     }
 

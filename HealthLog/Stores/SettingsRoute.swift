@@ -36,4 +36,26 @@ enum SettingsRoute: Hashable {
     case checkups
     /// #141 — the cycle home (`/cycle`), pushed straight onto the More stack.
     case cycle
+    /// #153 follow-up — Settings › Server › Access headers. A value, so the
+    /// page comes back after the privacy shield rebuilt the window.
+    case serverAccessHeaders
+    /// POLISH-C (C2) — the pages one level further down, pushed as values so
+    /// they come back after the privacy shield too: Account › Sessions,
+    /// Account › Security › Passkeys and › Two-factor, and each provider page
+    /// under Integrations.
+    case sessions
+    case passkeys
+    case twoFactor
+    case integration(IntegrationRoute)
+}
+
+/// POLISH-C (C2) — one provider page under Settings › Integrations.
+enum IntegrationRoute: Hashable, CaseIterable {
+    case withings
+    case whoop
+    case oura
+    case polar
+    case fitbit
+    case strava
+    case nightscout
 }

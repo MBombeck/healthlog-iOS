@@ -32,39 +32,15 @@ struct OnboardingFlow: View {
     /// `withAnimation(...) { step = … }` callsites did not until now.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var step: Step = OnboardingFlow.initialStep
-    /// Set when the user picks a mode in `ModeSelectionStep`. `nil` before
-    /// the choice. Drives the rest of the flow.
-    @State private var chosenMode: OnboardingMode?
-    /// Cached value from the post-ServerURL probe — gates whether the
-    /// auth step shows the "Neues Konto" CTA.
-    @State private var registrationEnabled: Bool = true
-    /// parity 2.9 — cached `GET /api/auth/oidc/status`, probed on the same
-    /// beats as `registrationEnabled`. Gates the SSO button (no IdP → hide it)
-    /// and, in `OIDC_ONLY` mode, the password / passkey / register CTAs the
-    /// server would refuse. `.unknown` until probed → all doors visible.
-    @State private var oidcStatus: OidcStatus = .unknown
-    /// #65 / 13-02 — cached web-handoff availability, probed on the same beats
-    /// as `registrationEnabled` / `oidcStatus`. Gates the self-hosted
-    /// web-handoff CTA. Fail-closed: anything but `.available` keeps the native
-    /// form. `.probing` until the answer lands — the auth step's FIRST render
-    /// sees this value, and it must not be mistaken for "no web login here".
-    @State private var webLoginAvailability: WebLoginAvailability = .probing
-    /// b182 W-B182-INVITE (GH #16) — the server invite token consumed (one-shot)
-    /// from `AppRouter.pendingInviteToken` when the user arrives via the web
-    /// invite QR / universal link. Non-nil drives the flow straight into the
-    /// server-branch auth step and auto-opens the prefilled `RegistrationSheet`.
-    /// Sensitive secret — held only in transient `@State`, never logged.
-    @State private var inviteToken: String?
-    /// **Phase 08 Wave 1** — the in-flight post-authentication completion
-    /// lookup. Held so a repeated `.authenticating` notification cannot start a
-    /// second one, and so a sign-out or an account change can cancel the one
-    /// that is running instead of letting its answer land on the next session.
-    @State private var routeResolution: Task<Void, Never>?
-    /// **Phase 16 Plan 01 (K10)** — how much of setup this run owes. `.full`
-    /// until a post-authentication decision narrows it; the pre-authentication
-    /// walk is always full by construction (nothing has been asked yet).
-    @State private var setupScope: PostAuthenticationSetupScope = .full
+    /// **#153** — the flow's state (step, mode, scope, probe answers,
+    /// invite token, completion lookup) lives in the container's in-memory
+    /// `OnboardingDraftStore`, not in `@State`: the privacy shield rebuilds the
+    /// window whenever the scene goes inactive, and the user must come back to
+    /// the step and the answers they left. Accessors: `OnboardingFlow+Draft`.
+    @State private var fallbackDraft = OnboardingDraftStore() // only without a container
+    var draft: OnboardingDraftStore {
+        container?.onboardingDraft ?? fallbackDraft
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -177,17 +153,16 @@ struct OnboardingFlow: View {
                 removal: .move(edge: .leading)
             ))
         }
-        // v0.11 W5 — quiet adopt-on-pair indicator. When a previously-standalone
-        // user pairs (Settings → `beginServerPairing()` → re-onboard → login),
-        // the local mirror is uploaded once; `AuthStore.adoptUploadState` drives
-        // a calm inline "moving your data over…" banner pinned above the bottom
-        // safe area. Stays absent for every paired-from-start login (the state
-        // is `.idle` unless a genuine standalone→paired transition fired).
+        // v0.11 W5 — adopt-on-pair indicator (`adoptUploadState`, `.idle` unless
+        // standalone→paired). KONTO (#151): above it, once, a deletion receipt.
         .safeAreaInset(edge: .bottom) {
-            AdoptUploadIndicator(
-                state: authStore.adoptUploadState,
-                onRetry: { authStore.retryAdoptUpload() }
-            )
+            VStack(spacing: HLSpace.sm) {
+                AccountDeletionReceiptNote()
+                AdoptUploadIndicator(
+                    state: authStore.adoptUploadState,
+                    onRetry: { authStore.retryAdoptUpload() }
+                )
+            }
         }
         .background(HLColor.background.ignoresSafeArea())
         // v0.5.5.1 perceptual budget (PROJECT_GUIDE.md Marathon discipline →
@@ -211,6 +186,7 @@ struct OnboardingFlow: View {
         // offer to sign in; a session that has already been accepted has moved
         // past it, so the resume is asked first.
         .onAppear {
+            draft.prepareForAppearance(phase: authStore.phase)
             resumePostAuthenticationRouteIfNeeded()
             consumeInviteTokenIfPresent()
         }

@@ -86,6 +86,8 @@ private struct PinToHomeButton: View {
                 localized: "\(name) removed from Home",
                 comment: "Toast — metric unpinned from home dashboard. %@ = metric name."
             )
+        // Explicit capture: the undo closure below holds the store weakly;
+        // Swift 6.4 (#ImplicitStrongCapture) wants the outer strong capture named.
         Task { @MainActor [layoutStore] in
             await layoutStore.setPinned(forId: widgetId, pinned: pinned)
             UINotificationFeedbackGenerator().notificationOccurred(.success)

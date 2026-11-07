@@ -87,6 +87,7 @@ enum IntentDependencies {
             measurementsRepo: MeasurementsRepository(api: api, outbox: outbox),
             medicationsRepo: MedicationsRepository(api: api, outbox: outbox),
             moodRepo: MoodRepository(api: api, outbox: outbox),
+            customMetricsRepo: CustomMetricsRepository(api: api, outbox: outbox, swr: customMetricsCatalogCache()),
             glucoseUnit: { accountGlucoseUnit() },
             accountUnits: { accountUnits() }
         )
@@ -102,6 +103,18 @@ enum IntentDependencies {
     }
 
     private static var cached: Resolved?
+
+    /// **1.5 SHORTCUT** — the SWR cache the custom-metric picker reads when the
+    /// network is gone, so a shortcut set up earlier still offers its metrics
+    /// offline. Only in the app process: the cache lives in the app's own
+    /// Application Support (the same file `AppContainer` writes the
+    /// `.customMetrics` list into), and the widget extension has neither that
+    /// file nor a reason to open a SwiftData store in its tight memory budget.
+    /// The store opens lazily on the first read (`SWRCoordinator(cacheTask:)`).
+    private static func customMetricsCatalogCache() -> SWRCoordinator? {
+        guard Bundle.main.bundleURL.pathExtension == "app" else { return nil }
+        return SWRCoordinator(cacheTask: SWRCache.makeWithRecoveryTask(), reachability: Reachability())
+    }
 
     /// **#115 B5 — the unit a spoken glucose value is in: the account's.**
     ///
@@ -160,6 +173,8 @@ enum IntentDependencies {
         let measurementsRepo: MeasurementsRepository
         let medicationsRepo: MedicationsRepository
         let moodRepo: MoodRepository
+        /// 1.5 SHORTCUT — the custom-metric write path of ``LogCustomMetricValueIntent``.
+        let customMetricsRepo: CustomMetricsRepository
         /// #115 B5 — the account's glucose unit, read at perform time.
         let glucoseUnit: () -> GlucoseUnit
         /// #115 P2 — the account's unit system + weight unit, read at perform time.
@@ -172,6 +187,7 @@ enum IntentDependencies {
             measurementsRepo: MeasurementsRepository,
             medicationsRepo: MedicationsRepository,
             moodRepo: MoodRepository,
+            customMetricsRepo: CustomMetricsRepository? = nil,
             glucoseUnit: @escaping () -> GlucoseUnit = { .mgdL },
             accountUnits: @escaping () -> UnitPreferences = { .standard }
         ) {
@@ -181,6 +197,7 @@ enum IntentDependencies {
             self.measurementsRepo = measurementsRepo
             self.medicationsRepo = medicationsRepo
             self.moodRepo = moodRepo
+            self.customMetricsRepo = customMetricsRepo ?? CustomMetricsRepository(api: api, outbox: outbox)
             self.glucoseUnit = glucoseUnit
             self.accountUnits = accountUnits
         }

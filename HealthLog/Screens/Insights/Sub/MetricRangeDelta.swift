@@ -15,52 +15,74 @@ import SwiftUI
 /// screen. (The web keys its delta to a server analytics-range window; the iOS
 /// honest equivalent over the on-device series is the in-window split.)
 ///
-/// **Sentiment — the server's, or none (#115 · 1.3).** The caption used to
-/// decide good or bad itself from a hard-coded per-metric polarity table
-/// (weight "lower is better" for everyone, pulse "lower is better", …). That is
-/// a clinical judgement the app does not own. Since v1.43 (#135) the series
-/// route sends its own `direction` for every metric; on an older server only
-/// weight has one (`tiles.weightTrend.direction`), and every other metric
-/// passes `nil` and the caption stays neutral: direction and size are shown,
-/// never tinted as good or bad. Colour stays signal-only (STANDARDS §7):
-/// only an ADVERSE server verdict carries `HLColor.statusBad`.
+/// **1.5 VERDICTS (#135 rest) — the server's change first.** Since v1.43 the
+/// series carries `change`: the first and the last day value of the window and
+/// how that change counts (`sentiment`). When it is there the caption shows
+/// that delta in the metric's unit and says what it compares ("since the first
+/// day in range"), coloured by the server's verdict: adverse red, favourable
+/// green, the rest neutral. A server that knows `change` but sent none (under
+/// two days) gets no caption. Only a server before v1.43 still gets the
+/// in-window split described above, always neutral: the app does not judge a
+/// change itself, and the old per-metric polarity table is gone.
 ///
 /// **Self-suppression (calm doctrine):** with no prior-window data — fewer than
 /// two points in either half, or a zero/▏undefined prior mean — the view renders
 /// **nothing** (no "—", no apologetic empty caption). A sparse metric simply
 /// shows the range control with no delta line.
 struct MetricRangeDelta: View {
-    /// The chart's loaded points for the selected range (chronological or not —
-    /// the resolver sorts by date internally).
-    let points: [SeriesPoint]
-    /// The server's verdict on which way is progress (weight only, from the
-    /// dashboard snapshot). `nil` → neutral: no good/bad colouring.
-    let sentiment: TrendDirectionSentiment?
-    /// The selected range, supplying the "vs prior <label>" suffix.
+    /// Where the figure comes from.
+    enum Source {
+        /// The server's `change`, already in the account's unit.
+        case server(delta: Double, unit: String, sentiment: TrendSentiment)
+        /// A server before v1.43: the chart's loaded points for the selected
+        /// range (chronological or not, the resolver sorts by date).
+        case ownComparison([SeriesPoint])
+    }
+
+    let source: Source
+    /// The selected range, supplying the "vs prior <label>" suffix of the own
+    /// comparison.
     let range: ChartDetailStore.Range
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        if let result = Self.resolve(points: points, sentiment: sentiment) {
-            HStack(spacing: HLSpace.xxs) {
-                Image(systemName: result.symbol)
-                    .accessibilityHidden(true)
-                Text(result.deltaText)
-                    .monospacedDigit()
-                Text(priorLabel)
+        if let result = Self.resolve(source) {
+            // POLISH-B (SHOTS F-AX-DELTA) — one line up to XXXL; from the
+            // accessibility sizes on the comparison stands under the figure
+            // and wraps instead of reading "ggü. Vo…".
+            let wraps = dynamicTypeSize.isAccessibilitySize
+            let layout = wraps
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xxs))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: HLSpace.xxs))
+            layout {
+                HStack(alignment: .firstTextBaseline, spacing: HLSpace.xxs) {
+                    Image(systemName: result.symbol)
+                        .accessibilityHidden(true)
+                    Text(result.deltaText)
+                        .monospacedDigit()
+                }
+                Text(suffix(result))
+                    .fixedSize(horizontal: false, vertical: wraps)
             }
             .font(.hlCaption)
             .foregroundStyle(result.tint)
-            .lineLimit(1)
+            .lineLimit(wraps ? nil : 1)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(Text(accessibilityText(result)))
+            .accessibilityLabel(Text(Self.accessibilityText(result, priorLabel: suffix(result))))
             .accessibilityIdentifier("insights.metric.rangeDelta")
         }
     }
 
-    /// "vs prior <range>" suffix — the prior-window label localized off the
-    /// selected range's accessibility name (e.g. "vs prior month").
-    private var priorLabel: String {
-        Self.priorLabel(for: range)
+    /// What the figure compares: the server's first-to-last-day change, or the
+    /// prior window of the own comparison.
+    private func suffix(_ result: Result) -> String {
+        Self.suffix(for: result, range: range)
+    }
+
+    nonisolated static func suffix(for result: Result, range: ChartDetailStore.Range, bundle: Bundle = .main) -> String {
+        result.percent == nil
+            ? String(localized: "insights.metric.rangeDelta.sinceFirstDay", bundle: bundle)
+            : priorLabel(for: range, bundle: bundle)
     }
 
     /// One catalog phrase per range (H2, 1.1.0). The suffix used to lowercase
@@ -76,10 +98,6 @@ struct MetricRangeDelta: View {
         case .year: String(localized: "insights.metric.rangeDelta.prior.year", bundle: bundle)
         case .all: String(localized: "insights.metric.rangeDelta.prior.all", bundle: bundle)
         }
-    }
-
-    private func accessibilityText(_ result: Result) -> String {
-        Self.accessibilityText(result, priorLabel: priorLabel)
     }
 
     /// #135 — VoiceOver hears the verdict the tint shows ("a good direction
@@ -106,8 +124,9 @@ struct MetricRangeDelta: View {
         let symbol: String
         /// Sentiment colour — signal-only, neutral for `neutral`/target-band.
         let tint: Color
-        /// Raw signed percentage (for tests + accessibility).
-        let percent: Double
+        /// Raw signed percentage of the own comparison; `nil` for the
+        /// server's change (shown in the metric's unit, not as a percentage).
+        let percent: Double?
         /// Sentiment classification (for tests).
         let sentiment: Sentiment
 
@@ -125,20 +144,46 @@ struct MetricRangeDelta: View {
         case neutral
     }
 
-    /// Computes the period-over-period delta from the loaded series. Returns
-    /// `nil` (→ the view self-suppresses) when there is no coherent prior window:
-    /// fewer than two points overall, an empty current or prior half, or a
-    /// prior mean of zero (no meaningful percentage).
+    nonisolated static func resolve(_ source: Source) -> Result? {
+        switch source {
+        case let .server(delta, unit, sentiment):
+            resolve(serverDelta: delta, unit: unit, sentiment: sentiment)
+        case let .ownComparison(points):
+            resolve(points: points)
+        }
+    }
+
+    /// The server's change as sent: signed, in the metric's unit, coloured by
+    /// the server's verdict. `nil` for a figure that is not finite.
+    nonisolated static func resolve(serverDelta delta: Double, unit: String, sentiment verdict: TrendSentiment) -> Result? {
+        guard delta.isFinite else { return nil }
+        let rounded = (delta * 10).rounded() / 10
+        let magnitude = abs(rounded).formatted(.number.precision(.fractionLength(0 ... 1)))
+        let number = rounded == 0 ? "±" + magnitude : (rounded > 0 ? "+" : "−") + magnitude
+        let sentiment: Sentiment = switch verdict {
+        case .positive: .favourable
+        case .negative: .adverse
+        case .neutral, .unknown: .neutral
+        }
+        return Result(
+            deltaText: unit.isEmpty ? number : "\(number) \(unit)",
+            symbol: rounded == 0 ? "minus" : (rounded > 0 ? "arrow.up" : "arrow.down"),
+            tint: tint(for: sentiment),
+            percent: nil,
+            sentiment: sentiment
+        )
+    }
+
+    /// The own comparison for a server before v1.43, always neutral. Returns
+    /// `nil` (→ the view self-suppresses) when there is no coherent prior
+    /// window: fewer than two points in either half, or a prior mean of zero.
     ///
     /// The window is split at the temporal midpoint of the loaded span: points
     /// before the midpoint form the *prior* half, points at/after it the
     /// *current* half. The delta percentage is `(meanCurrent − meanPrior) /
     /// |meanPrior| · 100`, rounded to one fractional digit and trimmed to whole
     /// numbers when integral.
-    nonisolated static func resolve(
-        points: [SeriesPoint],
-        sentiment serverSentiment: TrendDirectionSentiment?
-    ) -> Result? {
+    nonisolated static func resolve(points: [SeriesPoint]) -> Result? {
         let sorted = points.sorted { $0.at < $1.at }
         guard sorted.count >= 4,
               let first = sorted.first?.at,
@@ -157,35 +202,13 @@ struct MetricRangeDelta: View {
 
         let percent = (meanCurrent - meanPrior) / abs(meanPrior) * 100
         let rounded = (percent * 10).rounded() / 10
-
-        let sentiment = sentiment(percent: rounded, server: serverSentiment)
         return Result(
             deltaText: format(percent: rounded),
             symbol: symbol(for: rounded),
-            tint: tint(for: sentiment),
+            tint: tint(for: .neutral),
             percent: rounded,
-            sentiment: sentiment
+            sentiment: .neutral
         )
-    }
-
-    /// Sentiment from the signed percentage and the server's verdict. No
-    /// verdict → neutral. A flat delta (≈0%) is a level change, which only a
-    /// `hold` verdict reads as progress.
-    nonisolated static func sentiment(
-        percent: Double,
-        server: TrendDirectionSentiment?
-    ) -> Sentiment {
-        guard let server else { return .neutral }
-        let change: TrendDirectionSentiment.Change = if abs(percent) < 0.05 {
-            .level
-        } else {
-            percent > 0 ? .rising : .falling
-        }
-        switch server.tone(for: change) {
-        case .favorable: return .favourable
-        case .adverse: return .adverse
-        case .neutral: return .neutral
-        }
     }
 
     nonisolated static func format(percent: Double) -> String {
@@ -205,12 +228,12 @@ struct MetricRangeDelta: View {
     }
 
     nonisolated static func tint(for sentiment: Sentiment) -> Color {
+        // 1.5 VERDICTS — the same colours as the hero chip and the tiles: the
+        // server's verdict paints, nothing else does.
         switch sentiment {
-        // Monochrome doctrine: only the adverse signal carries colour, matching
-        // the canonical `HLTileTrendGlyph` (`isAdverse → statusBad`). Favourable
-        // + neutral stay mono so the metric column never alternates green/red.
         case .adverse: HLColor.statusBad
-        case .favourable, .neutral: HLText.secondary
+        case .favourable: HLColor.statusOK
+        case .neutral: HLText.secondary
         }
     }
 }

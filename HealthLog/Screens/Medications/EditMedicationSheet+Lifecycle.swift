@@ -9,8 +9,9 @@ import SwiftUI
 extension EditMedicationSheet {
     /// Pause / reactivate / end-course controls + the server `pausedAt` state.
     /// Pause and reactivate flip `active` (the server stamps / clears
-    /// `pausedAt`); "Behandlung beenden" sets `endsOn` to today so the cadence
-    /// stops without archiving the row. Each action dismisses on success via
+    /// `pausedAt`); "Behandlung beenden" ends the course now on a server that
+    /// offers it (`canEndCourse`), else sets `endsOn` to today, without
+    /// archiving the row in either case. Each action dismisses on success via
     /// `onSaved` (the list re-reads the canonical row).
     var lifecycleSection: some View {
         Section {
@@ -20,10 +21,21 @@ extension EditMedicationSheet {
                 } label: {
                     Label("med.lifecycle.pause", systemImage: "pause.circle")
                 }
-                Button {
-                    showEndConfirm = true
-                } label: {
-                    Label("med.lifecycle.end", systemImage: "stop.circle")
+                // MED (#1280): End and Start follow `canEndCourse` / `canStartCourse`;
+                // an older server offers End as before and no Start.
+                if medication.offersEndCourse {
+                    Button {
+                        showEndConfirm = true
+                    } label: {
+                        Label("med.lifecycle.end", systemImage: "stop.circle")
+                    }
+                }
+                if medication.offersCourseStart {
+                    Button {
+                        Task { await runLifecycle { await store.startCourse(id: medication.id) } }
+                    } label: {
+                        Label("med.lifecycle.start", systemImage: "play.circle")
+                    }
                 }
             } else {
                 if let pausedAt = medication.pausedAt {
@@ -57,7 +69,9 @@ extension EditMedicationSheet {
         .hlConfirmDestructive(
             Text("med.lifecycle.end.confirm.title"),
             isPresented: $showEndConfirm,
-            message: Text("med.lifecycle.end.confirm.message"),
+            message: medication.serverEndsCourseNow
+                ? Text("med.lifecycle.end.confirm.message.now")
+                : Text("med.lifecycle.end.confirm.message"),
             confirm: Text(String(localized: "med.lifecycle.end.confirm.cta")),
             cancel: Text(String(localized: "med.lifecycle.end.confirm.cancel")),
             action: {

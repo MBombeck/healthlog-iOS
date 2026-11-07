@@ -25,11 +25,51 @@ import Foundation
             callbackURLScheme: String?,
             completionHandler: @escaping (URL?, Error?) -> Void
         ) -> any WebAuthenticationSession
+
+        func makeSession(
+            url: URL,
+            returnRoute: OidcReturnRoute,
+            completionHandler: @escaping (URL?, Error?) -> Void
+        ) -> any WebAuthenticationSession
+    }
+
+    public extension WebAuthenticationSessionCreating {
+        /// SEC — a session for the native SSO return (``OidcReturnRoute``).
+        /// The default (test factories) builds the scheme session, with no
+        /// scheme for the `https` return; the system factory below implements
+        /// the real `https` callback.
+        func makeSession(
+            url: URL,
+            returnRoute: OidcReturnRoute,
+            completionHandler: @escaping (URL?, Error?) -> Void
+        ) -> any WebAuthenticationSession {
+            makeSession(url: url, callbackURLScheme: returnRoute.customScheme, completionHandler: completionHandler)
+        }
     }
 
     @MainActor
     public struct SystemWebAuthenticationSessionFactory: WebAuthenticationSessionCreating {
         public init() {}
+
+        /// SEC — the scheme return builds exactly the session 1.4 built; only
+        /// the `https` return uses the callback initializer (iOS 17.4, below
+        /// the 18.0 target), which matches host and path.
+        public func makeSession(
+            url: URL,
+            returnRoute: OidcReturnRoute,
+            completionHandler: @escaping (URL?, Error?) -> Void
+        ) -> any WebAuthenticationSession {
+            guard case .https = returnRoute else {
+                return makeSession(url: url, callbackURLScheme: returnRoute.customScheme, completionHandler: completionHandler)
+            }
+            return SystemWebAuthenticationSession(
+                session: ASWebAuthenticationSession(
+                    url: url,
+                    callback: returnRoute.sessionCallback,
+                    completionHandler: completionHandler
+                )
+            )
+        }
 
         public func makeSession(
             url: URL,
@@ -58,6 +98,10 @@ import Foundation
                 callbackURLScheme: callbackURLScheme,
                 completionHandler: completionHandler
             )
+        }
+
+        init(session: ASWebAuthenticationSession) {
+            self.session = session
         }
 
         var presentationContextProvider: (any ASWebAuthenticationPresentationContextProviding)? {

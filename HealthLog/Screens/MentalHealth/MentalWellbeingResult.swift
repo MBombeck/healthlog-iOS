@@ -80,6 +80,15 @@ struct MentalWellbeingResult: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                if result.wording == .unvalidatedTranslation {
+                    // L10N-MH — answered in HealthLog's own translation: said
+                    // once, where the score is read.
+                    Text("mentalHealth.wording.resultUnvalidated")
+                        .font(.hlCaption)
+                        .foregroundStyle(HLText.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("mentalHealth.result.wordingNote")
+                }
                 Text("mentalHealth.disclaimer")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)

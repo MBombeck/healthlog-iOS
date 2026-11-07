@@ -765,6 +765,10 @@ public extension MetricKindDescriptor {
             // Audit B-4 — the audio-exposure event and the generic `unknown`
             // arm. See `MetricKindDescriptor+AuditB4.swift`.
             + auditB4Descriptors
+            // #162 — the four Garmin types (server v1.47.0).
+            + garminDescriptors
+            // HK-NEW (1.5) — the six server-v1.44 Apple Health types.
+            + server144Descriptors
         var dict: [MetricKind: MetricKindDescriptor] = [:]
         for entry in entries {
             dict[entry.kind] = entry

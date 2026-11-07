@@ -17,6 +17,11 @@ public struct AppEnvironment: Sendable {
     public let baseURL: URL?
     public let cfAccessClientID: String?
     public let cfAccessClientToken: String?
+    /// Every extra header the server requests carry: the build-time Cloudflare
+    /// pair from `Info.plist` under its correct names, overlaid by what the
+    /// user stored in the Keychain (`ServerAccessHeaders`). Empty for almost
+    /// every install.
+    public let accessHeaders: [ServerAccessHeader]
     public let bundleID: String
     public let appVersion: String
     public let buildNumber: String
@@ -31,6 +36,7 @@ public struct AppEnvironment: Sendable {
         baseURL: URL?,
         cfAccessClientID: String? = nil,
         cfAccessClientToken: String? = nil,
+        accessHeaders: [ServerAccessHeader] = [],
         bundleID: String,
         appVersion: String,
         buildNumber: String
@@ -38,9 +44,57 @@ public struct AppEnvironment: Sendable {
         self.baseURL = baseURL
         self.cfAccessClientID = cfAccessClientID?.nilIfEmpty
         self.cfAccessClientToken = cfAccessClientToken?.nilIfEmpty
+        self.accessHeaders = Self.mergedAccessHeaders(
+            cfAccessClientID: self.cfAccessClientID,
+            cfAccessClientToken: self.cfAccessClientToken,
+            stored: accessHeaders
+        )
         self.bundleID = bundleID
         self.appVersion = appVersion
         self.buildNumber = buildNumber
+    }
+
+    /// Sets ``accessHeaders`` on a request to the configured server.
+    public func applyAccessHeaders(to request: inout URLRequest) {
+        ServerAccessHeaders.apply(accessHeaders, to: &request)
+    }
+
+    /// #153 — the same environment with the user's stored list replaced
+    /// and merged again over the build-time pair. Address and app metadata
+    /// stay as they are, so a header edit is never a host change.
+    public func replacingStoredAccessHeaders(_ stored: [ServerAccessHeader]) -> AppEnvironment {
+        AppEnvironment(
+            baseURL: baseURL,
+            cfAccessClientID: cfAccessClientID,
+            cfAccessClientToken: cfAccessClientToken,
+            accessHeaders: stored,
+            bundleID: bundleID,
+            appVersion: appVersion,
+            buildNumber: buildNumber
+        )
+    }
+
+    /// The `Info.plist` pair goes first under Cloudflare's documented names
+    /// (`CF-Access-Client-Id`, `CF-Access-Client-Secret`); a stored header with
+    /// the same name, compared without case, replaces it.
+    static func mergedAccessHeaders(
+        cfAccessClientID: String?,
+        cfAccessClientToken: String?,
+        stored: [ServerAccessHeader]
+    ) -> [ServerAccessHeader] {
+        let names = ServerAccessHeaders.Preset.cloudflareAccess.headerNames
+        var merged: [ServerAccessHeader] = []
+        if let cfAccessClientID {
+            merged.append(ServerAccessHeader(name: names[0], value: cfAccessClientID))
+        }
+        if let cfAccessClientToken {
+            merged.append(ServerAccessHeader(name: names[1], value: cfAccessClientToken))
+        }
+        for header in stored {
+            merged.removeAll { $0.name.caseInsensitiveCompare(header.name) == .orderedSame }
+            merged.append(header)
+        }
+        return merged
     }
 }
 
@@ -54,7 +108,9 @@ public extension AppEnvironment {
     /// retired for public builds.
     static let retiredServerHostFingerprints: Set<String> = []
 
-    /// Loads from `Info.plist`. Keys: `HLBaseURL`, `CFAccess.ClientID`, `CFAccess.ClientToken`.
+    /// Loads from `Info.plist`. Keys: `HLBaseURL`, `CFAccess.ClientID`,
+    /// `CFAccess.ClientSecret` (older builds named it `CFAccess.ClientToken`;
+    /// both are read, the value is sent as `CF-Access-Client-Secret`).
     ///
     /// **Kein Rückfall.** Fehlt `HLBaseURL` (der Normalfall — die
     /// eingecheckte `project.yml` setzt den Schlüssel nicht), oder ist der
@@ -68,7 +124,7 @@ public extension AppEnvironment {
         return AppEnvironment(
             baseURL: (info["HLBaseURL"] as? String)?.nilIfEmpty.flatMap { URL(string: $0) },
             cfAccessClientID: cfDict?["ClientID"],
-            cfAccessClientToken: cfDict?["ClientToken"],
+            cfAccessClientToken: cfDict?["ClientSecret"] ?? cfDict?["ClientToken"],
             bundleID: bundle.bundleIdentifier ?? "dev.healthlog.app",
             appVersion: info["CFBundleShortVersionString"] as? String ?? "0.0.0",
             buildNumber: info["CFBundleVersion"] as? String ?? "0"
@@ -93,7 +149,18 @@ public extension AppEnvironment {
         bundle: Bundle = .main,
         retiredServerHostFingerprints: Set<String> = Self.retiredServerHostFingerprints
     ) -> AppEnvironment {
-        let bundleEnv = loadFromBundle(bundle)
+        let bundled = loadFromBundle(bundle)
+        // GH-iOS #27 — proxy headers apply with or without a stored address:
+        // a build that ships `HLBaseURL` still needs them.
+        let bundleEnv = AppEnvironment(
+            baseURL: bundled.baseURL,
+            cfAccessClientID: bundled.cfAccessClientID,
+            cfAccessClientToken: bundled.cfAccessClientToken,
+            accessHeaders: ServerAccessHeaders.load(keychain: keychain),
+            bundleID: bundled.bundleID,
+            appVersion: bundled.appVersion,
+            buildNumber: bundled.buildNumber
+        )
         guard let overrideString = keychain.getString(forKey: KeychainKey.serverURL),
               let trimmed = overrideString.nilIfEmpty,
               let overrideURL = URL(string: trimmed),
@@ -120,6 +187,7 @@ public extension AppEnvironment {
             baseURL: overrideURL,
             cfAccessClientID: bundleEnv.cfAccessClientID,
             cfAccessClientToken: bundleEnv.cfAccessClientToken,
+            accessHeaders: bundleEnv.accessHeaders,
             bundleID: bundleEnv.bundleID,
             appVersion: bundleEnv.appVersion,
             buildNumber: bundleEnv.buildNumber

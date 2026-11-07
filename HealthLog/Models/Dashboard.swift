@@ -284,7 +284,10 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
     /// 3. else empty string (a brand-new metric with neither field).
     static func resolve(key: String?, legacy: String?) -> String {
         if let key, !key.isEmpty {
-            return String(localized: String.LocalizationValue(key))
+            let resolved = String(localized: String.LocalizationValue(key))
+            // A key this build's catalog lacks resolves to itself; the legacy
+            // translated field is the better answer then.
+            if resolved != key || legacy?.isEmpty != false { return resolved }
         }
         return legacy ?? ""
     }

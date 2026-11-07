@@ -92,6 +92,14 @@ public enum HLError: Error, Sendable, Equatable {
     /// changes shape underneath it. Both values are raw wire strings; the
     /// domain maps the pair (see ``HealthScoreBreadthReason``).
     case refusedWithReason(code: String, reason: String)
+    /// KONTO (#151, server 1.46.0) — `403 auth.account.deletion_pending`:
+    /// the account was deleted, is locked inside the grace window, and the
+    /// purge erases it at `meta.purgeAt` (`nil` when the server did not say,
+    /// as on the native SSO redirect). Every sign-in door answers it (password,
+    /// passkey, second factor, token exchanges), so it is typed here once and
+    /// every sign-in surface shows the same sentence with the date. Not
+    /// retriable, not outbox-persisted: nothing acts for the account any more.
+    case accountDeletionPending(purgeAt: Date?)
     case unknown(String)
 
     public enum Underlying: Sendable, Equatable {
@@ -264,6 +272,7 @@ public extension HLError {
         case let .writeConflictUnresolved(code): return String(localized: "error.detail.writeConflict \(code)")
         case let .refusedWithReason(code, reason): return String(localized: "error.detail.refused \(code) \(reason)")
         case .serverNotConfigured: return String(localized: "error.detail.serverNotConfigured")
+        case let .accountDeletionPending(purgeAt): return AccountDeletionCopy.signInRefusal(purgeAt: purgeAt)
         case let .unknown(s): return s
         }
     }
@@ -344,6 +353,8 @@ public extension HLError {
             // nennt den Weg dorthin, statt einen Verbindungsfehler zu
             // behaupten, den es nicht gibt.
             String(localized: "error.serverNotConfigured")
+        case let .accountDeletionPending(purgeAt):
+            AccountDeletionCopy.signInRefusal(purgeAt: purgeAt)
         case .unknown:
             String(localized: "Something went wrong. Please try again.")
         }

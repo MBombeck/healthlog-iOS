@@ -198,8 +198,7 @@ struct WhoopIntegrationScreen: View {
             .accessibilityIdentifier("settings.whoop.clientIdField")
 
         SecureField(String(localized: "Client Secret"), text: $clientSecretDraft)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
+            .hlSecretEntry()
             .accessibilityIdentifier("settings.whoop.clientSecretField")
 
         // v0.14.1 #6 — was "Save credentials" / "Zugangsdaten

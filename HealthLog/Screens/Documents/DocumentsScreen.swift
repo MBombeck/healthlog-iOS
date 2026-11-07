@@ -162,6 +162,7 @@ struct DocumentsScreen: View {
                 loadMoreRow(store: store)
             }
         }
+        recentlyDeletedSection(store: store)
         Section {} footer: {
             HLSyncStatusFooter(screenLoading: store.isLoading)
         }
@@ -250,6 +251,7 @@ struct DocumentsScreen: View {
         .accessibilityElement(children: .combine)
     }
 
+    @ViewBuilder
     private var emptyRows: some View {
         Section {
             let filtered = store?.filter.isActive == true
@@ -272,6 +274,19 @@ struct DocumentsScreen: View {
             }
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
+        }
+        if let store { recentlyDeletedSection(store: store) }
+    }
+
+    /// #151 — the centred link to Recently deleted, only while the server
+    /// counts a deleted document (never before v1.46.0, never in a shared record).
+    /// POLISH-A A3 — it sits in a section footer, like the "Advanced" text
+    /// links: as a list row the `NavigationLink` drew the system chevron at the
+    /// trailing edge beside the centred text.
+    @ViewBuilder
+    private func recentlyDeletedSection(store: DocumentsStore) -> some View {
+        if RecentlyDeletedDocumentsLink.isOffered(store.usage), let count = store.usage?.deletedCount {
+            Section {} footer: { RecentlyDeletedDocumentsLink(vault: store, count: count) }
         }
     }
 

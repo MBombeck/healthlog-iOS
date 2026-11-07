@@ -493,7 +493,7 @@ public actor EcgSyncCoordinator {
         switch hlError {
         case .moduleDisabled, .aiUnavailable:
             return .halted(.gated)
-        case .unauthorized:
+        case .unauthorized, .accountDeletionPending:
             return .halted(.unauthorized)
         case .rateLimited:
             return .halted(.rateLimited)

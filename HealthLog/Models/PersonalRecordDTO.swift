@@ -132,9 +132,12 @@ public extension PersonalRecordDTO {
     /// 1.4 B4 — the server stamps a step record "steps"; printed verbatim it
     /// read "12.999 steps" in German. A count unit takes the app's own word
     /// ("Schritte"); every measured unit ("kg", "bpm", "km") stays as sent.
+    /// POLISH-B (SHOTS F-REC-1) — the same for "floors" ("27 floors").
     static func localizedUnit(_ unit: String) -> String {
-        unit.trimmingCharacters(in: .whitespaces).lowercased() == "steps"
-            ? String(localized: "dashboard.metric.unit.steps")
-            : unit
+        switch unit.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "steps": String(localized: "dashboard.metric.unit.steps")
+        case "floors": String(localized: "dashboard.metric.unit.floors")
+        default: unit
+        }
     }
 }

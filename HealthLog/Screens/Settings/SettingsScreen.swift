@@ -235,9 +235,10 @@ struct SettingsScreen: View {
     private var hubSection: some View {
         Section {
             ForEach(HubRow.allCases) { row in
-                NavigationLink {
-                    row.destination
-                } label: {
+                // #153 follow-up (SET-ROUTE) — a value on the More stack,
+                // resolved in `MoreScreen`, so the page comes back after the
+                // privacy shield rebuilt the window.
+                NavigationLink(value: row) {
                     HLSettingsRow(
                         icon: row.icon,
                         title: LocalizedStringKey(row.title),
@@ -502,7 +503,7 @@ enum HubRow: String, CaseIterable, Identifiable {
     @ViewBuilder @MainActor
     var destination: some View {
         switch self {
-        case .account: SettingsAccountScreen()
+        case .account: SettingsAccountScreen(routesByValue: true)
         case .integrations: SettingsIntegrationsScreen()
         case .devices: SettingsDevicesScreen()
         case .siri: SettingsSiriShortcutsScreen()

@@ -23,6 +23,10 @@ enum TodayHeroActionRoute: Equatable {
     /// (`/checkups?view=visits`); the app has neither screen yet, so both open
     /// the Vorsorge list, as the appointment's `checkup.view` did before.
     case checkupsList
+    /// VISIT — `visit.view` whose `href` names one visit
+    /// (`/checkups?visit=<id>`): Vorsorge, with that visit under "Nächster
+    /// Termin". Several visits (`?view=visits`) stay ``checkupsList``.
+    case visit(id: String)
     case insightsOverview
     case insights(slug: String)
     case none
@@ -40,7 +44,9 @@ enum TodayHeroActionRoute: Equatable {
         case "dose.log": return .intakes
         case "sync.reconnect": return .integrations
         case "checkup.view": return .checkupFrontDoor
-        case "visit.view": return .checkupsList
+        case "visit.view":
+            if case let .checkupsVisit(id) = DeepLinkRoute.fromPushPath(href ?? "") { return .visit(id: id) }
+            return .checkupsList
         case "ecg.view": return .insightsOverview
         case "milestone.view", "pulse.view":
             return insightsSlug(from: href).map { .insights(slug: $0) } ?? .insightsOverview

@@ -26,7 +26,8 @@ import Foundation
 /// cases pin a canonical locale whose default numeric date order matches the
 /// requested preference — exactly the server's `dateOrderLocale` mapping
 /// (DMY → de-DE `dd.MM.yyyy`, MDY → en-US `MM/dd/yyyy`, YMD → en-CA/ISO
-/// `yyyy-MM-dd`). AUTO keeps the device's own locale.
+/// `yyyy-MM-dd`). DMY uses the interface language's own day-first locale so
+/// month names match the visible copy. AUTO keeps the device's own locale.
 public enum HLDateFormat: String, CaseIterable, Sendable {
     /// Follow the device locale's own field order.
     case auto = "AUTO"
@@ -63,10 +64,16 @@ public enum HLDateFormat: String, CaseIterable, Sendable {
     /// governs); the pinned cases return the canonical locale whose default
     /// numeric date order matches the requested preference — identical to the
     /// server's `dateOrderLocale`.
+    ///
+    /// DMY pins a day-month-year locale in the interface language
+    /// (``AppLanguage/dayMonthYearLocale``): `de_DE`, `en_GB`, `nl_NL`. Until
+    /// 1.5 it was `de_DE` for everyone, which rendered German month names
+    /// ("17. Juni 2026") in the abbreviated and long styles under an English
+    /// or Dutch interface.
     public var formattingLocale: Locale {
         switch self {
         case .auto: .current
-        case .dayMonthYear: Locale(identifier: "de_DE")
+        case .dayMonthYear: AppLanguage.current.dayMonthYearLocale
         case .monthDayYear: Locale(identifier: "en_US")
         case .yearMonthDay: Locale(identifier: "en_CA")
         }

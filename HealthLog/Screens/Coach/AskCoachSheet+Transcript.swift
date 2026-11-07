@@ -22,12 +22,20 @@ import SwiftUI
     struct CoachTranscriptView: View {
         let store: CoachConversationStore
         var seed: String? // v0.13 WP — one-shot composer seed from a prompt chip
+        /// POLISH-B B1 — the welcome and the suggestion chips while the
+        /// transcript is empty. They live inside the scroll view, so the
+        /// composer above the keyboard always keeps its place: at the
+        /// accessibility sizes the two are taller than the room the keyboard
+        /// leaves, and as a fixed block above the transcript they pushed the
+        /// composer under the keyboard (iOS 26.5).
+        var emptyHeader: AnyView?
         @State private var draft: String = ""
         @State private var didApplySeed = false
         @FocusState private var inputFocused: Bool
         /// QoL-A2 (Felt-craft #5) — gate the transcript auto-scroll on
         /// reduce-motion (instant jump to tail when motion is disabled).
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.dynamicTypeSize) private var dynamicTypeSize
         /// W-B187 COACH-3 — reach the shared about-me store + server gate so a
         /// "remember this" on a user turn folds the statement into the coach
         /// self-context. Only offered on a paired install (server present).
@@ -46,7 +54,28 @@ import SwiftUI
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: HLSpace.md) {
+                        // POLISH-B B1 — a plain stack, not a lazy one. On iOS
+                        // 26.5 at the accessibility sizes the lazy stack kept
+                        // re-estimating its rows while the scroll view adjusted
+                        // its offset for the bottom anchor (keyboard open, each
+                        // streamed token scrolling to the tail), and the main
+                        // thread stayed in that layout for 30 s and more
+                        // (`LazyStack.measureEstimates`,
+                        // `ScrollViewAdjustedState.adjustOffsetIfNeeded` in the
+                        // samples). A Coach conversation is a few dozen
+                        // bubbles at most; measured once, it lays out exactly.
+                        VStack(alignment: .leading, spacing: HLSpace.md) {
+                            if let emptyHeader {
+                                emptyHeader
+                                    .id("coach-empty-header")
+                            }
+                            // A11Y (1.5) — the "AI-generated, not medical
+                            // advice" line stands here, whole, at the
+                            // accessibility sizes (see `CoachInputRow`).
+                            if dynamicTypeSize.isAccessibilitySize {
+                                CoachAIGeneratedNote()
+                                    .id("coach-ai-note")
+                            }
                             ForEach(visibleEntries) { entity in
                                 VStack(alignment: .leading, spacing: HLSpace.xs) {
                                     CoachMessageBubble(entity: entity)
@@ -75,6 +104,8 @@ import SwiftUI
                                     // count is gone.
                                     if isAssistant(entity) {
                                         CoachReplyActions(store: store, entityID: entity.id)
+                                        // 1.5 COACH-R — proposal and trail link.
+                                        CoachAnswerExtras(store: store, entityID: entity.id)
                                     }
                                 }
                                 .id(entity.id)
@@ -98,6 +129,11 @@ import SwiftUI
                                 CoachTypingBubble()
                                     .id("typing-indicator")
                             }
+                            // 1.5 COACH-R — one quiet line while the turn runs.
+                            if let line = store.live.statusLine {
+                                CoachLiveStatusLine(text: line)
+                                    .id("coach-live-status")
+                            }
                             // Tail anchor so we always scroll to the
                             // newest content (entity OR indicator).
                             Color.clear
@@ -115,6 +151,25 @@ import SwiftUI
                     .onChange(of: store.isResponding) { _, _ in
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                             proxy.scrollTo("transcript-tail", anchor: .bottom)
+                        }
+                    }
+                    // 1.5 COACH-R — the proposal and the trail link arrive after
+                    // the answer; bring them up above the keyboard, which stays
+                    // open after sending like everywhere else in the chat.
+                    // The views they need are inserted in the same pass, so the
+                    // scroll waits a moment for them (it ran twice while the stack
+                    // was lazy; POLISH-B B1 made it a plain one, the second pass
+                    // stays as a harmless safety net).
+                    .onChange(of: store.live.settledRevision) { _, _ in
+                        Task { @MainActor in
+                            // Twice: once the stack has placed the new views,
+                            // and again after it has measured them.
+                            for delay in [50, 350] {
+                                try? await Task.sleep(for: .milliseconds(delay))
+                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                                    proxy.scrollTo("transcript-tail", anchor: .bottom)
+                                }
+                            }
                         }
                     }
                     // v1.18.1 (§3) — bring a freshly-arrived cadence card into view.

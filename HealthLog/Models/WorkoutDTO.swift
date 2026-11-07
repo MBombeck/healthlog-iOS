@@ -243,7 +243,13 @@ public struct WorkoutSamplesDTO: Decodable, Sendable, Equatable {
 
 /// Consumes one element of an unkeyed container without modelling it — used to
 /// advance past a sample row that failed to decode (M-2 tolerant decode).
-private struct AnyDecodableSkip: Decodable {}
+private struct AnyDecodableSkip: Decodable {
+    /// A bare string or number has no keyed container; reading a single value
+    /// container works for every JSON shape, so the element is always consumed.
+    init(from decoder: any Decoder) throws {
+        _ = try decoder.singleValueContainer()
+    }
+}
 
 // MARK: - Workout enrichment (7.8 / #67 — hrSeries · zones · splits · sportContext)
 
@@ -420,23 +426,30 @@ public struct WorkoutSportContextDTO: Decodable, Sendable, Equatable {
 
 /// GeoJSON LineString wrapper as emitted by `GET /api/workouts/{id}`.
 ///
-/// **Wire shape** (verbatim from `WorkoutRoute` in `prisma/schema.prisma`):
+/// **Wire shape** (`WorkoutRouteGeometry`, server v1.46):
 /// ```
 /// {
 ///   "geometry": { "type": "LineString", "coordinates": [[lon, lat, alt?], ...] },
-///   "sampleTimestamps": ["2026-05-15T07:00:00Z", ...]   // optional, may be null
+///   "sampleTimestamps": ["2026-05-15T07:00:00Z", { "t": "…", "speedMs": 3.1, "hr": 140 }, ...]
 /// }
 /// ```
 ///
-/// We decode the geometry permissively — accept any GeoJSON-shaped JSON,
-/// but expose `coordinates` as `[[Double]]` so the consumer can render a
-/// MapKit polyline directly without re-parsing.
+/// 1.5 FIX-DATA (#151) — each `sampleTimestamps` entry is either a bare
+/// ISO instant (older tracks) or an object with its instant and, where
+/// recorded, speed and heart rate (the workout batch and the Apple Health
+/// export since server 1.46). Until 1.5 the field was `[Date]`, so one
+/// imported track made the whole workout detail fail. Both the entries and the
+/// coordinates now decode one by one: a broken point costs only that point.
 public struct WorkoutRouteDTO: Decodable, Sendable, Equatable {
     public let geometry: Geometry
-    /// Per-coordinate timestamps when the source ships them (Apple Health),
-    /// otherwise nil (Withings GPX, manual). Decoded via the shared
-    /// `APIClient`-level ISO-8601 strategy.
-    public let sampleTimestamps: [Date]?
+    /// Per-point instants, with speed and heart rate where the track carries
+    /// them. `nil` when the source ships none (Withings GPX, manual).
+    public let samples: [WorkoutRoutePoint]?
+
+    /// Per-coordinate timestamps when the source ships them, otherwise nil.
+    public var sampleTimestamps: [Date]? {
+        samples?.map(\.t)
+    }
 
     public struct Geometry: Decodable, Sendable, Equatable {
         public let type: String
@@ -449,11 +462,95 @@ public struct WorkoutRouteDTO: Decodable, Sendable, Equatable {
             self.type = type
             self.coordinates = coordinates
         }
+
+        private enum CodingKeys: String, CodingKey {
+            case type, coordinates
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            type = try c.decodeIfPresent(String.self, forKey: .type) ?? "LineString"
+            guard c.contains(.coordinates), try !c.decodeNil(forKey: .coordinates) else {
+                coordinates = []
+                return
+            }
+            var points = try c.nestedUnkeyedContainer(forKey: .coordinates)
+            coordinates = TolerantElements.decode(&points, as: [Double].self).filter { $0.count >= 2 }
+        }
     }
 
     public init(geometry: Geometry, sampleTimestamps: [Date]?) {
         self.geometry = geometry
-        self.sampleTimestamps = sampleTimestamps
+        samples = sampleTimestamps?.map { WorkoutRoutePoint(t: $0) }
+    }
+
+    public init(geometry: Geometry, samples: [WorkoutRoutePoint]?) {
+        self.geometry = geometry
+        self.samples = samples
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case geometry, sampleTimestamps
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        geometry = try c.decode(Geometry.self, forKey: .geometry)
+        guard c.contains(.sampleTimestamps), try !c.decodeNil(forKey: .sampleTimestamps) else {
+            samples = nil
+            return
+        }
+        var entries = try c.nestedUnkeyedContainer(forKey: .sampleTimestamps)
+        samples = TolerantElements.decode(&entries, as: WorkoutRoutePoint.self)
+    }
+}
+
+/// One `sampleTimestamps` entry: a bare ISO instant, or `{ t, speedMs?, hr? }`.
+public struct WorkoutRoutePoint: Decodable, Sendable, Equatable {
+    public let t: Date
+    /// Speed, metres/second.
+    public let speedMs: Double?
+    /// Heart rate, beats/min.
+    public let hr: Double?
+
+    public init(t: Date, speedMs: Double? = nil, hr: Double? = nil) {
+        self.t = t
+        self.speedMs = speedMs
+        self.hr = hr
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case t, speedMs, hr
+    }
+
+    public init(from decoder: any Decoder) throws {
+        if let instant = try? decoder.singleValueContainer().decode(Date.self) {
+            self.init(t: instant)
+            return
+        }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            t: c.decode(Date.self, forKey: .t),
+            speedMs: try? c.decodeIfPresent(Double.self, forKey: .speedMs),
+            hr: try? c.decodeIfPresent(Double.self, forKey: .hr)
+        )
+    }
+}
+
+/// Decodes an array element by element: an element that does not decode is
+/// skipped, the rest survive.
+enum TolerantElements {
+    static func decode<T: Decodable>(_ container: inout any UnkeyedDecodingContainer, as _: T.Type) -> [T] {
+        var collected: [T] = []
+        while !container.isAtEnd {
+            if let value = try? container.decode(T.self) {
+                collected.append(value)
+            } else if (try? container.decode(AnyDecodableSkip.self)) == nil {
+                // Cannot advance past the element: stop rather than spin.
+                break
+            }
+        }
+        return collected
     }
 }
 

@@ -34,7 +34,7 @@ import Testing
                 #expect(harness.hourlyPosts.isEmpty)
                 #expect(outcome == .serverUnsupported)
                 #expect(harness.api.posts.count == 1)
-                #expect(Set(harness.dayPosts.flatMap(\.externalIds)).count == 10)
+                #expect(Set(harness.dayPosts.flatMap(\.externalIds)).count == HealthKitCumulativeTypeConfig.defaults.count * 2)
             }
             // Never probed at all: the same.
             let fresh = try Harness()
@@ -125,7 +125,7 @@ import Testing
             }
 
             #expect(harness.dayPosts.count == 1)
-            #expect(Set(harness.dayPosts.flatMap(\.externalIds)).count == 10)
+            #expect(Set(harness.dayPosts.flatMap(\.externalIds)).count == HealthKitCumulativeTypeConfig.defaults.count * 2)
             let hourly = try #require(harness.hourlyPosts.first)
             #expect(harness.hourlyPosts.count == 1)
             #expect(hourly.trigger == "background")
@@ -280,18 +280,18 @@ import Testing
         func backfillWireValue() async {
             let context = SyncTriggerContext()
             await context.bind(.background) {
-                await SyncTriggerContext.bindingBackfill {
-                    #expect(context.current == .background)
-                    #expect(context.wireValue == .background)
-                    context.noteServerVersion(ServerVersionInfo(version: "1.43.0"))
-                    #expect(context.wireValue == .background)
-                    context.noteServerFeatures([.syncTriggerBackfill])
-                    #expect(context.wireValue == .backfill)
-                    #expect(context.current == .background)
-                    context.noteServerVersion(ServerVersionInfo(version: "1.42.4"))
-                    #expect(context.wireValue == .background)
-                }
-                // Outside the marker the pass keeps its own word.
+                // SYNC-TRIG (1.5) — the mark is an argument of the upload, no
+                // longer a task-local; the expectations are unchanged.
+                #expect(context.current == .background)
+                #expect(context.wireValue(backfill: true) == .background)
+                context.noteServerVersion(ServerVersionInfo(version: "1.43.0"))
+                #expect(context.wireValue(backfill: true) == .background)
+                context.noteServerFeatures([.syncTriggerBackfill])
+                #expect(context.wireValue(backfill: true) == .backfill)
+                #expect(context.current == .background)
+                context.noteServerVersion(ServerVersionInfo(version: "1.42.4"))
+                #expect(context.wireValue(backfill: true) == .background)
+                // Without the mark the pass keeps its own word.
                 context.noteServerVersion(ServerVersionInfo(version: "1.43.0"))
                 #expect(context.wireValue == .background)
             }

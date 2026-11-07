@@ -1,0 +1,36 @@
+{
+  "_doc": "Medical catalog keys (R2 3.3 and 3.11): questionnaires and crisis contacts, disclaimers of the app, the export and the assistant, and texts about thresholds, red flags and the evidence behind a reading. A value of these keys in any language other than German is written by scripts/xcstrings-add.py with state `needs_review`; a person approves it by setting `translated` and names themselves and the date in the unit report. scripts/l10n/check-catalog-format.py reports open reviews in CI and, with --release (freeze pregates), fails while one sits in a `required` language. Every prefix and key here must match at least one key of a shipped catalog (`report.` keys live in HealthLog/Resources/DoctorReport.xcstrings, the doctor report's own table), so the list cannot rot.",
+  "prefixes": [
+    "mentalHealth.",
+    "disclaimer.ack.",
+    "appstore.disclaimer.",
+    "export.disclaimer.",
+    "cycle.prediction.disclaimer.",
+    "threshold.nudge.",
+    "illness.correlation.redFlags.",
+    "sources.caveat.",
+    "sources.method.",
+    "report.adherence.",
+    "report.medications.",
+    "life.derived.",
+    "life.screening.",
+    "life.auditC.result.",
+    "targets.status."
+  ],
+  "keys": [
+    "coach.aiGeneratedNote",
+    "coach.filtered.refusal",
+    "correlations.disclaimer",
+    "insights.ecg.disclaimer",
+    "insights.metric.statusCard.notADiagnosis",
+    "sources.sheet.footer",
+    "report.disclaimer",
+    "report.vitals.title",
+    "I understand: no medical recommendations, no diagnoses, no therapy suggestions.",
+    "These are alerts your device produced using its own built-in detection. They are shown here for your awareness only. This is not a medical assessment by HealthLog, and HealthLog does not diagnose any condition. If a notification concerns you, talk to your doctor.",
+    "symptoms.intensity.scale",
+    "life.auditC.intro",
+    "life.auditC.offerDue",
+    "life.auditC.notValidated"
+  ]
+}

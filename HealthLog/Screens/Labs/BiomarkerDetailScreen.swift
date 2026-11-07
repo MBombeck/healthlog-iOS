@@ -227,7 +227,9 @@ struct BiomarkerDetailScreen: View {
             StatsRow(
                 stats: stats,
                 median: BiomarkerSeries.median(for: windowedRows),
-                unit: unit
+                // POLISH-A F-LAB-1 — the unity "1" (a ratio, #160) is
+                // never printed after a number.
+                unit: LabUnit.suffix(unit) ?? ""
             )
         }
     }

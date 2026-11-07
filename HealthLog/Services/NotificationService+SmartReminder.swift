@@ -50,7 +50,8 @@ import Foundation
         ///     instance. AppContainer owns the long-lived service in prod;
         ///     tests inject stubs.
         ///   - locale: Locale for the FM prompt + instructions. Defaults to
-        ///     the device locale.
+        ///     the interface language (`AppLanguage.current`), so the phrase
+        ///     matches the static fallback copy.
         /// - Returns: The `ReminderPhraseOutcome` so callers can log which
         ///   path was taken without re-running the service. Useful for
         ///   tests + the eventual analytics card.
@@ -64,7 +65,7 @@ import Foundation
             category: String? = nil,
             userInfo: [String: Any] = [:],
             phraseService: SmartReminderPhraseService = SmartReminderPhraseService(),
-            locale: Locale = .current
+            locale: Locale = AppLanguage.current.locale
         ) async throws -> ReminderPhraseOutcome {
             let outcome = await phraseService.generate(context: context, locale: locale)
             let (title, body) = resolvePhrase(

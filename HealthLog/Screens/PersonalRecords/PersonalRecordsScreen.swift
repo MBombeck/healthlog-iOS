@@ -48,6 +48,7 @@ struct PersonalRecordsScreen: View {
     @Environment(AuthStore.self) private var authStore
     /// QoL-A2 (Felt-craft #5) — gate the celebration-dismiss fade on reduce-motion.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var selectedShareRecord: PersonalRecord?
     @State private var celebrationRecord: PersonalRecord?
@@ -231,8 +232,11 @@ struct PersonalRecordsScreen: View {
     private var gridSection: some View {
         let visible = Self.gridRecords(store.visibleRecords)
         if !visible.isEmpty {
+            // POLISH-B (SHOTS F-REC-1) — two cards a row up to XXXL; from the
+            // accessibility sizes on one card a row, so names, times and the
+            // "new record" chip keep their whole words.
             LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: HLSpace.md), GridItem(.flexible(), spacing: HLSpace.md)],
+                columns: Self.gridColumns(dynamicTypeSize),
                 spacing: HLSpace.md
             ) {
                 ForEach(visible) { record in
@@ -243,6 +247,12 @@ struct PersonalRecordsScreen: View {
             }
             .padding(.horizontal, HLSpace.lg)
         }
+    }
+
+    /// Two flexible columns, one from the accessibility sizes on.
+    nonisolated static func gridColumns(_ size: DynamicTypeSize) -> [GridItem] {
+        let count = size.isAccessibilitySize ? 1 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: HLSpace.md), count: count)
     }
 
     /// Streak records render in the rail instead of the grid.

@@ -226,11 +226,11 @@ extension AppContainer {
         #if canImport(UserNotifications) && canImport(UIKit)
             // W-THRESHOLD-NUDGE — MDR-safe out-of-range nudge onto the labs
             // store. Acts ONLY on the server's own range verdict, opt-in
-            // (default off), defers to an active server illness escalation, and
-            // debounces a standing breach.
+            // (default off), defers while the server holds Rest Mode
+            // (POLISH-B B5), and debounces a standing breach.
             labsStore.thresholdNudge = ThresholdNudgeCoordinator.live(
                 notifications: notifications,
-                illnessStore: illnessStore
+                healthScoreStore: healthScoreStore
             )
             // v1.18.6 (#32) — Vorsorge reminder server-completion seam so the
             // foreground "Erledigt" notification action POSTs `…/{id}/complete`

@@ -44,7 +44,9 @@ extension OutboxReplayService {
     /// Replays one persisted HealthKit measurement batch under its own owner
     /// and its own persisted idempotency key.
     func dispatchHealthKitBatch(_ op: OutboxQueue.Operation) async throws {
-        let payload = try decoder.decode(HealthKitBatchPayload.self, from: op.payload)
+        // POLISH-B B6 — a page parked before REG carries the noise event under
+        // its old name; it goes out under the server's.
+        let payload = try decoder.decode(HealthKitBatchPayload.self, from: op.payload).withServerWireNames()
         guard !payload.entries.isEmpty else {
             // An empty batch has nothing to prove and nothing to lose; letting
             // it drain keeps a malformed historical row from wedging the queue.
@@ -54,7 +56,7 @@ extension OutboxReplayService {
         let response: HealthKitBatchResponseDTO
         var splitAccepted = false
         do {
-            response = try await postReplayed(payload.entries, syncTrigger: payload.syncTrigger, op)
+            response = try await postReplayed(payload.entries, syncTrigger: syncTriggerGate.replayValue(payload.syncTrigger), op)
         } catch is OutboxQueue.OwnerLeaseError {
             // Session transitions are retryable protocol uncertainty. The
             // message carries neither owner nor token.
@@ -62,7 +64,12 @@ extension OutboxReplayService {
         } catch let invalid as MeasurementBatchInvalid where invalid.entryIndexes != nil && op.ownerUserID != nil {
             // E1 — the entries v1.39.1 named go into the register, the rest of
             // the page is sent once more on its own and folded back in.
-            response = try await replaySplit(invalid, payload.entries, syncTrigger: payload.syncTrigger, owner: op.ownerUserID)
+            response = try await replaySplit(
+                invalid,
+                payload.entries,
+                syncTrigger: syncTriggerGate.replayValue(payload.syncTrigger),
+                owner: op.ownerUserID
+            )
             splitAccepted = true
         } catch {
             // A named refusal is recorded, a 422 that names no row is halved,
@@ -104,14 +111,14 @@ extension OutboxReplayService {
         // It goes into the skip register first; if that write fails, the row
         // parks and the next pass tries again.
         let outcome = BatchUploadOutcome(chunk: payload.entries, response: response)
-        var refusedByReason: [String: [HealthKitBatchEntryDTO]] = [:]
+        var refused: [HealthKitSkippedEntry] = []
         for verdict in outcome.rowVerdicts where verdict.status == .skipped {
             let reason = verdict.reason ?? "unknown"
             guard reason != MeasurementBatchAcceptance.Reason.unmappableIdentifier else { continue }
-            refusedByReason[reason, default: []].append(payload.entries[verdict.index])
+            refused.append(HealthKitSkippedEntry(entry: payload.entries[verdict.index], reason: reason, detail: verdict.detail))
         }
-        for (reason, entries) in refusedByReason.sorted(by: { $0.key < $1.key }) {
-            try await recordRefused(entries, reason: reason, owner: op.ownerUserID)
+        if !refused.isEmpty {
+            try await recordRefused(refused, owner: op.ownerUserID)
         }
 
         let unmappable = Self.unmappableIndexCount(in: response, postedCount: payload.entries.count)
@@ -220,7 +227,7 @@ extension OutboxReplayService {
             guard !HealthKitReplayParked.wasHalved(op) else {
                 throw HealthKitReplayParked(reason: .notStoredAfterHalving(status: 422))
             }
-            return try await replayHalving(payload.entries, syncTrigger: payload.syncTrigger, owner: owner)
+            return try await replayHalving(payload.entries, syncTrigger: syncTriggerGate.replayValue(payload.syncTrigger), owner: owner)
         default:
             break
         }
@@ -230,10 +237,14 @@ extension OutboxReplayService {
     /// Writes refused rows into the owner's skip register, or parks the row.
     /// A row without an owner has no account to show them to; it parks too.
     private func recordRefused(_ entries: [HealthKitBatchEntryDTO], reason: String, owner: String?) async throws {
+        try await recordRefused(entries.map { HealthKitSkippedEntry(entry: $0, reason: reason) }, owner: owner)
+    }
+
+    private func recordRefused(_ refused: [HealthKitSkippedEntry], owner: String?) async throws {
         guard let owner else { throw HealthKitReplayParked(reason: .refusalNotRecorded) }
         do {
             try await HealthKitSkippedRowRegister.current.record(
-                entries.map { HealthKitSkippedEntry(entry: $0, reason: reason) },
+                refused,
                 ownerID: owner,
                 build: HealthKitSkipRegisterBuild.current
             )

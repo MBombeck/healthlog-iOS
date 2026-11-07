@@ -399,3 +399,23 @@ public extension MedicationsStore {
         }
     }
 }
+
+/// The active and archived lists (moved from `+CRUD.swift` in MED, 1.5.0, to
+/// make room for the course actions; unchanged).
+public extension MedicationsStore {
+    /// Derived: rows the user has not archived (UI's "active" tab).
+    ///
+    /// **M2** — honours the saved per-account manual `order` from
+    /// `/api/medications/layout` so the list matches the web/other devices.
+    /// An empty saved order is a pure passthrough (plain server order).
+    var activeMedications: [Medication] {
+        listLayout.applied(to: medications.filter(\.active), id: \.id)
+    }
+
+    /// Derived: archived rows, newest-first.
+    var archivedMedications: [Medication] {
+        medications
+            .filter { !$0.active }
+            .sorted { ($0.archivedAt ?? .distantPast) > ($1.archivedAt ?? .distantPast) }
+    }
+}

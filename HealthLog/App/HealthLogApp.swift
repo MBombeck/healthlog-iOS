@@ -129,6 +129,9 @@ struct HealthLogApp: App {
             // bootstrap awaits this before it asks the outbox to open; a
             // background write does not wait for it at all.
             .hlEmitFirstFrame(FirstFrameSignal.shared)
+            // POLISH-C (F-AX-DATEROW) — date pickers stack their label at the
+            // accessibility sizes, app-wide (sheets inherit it).
+            .datePickerStyle(HLAdaptiveDatePickerStyle())
             .environment(container.authStore)
             .environment(container.syncModeStore)
             // R4 §3.1 — capability surface (sync-mode + auth + reachability).

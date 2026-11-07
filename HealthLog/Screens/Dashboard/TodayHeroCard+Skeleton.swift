@@ -88,9 +88,14 @@ enum TodayHeroCopy {
     }
 
     /// Resolve a server-sent action `labelKey` (`daily.action.*`) client-side.
+    /// A key this build does not know (a newer server) falls back to the
+    /// generic "View" instead of printing the raw key on the button.
     static func actionLabel(_ labelKey: String) -> String {
-        local(labelKey)
+        let resolved = local(labelKey)
+        return resolved == labelKey || labelKey.isEmpty ? local(fallbackActionKey) : resolved
     }
+
+    static let fallbackActionKey = "daily.action.viewMilestone"
 
     // MARK: Resolution
 

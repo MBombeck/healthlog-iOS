@@ -60,7 +60,6 @@
         /// Path prefixes whose German literals are not user copy.
         static let allowedPaths: [(prefix: String, reason: String)] = [
             ("HealthLog/Services/AI/", "on-device model prompts, safety-filter patterns; replies branch on the language"),
-            ("HealthLog/Services/PDF/DoctorReport", "the explicit `ReportLocale.de` branch of the doctor PDF"),
             ("HealthLog/Services/Vision/", "OCR vocabulary matched against German packs and lab reports"),
             ("HealthLog/Screens/Labs/BiomarkerExplainer.swift", "German analyte aliases matched against lab names"),
             ("HealthLog/Services/HealthKit/MoodStateOfMindMapping.swift", "German mood words matched onto HealthKit labels"),

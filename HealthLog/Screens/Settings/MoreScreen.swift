@@ -28,23 +28,11 @@ struct MoreScreen: View {
     /// in `MoreScreen+ClinicalSection.swift` reads this from a sibling file.
     @Environment(\.appContainer) var container
 
-    // v0.5.5 — local binding driving the gear-button-triggered push to
-    // SettingsScreen. Mirrors the Dashboard-avatar pattern (see
-    // `DashboardProfileToolbar.swift`): plain `Button` flips this binding,
-    // a sibling `.navigationDestination(isPresented:)` resolves the push,
-    // SwiftUI's back-swipe / back-button flips it back to `false` without
-    // an extra observer. We deliberately avoid `NavigationLink` here because
-    // its row-style label rendering re-introduces a chevron + tap-area
-    // expansion the operator screenshot flagged on v0.5.4.2.
-    @State private var showSettings = false
-
-    /// v0.14.8 (Task D) — binding driving the share-glyph-triggered push to
-    /// `UnifiedSharingScreen`. Mirrors `showSettings` exactly: a bare `Button`
-    /// in `MoreHeader` flips this, a sibling `.navigationDestination(isPresented:)`
-    /// at the NavigationStack root resolves the push (no NavigationLink, no
-    /// chevron). The "Mit dem Arzt teilen" list row was removed in favour of the
-    /// header share glyph (left of the gear) per operator directive.
-    @State private var showShareWithDoctor = false
+    // v0.5.5 / v0.14.8 — the gear and the share glyph in `MoreHeader` are plain
+    // `Button`s (no `NavigationLink`, no chevron). #153 follow-up
+    // (SET-ROUTE): they append a value to `router.morePath` instead of flipping
+    // local `@State`, so the pushed page survives the privacy shield, which
+    // rebuilds the window whenever the scene goes inactive.
 
     // v0.6.1.10 Y9-C — Sicherheit section relocated to SettingsScreen
     // per operator walkthrough on 2026-05-23: "Abmelden und Konto
@@ -61,20 +49,16 @@ struct MoreScreen: View {
         @Bindable var router = router
         return NavigationStack(path: $router.morePath) {
             content
-                // v0.5.5 — sibling destination push driven by the
-                // gear-button binding (see `showSettings` above + the
-                // `MoreHeader` in the List). Lives at the NavigationStack
-                // root so the push uses the same stack the typed-route
-                // destinations above use; no nested stacks.
-                .navigationDestination(isPresented: $showSettings) {
-                    SettingsScreen()
+                // #153 follow-up (SET-ROUTE) — the Settings hub rows push
+                // their `HubRow` as a value, so the stack in the container's
+                // router remembers them across the privacy shield.
+                .navigationDestination(for: HubRow.self) { row in
+                    row.destination
                 }
-                // v0.14.8 (Task D) — sibling destination push driven by the
-                // header share-glyph binding (see `showShareWithDoctor` above +
-                // the `MoreHeader` in the List). Same stack-root pattern as
-                // `showSettings`; lands the operator on the doctor-handover hub.
-                .navigationDestination(isPresented: $showShareWithDoctor) {
-                    UnifiedSharingScreen()
+                // The rows of this list and the header share glyph, as values
+                // for the same reason (`MoreRoute`).
+                .navigationDestination(for: MoreRoute.self) { route in
+                    moreDestination(route)
                 }
                 // v0.12 W0-1 — typed deep-link destinations on the Mehr stack.
                 // The router appends these to `morePath` for
@@ -149,8 +133,9 @@ struct MoreScreen: View {
                         AppleHealthIntegrationDetailScreen()
                     case .security:
                         // #141 — a security alert's push lands here, the same
-                        // screen Account pushes.
-                        SettingsSecurityScreen()
+                        // screen Account pushes. POLISH-C (C2) — on the More
+                        // stack its rows push values.
+                        SettingsSecurityScreen(routesByValue: true)
                     case .checkups:
                         // #141 — the push path `/checkups`: Vorsorge, the
                         // same screen the clinical-spine row links to.
@@ -159,8 +144,41 @@ struct MoreScreen: View {
                         // #141 — the push path `/cycle`, the same screen the
                         // cycle row links to.
                         CycleScreen()
+                    case .serverAccessHeaders:
+                        // #153 follow-up — Settings › Server › Access
+                        // headers, pushed as a value by `SettingsServerScreen`.
+                        ServerAccessHeadersScreen()
+                    case .sessions:
+                        SessionsScreen()
+                    case .passkeys:
+                        PasskeyManagementScreen()
+                    case .twoFactor:
+                        TwoFactorManagementScreen()
+                    case let .integration(provider):
+                        IntegrationRouteDestination(route: provider)
                     }
                 }
+        }
+    }
+
+    /// #153 follow-up (SET-ROUTE) — the screen behind each `MoreRoute`
+    /// value. The rows push values instead of views so the page they open comes
+    /// back after the privacy shield rebuilt the window.
+    @ViewBuilder
+    func moreDestination(_ route: MoreRoute) -> some View {
+        switch route {
+        case .shareWithDoctor: UnifiedSharingScreen()
+        case .aboutMe, .lifeCircumstances: AboutMeRouteDestination(route: route)
+        case .labs: LabsScreen()
+        case .illness: IllnessJournalScreen()
+        case .documents: DocumentsScreen()
+        case .nutrients: NutrientListScreen()
+        case .environment: EnvironmentScreen()
+        case .medicalSources: MedicalSourcesScreen()
+        case .personalRecords: PersonalRecordsScreen()
+        case .achievements: AchievementsScreen()
+        case .workouts: WorkoutsScreen()
+        case .measurements: MeasurementsPickerScreen()
         }
     }
 
@@ -175,13 +193,13 @@ struct MoreScreen: View {
             // gear/profile shortcut on the trailing edge of the header.
             // The MoreHeader now reads `[Mehr title] [Spacer] [Gear]`,
             // chevron-free (still a plain `Button` flipping
-            // `showSettings`, no `NavigationLink`). The accessibility
+            // `openSettings`, no `NavigationLink`). The accessibility
             // identifier (`more.toolbar.gear`) stays stable — pinned by
             // `MoreScreenLayoutTests` and the XCUI assertion in
             // `WalkthroughDashboardTest.test_mehr_header_gear_is_right_of_title`.
             MoreHeader(
-                showSettings: $showSettings,
-                showShareWithDoctor: $showShareWithDoctor,
+                openSettings: { router.morePath.append(SettingsRoute.root) },
+                openShareWithDoctor: { router.morePath.append(MoreRoute.shareWithDoctor) },
                 showsShareWithDoctor: container?.moduleGate.isEnabled(.doctorReport) != false
             )
             .listRowInsets(EdgeInsets(top: HLSpace.md, leading: HLSpace.lg, bottom: HLSpace.md, trailing: HLSpace.lg))
@@ -218,9 +236,7 @@ struct MoreScreen: View {
                 clinicalSectionRows
             }
             Section(LocalizedStringKey(Layout.recordsSectionTitle)) {
-                NavigationLink {
-                    PersonalRecordsScreen()
-                } label: {
+                NavigationLink(value: MoreRoute.personalRecords) {
                     HLSettingsRow(
                         icon: Layout.personalRecordsRow.icon,
                         title: LocalizedStringKey(Layout.personalRecordsRow.title),
@@ -230,9 +246,7 @@ struct MoreScreen: View {
                 .accessibilityIdentifier(Layout.personalRecordsRow.accessibilityIdentifier)
                 // #30 — gated behind the `achievements` server module.
                 if container?.moduleGate.isEnabled(.achievements) != false {
-                    NavigationLink {
-                        AchievementsScreen()
-                    } label: {
+                    NavigationLink(value: MoreRoute.achievements) {
                         HLSettingsRow(
                             icon: Layout.achievementsRow.icon,
                             title: LocalizedStringKey(Layout.achievementsRow.title),
@@ -243,9 +257,7 @@ struct MoreScreen: View {
                 }
                 // #30 — gated behind the `workouts` server module.
                 if container?.moduleGate.isEnabled(.workouts) != false {
-                    NavigationLink {
-                        WorkoutsScreen()
-                    } label: {
+                    NavigationLink(value: MoreRoute.workouts) {
                         HLSettingsRow(
                             icon: Layout.workoutsRow.icon,
                             title: LocalizedStringKey(Layout.workoutsRow.title),
@@ -264,9 +276,7 @@ struct MoreScreen: View {
                 // devices it no longer had. Browsing one's own results is the
                 // same content navigation as records/workouts, so it lives
                 // here and the stale section was dropped.
-                NavigationLink {
-                    MeasurementsPickerScreen()
-                } label: {
+                NavigationLink(value: MoreRoute.measurements) {
                     HLSettingsRow(
                         icon: Layout.measurementsRow.icon,
                         title: LocalizedStringKey(Layout.measurementsRow.title),
@@ -354,9 +364,9 @@ struct MoreScreen: View {
 /// The 44pt tap target is preserved via `.frame(minWidth/minHeight:)`
 /// on the button label.
 ///
-/// **Push mechanism:** plain `Button` flipping the parent's
-/// `showSettings` binding, paired with a sibling
-/// `.navigationDestination(isPresented:)` at the NavigationStack root.
+/// **Push mechanism:** plain `Button` calling the parent's `openSettings`,
+/// which appends `SettingsRoute.root` to the More stack (until SET-ROUTE a
+/// binding with a sibling `.navigationDestination(isPresented:)`).
 /// Same affordance the Dashboard-avatar uses (see
 /// `DashboardProfileToolbar.swift`) — no NavigationLink, no chevron, no
 /// chevron-via-list-row-style inheritance.
@@ -364,11 +374,11 @@ struct MoreScreen: View {
 /// The accessibility identifier (`more.toolbar.gear`) stays stable so
 /// `MoreScreenLayoutTests` and the XCUI walkthrough still resolve it.
 private struct MoreHeader: View {
-    @Binding var showSettings: Bool
-    /// v0.14.8 (Task D) — flips the parent's `showShareWithDoctor` push, so the
-    /// header share glyph lands on `UnifiedSharingScreen` (the former list-row
-    /// destination). Threaded exactly like `showSettings`.
-    @Binding var showShareWithDoctor: Bool
+    /// Pushes Settings (`SettingsRoute.root`) onto the More stack.
+    let openSettings: () -> Void
+    /// v0.14.8 (Task D) — the header share glyph lands on
+    /// `UnifiedSharingScreen` (`MoreRoute.shareWithDoctor`).
+    let openShareWithDoctor: () -> Void
     /// #30 — when the `doctorReport` server module is OFF, the header share
     /// glyph (the sole entry to the doctor-handover / FHIR-export hub) is hidden.
     var showsShareWithDoctor: Bool = true
@@ -392,9 +402,7 @@ private struct MoreHeader: View {
             // treatment as the gear (glyph only, .hlTitle2, HLText.primary, 44pt
             // tap target) so the two header affordances feel identical in hand.
             if showsShareWithDoctor {
-                Button {
-                    showShareWithDoctor = true
-                } label: {
+                Button(action: openShareWithDoctor) {
                     Image(systemName: "square.and.arrow.up")
                         .font(.hlTitle2)
                         .foregroundStyle(HLText.primary)
@@ -406,9 +414,7 @@ private struct MoreHeader: View {
                 .accessibilityIdentifier(MoreScreen.Layout.shareToolbarAccessibilityIdentifier)
             }
 
-            Button {
-                showSettings = true
-            } label: {
+            Button(action: openSettings) {
                 // Y8 M-3: lift the gear glyph off the raw 22pt literal
                 // onto .hlTitle2 (22pt @L) so it scales with the
                 // .hlLargeTitle title beside it under accessibility

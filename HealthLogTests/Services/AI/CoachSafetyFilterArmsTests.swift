@@ -193,7 +193,8 @@ struct CoachSafetyFilterArmsTests {
         // either, so there is nowhere to hold the turn mid-window. Ordering in
         // the source is what can honestly be checked, so it is what is checked.
         let filterCall = try #require(source.range(of: "let replyText = await filteredReply(reply.text)"))
-        let settle = try #require(source.range(of: "if streamRender.didAppend {"))
+        // 1.5 COACH-R — the settle is one call now (append or replace).
+        let settle = try #require(source.range(of: "upsertStreamingAssistant(replyText, isFirstPartial: !streamRender.didAppend)"))
         let guardCall = try #require(
             source.range(of: "if Task.isCancelled { return }", range: filterCall.upperBound ..< settle.lowerBound)
         )

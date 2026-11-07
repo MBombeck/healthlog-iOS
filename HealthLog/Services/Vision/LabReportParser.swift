@@ -394,18 +394,21 @@ public enum LabReportParser {
         return tokens[index]
     }
 
-    /// Single-word qualitative results, diacritic- and case-folded.
+    /// Single-word qualitative results, diacritic- and case-folded. German,
+    /// English and Dutch, since a report comes in the language of the lab.
     private static let qualitativeTerms: Set<String> = [
-        "negativ", "negative", "positiv", "positive",
-        "grenzwertig", "borderline", "fraglich",
-        "nachweisbar", "reaktiv", "reactive", "detected",
-        "unauffallig", "auffallig", "normal",
-        "spuren", "trace", "none", "keine"
+        "negativ", "negative", "positiv", "positive", "negatief", "positief",
+        "grenzwertig", "borderline", "fraglich", "grenswaardig", "dubieus", "twijfelachtig",
+        "nachweisbar", "reaktiv", "reactive", "detected", "aantoonbaar", "reactief",
+        "unauffallig", "auffallig", "normal", "afwijkend", "normaal",
+        "spuren", "trace", "none", "keine", "sporen", "geen"
     ]
 
-    /// Modifiers that bind to a following term ("nicht nachweisbar").
+    /// Modifiers that bind to a following term ("nicht nachweisbar", "niet
+    /// aantoonbaar").
     private static let qualitativeModifiers: Set<String> = [
-        "nicht", "non", "not", "schwach", "weak", "leicht", "stark", "strongly"
+        "nicht", "non", "not", "schwach", "weak", "leicht", "stark", "strongly",
+        "niet", "zwak", "licht", "sterk"
     ]
 
     // MARK: - Line rejection
@@ -469,6 +472,12 @@ public enum LabReportParser {
         "einheit", "unit", "ergebnis", "result", "analyse", "parameter", "labor",
         "praxis", "datum", "date", "untersuchung", "methode", "method", "validiert",
         "unterschrift", "signature", "arzt", "doctor", "telefon", "phone", "fax",
-        "strasse", "street", "vorbefund", "kommentar", "comment", "bemerkung"
+        "strasse", "street", "vorbefund", "kommentar", "comment", "bemerkung",
+        // Dutch report chrome: the header row ("Bepaling Uitslag Eenheid
+        // Referentiewaarde"), the sampling and reception lines, the footer.
+        "laboratoriumuitslag", "laboratorium", "uitslag", "resultaat", "bepaling",
+        "eenheid", "referentiewaarde", "referentiewaarden", "referentiebereik",
+        "geboortedatum", "afname", "afnamedatum", "ontvangst", "aanvrager",
+        "pagina", "onderzoek", "opmerking", "handtekening", "huisarts", "straat"
     ]
 }

@@ -31,6 +31,7 @@ import SwiftUI
         @Namespace private var glassNS
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @Environment(\.openURL) private var openURL
+        @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
         /// Voice dictation (web-parity v1.18.7). Owned here so the mic lives with
         /// the field; transcribes into `$draft`, never auto-sends.
@@ -63,15 +64,17 @@ import SwiftUI
             // that the answers are generated, fallible and not medical advice
             // (App Review 1.2 / 5.1.1); the first-launch disclaimer alone is a
             // screen the reviewer may never reopen.
+            //
+            // A11Y (1.5) — at the accessibility sizes the line under the field
+            // was cut ("Antw…"), and at full height it took the room the plan
+            // proposal needs above the keyboard. There it stands whole as the
+            // first line of the transcript instead (`CoachTranscriptView`).
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                Text("coach.aiGeneratedNote")
-                    .font(.hlCaption2)
-                    .foregroundStyle(HLText.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, HLSpace.lg)
-                    .padding(.bottom, HLSpace.xs)
-                    .accessibilityIdentifier("coach.aiGeneratedNote")
+                if !dynamicTypeSize.isAccessibilitySize {
+                    CoachAIGeneratedNote()
+                        .padding(.horizontal, HLSpace.lg)
+                        .padding(.bottom, HLSpace.xs)
+                }
             }
             .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: canSend)
             .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: dictation.isRecording)
@@ -303,6 +306,22 @@ import SwiftUI
                     content
                 }
             }
+        }
+    }
+
+    /// The standing statement that the Coach's answers are generated,
+    /// fallible and not medical advice (build 273, App Review 1.2 / 5.1.1).
+    /// Under the composer at the ordinary sizes, the transcript's first line
+    /// at the accessibility sizes (A11Y, 1.5).
+    struct CoachAIGeneratedNote: View {
+        var body: some View {
+            Text("coach.aiGeneratedNote")
+                .font(.hlCaption2)
+                .foregroundStyle(HLText.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("coach.aiGeneratedNote")
         }
     }
 #endif

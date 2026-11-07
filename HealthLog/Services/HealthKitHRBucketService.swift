@@ -100,6 +100,19 @@ public struct HealthKitHRBucketRow: Sendable, Equatable {
 
 #if canImport(HealthKit)
 
+    /// The two calls a bounded HealthKit query needs, behind a seam so a test
+    /// can play a health store that never answers (SYNC-HR, #159).
+    public protocol HealthKitQueryExecuting: Sendable {
+        func execute(_ query: HKQuery)
+        func stop(_ query: HKQuery)
+    }
+
+    extension HKHealthStore: HealthKitQueryExecuting {}
+
+    /// The statistics query did not answer within its time limit. It was
+    /// stopped; the next sweep asks again.
+    public struct HealthKitQueryTimedOut: Error, Sendable, Equatable {}
+
     /// `HKStatisticsCollectionQuery` wrapper that produces 10-minute heart-rate
     /// aggregate buckets — `.discreteAverage | .discreteMin | .discreteMax` over
     /// 10-minute UTC-aligned intervals.
@@ -109,15 +122,38 @@ public struct HealthKitHRBucketRow: Sendable, Equatable {
     /// `enumerateStatistics` closure never touches actor state). The interval
     /// anchor is a UTC 10-minute boundary so each bucket aligns with the
     /// contract's UTC bucket key.
+    ///
+    /// **SYNC-HR (1.5, #159 / HealthLog#1326):** until 1.4.1 the query was
+    /// awaited without a limit and without a way to stop it. A callback that
+    /// never came (the suspect: iOS suspending the app mid-query in the
+    /// background) held the sweep, and with it every later sweep, until the
+    /// app was restarted. The query now answers exactly once: with its result,
+    /// with ``HealthKitQueryTimedOut`` after ``defaultQueryTimeout``, or with
+    /// `CancellationError` when the awaiting task is cancelled. The last two
+    /// also `stop` the query, so HealthKit stops working on it.
     public actor HealthKitHRBucketService {
-        private let store: HKHealthStore
+        /// Long enough for 90 days of 10-minute statistics on an old phone,
+        /// short enough to sit well inside the sweep's own deadline.
+        public static let defaultQueryTimeout: Duration = .seconds(60)
+
+        private let store: any HealthKitQueryExecuting
         private let clock: @Sendable () -> Date
+        private let queryTimeout: Duration
 
         public init(
             store: HKHealthStore = HKHealthStore(),
             clock: @escaping @Sendable () -> Date = { Date() }
         ) {
-            self.store = store
+            self.init(executor: store, queryTimeout: Self.defaultQueryTimeout, clock: clock)
+        }
+
+        init(
+            executor: any HealthKitQueryExecuting,
+            queryTimeout: Duration,
+            clock: @escaping @Sendable () -> Date = { Date() }
+        ) {
+            store = executor
+            self.queryTimeout = queryTimeout
             self.clock = clock
         }
 
@@ -178,27 +214,99 @@ public struct HealthKitHRBucketRow: Sendable, Equatable {
             predicate: NSPredicate,
             anchor: Date
         ) async throws -> HKStatisticsCollection {
-            try await withCheckedThrowingContinuation { continuation in
-                let query = HKStatisticsCollectionQuery(
-                    quantityType: quantityType,
-                    quantitySamplePredicate: predicate,
-                    options: [.discreteAverage, .discreteMin, .discreteMax],
-                    anchorDate: anchor,
-                    intervalComponents: DateComponents(minute: 10)
-                )
-                query.initialResultsHandler = { _, collection, error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                        return
-                    }
-                    guard let collection else {
-                        continuation.resume(throwing: HealthKitStatisticsError.noCollection)
-                        return
-                    }
-                    continuation.resume(returning: collection)
+            let query = HKStatisticsCollectionQuery(
+                quantityType: quantityType,
+                quantitySamplePredicate: predicate,
+                options: [.discreteAverage, .discreteMin, .discreteMax],
+                anchorDate: anchor,
+                intervalComponents: DateComponents(minute: 10)
+            )
+            let answer = BoundedHealthKitAnswer<HKStatisticsCollection>(query: query, executor: store)
+            query.initialResultsHandler = { _, collection, error in
+                if let error {
+                    answer.finish(.failure(error))
+                } else if let collection {
+                    answer.finish(.success(collection))
+                } else {
+                    answer.finish(.failure(HealthKitStatisticsError.noCollection))
                 }
-                store.execute(query)
             }
+            return try await answer.value(timeout: queryTimeout)
+        }
+    }
+
+    /// One HealthKit query's answer, delivered exactly once (SYNC-HR).
+    ///
+    /// The first of four events wins: the query's callback, the time limit,
+    /// the awaiting task's cancellation, or a cancellation that arrived before
+    /// the query was even started. The last three stop the query when it was
+    /// started; a callback that arrives afterwards is ignored.
+    final class BoundedHealthKitAnswer<Value: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private let query: HKQuery
+        private let executor: any HealthKitQueryExecuting
+        private var continuation: CheckedContinuation<Value, any Error>?
+        private var outcome: Result<Value, any Error>?
+        private var executed = false
+        private var timer: Task<Void, Never>?
+
+        init(query: HKQuery, executor: any HealthKitQueryExecuting) {
+            self.query = query
+            self.executor = executor
+        }
+
+        func value(timeout: Duration) async throws -> Value {
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    lock.lock()
+                    if let outcome {
+                        lock.unlock()
+                        continuation.resume(with: outcome)
+                        return
+                    }
+                    self.continuation = continuation
+                    executed = true
+                    // `execute` returns at once; the callback is asynchronous.
+                    // Under the lock, so a cancellation cannot slip between
+                    // registering and starting.
+                    executor.execute(query)
+                    timer = Task { [weak self] in
+                        try? await Task.sleep(for: timeout)
+                        guard !Task.isCancelled else { return }
+                        self?.abandon(HealthKitQueryTimedOut())
+                    }
+                    lock.unlock()
+                }
+            } onCancel: {
+                abandon(CancellationError())
+            }
+        }
+
+        /// The query's own callback.
+        func finish(_ result: Result<Value, any Error>) {
+            resolve(result, stopQuery: false)
+        }
+
+        private func abandon(_ error: any Error) {
+            resolve(.failure(error), stopQuery: true)
+        }
+
+        private func resolve(_ result: Result<Value, any Error>, stopQuery: Bool) {
+            lock.lock()
+            guard outcome == nil else {
+                lock.unlock()
+                return
+            }
+            outcome = result
+            let waiting = continuation
+            continuation = nil
+            let pendingTimer = timer
+            timer = nil
+            let shouldStop = stopQuery && executed
+            lock.unlock()
+            pendingTimer?.cancel()
+            if shouldStop { executor.stop(query) }
+            waiting?.resume(with: result)
         }
     }
 

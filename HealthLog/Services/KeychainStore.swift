@@ -118,6 +118,10 @@ public enum KeychainKey {
     /// distinguish restored Keychain state from a fresh trust decision without
     /// retaining the host itself as readable product or configuration data.
     public static let serverURLExplicitHostFingerprint = "auth.serverURL.explicitHostFingerprint"
+    /// GH-iOS #27 — JSON list of extra headers for a server behind a
+    /// zero-trust proxy (`ServerAccessHeaders`). Per install like `serverURL`,
+    /// because onboarding's first probe already needs them.
+    public static let serverAccessHeaders = "auth.serverAccessHeaders"
     public static let userID = "auth.userID"
     /// Build 273 (sync audit A2) — the user-id the last credential wipe signed
     /// out. Written by `AuthService.invalidateAndWipeSessionCredentials()`

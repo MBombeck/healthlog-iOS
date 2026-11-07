@@ -80,6 +80,35 @@ public actor MiniCoachAskClassifier {
                 reason: .adviceRequest,
                 label: "advice_en"
             ),
+            // Dutch advice + dose asks ("moet ik", "mag ik mijn dosis …",
+            // "wat raad je aan"). "zal ik" sits here, not under prediction:
+            // "Zal ik meer drinken?" asks what to do.
+            DenyPattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\b(wat\s+moet\s+ik|moet\s+ik|zal\s+ik|zou\s+ik\s+(moeten|beter)|wat\s+zou\s+(jij|je|u)|"#
+                        + #"wat\s+raad\s+(je|jij|u)|raad\s+(je|jij|u)\s+(me|mij|aan)|adviseer\s+(je|jij|u)|advies|aanbevel\w*|"#
+                        + #"mag\s+ik\s+[^.!?]{0,30}(dosis|dosering|medicatie|medicijn\w*|tablet\w*|pil\w*|innemen|nemen|stoppen|overslaan)|"#
+                        + #"kan\s+ik\s+[^.!?]{0,30}(verhogen|verlagen|stoppen|overslaan|minderen|innemen)|"#
+                        + #"hoe\s+kan\s+ik\s+(beter|gezonder|mijn\s+\w+\s+(verlagen|verhogen|verbeteren)))"#,
+                    options: .caseInsensitive
+                ),
+                reason: .adviceRequest,
+                label: "advice_nl"
+            ),
+            // Dutch diagnosis asks. German needs no twin: "Bluthochdruck" is
+            // one word the metric fallback never matches, but Dutch "hoge
+            // bloeddruk" contains "bloeddruk", so "Heb ik hoge bloeddruk?"
+            // would otherwise be waved through as a data lookup.
+            DenyPattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\b(heb\s+ik\s+(\w+\s+)?(hoge\s+bloeddruk|hypertensie|diabetes|suikerziekte|(slaap)?apneu|"#
+                        + #"boezemfibrilleren|hartritmestoornis\w*|een\s+(ziekte|aandoening|tekort))|ben\s+ik\s+ziek|"#
+                        + #"lijd\s+ik\s+aan|diagnose|(wijst|duidt)\s+(dit|dat|het|mijn\s+\w+)\s+op)"#,
+                    options: .caseInsensitive
+                ),
+                reason: .outOfScope,
+                label: "diagnosis_nl"
+            ),
             // Prediction requests.
             DenyPattern(
                 regex: try! NSRegularExpression(
@@ -92,11 +121,21 @@ public actor MiniCoachAskClassifier {
             ),
             DenyPattern(
                 regex: try! NSRegularExpression(
-                    pattern: #"\b(will\s+my\s+\w+\s+(rise|fall|go\s+up|go\s+down)|forecast|predict\s+my|what\s+will\s+(happen|my))\b"#,
+                    pattern: #"\b(will\s+my\s+[^.!?]{1,40}?\b(rise|fall|go\s+up|go\s+down|increase|decrease|drop)|forecast|predict\s+my|"#
+                        + #"what\s+will\s+(happen|my))\b"#,
                     options: .caseInsensitive
                 ),
                 reason: .predictionRequest,
                 label: "prediction_en"
+            ),
+            DenyPattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\b((zal|zullen|gaat|gaan)\s+[^.!?]{1,40}\b(stijgen|dalen|toenemen|afnemen|oplopen|zakken)|"#
+                        + #"word\s+ik\s+\w+|hoe\s+(zal|gaat)\s+mijn|voorspel\w*|prognose|verwachting)\b"#,
+                    options: .caseInsensitive
+                ),
+                reason: .predictionRequest,
+                label: "prediction_nl"
             ),
             // Prompt-injection markers — bracketed instructions, role
             // overrides, "ignore previous". Same shape as the
@@ -117,6 +156,16 @@ public actor MiniCoachAskClassifier {
                 ),
                 reason: .promptInjection,
                 label: "injection_de"
+            ),
+            DenyPattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"(negeer\s+(alle|de|je|jouw|vorige|eerdere)\s+((vorige|eerdere)\s+)?(instructies|regels|opdrachten|prompt)|"#
+                        + #"vergeet\s+(je|jouw|alle|de)\s+((vorige|eerdere)\s+)?(regels|instructies|opdrachten)|"#
+                        + #"doe\s+alsof\s+(je|jij)|gedraag\s+je\s+als)"#,
+                    options: .caseInsensitive
+                ),
+                reason: .promptInjection,
+                label: "injection_nl"
             )
         ]
     // swiftlint:enable force_try
@@ -135,6 +184,17 @@ public actor MiniCoachAskClassifier {
                 category: .comparison,
                 label: "compare"
             ),
+            // Each Dutch twin sits directly after its German/English row, so
+            // the first-match ordering (comparison > historic > period >
+            // lookup) holds for Dutch asks too.
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\b(vergelijk(en|t)?|vergeleken\s+met|ten\s+opzichte\s+van|t\.o\.v)\b"#,
+                    options: .caseInsensitive
+                ),
+                category: .comparison,
+                label: "compare_nl"
+            ),
             // Historic — explicit past date phrasing.
             Pattern(
                 regex: try! NSRegularExpression(
@@ -148,6 +208,16 @@ public actor MiniCoachAskClassifier {
                 category: .historicLookup,
                 label: "historic"
             ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\b(op\s+\d{1,2}\s*(januari|februari|maart|april|mei|juni|juli|augustus|"#
+                        + #"september|oktober|november|december)|(vorige|afgelopen)\s+(maand|kwartaal)|"#
+                        + #"(vorig|afgelopen)\s+jaar)\b"#,
+                    options: .caseInsensitive
+                ),
+                category: .historicLookup,
+                label: "historic_nl"
+            ),
             // Period summary — "wie war meine woche", "how was my week".
             Pattern(
                 regex: try! NSRegularExpression(
@@ -158,6 +228,15 @@ public actor MiniCoachAskClassifier {
                 ),
                 category: .periodSummary,
                 label: "period"
+            ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\b(hoe\s+was(\s+mijn)?|hoe\s+zag(\s+mijn)?|hoe\s+ging(\s+mijn)?|laat\s+(me|mij)|"#
+                        + #"toon(\s+me|\s+mij)?|samenvatting\s+van|overzicht\s+van)\s+\w*\s*(week|maand|dag|periode)"#,
+                    options: .caseInsensitive
+                ),
+                category: .periodSummary,
+                label: "period_nl"
             ),
             // Data lookup — "letzter Wert", "current", "highest",
             // direct metric names, "was ist mein". Permissive
@@ -172,6 +251,15 @@ public actor MiniCoachAskClassifier {
                 category: .dataLookup,
                 label: "lookup_phrasing"
             ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\b(wat\s+is\s+mijn|wat\s+was\s+mijn|mijn\s+(laatste|hoogste|laagste)|huidige?|actuele?|"#
+                        + #"laatste\s+(gewicht|hartslag|pols|meting|waarde)|hoogste|laagste)\b"#,
+                    options: .caseInsensitive
+                ),
+                category: .dataLookup,
+                label: "lookup_phrasing_nl"
+            ),
             // Metric-name fallback. If the user just mentions a metric
             // ("blutdruck?", "weight?"), treat as data-lookup.
             Pattern(
@@ -181,6 +269,14 @@ public actor MiniCoachAskClassifier {
                 ),
                 category: .dataLookup,
                 label: "metric_name"
+            ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\b(bloeddruk|hartslag|pols|gewicht|slaap|stappen|bloedsuiker|temperatuur|zuurstof|saturatie)\b"#,
+                    options: .caseInsensitive
+                ),
+                category: .dataLookup,
+                label: "metric_name_nl"
             )
         ]
     // swiftlint:enable force_try
@@ -231,5 +327,25 @@ public actor MiniCoachAskClassifier {
     /// Test-introspection: number of allow patterns.
     public static var allowPatternCount: Int {
         allowPatterns.count
+    }
+
+    /// The deny rows each interface language owns, by label: its advice,
+    /// prediction and injection asks (and Dutch diagnosis asks, see
+    /// `diagnosis_nl`). Exhaustive on purpose, like
+    /// ``MDRSafetyFilter/rows(for:)``: a new ``AppLanguage`` case does not
+    /// compile until it names its rows.
+    static func denyLabels(for language: AppLanguage) -> Set<String> {
+        switch language {
+        case .de: ["advice_de", "prediction_de", "injection_de"]
+        case .en: ["advice_en", "prediction_en", "injection_en"]
+        case .nl: ["advice_nl", "diagnosis_nl", "prediction_nl", "injection_nl"]
+        }
+    }
+
+    /// `true` when every deny row the language names exists. Read by
+    /// ``OnDeviceLanguageGate``.
+    static func covers(_ language: AppLanguage) -> Bool {
+        let labels = denyLabels(for: language)
+        return !labels.isEmpty && labels.isSubset(of: Set(denyPatterns.map(\.label)))
     }
 }

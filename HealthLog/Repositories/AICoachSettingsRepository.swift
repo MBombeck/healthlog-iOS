@@ -9,7 +9,7 @@ import Foundation
 /// - `insightsPrivacyMode` — `GET / PUT  /api/insights/settings`
 ///   (read + write field name on the wire is `privacyMode`).
 public actor AICoachSettingsRepository {
-    private let api: APIClientProtocol
+    let api: APIClientProtocol
 
     /// **CU-20 (#69)** — last `updatedAt` seen from `/api/auth/me/coach-prefs`.
     /// `nil` when the user has never saved (the GET omits the key entirely —

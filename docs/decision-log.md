@@ -51,6 +51,12 @@ Architecture Decision Records. Format: ADR-NNN.
   - `APIClient` liest `cf-access-client-id` und `cf-access-client-token` aus `Bundle.main.infoDictionary["CFAccess"]`.
   - Standard-Werte leer; nur bei Aktivierung werden Header gesetzt.
   - xcconfig-Variante: `CF_ACCESS_CLIENT_ID` und `CF_ACCESS_CLIENT_TOKEN`, default `""`.
+- **Nachtrag 2026-10-24 (1.4.1, GH-iOS #27):** Abgeloest durch frei einstellbare
+  Zugangs-Header im Keychain (`ServerAccessHeaders`), weil die verteilte App sonst
+  keinen Weg durch einen Proxy hat. Presets fuer Cloudflare Access und Pangolin,
+  beliebige weitere Namen. Der Secret-Header hiess faelschlich
+  `cf-access-client-token`; korrekt ist `CF-Access-Client-Secret`. Das
+  `Info.plist`-Paar bleibt als Build-Option.
 
 ---
 

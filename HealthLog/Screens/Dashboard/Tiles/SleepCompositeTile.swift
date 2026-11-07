@@ -40,17 +40,21 @@ public struct SleepCompositeTile: View {
     /// today. `nil` under reduce-motion or on surfaces without a host
     /// namespace.
     private let matchedNamespace: Namespace.ID?
+    /// 1.5 VERDICTS — the server's verdicts the trend arrow is coloured from.
+    private let trendVerdicts: TileTrendVerdicts
 
     @ScaledMetric(relativeTo: .title2) private var primaryValueSize: CGFloat = 28
 
     public init(
         metric: DashboardMetric,
         stages: StagesBreakdown? = nil,
-        matchedNamespace: Namespace.ID? = nil
+        matchedNamespace: Namespace.ID? = nil,
+        trendVerdicts: TileTrendVerdicts = .none
     ) {
         self.metric = metric
         self.stages = stages
         self.matchedNamespace = matchedNamespace
+        self.trendVerdicts = trendVerdicts
     }
 
     public var body: some View {
@@ -95,12 +99,8 @@ public struct SleepCompositeTile: View {
                     .font(.hlCaption2.weight(.medium))
                     .foregroundStyle(HLText.tertiary)
             }
-            TrendChip(
-                trend: metric.dashboardTrend,
-                polarity: descriptor.trendPolarity,
-                // #135 — the server's verdict when it sends one, else as before.
-                mode: metric.dashboardTrendMode(weightSentiment: nil)
-            )
+            // 1.5 VERDICTS — the server's verdict colours the arrow, nothing else.
+            TrendChip(trend: metric.dashboardTrend, mode: trendVerdicts.mode(for: metric))
         }
     }
 
@@ -183,7 +183,7 @@ public struct SleepCompositeTile: View {
         case .flat: String(localized: "Trend stable")
         case .unknown: nil
         }
-        let trend = direction.map { $0 + metric.spokenVerdictSuffix }
+        let trend = direction.map { $0 + metric.spokenVerdictSuffix(trendVerdicts) }
         if let stages, stages.total > 0 {
             let primary = metric.formattedPrimary()
             let stageDescription = String(

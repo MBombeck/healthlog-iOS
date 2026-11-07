@@ -47,18 +47,16 @@ import Testing
                 await probe.run(mode: $0)
             }
             await probe.waitForRunCount(1)
-            // 22-02 (D-14-02-A, coordinator half) — the second caller must be
-            // INSIDE `coordinator.run` before the first pass is released.
-            // Without this barrier the release could complete the first pass
-            // before the joiner ever reached the join decision, the joiner would
-            // then legitimately start a SECOND pass, and the probe would overrun
-            // — which used to kill the host rather than say so.
-            async let joined = { () async -> Bool in
-                await arrival.arrive()
-                return await coordinator.run(partition: "user-A", mode: .incrementalOnly) {
-                    await probe.run(mode: $0)
-                }
-            }()
+            // 22-02 (D-14-02-A, coordinator half) — the second caller must
+            // have made its join decision before the first pass is released.
+            // Otherwise the release could complete the first pass before the
+            // joiner reached the decision, the joiner would then legitimately
+            // start a SECOND pass, and the probe would overrun. REG (1.5): the
+            // arrival is signalled on the coordinator itself, so it marks the
+            // decision and not a hop that load can stretch.
+            async let joined = coordinator.run(signalling: arrival, partition: "user-A", mode: .incrementalOnly) {
+                await probe.run(mode: $0)
+            }
             await arrival.waitForArrival()
             await probe.release()
 
@@ -79,20 +77,14 @@ import Testing
             }
             await probe.waitForRunCount(1)
             // 22-02 — same barrier as above: both upgrade callers must have
-            // entered `coordinator.run` before the short pass is released, or
+            // made their join decision before the short pass is released, or
             // one of them races the completion and starts a third pass.
-            async let processingOne = { () async -> Bool in
-                await arrival.arrive()
-                return await coordinator.run(partition: "user-A", mode: .processing) {
-                    await probe.run(mode: $0)
-                }
-            }()
-            async let processingTwo = { () async -> Bool in
-                await arrival.arrive()
-                return await coordinator.run(partition: "user-A", mode: .processing) {
-                    await probe.run(mode: $0)
-                }
-            }()
+            async let processingOne = coordinator.run(signalling: arrival, partition: "user-A", mode: .processing) {
+                await probe.run(mode: $0)
+            }
+            async let processingTwo = coordinator.run(signalling: arrival, partition: "user-A", mode: .processing) {
+                await probe.run(mode: $0)
+            }
             await arrival.waitForArrival()
             await probe.release()
 

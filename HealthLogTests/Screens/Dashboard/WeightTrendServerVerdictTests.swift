@@ -90,11 +90,8 @@ struct WeightTrendServerVerdictTests {
         _ sentiment: TrendDirectionSentiment?
     ) -> TrendChip.ColorRole {
         let metric = weightMetric(trend: trend)
-        return TrendChip(
-            trend: metric.dashboardTrend,
-            polarity: metric.kind.descriptor.trendPolarity,
-            mode: metric.dashboardTrendMode(weightSentiment: sentiment)
-        ).colorRole
+        let verdicts = TileTrendVerdicts(targets: [:], directions: [:], weightTrend: sentiment)
+        return TrendChip(trend: metric.dashboardTrend, mode: verdicts.mode(for: metric)).colorRole
     }
 
     @Test("a gain below the target is progress, a gain above it is not")

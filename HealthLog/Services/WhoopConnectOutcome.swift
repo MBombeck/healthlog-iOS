@@ -79,9 +79,34 @@ public enum WhoopConnectOutcome: Equatable, Sendable {
                 String(localized: "The WHOOP sign-in expired. Please connect again.")
             case "not_configured", "credentials":
                 String(localized: "Save your WHOOP credentials before connecting.")
+            case OAuthConnectReason.alreadyLinked, OAuthConnectReason.ownerConflict:
+                OAuthConnectReason.alreadyLinkedMessage(provider: "WHOOP")
             default:
                 String(localized: "WHOOP connection failed. Please try again.")
             }
         }
+    }
+}
+
+/// KONTO (#149, server 1.44.0) — callback reasons every server-OAuth
+/// provider shares, with one sentence each.
+///
+/// `already_linked`: the provider account is already connected to another
+/// HealthLog profile (a guardian connecting for a managed profile while signed
+/// in to the provider as themselves). Server 1.44.0 renamed WHOOP's
+/// `owner_conflict` to it, so both spellings get the same sentence: an older
+/// server still sends the old one.
+public enum OAuthConnectReason {
+    public static let alreadyLinked = "already_linked"
+    public static let ownerConflict = "owner_conflict"
+
+    /// The sentence for `already_linked` / `owner_conflict`, naming the
+    /// provider, or `nil` for any other reason (the caller keeps its own).
+    public static func message(for reason: String, provider: String) -> String? {
+        reason == alreadyLinked || reason == ownerConflict ? alreadyLinkedMessage(provider: provider) : nil
+    }
+
+    static func alreadyLinkedMessage(provider: String) -> String {
+        String(localized: "integration.oauth.alreadyLinked \(provider)")
     }
 }

@@ -117,7 +117,7 @@ public extension MedicalSourceCatalog {
         case .who5Score: [.topp2015Who5]
         case .sciScore: [.espie2014Sci]
         case .recoveryScore, .stressScore, .strainScore, .resilience, .ansCharge, .cardioLoad, .dayStrain, .workoutStrain,
-             .cardioRecovery: [.escNaspe1996Hrv]
+             .cardioRecovery, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad: [.escNaspe1996Hrv]
         case .gripStrength: [.leong2015Grip]
         case .sixMinuteWalk: [.ats2002SixMinuteWalk]
         case .audioExposureEnvironment, .audioExposureHeadphone: [.who2018Noise]
@@ -126,6 +126,8 @@ public extension MedicalSourceCatalog {
         case .breathingDisturbances: [.appleSleepApnea]
         case .boneMass: [.icrp89ReferenceMan]
         case .timeInDaylight: [.who2020PhysicalActivity]
+        // HK-NEW (1.5) — the activity rings are physical-activity minutes.
+        case .exerciseMinutes, .standMinutes, .standHours: [.who2020PhysicalActivity]
         case .mood: [.topp2015Who5]
         // Deliberately empty, not an oversight: `.painNRS` is a self-report on a
         // 0–10 rail the methodology text already explains, `.unknown` is the

@@ -14,9 +14,13 @@ import SwiftUI
 
 // MARK: - Delta pill
 
-/// Hero delta pill — used for both the prior-window delta (`HeroStrip`) and
-/// the v0.7.0 W-API-RENDER year-over-year row below. Neutral unless the
-/// delta is meaningful, then green (improvement) / amber (regression).
+/// Hero delta pill — used for both the window's change (`HeroStrip`) and the
+/// year-over-year row below.
+///
+/// **1.5 VERDICTS (#135 rest):** the colour is the server's verdict on this
+/// change (`series.change.sentiment`) and nothing else: positive green,
+/// negative red, everything else neutral. The chip used to paint every rise
+/// amber and every fall green, so rising steps read as a setback.
 ///
 /// Named `HeroDeltaChip` (not `DeltaChip`) to avoid colliding with the
 /// `DeltaChip` the HealthScore tile declares — both are module-visible once
@@ -24,16 +28,15 @@ import SwiftUI
 struct HeroDeltaChip: View {
     let delta: Double
     let unit: String
+    /// The server's verdict; `nil` → neutral.
+    var sentiment: TrendSentiment?
+    /// What the change compares, for VoiceOver; `nil` on the year row (its
+    /// row speaks for it).
+    var basis: RangeChange.Basis?
 
     var body: some View {
         let symbol = delta > 0 ? "arrow.up" : delta < 0 ? "arrow.down" : "minus"
-        let color: Color = if abs(delta) < 0.05 {
-            HLText.secondary
-        } else if delta > 0 {
-            HLColor.statusWarn
-        } else {
-            HLColor.statusOK
-        }
+        let color = Self.color(for: sentiment)
 
         HStack(spacing: HLSpace.xs) {
             Image(systemName: symbol)
@@ -47,7 +50,30 @@ struct HeroDeltaChip: View {
         .padding(.vertical, HLSpace.xs)
         .background(color.opacity(0.18))
         .clipShape(Capsule())
-        .accessibilityLabel(Text("Delta to the previous period: \(delta.formatted(.number.precision(.fractionLength(0 ... 1)))) \(unit)"))
+        .accessibilityLabel(Text(accessibilityLabel))
+    }
+
+    /// The colour role a verdict paints (``TrendChip/Mode``'s table).
+    nonisolated static func colorRole(for sentiment: TrendSentiment?) -> TrendChip.ColorRole {
+        sentiment.map { TrendChip.Mode.colorRole(for: $0) } ?? .textSecondary
+    }
+
+    private static func color(for sentiment: TrendSentiment?) -> Color {
+        switch colorRole(for: sentiment) {
+        case .statusOK: HLColor.statusOK
+        case .statusBad: HLColor.statusBad
+        case .textSecondary, .none: HLText.secondary
+        }
+    }
+
+    private var accessibilityLabel: String {
+        let number = delta.formatted(.number.precision(.fractionLength(0 ... 1)))
+        let base = switch basis {
+        case .firstToLastDay: String(localized: "chart.hero.change.firstToLastDay.a11y \(number) \(unit)")
+        case .priorHalf, .none: String(localized: "Delta to the previous period: \(number) \(unit)")
+        }
+        guard let clause = sentiment?.spokenClause else { return base }
+        return "\(base), \(clause)"
     }
 }
 
@@ -93,8 +119,9 @@ private struct TrendSlopeChip: View {
         .accessibilityLabel(Text(accessibilityLabel))
     }
 
-    /// Direction glyph — `nil` server direction collapses to the flat
-    /// "stable" minus so a missing field never blanks the chip.
+    /// Direction glyph. A slope without a direction never reaches a chip
+    /// (#151, `ChartDetailStore.trendSlopes(from:)`): a `null` direction is
+    /// "no trend", never "stable".
     private var glyph: String {
         switch slope.direction {
         case .up: "arrow.up.right"

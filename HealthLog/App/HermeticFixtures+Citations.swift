@@ -27,9 +27,9 @@
     /// and the outcome channel's resolved label. The real route localizes them
     /// per request; a fixed English string would put an English sentence in the
     /// middle of the German evidence and look exactly like the translation bug
-    /// the screenshots are meant to rule out. ``isGerman`` reads the forced
-    /// display language, so the German run gets German prose — which is what
-    /// the server does.
+    /// the screenshots are meant to rule out. The prose follows the forced
+    /// display language (de, en, nl), so each run gets its own language,
+    /// which is what the server does.
     enum CitationFixtures {
         /// Opt-in. `MedicalSourcesReviewPathUITests` is the only caller.
         static let argument = "-uitest-citations"
@@ -38,17 +38,13 @@
             ProcessInfo.processInfo.arguments.contains(argument)
         }
 
-        /// The app's presented language.
-        ///
-        /// `Bundle.main.preferredLocalizations`, NOT `Locale.preferredLanguages`:
-        /// the first run read the latter and served German prose to the ENGLISH
-        /// capture, because the argument-domain `-AppleLanguages (en)` did not
-        /// win there against the simulator's own language. The bundle's resolved
-        /// localization is the same thing `Text()` renders from, so the fixture
-        /// prose and the app chrome can no longer disagree.
-        private static var isGerman: Bool {
-            Bundle.main.preferredLocalizations.first?.hasPrefix("de") ?? false
-        }
+        // The prose reads `AppLanguage.current` (the bundle's resolved
+        // localization), NOT `Locale.preferredLanguages`: the first run read
+        // the latter and served German prose to the ENGLISH capture, because
+        // the argument-domain `-AppleLanguages (en)` did not win there against
+        // the simulator's own language. The bundle's resolved localization is
+        // the same thing `Text()` renders from, so the fixture prose and the
+        // app chrome can no longer disagree.
 
         /// `nil` for every route this overlay has nothing to say about — and for
         /// EVERY route when the flag is absent — so the shared fixture table
@@ -121,8 +117,9 @@
         /// is NOT curated, so its label has to come from here, exactly as it
         /// would from the server.
         static var correlationsJSON: String {
-            let diaLabel = isGerman ? "diastolischer Blutdruck" : "diastolic blood pressure"
-            let rhrLabel = isGerman ? "Ruhepuls" : "resting heart rate"
+            let language = AppLanguage.current
+            let diaLabel = language.pick(de: "diastolischer Blutdruck", en: "diastolic blood pressure", nl: "diastolische bloeddruk")
+            let rhrLabel = language.pick(de: "Ruhepuls", en: "resting heart rate", nl: "rusthartslag")
             let firstDE = "Eine längere Schlafdauer geht in deinen Daten allenfalls mit einem leicht "
                 + "höheren diastolischen Blutdruck am Folgetag einher — zu klein, um sich darauf zu "
                 + "stützen, und nie eine Ursache."
@@ -132,8 +129,12 @@
                 + "am Folgetag einher. Das beschreibt einen Zusammenhang, keine Wirkung."
             let secondEN = "More steps go with a somewhat lower resting heart rate the next day in "
                 + "your data. That describes an association, not an effect."
-            let first = isGerman ? firstDE : firstEN
-            let second = isGerman ? secondDE : secondEN
+            let firstNL = "Een langere slaapduur gaat in je gegevens hooguit samen met een iets "
+                + "hogere diastolische bloeddruk de volgende dag, te klein om op te bouwen en nooit een oorzaak."
+            let secondNL = "Meer stappen gaan in je gegevens samen met een iets lagere rusthartslag "
+                + "de volgende dag. Dat beschrijft een samenhang, geen effect."
+            let first = language.pick(de: firstDE, en: firstEN, nl: firstNL)
+            let second = language.pick(de: secondDE, en: secondEN, nl: secondNL)
             return """
             {
               "discovered": [

@@ -11,6 +11,8 @@ import XCTest
 /// soft like the rest of the sweep: a missing row is a line in `_notes.txt`.
 /// Only runs when `HL_SWEEP_OUT` is set.
 extension QASweepScreenshotsTest {
+    /// The first half of the Settings walk (hub to integrations). Split from
+    /// the second half so neither runs into the 900 s test allowance.
     func test_17a_settingsArea() {
         guard !isXXL else { return }
         boot()
@@ -20,10 +22,10 @@ extension QASweepScreenshotsTest {
         walkToEnd("14-hub")
         visit("settings.hub.account", "14-account") {
             self.visit("settings.account.profileRow", "14-account-profile")
-            self.visit("settings.account.sessionsRow", "14-account-sessions")
             self.visit("settings.account.securityRow", "14-account-security") {
                 self.visit("settings.security.passkeysRow", "14-account-passkeys")
                 self.visit("settings.security.twoFactorManageRow", "14-account-2fa")
+                self.visit("settings.security.sessionsRow", "14-account-sessions")
             }
         }
         visit("settings.hub.dashboard", "14-appearance") {
@@ -41,6 +43,15 @@ extension QASweepScreenshotsTest {
             self.visit("settings.integrations.withingsRow", "14-withings")
             self.visit("settings.integrations.whoopRow", "14-whoop")
         }
+    }
+
+    /// The second half of the Settings walk (devices to about).
+    func test_17a2_settingsAreaRest() {
+        guard !isXXL else { return }
+        boot()
+        tab("ellipsis")
+        guard tap(app.buttons["more.toolbar.gear"], "settings gear") else { return }
+        settle(2)
         for (row, name) in [
             ("devices", "14-devices"), ("siri", "14-siri"), ("mcp", "14-mcp"), ("apiTokens", "14-apitokens")
         ] {

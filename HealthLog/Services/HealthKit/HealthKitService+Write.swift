@@ -260,34 +260,42 @@ import Foundation
         /// was not known and the pass wrote nothing for that reason.
         @discardableResult
         func mirrorServerMeasurements(_ measurements: [Measurement]) async -> Bool {
+            await mirrorServerMeasurements(measurements, rowLimit: .max, isExpired: { false }).decided
+        }
+
+        /// **MIRROR (1.5, public #28)** — the same mirror, bounded: at most
+        /// `rowLimit` readings, and `isExpired` is asked before every reading and
+        /// once more before the save. A window that closes before the save writes
+        /// nothing, so a background wake never leaves half a batch; the next
+        /// window plans again and the probes skip what is already there. The
+        /// foreground page and the history pass call it unbounded.
+        internal func mirrorServerMeasurements(
+            _ measurements: [Measurement],
+            rowLimit: Int,
+            isExpired: @escaping @Sendable () -> Bool
+        ) async -> ServerMirrorWriteOutcome {
             let plan = await HealthKitServerMirrorPlanner.plan(
                 measurements,
                 excluding: serverMirrorExclusions(),
-                probe: serverMirrorProbe()
+                probe: serverMirrorProbe(),
+                rowLimit: rowLimit,
+                shouldStop: isExpired
             )
-            guard !plan.samples.isEmpty else { return plan.decided }
+            guard !plan.samples.isEmpty else { return HealthKitServerMirrorPlanner.outcome(of: plan) }
             // S1 — a create-time write that reached the actor while the plan was
             // probing may have claimed one of these rows; it owns that row.
             guard serverMirrorClaims.isDisjoint(with: plan.linkageIDs) else {
-                return await mirrorServerMeasurements(measurements)
+                return await mirrorServerMeasurements(measurements, rowLimit: rowLimit, isExpired: isExpired)
             }
             serverMirrorClaims.formUnion(plan.linkageIDs)
-            do {
-                try await store.save(plan.objects)
-                // Count is operator-grade (no PHI).
-                // swiftlint:disable:next hllog_public_privacy_interpolation
-                HLLog.healthKit.debug(
-                    "HK server-mirror: \(plan.samples.count, privacy: .public) Sample(s) gespiegelt."
-                )
-            } catch {
-                serverMirrorClaims.subtract(plan.linkageIDs)
-                // Localized HK error string is operator-grade diagnostics.
-                // swiftlint:disable:next hllog_public_privacy_interpolation
-                HLLog.healthKit.warning(
-                    "HK server-mirror write fehlgeschlagen: \(error.localizedDescription, privacy: .public)"
-                )
+            let store = store
+            let outcome = await HealthKitServerMirrorPlanner.commit(plan, isExpired: isExpired) { objects in
+                try await store.save(objects)
             }
-            return true
+            // Nothing saved (window closed, or HealthKit refused): release the
+            // claims so the next pass may write these rows.
+            if outcome.written == 0 { serverMirrorClaims.subtract(plan.linkageIDs) }
+            return outcome
         }
 
         /// What the mirror leaves alone: rows a write on this actor has claimed,
@@ -334,13 +342,24 @@ import Foundation
         /// Source + kind policy for the server-origin mirror. Mirrors only
         /// user-authored-elsewhere sources whose kind has an HK write-type.
         ///
-        /// **W-HKBACKFILL** — the source predicate now reads the platform-free
+        /// **W-HKBACKFILL** — the source predicate reads the platform-free
         /// `MeasurementSource.isServerMirrorEligible` so the latest-page mirror
         /// and the historical backfill share one policy and cannot drift. The
         /// kind half stays anchored to the authoritative `quantitySamples`
         /// switch (a kind with no HK write-type yields `[]` → skip).
+        ///
+        /// **MIRROR (1.5, #152)** — the source half is now the server's
+        /// per-row answer (``Measurement/isServerMirrorAllowed``), the source
+        /// rule only where the row carries no `appleHealthMirror`.
+        ///
+        /// A blood pressure with a zero half (a pair the page cut in two, which
+        /// the aggregator keeps as a lone half) is never written: "124/0" is not
+        /// a reading.
         static func shouldMirrorFromServer(_ measurement: Measurement) -> Bool {
-            guard measurement.source.isServerMirrorEligible else { return false }
+            guard measurement.isServerMirrorAllowed else { return false }
+            if case let .bloodPressure(systolic, diastolic) = measurement.value, systolic <= 0 || diastolic <= 0 {
+                return false
+            }
             return !quantitySamples(for: measurement, metadata: [:]).isEmpty
         }
 
@@ -422,5 +441,8 @@ import Foundation
             try await store.delete(samples)
         }
     }
+
+    /// MIRROR (1.5) — the background pass writes through the bounded mirror.
+    extension HealthKitService: BoundedServerMirrorWriting {}
 
 #endif

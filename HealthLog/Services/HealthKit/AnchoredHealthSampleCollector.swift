@@ -504,7 +504,7 @@
             }
             return HKObjectType.categoryType(
                 forIdentifier: HKCategoryTypeIdentifier(rawValue: identifier)
-            )
+            ) ?? HealthKitServer144Types.otherSampleType(for: identifier) // HK-NEW: State of Mind
         }
     }
 

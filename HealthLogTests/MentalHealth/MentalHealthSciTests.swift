@@ -188,56 +188,54 @@ struct MentalHealthSciWireTests {
 /// localised note explaining why. Everything AROUND the instrument — title,
 /// description, bands, follow-up hint, buttons — is localised normally.
 ///
-/// Pure catalog / source reads, no network → no `.serialized`.
-@Suite("SCI localisation stance (CU-36)", .mockURLSession)
+/// Pure catalog / source / bundle reads, no network → no `.serialized`.
+///
+/// 1.5.0 (L10N-MH): the SCI has a published validated text only in English.
+/// German and Dutch readers now see the server's own translation (marked
+/// `validated: false`), with a note and a switch to the English original,
+/// instead of the English text under a German interface.
+@Suite("SCI localisation stance (CU-36, L10N-MH)", .mockURLSession)
 struct MentalHealthSciLocalisationTests {
-    private static let itemKeys = (1 ... 8).map { "mentalHealth.items.sci.\($0)" }
-    private static let stemKeys = [
-        "mentalHealth.stems.sci.night",
-        "mentalHealth.stems.sci.impact",
-        "mentalHealth.stems.sci.finally"
-    ]
-
-    @Test("All eight SCI items and their three stems exist in both bundled languages")
-    func allEightItemsArePresent() throws {
+    @Test("No SCI wording key is left in the catalog")
+    func noWordingInCatalog() throws {
         let catalog = try ParityCatalog.load()
-        #expect(Self.itemKeys.count == MentalHealthInstrument.sci.itemCount)
-        for key in Self.itemKeys + Self.stemKeys {
-            let entry = try #require(catalog.strings[key], "missing catalog entry \(key)")
-            for language in ["de", "en"] {
-                let value = ParityCatalog.value(entry, language: language)
-                #expect(value?.isEmpty == false, "\(key) has no \(language) value")
-            }
+        let leftovers = catalog.strings.keys.filter {
+            $0.hasPrefix("mentalHealth.items.sci.") || $0.hasPrefix("mentalHealth.stems.sci.")
+                || $0.hasPrefix("mentalHealth.sciOptions.")
         }
+        #expect(leftovers.isEmpty, "\(leftovers.sorted())")
     }
 
-    @Test("Item wording is the English original in EVERY language — never freely translated")
-    func itemWordingIsNotTranslated() throws {
+    @Test("German and Dutch get the server translation, unvalidated; English the validated original")
+    func translationsAreTheServers() throws {
+        let en = try #require(MentalHealthInstrument.sci.wording(in: .en))
+        let de = try #require(MentalHealthInstrument.sci.wording(in: .de))
+        let nl = try #require(MentalHealthInstrument.sci.wording(in: .nl))
+        #expect(en.validated)
+        #expect(!de.validated)
+        #expect(!nl.validated)
+        #expect(en.item(0) == "\u{2026} how long does it take you to fall asleep?")
+        #expect(de.item(0) == "\u{2026} wie lange brauchen Sie, um einzuschlafen?")
+        #expect(nl.item(0) == "\u{2026} hoe lang duurt het voordat u in slaap valt?")
+        #expect(de.stem("night") == "Wenn Sie an eine typische Nacht im letzten Monat denken \u{2026}")
+        // The answer ranges read with the language's range word, never a dash.
+        #expect(de.anchor(group: "duration", value: 1) == "46 bis 60 Min.")
+        #expect(en.anchor(group: "duration", value: 1) == "46 to 60 min")
+        #expect(nl.anchor(group: "nights", value: 0) == "5 tot 7")
+    }
+
+    @Test("The note and its switch are localised, the wording around them is not ours to change")
+    func noteAndSwitchAreLocalised() throws {
         let catalog = try ParityCatalog.load()
-        for key in Self.itemKeys + Self.stemKeys {
-            let entry = try #require(catalog.strings[key])
+        for key in ["mentalHealth.wording.unvalidatedNote", "mentalHealth.wording.showOriginal", "mentalHealth.wording.showTranslation"] {
+            let entry = try #require(catalog.strings[key], "missing \(key)")
             let de = try #require(ParityCatalog.value(entry, language: "de"))
             let en = try #require(ParityCatalog.value(entry, language: "en"))
-            // Identical by design: a German rendering of a validated instrument
-            // would change the measurement, so the original wording is shown.
-            #expect(de == en, "\(key) was translated — the SCI wording must stay the English original")
+            #expect(de != en, "\(key) must be translated")
         }
-    }
-
-    @Test("The explanatory note IS localised — the stance is explained, not silently applied")
-    func explanatoryNoteIsLocalised() throws {
-        let catalog = try ParityCatalog.load()
-        let entry = try #require(catalog.strings["mentalHealth.validatedInEnglishNote"])
-        let de = try #require(ParityCatalog.value(entry, language: "de"))
-        let en = try #require(ParityCatalog.value(entry, language: "en"))
-        #expect(de != en, "the note explaining the English wording must itself be translated")
-        // It must state the two facts the server's own note states: the
-        // questionnaire is validated in English, and that is why the questions
-        // appear in the original wording.
-        #expect(de.localizedCaseInsensitiveContains("englisch"))
-        #expect(de.localizedCaseInsensitiveContains("validiert"))
-        #expect(en.localizedCaseInsensitiveContains("english"))
-        #expect(en.localizedCaseInsensitiveContains("validated"))
+        let note = try #require(catalog.strings["mentalHealth.wording.unvalidatedNote"])
+        #expect(ParityCatalog.value(note, language: "de")?.localizedCaseInsensitiveContains("validiert") == true)
+        #expect(ParityCatalog.value(note, language: "en")?.localizedCaseInsensitiveContains("validated") == true)
     }
 
     @Test("The note shows exactly where the wording is unvalidated, and nowhere else")
@@ -248,9 +246,11 @@ struct MentalHealthSciLocalisationTests {
         #expect(sci.hasValidatedItems(locale: "en-GB"))
         #expect(!sci.hasValidatedItems(locale: "de"))
         #expect(!sci.hasValidatedItems(locale: "de_DE"))
-        // The instruments with validated German wording never show the note.
+        #expect(!sci.hasValidatedItems(locale: "nl-BE"))
+        // The instruments with validated German and Dutch wording never show the note.
         for instrument in [MentalHealthInstrument.phq9, .gad7, .who5] {
             #expect(instrument.hasValidatedItems(locale: "de-DE"))
+            #expect(instrument.hasValidatedItems(locale: "nl-NL"))
         }
     }
 
@@ -273,39 +273,22 @@ struct MentalHealthSciLocalisationTests {
         }
     }
 
-    @Test("Every SCI response option exists for all four anchor scales, 0–4, in both languages")
-    func allResponseOptionsArePresent() throws {
-        let catalog = try ParityCatalog.load()
-        let groups = try #require(MentalHealthInstrument.sci.optionGroups)
-        for group in Set(groups) {
-            for value in 0 ... MentalHealthInstrument.sci.itemMax {
-                let key = "mentalHealth.sciOptions.\(group).\(value)"
-                let entry = try #require(catalog.strings[key], "missing catalog entry \(key)")
-                for language in ["de", "en"] {
-                    #expect(
-                        ParityCatalog.value(entry, language: language)?.isEmpty == false,
-                        "\(key) has no \(language) value"
-                    )
-                }
-            }
-        }
-    }
-
     // MARK: - No client-side threshold in the presentation layer
 
-    @Test("The SCI item wording lives ONLY in the catalog — no Swift source carries it")
+    @Test("No Swift source carries questionnaire wording — it lives only in the bundled server files")
     func itemWordingIsNotHardcodedInSource() throws {
-        let catalog = try ParityCatalog.load()
-        let wording = try Self.itemKeys.map { key -> String in
-            let entry = try #require(catalog.strings[key])
-            return try #require(ParityCatalog.value(entry, language: "en"))
+        var phrases: [String] = []
+        for language in AppLanguage.allCases {
+            for instrument in MentalHealthInstrument.allCases {
+                phrases += try #require(instrument.wording(in: language)).items
+            }
         }
         for source in try Self.mentalHealthSources() {
             let text = try String(contentsOf: source, encoding: .utf8)
-            for phrase in wording {
+            for phrase in phrases {
                 #expect(
                     !text.contains(phrase),
-                    "\(source.lastPathComponent) hardcodes SCI wording — it belongs in Localizable.xcstrings"
+                    "\(source.lastPathComponent) hardcodes questionnaire wording — it belongs in Resources/Questionnaires"
                 )
             }
         }

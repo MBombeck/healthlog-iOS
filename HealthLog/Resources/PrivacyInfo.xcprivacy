@@ -90,6 +90,21 @@
                 <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
             </array>
         </dict>
+        <!-- Precise location: 1.5 ROUTES (#149). The GPS track of a new
+             workout, read from Apple Health and sent with the workout only
+             after the person switched "Send routes" on (off by default). -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePreciseLocation</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
         <!-- User ID (server-issued account UUID) -->
         <dict>
             <key>NSPrivacyCollectedDataType</key>

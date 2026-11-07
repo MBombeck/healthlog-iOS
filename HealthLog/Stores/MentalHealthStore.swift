@@ -58,6 +58,11 @@ public final class MentalHealthStore {
     public private(set) var answers: [Int] = []
     /// Optional functional-impairment follow-up (0–3; not scored). PHI.
     public private(set) var functionalDifficulty: Int?
+    /// The reader switched the running administration from HealthLog's own
+    /// translation to the English original. Only offered where the reader's
+    /// text is not a validated translation (``translationIsUnvalidated``);
+    /// reset by every new administration.
+    public internal(set) var showsEnglishOriginal = false
 
     /// The rendered result. `serverDerived == false` marks a PROVISIONAL offline
     /// result (locally-summed; will sync). `crisis` is non-nil iff the item-9 flag
@@ -75,6 +80,10 @@ public final class MentalHealthStore {
         /// `true` when the result came from the server 201; `false` when it is the
         /// provisional offline fallback (upload failed / queued).
         public let serverDerived: Bool
+        /// Which text the answers were given in: the server's record when it
+        /// sends one (1.46.0+), otherwise what this form showed. Drives the
+        /// one "not a validated translation" line on the result.
+        public var wording: AssessmentWording?
 
         /// The gentle nudge shows on the concerning side of the threshold. The
         /// THRESHOLD is the server's (`actionThreshold` from the POST response,
@@ -91,11 +100,18 @@ public final class MentalHealthStore {
     }
 
     private let repository: MentalHealthRepository
-    /// The app's presented display language ("de" / "en"), sent to the server +
-    /// used to resolve the bundled crisis fallback. Mirrors the web sending its
-    /// i18n locale (NOT the region), so a plain-"en" user gets the international
-    /// set, a "de" user gets TelefonSeelsorge (server-confirmed mapping).
-    private let presentedLocale: String
+    /// The interface language plus the device region (``AppLanguage/regionTag``:
+    /// `de-AT`, `nl-BE`, `en-US`), sent as the submit's `locale` and used to
+    /// resolve the bundled crisis fallback. The server reads the questionnaire
+    /// language from the language part and the crisis set from the whole tag,
+    /// so an Austrian reader gets 142, a Belgian Dutch reader 1813 and a US
+    /// reader 988, online and offline alike.
+    let presentedLocale: String
+    /// The interface language the questionnaire text is shown in.
+    let language: AppLanguage
+    /// Where the remembered server version lives (``KnownServerVersion``);
+    /// `englishOriginal` goes only to a server known to read it.
+    let serverDefaults: UserDefaults
     private var isReloading = false
     private var detailLoadID: UUID?
 
@@ -105,16 +121,20 @@ public final class MentalHealthStore {
 
     public init(
         repository: MentalHealthRepository,
-        presentedLocale: String = MentalHealthStore.deviceDisplayLocale()
+        presentedLocale: String = MentalHealthStore.deviceDisplayLocale(),
+        language: AppLanguage = .current,
+        serverDefaults: UserDefaults = .standard
     ) {
         self.repository = repository
         self.presentedLocale = presentedLocale
+        self.language = language
+        self.serverDefaults = serverDefaults
     }
 
-    /// The app's effective UI language ("de" / "en") — the bundle's first
-    /// preferred localization. Matches what the questionnaire wording is shown in.
+    /// The submit's `locale`: the interface language (``AppLanguage/current``,
+    /// the language the questionnaire text is shown in) with the device region.
     public static func deviceDisplayLocale() -> String {
-        Bundle.main.preferredLocalizations.first ?? "en"
+        AppLanguage.current.regionTag
     }
 
     // MARK: - Load
@@ -182,6 +202,7 @@ public final class MentalHealthStore {
         activeInstrument = instrument
         answers = Array(repeating: -1, count: instrument.itemCount)
         functionalDifficulty = nil
+        showsEnglishOriginal = false
         result = nil
         lastError = nil
         phase = .form
@@ -191,6 +212,7 @@ public final class MentalHealthStore {
     public func backToChoose() {
         answers = []
         functionalDifficulty = nil
+        showsEnglishOriginal = false
         result = nil
         lastError = nil
         phase = .choose
@@ -246,6 +268,7 @@ public final class MentalHealthStore {
         // item-9 is signposted even if the upload fails. Never logged — the
         // signpost below carries NO flag value / NO PII.
         let localFlag = instrument.isSafetyFlagged(items: items)
+        let shownWording = presentedWording
         MentalHealthSignpost.submitStarted()
 
         // #39 — a STABLE per-administration id, minted once here. It is both the
@@ -258,13 +281,14 @@ public final class MentalHealthStore {
             items: items,
             functionalDifficulty: functionalDifficulty,
             locale: presentedLocale,
+            englishOriginal: englishOriginalField(),
             source: Self.clientSource,
             externalId: externalId
         )
 
         do {
             let response = try await repository.submit(body)
-            applyServerResult(response)
+            applyServerResult(response, shownWording: shownWording)
             // Drop the in-memory PHI answers — the result is now derived-only.
             answers = []
             functionalDifficulty = nil
@@ -274,7 +298,7 @@ public final class MentalHealthStore {
             // Durably queued — render a PROVISIONAL offline result. Crucially, if
             // item-9 was flagged locally, STILL surface the crisis card from the
             // bundled fallback (the signpost must not wait on connectivity).
-            applyOfflineResult(instrument: instrument, items: items, item9Flagged: localFlag)
+            applyOfflineResult(instrument: instrument, items: items, item9Flagged: localFlag, wording: shownWording)
             answers = []
             functionalDifficulty = nil
             phase = .result
@@ -294,7 +318,7 @@ public final class MentalHealthStore {
             // so re-queuing would risk a double-write — the no-double-write contract
             // (`HLError.shouldPersistToOutbox`) intentionally excludes `.decoding`.
             if localFlag {
-                applyOfflineResult(instrument: instrument, items: items, item9Flagged: true)
+                applyOfflineResult(instrument: instrument, items: items, item9Flagged: true, wording: shownWording)
                 answers = []
                 functionalDifficulty = nil
                 phase = .result
@@ -312,7 +336,7 @@ public final class MentalHealthStore {
 
     // MARK: - Result builders
 
-    private func applyServerResult(_ response: CreateAssessmentResponse) {
+    private func applyServerResult(_ response: CreateAssessmentResponse, shownWording: AssessmentWording) {
         let a = response.assessment
         // SAFETY net for deploy skew: server says flagged but omitted `crisis` →
         // resolve the bundled fallback (anchored on the DEVICE display language the
@@ -330,11 +354,17 @@ public final class MentalHealthStore {
             actionThreshold: response.actionThreshold,
             item9Flagged: a.item9Flagged,
             crisis: crisis,
-            serverDerived: true
+            serverDerived: true,
+            wording: a.wording ?? shownWording
         )
     }
 
-    private func applyOfflineResult(instrument: MentalHealthInstrument, items: [Int], item9Flagged: Bool) {
+    private func applyOfflineResult(
+        instrument: MentalHealthInstrument,
+        items: [Int],
+        item9Flagged: Bool,
+        wording: AssessmentWording?
+    ) {
         // Instrument-aware total: WHO-5 reports raw-sum × 4 (0–100 %), the others
         // the raw sum. Matches the server's `scoreTotal`.
         let total = instrument.scoreTotal(items: items)
@@ -345,7 +375,8 @@ public final class MentalHealthStore {
             actionThreshold: instrument.actionThreshold,
             item9Flagged: item9Flagged,
             crisis: item9Flagged ? CrisisResourceFallback.forLocale(presentedLocale) : nil,
-            serverDerived: false
+            serverDerived: false,
+            wording: wording
         )
     }
 
@@ -362,6 +393,7 @@ public final class MentalHealthStore {
         detailLoadID = nil
         answers = []
         functionalDifficulty = nil
+        showsEnglishOriginal = false
         result = nil
         phase = .choose
         isLoading = false
@@ -380,7 +412,12 @@ public final class MentalHealthStore {
     /// in-flight answers are taken as given) so the crisis-on-upload-failure path
     /// can be asserted without a network stub.
     func applyOfflineResultForTesting(instrument: MentalHealthInstrument, items: [Int]) {
-        applyOfflineResult(instrument: instrument, items: items, item9Flagged: instrument.isSafetyFlagged(items: items))
+        applyOfflineResult(
+            instrument: instrument,
+            items: items,
+            item9Flagged: instrument.isSafetyFlagged(items: items),
+            wording: presentedWording(for: instrument)
+        )
         phase = .result
     }
 

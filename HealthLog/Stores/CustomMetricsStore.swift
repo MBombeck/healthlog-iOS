@@ -1,3 +1,4 @@
+import AppIntents
 import Foundation
 import Observation
 
@@ -68,7 +69,11 @@ public final class CustomMetricsStore {
         }
         do {
             let response = try await repository.customMetrics()
+            let namesChanged = response.customMetrics.map(\.name) != metrics.map(\.name)
             metrics = response.customMetrics
+            // 1.5 SHORTCUT — the "Log <metric> in HealthLog" phrase names the
+            // metrics; tell Siri when the list of names moved.
+            if namesChanged { HealthLogAppShortcuts.updateAppShortcutParameters() }
             lastError = nil
             lastErrorWasDuplicateName = false
         } catch {

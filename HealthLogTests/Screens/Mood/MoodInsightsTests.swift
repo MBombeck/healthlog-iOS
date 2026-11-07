@@ -122,12 +122,13 @@ struct MoodInsightsTests {
 
     // MARK: - Slope
 
-    @Test("rising series yields a positive slope")
-    func slopePositive() {
+    @Test("1.5 VERDICTS (#151): without the server there is no slope, even on a clear rise")
+    func noClientSlope() {
         let entries = (0 ..< 7).map { Self.entry(score: max(1, min(5, 5 - $0)), daysAgo: $0) }
-        // daysAgo 0→score5 … 6→score(-1 clamps to1): newer days higher → positive slope.
         let insight = MoodInsights.compute(entries: entries, now: Self.now, calendar: Self.fixedCalendar)
-        #expect((insight.slope7 ?? 0) > 0)
+        #expect(insight.slope7 == nil)
+        #expect(insight.slope30 == nil)
+        #expect(insight.trendDirection == nil)
     }
 
     @Test("single daily point → nil slope (no fabricated trend)")

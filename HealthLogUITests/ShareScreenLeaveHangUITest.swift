@@ -54,7 +54,7 @@ final class ShareScreenLeaveHangUITest: XCTestCase {
     private func openScrolledShareScreen() -> XCUIApplication {
         let app = XCUIApplication()
         _ = app.launchHermeticAndWaitForDashboard(
-            extraArguments: ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"],
+            extraArguments: UITestLanguage.en.launchArguments,
             timeout: 120
         )
         // The screenshot run's pace: let every store hydrate first, so the

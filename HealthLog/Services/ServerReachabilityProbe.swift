@@ -36,8 +36,18 @@ public actor ServerReachabilityProbe {
         case reachable
         /// 404 — the host answered but does not look like a HealthLog server.
         case notHealthLogServer
+        /// #149 — 503: the server answered but is still starting (newer
+        /// servers add `reason: starting`, older ones send a bare 503). Worth
+        /// a retry in a moment, not a different address.
+        case serverStarting
         /// Any other status code — surfaced verbatim so the View can show it.
         case unexpectedStatus(Int)
+        /// GH-iOS #27 — the answer came from a different host than the one
+        /// asked (carries that host). That is what a zero-trust proxy does with
+        /// a request lacking its credentials: Cloudflare Access forwards it to
+        /// its sign-in page, which then answers 200 and would otherwise pass
+        /// for a reachable server.
+        case redirectedToOtherHost(String)
         /// A response without an `HTTPURLResponse` (non-HTTP transport).
         case nonHTTPResponse
         /// Transport failure (timeout / TLS / DNS / pin rejection). Carries
@@ -55,7 +65,14 @@ public actor ServerReachabilityProbe {
     ///   - userAgent: the `User-Agent` header value — the onboarding and
     ///     settings surfaces send distinct tags so server logs can tell
     ///     which flow issued the probe.
-    public func probe(url: URL, userAgent: String) async -> Outcome {
+    ///   - accessHeaders: proxy credentials (GH-iOS #27). The probe is the
+    ///     first request a new install sends, so a server behind Cloudflare
+    ///     Access or Pangolin is only reachable with them.
+    public func probe(
+        url: URL,
+        userAgent: String,
+        accessHeaders: [ServerAccessHeader] = []
+    ) async -> Outcome {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.path = "/api/auth/registration-status"
         guard let probeURL = components?.url else {
@@ -66,6 +83,7 @@ public actor ServerReachabilityProbe {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 10
+        ServerAccessHeaders.apply(accessHeaders, to: &request)
         let pinner = CertificatePinner(fromBundle: .main)
         let session = URLSession.healthLogProbeSession(pinner: pinner)
         defer { session.invalidateAndCancel() }
@@ -74,15 +92,27 @@ public actor ServerReachabilityProbe {
             guard let http = response as? HTTPURLResponse else {
                 return .nonHTTPResponse
             }
-            if (200 ... 299).contains(http.statusCode) {
-                return .reachable
-            }
-            if http.statusCode == 404 {
-                return .notHealthLogServer
-            }
-            return .unexpectedStatus(http.statusCode)
+            return Self.classify(statusCode: http.statusCode, requestedURL: probeURL, answeredURL: http.url)
         } catch {
             return .transportFailure(error.localizedDescription)
         }
+    }
+
+    /// Status and final URL to ``Outcome``. Pure, so the rule is testable
+    /// without a network.
+    static func classify(statusCode: Int, requestedURL: URL, answeredURL: URL?) -> Outcome {
+        if let answeredURL, !ServerAccessHeaders.isSameHost(requestedURL, answeredURL) {
+            return .redirectedToOtherHost(answeredURL.host ?? "")
+        }
+        if (200 ... 299).contains(statusCode) {
+            return .reachable
+        }
+        if statusCode == 404 {
+            return .notHealthLogServer
+        }
+        if statusCode == 503 {
+            return .serverStarting
+        }
+        return .unexpectedStatus(statusCode)
     }
 }

@@ -61,6 +61,13 @@ public extension AppContainer {
         // It is also the one record `SyncTriggerContext` reads for V1's
         // `syncTrigger: manual` (v1.42+), so both follow the same answer.
         HealthKitServerTypeGate.record(info)
+        // HK-NEW (1.5) — the server's own list of mapped types, when it has
+        // one, before anything is asked (cache-first: no extra request while
+        // the write-back pass keeps the entry fresh).
+        let settingsRepo = settingsRepo
+        _ = try? await swr.fetchCachingFirst(.hkSyncConfig, decoding: HealthKitSyncConfig.self) {
+            try await HealthKitAcceptedTypes.recording(settingsRepo.healthKitConfig())
+        }
         await hkReadinessStore.requestLateReadAuthorizationIfNeeded()
     }
 

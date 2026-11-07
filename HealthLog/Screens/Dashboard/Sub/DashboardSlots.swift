@@ -149,7 +149,7 @@ struct DashboardMetricsHost: View {
                     liveTodayStepsOverride: liveTodayStore.todayStepCount,
                     digest: insights.comprehensive?.digest,
                     targets: insightsTargets.response,
-                    weightTrendSentiment: briefingStore.snapshotBriefing?.weightTrend?.direction,
+                    snapshot: briefingStore.snapshotBriefing,
                     onTap: onTap
                 )
             }

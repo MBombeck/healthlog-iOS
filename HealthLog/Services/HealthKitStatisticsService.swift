@@ -87,7 +87,11 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
         "HKQuantityTypeIdentifierActiveEnergyBurned",
         "HKQuantityTypeIdentifierFlightsClimbed",
         "HKQuantityTypeIdentifierDistanceWalkingRunning",
-        "HKQuantityTypeIdentifierTimeInDaylight"
+        "HKQuantityTypeIdentifierTimeInDaylight",
+        // HK-NEW (1.5) — the exercise and stand rings (server v1.44), day
+        // totals like daylight; only where the server maps them.
+        "HKQuantityTypeIdentifierAppleExerciseTime",
+        "HKQuantityTypeIdentifierAppleStandTime"
     ]
 
     /// Default-Konfig fuer alle 5 locked cumulative types. Wire-Units
@@ -98,8 +102,19 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
         HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierActiveEnergyBurned", wireUnit: "kcal"),
         HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierFlightsClimbed", wireUnit: "flights"),
         HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierDistanceWalkingRunning", wireUnit: "m"),
-        HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierTimeInDaylight", wireUnit: "minutes")
+        HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierTimeInDaylight", wireUnit: "minutes"),
+        HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierAppleExerciseTime", wireUnit: "minutes"),
+        HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierAppleStandTime", wireUnit: "minutes")
     ]
+
+    /// HK-NEW (1.5) — the configs the configured server stores yet. A server
+    /// before v1.44 would answer the ring rows with `unmappable_identifier`.
+    static func serverCollectable(
+        _ configs: [HealthKitCumulativeTypeConfig] = defaults,
+        serverAccepts: (String) -> Bool = { HealthKitServerTypeGate.serverAccepts($0) }
+    ) -> [HealthKitCumulativeTypeConfig] {
+        configs.filter { serverAccepts($0.identifier) }
+    }
 }
 
 #if canImport(HealthKit)
@@ -271,7 +286,7 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
         ) async -> HealthKitDailyStatsRead {
             var rows: [HealthKitDailyStatRow] = []
             var failedTypes = 0
-            for config in HealthKitCumulativeTypeConfig.defaults {
+            for config in HealthKitCumulativeTypeConfig.serverCollectable() {
                 do {
                     rows += try await dailyRows(for: config, from: from, to: to)
                 } catch {
@@ -410,7 +425,9 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
                 .kilocalorie()
             case "HKQuantityTypeIdentifierDistanceWalkingRunning":
                 .meter()
-            case "HKQuantityTypeIdentifierTimeInDaylight":
+            case "HKQuantityTypeIdentifierTimeInDaylight",
+                 "HKQuantityTypeIdentifierAppleExerciseTime",
+                 "HKQuantityTypeIdentifierAppleStandTime":
                 .minute()
             default:
                 .count()

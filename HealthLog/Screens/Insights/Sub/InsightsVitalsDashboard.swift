@@ -58,6 +58,9 @@ struct InsightsVitalsDashboard: View {
     /// re-attach the "pin to home" long-press affordance the v0.14 redesign
     /// dropped. `nil` (previews / tests) → the modifier is a no-op.
     var container: AppContainer?
+    /// 1.5 VERDICTS — the server's verdicts the arrows are coloured from, the
+    /// same as on Today (``TileTrendVerdicts``).
+    var trendVerdicts: TileTrendVerdicts = .none
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// #115 P2 — weight, temperature and glucose read in the account's unit.
@@ -77,7 +80,7 @@ struct InsightsVitalsDashboard: View {
     ]
 
     var body: some View {
-        let tiles = Self.tiles(from: metrics, excluding: excludedKinds, units: unitPreferences)
+        let tiles = Self.tiles(from: metrics, excluding: excludedKinds, units: unitPreferences, verdicts: trendVerdicts)
         // Self-suppress: no vital with a value → render nothing (calm doctrine).
         if !tiles.isEmpty {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
@@ -113,7 +116,7 @@ struct InsightsVitalsDashboard: View {
                         .font(.hlHeadline)
                         .foregroundStyle(HLText.primary)
                     Spacer(minLength: HLSpace.sm)
-                    TrendChip(trend: tile.trend, polarity: tile.polarity, mode: tile.mode)
+                    TrendChip(trend: tile.trend, mode: tile.mode)
                     Text(tile.valueText)
                         .font(.hlHeadline)
                         .monospacedDigit()
@@ -158,9 +161,8 @@ struct InsightsVitalsDashboard: View {
         let symbol: String
         let valueText: String
         let trend: TrendIndicator
-        let polarity: MetricKindDescriptor.TrendPolarity
-        /// #135 — the server's verdict on this card's change, when it sends one.
-        var mode: TrendChip.Mode = .polarityAware
+        /// 1.5 VERDICTS — the server's verdict on this card, or neutral.
+        var mode: TrendChip.Mode = .neutral
         let series: [Double]
         let accessibilityLabel: String
         var id: String {
@@ -175,7 +177,8 @@ struct InsightsVitalsDashboard: View {
     nonisolated static func tiles(
         from metrics: [DashboardMetric],
         excluding excludedKinds: Set<MetricKind> = [],
-        units: UnitPreferences = .standard
+        units: UnitPreferences = .standard,
+        verdicts: TileTrendVerdicts = .none
     ) -> [VitalTile] {
         let byKind = Dictionary(metrics.map { ($0.kind, $0) }, uniquingKeysWith: { first, _ in first })
         return vitalOrder.compactMap { kind -> VitalTile? in
@@ -198,10 +201,9 @@ struct InsightsVitalsDashboard: View {
                 symbol: descriptor.sfSymbol,
                 valueText: valueText,
                 trend: metric.trend,
-                polarity: descriptor.trendPolarity,
-                mode: metric.verdictOrPolarityMode,
+                mode: verdicts.mode(for: metric),
                 series: metric.sparkline,
-                accessibilityLabel: [title, valueText, metric.spokenTrendWithVerdict].compactMap(\.self).joined(separator: ", ")
+                accessibilityLabel: [title, valueText, metric.spokenTrendWithVerdict(verdicts)].compactMap(\.self).joined(separator: ", ")
             )
         }
     }

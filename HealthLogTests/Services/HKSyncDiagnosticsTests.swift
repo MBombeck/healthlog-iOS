@@ -459,7 +459,10 @@ struct HKSyncDiagnosticsTests {
             // a quantity type, so it is not on the iOS observer registry (its
             // five sibling category events are exempt here for the same reason);
             // `.unknown` is a decode sentinel with no HK counterpart at all.
-            .audioExposureEvent, .unknown
+            .audioExposureEvent, .unknown,
+            // #162 — Garmin types come from the server pull or a bridge,
+            // never from HealthKit, so they have no reverse-map entry.
+            .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad
         ]
         let expectedKinds = Set(MetricKind.allCases).subtracting(kindsWithoutHKType)
         // `mappedKinds` must be a SUPERSET of the expected kinds.

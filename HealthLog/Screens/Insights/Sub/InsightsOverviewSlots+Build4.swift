@@ -118,12 +118,19 @@ struct InsightsVitalsSlot: View {
     let onSelect: (MetricKind) -> Void
 
     @Environment(DashboardStore.self) private var dashboardStore
+    /// 1.5 VERDICTS — the target and snapshot verdicts, as on Today.
+    @Environment(InsightsTargetsStore.self) private var insightsTargetsStore
+    @Environment(DailyBriefingStore.self) private var briefingStore
 
     var body: some View {
         InsightsVitalsDashboard(
             metrics: dashboardStore.summary?.metrics ?? [],
             onSelect: onSelect,
-            container: appContainer
+            container: appContainer,
+            trendVerdicts: TileTrendVerdicts(
+                targets: insightsTargetsStore.response,
+                snapshot: briefingStore.snapshotBriefing
+            )
         )
     }
 }

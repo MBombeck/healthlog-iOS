@@ -15,7 +15,7 @@ import Foundation
 /// Probe-side pinning is the only thing standing between an
 /// attacker-controlled host and a Keychain write that re-targets the
 /// entire authenticated session.
-final class PinningDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+final class PinningDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     let pinner: CertificatePinner
 
     init(pinner: CertificatePinner) {
@@ -104,6 +104,24 @@ final class PinningDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
             HLLog.security.error("Cert-Pinning failure for \(challenge.protectionSpace.host, privacy: .public)")
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
+    }
+
+    /// GH-iOS #27 — URLSession copies every header field onto a followed
+    /// redirect. A proxy that bounces an unauthenticated request to its own
+    /// login host (Cloudflare Access answers 302 to `*.cloudflareaccess.com`)
+    /// would otherwise receive the bearer and the proxy secret. Cross-host
+    /// redirects keep only the harmless fields; same-host ones pass unchanged.
+    func urlSession(
+        _: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(ServerAccessHeaders.redirectRequest(
+            original: task.originalRequest,
+            proposed: request
+        ))
     }
 }
 

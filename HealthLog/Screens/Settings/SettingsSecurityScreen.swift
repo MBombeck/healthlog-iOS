@@ -30,7 +30,16 @@ import SwiftUI
 /// (R10), und das Gerüst ist `HLSettingsPage` statt des handgebauten
 /// `ScrollView` (R12, Gerüst B→A).
 struct SettingsSecurityScreen: View {
+    /// POLISH-C (C2) — see ``SettingsAccountScreen``: values on the More
+    /// stack, view pushes in the avatar sheet's own stack.
+    private let routesByValue: Bool
+
+    init(routesByValue: Bool = false) {
+        self.routesByValue = routesByValue
+    }
+
     @Environment(AccountSecurityStore.self) private var store
+    @Environment(SyncModeStore.self) private var syncMode
     @Environment(\.appContainer) private var container
     @Environment(\.openURL) private var openURL
     @State private var showChangePassword = false
@@ -40,6 +49,11 @@ struct SettingsSecurityScreen: View {
             passwordCard
             passkeysCard
             twoFactorCard
+            // 1.5 (Alex, 07.11.) — who is signed in belongs with how they
+            // sign in. Moved here from Konto; a server action, so paired only.
+            if !syncMode.isStandalone {
+                sessionsCard
+            }
         }
         .navigationTitle("settings.security.title")
         .navigationBarTitleDisplayMode(.inline)
@@ -47,6 +61,23 @@ struct SettingsSecurityScreen: View {
             ChangePasswordSheet()
         }
         .task { await store.loadTwoFactor() }
+    }
+
+    /// Parity 2.2 — active sessions (from Konto since 1.5). Title and row say
+    /// it, no subtitle (1.4 B2-c).
+    private var sessionsCard: some View {
+        HLSettingsCard {
+            Group {
+                if routesByValue {
+                    HLSettingsActionRow(title: "sessions.title", presents: .push, value: SettingsRoute.sessions)
+                } else {
+                    HLSettingsActionRow(title: "sessions.title", presents: .push) {
+                        SessionsScreen()
+                    }
+                }
+            }
+            .accessibilityIdentifier("settings.security.sessionsRow")
+        }
     }
 
     /// R2/R5 — der frühere Subtitle („Ersetze dein aktuelles Passwort durch ein
@@ -72,11 +103,14 @@ struct SettingsSecurityScreen: View {
     /// 1.4 B4 — one row, one heading: the row names its screen.
     private var passkeysCard: some View {
         HLSettingsCard {
-            HLSettingsActionRow(
-                title: "settings.passkeys.title",
-                presents: .push
-            ) {
-                PasskeyManagementScreen()
+            Group {
+                if routesByValue {
+                    HLSettingsActionRow(title: "settings.passkeys.title", presents: .push, value: SettingsRoute.passkeys)
+                } else {
+                    HLSettingsActionRow(title: "settings.passkeys.title", presents: .push) {
+                        PasskeyManagementScreen()
+                    }
+                }
             }
             .accessibilityIdentifier("settings.security.passkeysRow")
         }
@@ -129,11 +163,14 @@ struct SettingsSecurityScreen: View {
             )
         case let .loaded(status):
             statusLine(status)
-            HLSettingsActionRow(
-                title: "settings.security.twoFactor.manage",
-                presents: .push
-            ) {
-                TwoFactorManagementScreen()
+            Group {
+                if routesByValue {
+                    HLSettingsActionRow(title: "settings.security.twoFactor.manage", presents: .push, value: SettingsRoute.twoFactor)
+                } else {
+                    HLSettingsActionRow(title: "settings.security.twoFactor.manage", presents: .push) {
+                        TwoFactorManagementScreen()
+                    }
+                }
             }
             .accessibilityIdentifier("settings.security.twoFactorManageRow")
         }

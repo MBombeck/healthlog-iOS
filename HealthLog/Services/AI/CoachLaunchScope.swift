@@ -194,7 +194,8 @@ extension MetricKind {
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes, .stateOfMindValence, .afibBurden,
              // Build 7 / item 7.3 — mood has no dedicated coach-scope source
              // server-side → all-source snapshot.
              .mood,

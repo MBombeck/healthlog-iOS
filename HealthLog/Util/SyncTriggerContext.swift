@@ -27,9 +27,10 @@ public enum SyncTrigger: String, Codable, Sendable, CaseIterable, Equatable {
     /// **X4 (1.3, #138 / #77)** — ein Verlaufs-Nachtrag (der stündliche
     /// 30-Tage-Backfill der Summentypen). Bewegt beim Server nur
     /// `syncProgress` und `lastBackfillAt`, nie `lastReceivedAt` oder
-    /// `lastTrigger`. Nie aus einem Pass abgeleitet: nur
-    /// ``SyncTriggerContext/bindingBackfill(_:)`` setzt ihn, und auf den Draht
-    /// geht er nur, wenn der Server `features.syncTriggerBackfill` meldet.
+    /// `lastTrigger`. Nie aus einem Pass abgeleitet: nur die Markierung am
+    /// Upload (``SyncTriggerContext/wireValue(backfill:)``) setzt ihn, und auf
+    /// den Draht geht er nur, wenn der Server `features.syncTriggerBackfill`
+    /// meldet.
     case backfill
 
     /// The first server release whose batch route accepts `manual`.
@@ -86,10 +87,6 @@ public final class SyncTriggerContext: @unchecked Sendable {
     /// The per-task bindings, keyed by context instance so an isolated test
     /// context never leaks into ``shared`` (and the other way round).
     @TaskLocal private static var bindings: [ObjectIdentifier: SyncTrigger] = [:]
-    /// X4 — whether the work in this task is a history backfill. Static, not
-    /// per instance: the coordinator that marks the work and the uploader that
-    /// reads the context at the POST need not share an instance.
-    @TaskLocal private static var backfillScope = false
 
     private let lock = NSLock()
     private var scopes: [SyncTrigger] = []
@@ -173,29 +170,39 @@ public final class SyncTriggerContext: @unchecked Sendable {
 
     /// Was auf den Draht geht: ``current``, außer `manual` gegenüber einem
     /// Server, der den Wert (noch) nicht kennt. Dann `foreground`, wie vor 1.2.
-    ///
-    /// **X4** — Arbeit in ``bindingBackfill(_:)`` geht als `backfill`, wenn der
-    /// Server es kennt; sonst unter dem Auslöser, den sie ohne die Markierung
-    /// hätte (der Server sieht dann genau, was er vor 1.3 sah).
     public var wireValue: SyncTrigger {
-        if Self.backfillScope, serverAcceptsBackfill { return .backfill }
-        let trigger = current
-        switch trigger {
-        case .manual: return serverAcceptsManual ? .manual : .foreground
-        case .backfill: return serverAcceptsBackfill ? .backfill : .foreground
-        case .foreground, .background, .push: return trigger
-        }
+        wireValue(backfill: false)
     }
 
-    /// **X4** — marks `body` as a history backfill for every context's
-    /// ``wireValue``. ``current`` is untouched, so the local upload log and
-    /// any sweep a live trigger started keep their own word.
-    public static func bindingBackfill<T>(
-        isolation: isolated (any Actor)? = #isolation,
-        _ body: () async throws -> T
-    ) async rethrows -> T {
-        try await $backfillScope.withValue(true) {
-            try await body()
+    /// **SYNC-TRIG (1.5, #138)** — what a batch carries when the caller
+    /// says whether it is a history catch-up. The mark is an argument of the
+    /// one upload, not a task-local: a task-local followed the work into every
+    /// `Task { }` started under it (a heart-rate sweep a page kicks, a stamp
+    /// the upload hands off), and those are live work. A marked batch goes as
+    /// `backfill` where the server takes it; otherwise under the trigger it
+    /// would have had without the mark, so an older server sees exactly what
+    /// it saw before 1.3.
+    public func wireValue(backfill: Bool) -> SyncTrigger {
+        if backfill, serverAcceptsBackfill { return .backfill }
+        return accepted(current)
+    }
+
+    /// **SYNC-TRIG** — the word a parked batch replays under. The outbox keeps
+    /// the trigger the batch was posted with; the server it replays against
+    /// may no longer take it (a self-hosted rollback, an older server after a
+    /// change of address). `manual` and `backfill` fall back to `foreground`
+    /// there, because an unknown value refuses the whole batch with 422 and
+    /// the replay would split good rows into the refusal register. `nil` (a
+    /// row from 1.3.0 or older) stays `nil`, byte for byte.
+    public func replayValue(_ stored: SyncTrigger?) -> SyncTrigger? {
+        stored.map(accepted)
+    }
+
+    private func accepted(_ trigger: SyncTrigger) -> SyncTrigger {
+        switch trigger {
+        case .manual: serverAcceptsManual ? .manual : .foreground
+        case .backfill: serverAcceptsBackfill ? .backfill : .foreground
+        case .foreground, .background, .push: trigger
         }
     }
 

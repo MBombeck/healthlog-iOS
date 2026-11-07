@@ -30,6 +30,13 @@ import Foundation
             callbackScheme: String,
             anchor: ASPresentationAnchorProvider
         ) async -> OidcAuthOutcome
+
+        /// SEC — the same, returning on ``OidcReturnRoute``.
+        func authenticate(
+            loginURL: URL,
+            returnRoute: OidcReturnRoute,
+            anchor: ASPresentationAnchorProvider
+        ) async -> OidcAuthOutcome
     }
 
     /// Concrete `ASWebAuthenticationSession` driver for the native OIDC flow.
@@ -69,7 +76,7 @@ import Foundation
 
         public func authenticate(
             loginURL: URL,
-            callbackScheme: String,
+            returnRoute: OidcReturnRoute,
             anchor: ASPresentationAnchorProvider
         ) async -> OidcAuthOutcome {
             let id = UUID()
@@ -83,7 +90,7 @@ import Foundation
                     let contextProvider = OidcPresentationContextProvider(anchorProvider: anchor)
                     let session = sessionFactory.makeSession(
                         url: loginURL,
-                        callbackURLScheme: callbackScheme
+                        returnRoute: returnRoute
                     ) { [weak self] callbackURL, error in
                         self?.complete(id: id, outcome: Self.outcome(callbackURL: callbackURL, error: error))
                     }
@@ -105,6 +112,14 @@ import Foundation
                     self?.cancel(id: id)
                 }
             }
+        }
+
+        public func authenticate(
+            loginURL: URL,
+            callbackScheme: String,
+            anchor: ASPresentationAnchorProvider
+        ) async -> OidcAuthOutcome {
+            await authenticate(loginURL: loginURL, returnRoute: .customScheme(callbackScheme), anchor: anchor)
         }
 
         private static func outcome(callbackURL: URL?, error: Error?) -> OidcAuthOutcome {
@@ -183,6 +198,19 @@ import Foundation
 
         func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
             anchorProvider.anchor()
+        }
+    }
+
+    public extension OidcAuthenticating {
+        /// Stubs (UI tests, unit tests) answer either way alike; for the
+        /// `https` return a stub that never learned it fails closed.
+        func authenticate(
+            loginURL: URL,
+            returnRoute: OidcReturnRoute,
+            anchor: ASPresentationAnchorProvider
+        ) async -> OidcAuthOutcome {
+            guard let scheme = returnRoute.customScheme else { return .failed }
+            return await authenticate(loginURL: loginURL, callbackScheme: scheme, anchor: anchor)
         }
     }
 

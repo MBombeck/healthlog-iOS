@@ -110,7 +110,13 @@ struct TodayHeroHost: View {
         case .checkupFrontDoor:
             openVorsorge(for: item)
         case .checkupsList:
-            // #149 — `visit.view`: no visit screen in the app yet.
+            // #149 — `visit.view` for several visits: Vorsorge, whose
+            // "Nächster Termin" shows the soonest.
+            router.focusVisit(nil)
+            onOpenVorsorge()
+        case let .visit(id):
+            // VISIT — one named visit: Vorsorge with that visit.
+            router.focusVisit(id)
             onOpenVorsorge()
         case .insightsOverview:
             router.requestInsightsOverview()

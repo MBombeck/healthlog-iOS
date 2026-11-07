@@ -47,6 +47,7 @@ struct MedicationCard: View {
     /// a local interim value that would jump on server arrival.
     let compliance: MedicationsStore.ComplianceCardSnapshot?
     let lastTakenAt: Date?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Tap on `clock.arrow.circlepath` icon in the header. Caller pushes
     /// the detail screen pre-scrolled to the Verlauf section.
     let onHistory: () -> Void
@@ -249,7 +250,9 @@ struct MedicationCard: View {
                     // (operator: "die Kacheln sehen unterschiedlich aus"). 1.4 B4:
                     // every card keeps the same type size and a long name takes
                     // a second line instead.
-                    .lineLimit(2)
+                    // POLISH-A (SHOTS F-AX-MEDLIST) — at an accessibility size
+                    // two lines cut "Naproxen 250 mg" to "Napro-xen 25…".
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                     .truncationMode(.tail)
                 // GH #47 — provenance mark for an Apple-Health-mirrored med so
                 // the user knows the doses (and the missing manual controls)
@@ -830,13 +833,21 @@ private struct ScheduleLine: View {
     /// this line exists for, and truncating it is not an option. On a large
     /// device at the default text size the first candidate always fits, so the
     /// card looks exactly as before.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
+        // POLISH-A (SHOTS F-AX-MEDCARD) — at an accessibility size the label
+        // wrapped inside the side-by-side candidate, so it still "fit" and
+        // the value was cut ("Nächs-te Ein-nahme / mor-gen, 8…"). There the
+        // pair always stacks.
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                labelText
-                Spacer(minLength: HLSpace.sm)
-                valueText
-                    .multilineTextAlignment(.trailing)
+            if !dynamicTypeSize.isAccessibilitySize {
+                HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+                    labelText
+                    Spacer(minLength: HLSpace.sm)
+                    valueText
+                        .multilineTextAlignment(.trailing)
+                }
             }
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 labelText

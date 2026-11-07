@@ -153,8 +153,8 @@ struct BiomarkerChart: View {
             }
         }
         .chartYAxisLabel(position: .leading, alignment: .center) {
-            if !unit.isEmpty {
-                Text(verbatim: unit)
+            if let axisUnit = LabUnit.suffix(unit) {
+                Text(verbatim: axisUnit)
                     .font(.hlCaption.weight(.semibold))
                     .foregroundStyle(HLText.secondary)
             }
@@ -174,19 +174,27 @@ struct BiomarkerChart: View {
         let triples = pts.enumerated().map { idx, point in
             (x: Double(idx), y: point.value, xLabel: point.date.formatted(.dateTime.day().month(.abbreviated).year()))
         }
-        let unitSuffix = unit.isEmpty ? "" : " \(unit)"
+        let chartUnit = unit
         return HLChartAX.singleSeries(
             title: String(localized: "biomarker.detail.chart.a11y"),
             summary: "",
             xAxisTitle: String(localized: "biomarker.detail.chart.ax.dateAxis"),
-            yAxisTitle: unit.isEmpty ? String(localized: "biomarker.detail.chart.ax.valueAxis") : unit,
+            yAxisTitle: Self.valueAxisTitle(unit: chartUnit),
             seriesName: String(localized: "biomarker.detail.chart.ax.series"),
             points: triples,
-            yValueLabel: { value in
-                let formatted = value.formatted(.number.precision(.fractionLength(0 ... 2)))
-                return "\(formatted)\(unitSuffix)"
-            }
+            yValueLabel: { Self.spokenValue($0, unit: chartUnit) }
         )
+    }
+
+    /// The VoiceOver name of the value axis: the unit, or a generic "Value"
+    /// when there is none to say (empty or the unity "1", #160).
+    nonisolated static func valueAxisTitle(unit: String) -> String {
+        LabUnit.suffix(unit) ?? String(localized: "biomarker.detail.chart.ax.valueAxis")
+    }
+
+    /// One plotted value as VoiceOver speaks it, with its unit when it has one.
+    nonisolated static func spokenValue(_ value: Double, unit: String) -> String {
+        LabUnit.appending(unit, to: value.formatted(.number.precision(.fractionLength(0 ... 2))))
     }
 
     /// A parsed `(date, value)` chart point keyed by the source row id.

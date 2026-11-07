@@ -89,7 +89,8 @@ public enum MeasurementRanges {
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes, .stateOfMindValence, .afibBurden,
              // Build 7 / item 7.3 — mood has no manual MeasureSheet entry (it is
              // logged via its own State-of-Mind flow), so no typo guard applies.
              .mood,

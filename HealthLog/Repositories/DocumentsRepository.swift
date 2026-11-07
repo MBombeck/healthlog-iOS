@@ -333,20 +333,15 @@ public actor DocumentsRepository {
     /// the stored original. VISION mode (empty body) scans the stored file; TEXT
     /// mode structures browser-OCR'd text. Returns the document + newly staged
     /// facts. `422 providerUnsupported` / `409 alreadyPartlyConfirmed` surface via
-    /// the discriminators above.
+    /// the discriminators above. Prefers a background run (#151, see
+    /// `DocumentsRepository+Runs.swift`).
     @discardableResult
     public func extract(id: String, text: DocumentTextExtractRequest? = nil) async throws -> InboundDocumentDetail {
         // The server dispatches on `Content-Type`: an `application/json` request
         // routes to the TEXT (local-OCR) handler. VISION mode must send NO body so
         // it reaches the vision handler; TEXT mode sends the on-device-OCR JSON.
-        if let text {
-            let req: APIRequest<InboundDocumentDetail> = try .post(
-                "/api/documents/inbound/\(id)/extract", body: text
-            )
-            return try await sendWithExternalAIConsent(req)
-        }
-        let req = APIRequest<InboundDocumentDetail>(method: .post, path: "/api/documents/inbound/\(id)/extract")
-        return try await sendWithExternalAIConsent(req)
+        let body = try text.map { try JSONEncoder.hlDefault.encode($0) }
+        return try await extractPreferringRun(id: id, body: body)
     }
 
     // MARK: - Upload (multipart, store-only)

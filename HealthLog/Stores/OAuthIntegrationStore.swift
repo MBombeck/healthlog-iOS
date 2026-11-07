@@ -31,6 +31,10 @@ public final class OAuthIntegrationCore {
     /// them on the generic red error line would say the opposite of what
     /// happened.
     public private(set) var syncState: ManualSyncState = .idle
+    /// KONTO (#149) — the Fitbit turndown (`retirement`, or a `410
+    /// provider_retired` from connect, sync or test). Always `nil` for the
+    /// other providers.
+    public private(set) var retirement: FitbitRetirement?
 
     public let provider: OAuthIntegrationRepository.Provider
     /// Whether this provider exposes a manual `/sync` route (Fitbit only).
@@ -75,6 +79,33 @@ public final class OAuthIntegrationCore {
         } catch {
             self.error = .unknown(String(describing: error))
         }
+        await loadRetirement()
+    }
+
+    /// The turndown is a second, best-effort read: a failure keeps what was
+    /// known and never shows as the connection's error.
+    private func loadRetirement() async {
+        guard provider == .fitbit, let read = try? await repo.retirement() else { return }
+        if retirement == .retiredByRefusal, !read.ended { return }
+        retirement = read
+    }
+
+    /// Whether Google turned the provider off: connect, sync and test are gone.
+    public var isRetired: Bool {
+        retirement?.ended == true
+    }
+
+    /// `false` only when the server says the row is not offered at all.
+    public var isOffered: Bool {
+        retirement?.offered != false
+    }
+
+    /// A `410 provider_retired` is the turndown, not a failure: the notice
+    /// explains it, so it replaces the error line.
+    private func absorbRetirement(_ error: Error) -> Bool {
+        guard provider == .fitbit, FitbitRetirement.isRetiredRefusal(error) else { return false }
+        if retirement?.ended != true { retirement = .retiredByRefusal }
+        return true
     }
 
     /// Ask the server to pull from the provider now.
@@ -101,6 +132,10 @@ public final class OAuthIntegrationCore {
             syncState = .finished(result)
             await loadStatus()
         } catch {
+            if absorbRetirement(error) {
+                syncState = .idle
+                return
+            }
             let state = ManualSyncState.classify(error)
             syncState = state
             if case .failed = state {
@@ -217,7 +252,7 @@ public final class OAuthIntegrationCore {
         do {
             lastTestResult = try await repo.test()
         } catch let err as HLError {
-            error = err
+            if !absorbRetirement(err) { error = err }
         } catch {
             self.error = .unknown(String(describing: error))
         }
@@ -229,6 +264,7 @@ public final class OAuthIntegrationCore {
         credentials = nil
         lastTestResult = nil
         syncState = .idle
+        retirement = nil
     }
 }
 
@@ -244,6 +280,9 @@ public protocol OAuthIntegrationStoreProtocol: AnyObject {
     var lastTestResult: ConnectionTestResult? { get }
     /// CU-35 (1) — the last manual-sync verdict, separate from ``error``.
     var syncState: ManualSyncState { get }
+    var retirement: FitbitRetirement? { get }
+    var isRetired: Bool { get }
+    var isOffered: Bool { get }
     var provider: OAuthIntegrationRepository.Provider { get }
     var supportsManualSync: Bool { get }
     var supportsConnectionTest: Bool { get }
@@ -294,6 +333,18 @@ public extension OAuthIntegrationStoreProtocol where Self: OAuthIntegrationStore
 
     var syncState: ManualSyncState {
         core.syncState
+    }
+
+    var retirement: FitbitRetirement? {
+        core.retirement
+    }
+
+    var isRetired: Bool {
+        core.isRetired
+    }
+
+    var isOffered: Bool {
+        core.isOffered
     }
 
     var provider: OAuthIntegrationRepository.Provider {

@@ -271,13 +271,11 @@ private struct EncryptedBackupExportCard: View {
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 SecureField(String(localized: "export.encrypted.passphrase.placeholder"), text: $passphrase)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                    .hlSecretEntry()
                     .accessibilityIdentifier("export.encrypted.passphrase")
 
                 SecureField(String(localized: "export.encrypted.confirm.placeholder"), text: $confirmPassphrase)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                    .hlSecretEntry()
                     .accessibilityIdentifier("export.encrypted.confirm")
 
                 if !confirmPassphrase.isEmpty, !passphrasesMatch {

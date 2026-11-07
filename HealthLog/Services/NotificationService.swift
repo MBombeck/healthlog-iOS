@@ -254,7 +254,10 @@ import Foundation
             let body = DeviceRegistration(
                 token: deviceUUID,
                 bundleId: environment.bundleID,
-                locale: Locale.current.identifier,
+                // POLISH-C (C4) — the interface language the person reads,
+                // with the device region (`nl-BE`), never the device language:
+                // that can name a language the app does not ship.
+                locale: AppLanguage.current.regionTag,
                 appVersion: environment.appVersion,
                 model: Self.deviceModel(),
                 apnsToken: tokenHex,

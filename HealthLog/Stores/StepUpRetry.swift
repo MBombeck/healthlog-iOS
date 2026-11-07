@@ -36,8 +36,16 @@ public final class StepUpRetry {
     /// The minted, not yet used elevation. Never logged, never persisted, and
     /// gone after one ``take()``.
     @ObservationIgnored private var elevation: String?
+    /// When ``supply(_:)`` received the elevation.
+    @ObservationIgnored private var suppliedAt: Date?
+    @ObservationIgnored private let now: () -> Date
 
-    public init() {}
+    /// The oldest elevation ``take()`` still hands out.
+    public nonisolated static let maximumAge: TimeInterval = 4 * 60
+
+    public init(now: @escaping () -> Date = Date.init) {
+        self.now = now
+    }
 
     /// Raises the request when `error` is a proof-family refusal and says
     /// whether it did. Drops any held elevation: the server refused it.
@@ -49,21 +57,36 @@ public final class StepUpRetry {
         return true
     }
 
+    /// SEC — asks for proof before the action is sent at all. Drops any held
+    /// elevation, so the proof that follows is the one the action carries.
+    public func require() {
+        elevation = nil
+        suppliedAt = nil
+        isRequested = true
+    }
+
     /// The step-up sheet hands the minted elevation over.
     public func supply(_ token: String) {
         elevation = token
+        suppliedAt = now()
         isRequested = false
     }
 
     /// The person closed the sheet without confirming.
     public func cancel() {
         elevation = nil
+        suppliedAt = nil
         isRequested = false
     }
 
-    /// The next attempt's elevation, at most once.
+    /// The next attempt's elevation, at most once, and only while it is
+    /// younger than ``maximumAge``.
     public func take() -> String? {
-        defer { elevation = nil }
+        defer {
+            elevation = nil
+            suppliedAt = nil
+        }
+        guard let suppliedAt, now().timeIntervalSince(suppliedAt) < Self.maximumAge else { return nil }
         return elevation
     }
 

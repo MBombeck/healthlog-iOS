@@ -171,7 +171,7 @@ struct IllnessInsightsScreen: View {
         // 1.4 B4 — the name sits mid-sentence: English writes it in lower case
         // ("Across episodes, resting heart rate tends..."), German keeps the noun.
         let label = IllnessVitalLabel.label(for: type)
-        let german = Bundle.main.preferredLocalizations.first?.hasPrefix("de") == true
-        return String(format: template, german ? label : Self.midSentence(label))
+        let keepsCapital = AppLanguage.current == .de
+        return String(format: template, keepsCapital ? label : Self.midSentence(label))
     }
 }

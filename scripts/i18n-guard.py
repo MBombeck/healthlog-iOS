@@ -33,7 +33,17 @@ Allow-listed (German there is intentional, NOT a catalogue-key leak):
 Exit code 1 (with a report) on any flag, 0 when clean. Wire into the lint gate
 right after `swiftlint`.
 
+Second rule (1.5 L10N-CORE, R2 3.1): no language decision outside
+`AppLanguage`. `.languageCode`, `preferredLocalizations` and
+`Locale.preferredLanguages` in app code outside `AppLanguage.swift` fail the
+guard. The only exceptions are the files in `_LANGUAGE_ALLOWLIST`, each with a
+reason and the exact number of hits it may carry. The allowlist only shrinks:
+a file with more hits fails, and so does one with fewer (lower the count or
+drop the entry). The per-line `// i18n-guard: allow` marker does not apply to
+this rule. Comment lines and `*Tests` paths are skipped like above.
+
 Usage: scripts/i18n-guard.py [ROOT]   (ROOT defaults to ./HealthLog)
+       scripts/i18n-guard.py --self-test
 """
 from __future__ import annotations
 
@@ -146,12 +156,126 @@ def scan(root: str):
     return hits
 
 
+_LANGUAGE_DECISION = re.compile(r"\.languageCode\b|\bpreferredLocalizations\b|\bLocale\.preferredLanguages\b")
+_LANGUAGE_HOME = "AppLanguage.swift"
+
+# path relative to ROOT -> (hits allowed, reason). Shrinks only.
+_LANGUAGE_ALLOWLIST: dict[str, tuple[int, str]] = {
+    "Screens/Settings/Sub/SettingsAboutScreen+SupportInfo.swift": (
+        1, "support info reports the raw bundle localization for diagnosis, it decides nothing"),
+}
+
+
+def scan_language_decisions(root: str):
+    """Who decides the UI language outside `AppLanguage`: (relpath, line, text)."""
+    hits = []
+    for dirpath, _dirs, files in os.walk(root):
+        for name in files:
+            if not name.endswith(".swift") or name == _LANGUAGE_HOME:
+                continue
+            path = os.path.join(dirpath, name)
+            norm = path.replace(os.sep, "/")
+            if "Tests/" in norm or norm.endswith("Tests.swift"):
+                continue
+            rel = os.path.relpath(path, root).replace(os.sep, "/")
+            with open(path, encoding="utf-8") as fh:
+                for lineno, line in enumerate(fh, 1):
+                    if line.lstrip().startswith("//"):
+                        continue
+                    if _LANGUAGE_DECISION.search(line):
+                        hits.append((rel, lineno, line.strip()))
+    return hits
+
+
+def check_language_decisions(root: str, allowlist=None) -> list[str]:
+    """Problems with the language rule; empty when every hit is allow-listed exactly."""
+    allowlist = _LANGUAGE_ALLOWLIST if allowlist is None else allowlist
+    per_file: dict[str, list[tuple[int, str]]] = {}
+    for rel, lineno, line in scan_language_decisions(root):
+        per_file.setdefault(rel, []).append((lineno, line))
+    problems = []
+    for rel, rows in sorted(per_file.items()):
+        allowed = allowlist.get(rel, (0, ""))[0]
+        if len(rows) > allowed:
+            for lineno, line in rows:
+                problems.append(f"{root}/{rel}:{lineno}: {line}")
+            if allowed:
+                problems.append(f"  {rel}: {len(rows)} hits, allowlist permits {allowed}")
+    for rel, (allowed, _reason) in sorted(allowlist.items()):
+        found = len(per_file.get(rel, []))
+        if found < allowed:
+            problems.append(
+                f"{rel}: allowlist permits {allowed} hit(s), {found} left; "
+                "lower the count or drop the entry (the allowlist only shrinks)"
+            )
+    return problems
+
+
+def _self_test() -> int:
+    import tempfile
+
+    failures = []
+
+    def run(files: dict[str, str], allowlist) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel, text in files.items():
+                path = os.path.join(tmp, rel)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            return check_language_decisions(tmp, allowlist)
+
+    decide = 'let c = Locale.current.language.languageCode?.identifier ?? "de"\n'
+    cases = [
+        ("decision outside AppLanguage fails", {"Screens/A.swift": decide}, {}, True),
+        ("preferredLocalizations fails", {"A.swift": "Bundle.main.preferredLocalizations.first\n"}, {}, True),
+        ("Locale.preferredLanguages fails", {"A.swift": "Locale.preferredLanguages.first\n"}, {}, True),
+        ("AppLanguage.swift itself passes", {"Util/AppLanguage.swift": decide}, {}, False),
+        ("comment line passes", {"A.swift": "// " + decide}, {}, False),
+        ("test file passes", {"FooTests.swift": decide}, {}, False),
+        ("per-line allow marker does not exempt", {"A.swift": decide.rstrip() + " // i18n-guard: allow\n"}, {}, True),
+        ("allow-listed with the exact count passes", {"A.swift": decide}, {"A.swift": (1, "r")}, False),
+        ("one hit more than allow-listed fails", {"A.swift": decide * 2}, {"A.swift": (1, "r")}, True),
+        ("stale allowlist count fails", {"A.swift": "let x = 1\n"}, {"A.swift": (1, "r")}, True),
+        ("AppLanguage.current passes", {"A.swift": "let c = AppLanguage.current.serverCode\n"}, {}, False),
+    ]
+    for name, files, allowlist, want_fail in cases:
+        got_fail = bool(run(files, allowlist))
+        status = "ok" if got_fail == want_fail else "FAIL"
+        if got_fail != want_fail:
+            failures.append(name)
+        print(f"  {status}: {name}")
+    if failures:
+        print(f"i18n-guard self-test: {len(failures)} of {len(cases)} failed", file=sys.stderr)
+        return 1
+    print(f"i18n-guard self-test: PASS {len(cases)}/{len(cases)}")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:] == ["--self-test"]:
+        return _self_test()
     root = sys.argv[1] if len(sys.argv) > 1 else "HealthLog"
+    status = 0
+    language_problems = check_language_decisions(root)
+    if language_problems:
+        print(f"i18n-guard: language decided outside {_LANGUAGE_HOME}:", file=sys.stderr)
+        for line in language_problems:
+            print(f"  {line}", file=sys.stderr)
+        print(
+            "\nFix: read AppLanguage.current (Util/AppLanguage.swift) instead. Only formatting "
+            "and the support info may stay, listed in _LANGUAGE_ALLOWLIST with a reason.",
+            file=sys.stderr,
+        )
+        status = 1
+    else:
+        allowed = sum(count for count, _ in _LANGUAGE_ALLOWLIST.values())
+        print(f"i18n-guard: language decided only in {_LANGUAGE_HOME} "
+              f"({allowed} allow-listed hit(s) in {len(_LANGUAGE_ALLOWLIST)} file(s)).")
     hits = scan(root)
     if not hits:
         print("i18n-guard: clean — no German literals in localization APIs.")
-        return 0
+        return status
     print(f"i18n-guard: {len(hits)} German literal(s) in a localization API "
           f"(would render raw German under the English locale):", file=sys.stderr)
     for path, lineno, lit in sorted(hits):

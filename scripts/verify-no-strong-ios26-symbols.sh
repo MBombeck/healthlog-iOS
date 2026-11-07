@@ -14,9 +14,14 @@
 # Exit 0 PASS, 1 FINDING (a strong iOS-26 import), 2 TOOLFAIL.
 set -euo pipefail
 
-# iOS-26-only HealthKit API surface the app touches (medications). Extend when
-# a new iOS-26 HealthKit type is adopted.
-PATTERN='_HKMedicationGeneralForm|_HKMedicationConcept|HKUserAnnotatedMedication|HKMedicationDoseEvent|_OBJC_CLASS_\$_HKHealthConceptIdentifier|_OBJC_CLASS_\$_HKClinicalCoding'
+# iOS-26-and-later HealthKit API surface the app touches (medications; from
+# 1.5 the iOS 27 limited-history call). Extend when a new iOS-26/27 HealthKit
+# symbol is adopted. `earliestAuthorizedSampleDate` matches the Swift overlay
+# symbol `$sSo13HKHealthStoreC9HealthKitE28earliestAuthorizedSampleDate...`
+# that HealthKit exports from iOS 27; the app's typed call goes through the
+# Objective-C method and links nothing, but a strong reference to the overlay
+# would abort the launch on iOS 18 to 26.
+PATTERN='_HKMedicationGeneralForm|_HKMedicationConcept|HKUserAnnotatedMedication|HKMedicationDoseEvent|_OBJC_CLASS_\$_HKHealthConceptIdentifier|_OBJC_CLASS_\$_HKClinicalCoding|earliestAuthorizedSampleDate'
 
 finding() { printf 'verify-no-strong-ios26-symbols: FINDING: %s\n' "$1" >&2; exit 1; }
 toolfail() { printf 'verify-no-strong-ios26-symbols: TOOLFAIL: %s\n' "$1" >&2; exit 2; }
@@ -37,6 +42,9 @@ if [[ "${1:-}" == "--self-test" ]]; then
     [[ -n "$(printf '%s\n' "$strong" | strong_matches)" ]] || toolfail "self-test: the strong fixture was not detected"
     [[ -z "$(printf '%s\n' "$weak" | strong_matches)" ]] || toolfail "self-test: the weak fixture was flagged"
     [[ -z "$(printf '%s\n' '(undefined) external _HKQuantityTypeIdentifierHeartRate (from HealthKit)' | strong_matches)" ]] || toolfail "self-test: an iOS-8 symbol was flagged"
+    ios27='                 (undefined) external _$sSo13HKHealthStoreC9HealthKitE28earliestAuthorizedSampleDate3forSDySo12HKObjectTypeC10Foundation0H0VGShyAGG_tYaKF (from HealthKit)'
+    [[ -n "$(printf '%s\n' "$ios27" | strong_matches)" ]] || toolfail "self-test: the strong iOS-27 fixture was not detected"
+    [[ -z "$(printf '%s\n' "${ios27/external/weak external}" | strong_matches)" ]] || toolfail "self-test: the weak iOS-27 fixture was flagged"
     printf 'verify-no-strong-ios26-symbols: self-test PASS\n'
     exit 0
 fi

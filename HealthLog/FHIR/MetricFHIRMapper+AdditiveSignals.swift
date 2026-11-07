@@ -292,6 +292,73 @@ extension MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "m")
             )
 
+        // POLISH-A A5 — the server-v1.44 Apple Health types, byte-aligned with
+        // the server's FHIR rows (`signals/registry.ts`, v1.47.0). No LOINC term
+        // means the same thing (the ring minutes are day totals, LOINC 55411-3
+        // is one session's duration; stand hours, mindful sessions and the AFib
+        // burden estimate have none), so each carries its HealthKit identifier.
+        // The state-of-mind valence has no code on the server either and stays
+        // out (`default`), like the Garmin scores.
+        case .exerciseMinutes:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKQuantityTypeIdentifierAppleExerciseTime",
+                    display: "Exercise time",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "min")
+            )
+
+        case .standMinutes:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKQuantityTypeIdentifierAppleStandTime",
+                    display: "Stand time",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "min")
+            )
+
+        case .standHours:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKCategoryTypeIdentifierAppleStandHour",
+                    display: "Stand hours",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "h")
+            )
+
+        case .mindfulMinutes:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKCategoryTypeIdentifierMindfulSession",
+                    display: "Mindful session",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "min")
+            )
+
+        case .afibBurden:
+            MetricFHIRMapping(
+                kind: kind,
+                loinc: LOINCCode(
+                    code: "HKQuantityTypeIdentifierAtrialFibrillationBurden",
+                    display: "Atrial fibrillation burden",
+                    physicianReviewPending: true,
+                    system: .healthKit
+                ),
+                ucum: UCUMUnit(unit: "%")
+            )
+
         default:
             nil
         }

@@ -59,8 +59,6 @@ struct InsightsMetricScreen: View {
     /// page needs the `InsightsStore`. Injected at the app root, available on
     /// every pushed Insights screen.
     @Environment(InsightsStore.self) var insightsStore
-    /// #115 · 1.3 — the snapshot slot carries the server's weight verdict.
-    @Environment(DailyBriefingStore.self) var briefingStore
     @Environment(BackendAvailability.self) var backend
     /// P8 (v0141 parity) — the ECG recording list. Drives the pulse page's
     /// data-gated cross-link into the ECG surface (`ecgCrossLinkRow`); app-root
@@ -116,6 +114,8 @@ struct InsightsMetricScreen: View {
     /// 1.4 B4 — the summaries slice's 30-day mean for this kind, the "30 Tage
     /// Durchschnitt" card's source when the (consent-gated) digest has none.
     @State var serverAverage30: Double?
+    /// 1.5 LAB-LINES — `coach-read` line one, the chart card's usual-range sentence (`+LabOverlay`).
+    @State var coachRead: CoachReadStrip?
     @State var selectedDate: Date?
     @State var presentFullscreenChart = false
     /// v0152 C4 — drives the inline `AskCoachSheet` from the per-page coach button.
@@ -307,6 +307,10 @@ struct InsightsMetricScreen: View {
                     }
                 }
                 chartBlock
+                // 1.5 LAB-LINES — under "Erweitert": a lab marker, the blood pressure part of the day.
+                InsightsChartExtras(kind: kind, store: store)
+                // 1.5 BP-TOD — blood pressure only, server 1.47+: the chart's range by part of the day.
+                BloodPressureTimeOfDaySection(kind: kind, days: store.range.rawValue)
                 // P7 (v0141 parity) — pulse-only: the intraday day curve sits
                 // DIRECTLY under the range chart, exactly where the web pulse
                 // page puts it (`pulse/page.tsx:163-166`), so the page narrows
@@ -458,6 +462,7 @@ struct InsightsMetricScreen: View {
         .task(id: kind) {
             serverAverage30 = await appContainer?.measurementsRepo.average30(for: kind)
         }
+        .task(id: kind) { await loadCoachRead() }
         // K1 — the banner below still presents as this overlay; this
         // reserves its height at the top so it covers nothing (H2).
         .hlReserveErrorBannerSpace(store.error)

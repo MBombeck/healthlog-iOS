@@ -29,8 +29,18 @@ struct LabScanRow: Identifiable {
     /// The qualitative reading ("negativ") as an editable string.
     var qualitativeText: String
     var unit: String
+    /// #160 — the person switched on "No unit" (the unity `"1"`). Never
+    /// set by the scan itself: only a person asserts that a value has no unit.
+    var noUnit = false
     var referenceLow: String
     var referenceHigh: String
+    /// LAB-OCR — the reference window exactly as the report printed it, from a
+    /// server read; sent back on commit so a worded range is not lost.
+    var referenceText: String?
+    /// LAB-OCR — the unit the matched marker is tracked in (server read).
+    var markerUnit: String?
+    /// LAB-OCR — a server commit needs a unit on every numeric reading.
+    var requiresUnit = false
     /// Set when the analyte resolved to a marker in the user's catalog — then
     /// the server resolves unit + range and the local fields are read-only.
     var biomarkerId: String?
@@ -55,7 +65,8 @@ struct LabScanRow: Identifiable {
         let hasName = isLinked || !analyte.trimmingCharacters(in: .whitespaces).isEmpty
         switch resultType {
         case .numeric:
-            return hasName && LocaleDecimalParser.parse(value) != nil
+            let hasUnit = !requiresUnit || LabUnit.wire(typed: unit, noUnit: noUnit) != nil || markerUnit != nil
+            return hasName && hasUnit && LocaleDecimalParser.parse(value) != nil
         case .qualitative:
             return hasName && !qualitativeText.trimmingCharacters(in: .whitespaces).isEmpty
         }
@@ -66,18 +77,22 @@ struct LabScanRow: Identifiable {
         resultType = candidate.isQualitative ? .qualitative : .numeric
         value = candidate.value.map { Self.editableNumber($0) } ?? ""
         qualitativeText = candidate.valueText ?? ""
-        unit = candidate.unit ?? ""
+        // #160 — a bare "1" read off the page is not a person saying "no
+        // unit". The field starts empty and the row is flagged for a look,
+        // so nothing goes out as the unity unless the switch is turned on.
+        let readUnity = LabUnit.isUnity(candidate.unit)
+        unit = readUnity ? "" : candidate.unit ?? ""
         referenceLow = candidate.referenceLow.map { Self.editableNumber($0) } ?? ""
         referenceHigh = candidate.referenceHigh.map { Self.editableNumber($0) } ?? ""
         self.biomarkerId = biomarkerId
-        self.isLowConfidence = isLowConfidence
+        self.isLowConfidence = isLowConfidence || readUnity
         rawLine = candidate.rawLine
     }
 
     /// Render a parsed number back into the user's locale so the review field
     /// shows "7,4" on a German phone and "7.4" on an English one — the field is
     /// read back through `LocaleDecimalParser`, so the two must agree.
-    private static func editableNumber(_ value: Double) -> String {
+    static func editableNumber(_ value: Double) -> String {
         value.formatted(.number.grouping(.never).precision(.fractionLength(0 ... 4)))
     }
 }
@@ -121,6 +136,8 @@ final class LabScanStore {
         case noRows
         case platform
         case generic
+        /// LAB-OCR — a server read ended without rows; its own sentence.
+        case server(LabsOCRFailure)
 
         var messageKey: String {
             switch self {
@@ -130,6 +147,7 @@ final class LabScanStore {
             case .noRows: "labs.scan.error.noRows"
             case .platform: "labs.scan.error.platform"
             case .generic: "labs.scan.error.generic"
+            case let .server(failure): failure.messageKey
             }
         }
 
@@ -151,6 +169,21 @@ final class LabScanStore {
     let takenAtBound = Date.now
     /// Set after a partial batch commit: the already-localized summary.
     private(set) var saveSummary: String?
+
+    /// LAB-OCR — where the rows came from. A server read commits through
+    /// `POST /api/labs/ocr/commit`; an on-device read row by row as before.
+    enum Origin: Equatable {
+        case device
+        case server
+    }
+
+    private(set) var origin: Origin = .device
+    /// LAB-OCR — the limits a server read ran into, one calm line each.
+    private(set) var readLimits: [LabsOCRLimitLine] = []
+    /// LAB-OCR — set by the sheet when the server can read reports.
+    var ocrRepository: LabsOCRRepository?
+    /// One commit key per body, so saving the same rows again reuses it.
+    private var commitKeys: [LabsOCRCommitRequest: IdempotencyKey] = [:]
 
     private let labsStore: LabsStore
     private let ocr: MedicationOCRService
@@ -189,6 +222,17 @@ final class LabScanStore {
             }
             step = .processing
             failure = nil
+            let lines = await recognisedLines(in: images)
+            guard !lines.isEmpty else {
+                report(.noText)
+                return
+            }
+            ingest(lines: lines)
+        }
+
+        /// The text Vision reads off the pages, on the device. Also the input
+        /// of a server read in `text` mode, where only this text leaves.
+        func recognisedLines(in images: [UIImage]) async -> [String] {
             var lines: [String] = []
             for image in images {
                 do {
@@ -201,11 +245,7 @@ final class LabScanStore {
                     continue
                 }
             }
-            guard !lines.isEmpty else {
-                report(.noText)
-                return
-            }
-            ingest(lines: lines)
+            return lines
         }
     #endif
 
@@ -236,6 +276,36 @@ final class LabScanStore {
             return row
         }
         flagDuplicates()
+        origin = .device
+        readLimits = []
+        failure = nil
+        step = .review
+    }
+
+    /// LAB-OCR — a server read is under way.
+    func beginServerRead() {
+        failure = nil
+        saveSummary = nil
+        step = .processing
+    }
+
+    /// LAB-OCR — the rows a server read proposed, into the same review list.
+    /// The server's own marker match wins; the local one fills the gap.
+    func ingest(server result: LabsOCRExtractResult) {
+        guard !result.rows.isEmpty else {
+            report(.noRows)
+            return
+        }
+        if let date = Self.reportDate(result.reportDate, notAfter: takenAtBound) { takenAt = date }
+        rows = result.rows.map { proposed in
+            let local = Self.match(analyte: proposed.analyte, in: labsStore.biomarkers)
+            var row = LabScanRow(server: proposed, biomarkerId: proposed.biomarkerId ?? local.biomarkerId)
+            if row.biomarkerId == nil, let canonical = local.canonicalName { row.analyte = canonical }
+            return row
+        }
+        flagDuplicates()
+        origin = .server
+        readLimits = LabsOCRLimitLine.lines(for: result)
         failure = nil
         step = .review
     }
@@ -245,6 +315,8 @@ final class LabScanStore {
         rows = []
         failure = nil
         saveSummary = nil
+        readLimits = []
+        origin = .device
         step = .chooser
     }
 
@@ -271,6 +343,9 @@ final class LabScanStore {
         guard !batch.isEmpty else { return false }
         step = .saving
         saveSummary = nil
+        if origin == .server, let ocrRepository {
+            return await commitThroughServer(batch, repository: ocrRepository)
+        }
 
         let iso = ISO8601DateFormatter()
         let takenAtISO = iso.string(from: takenAt)
@@ -298,65 +373,38 @@ final class LabScanStore {
         return false
     }
 
-    /// Map one reviewed row onto the create body. A linked row sends only the
-    /// biomarker id + result (the server resolves analyte / unit / range); a
-    /// free-text row sends its own fields.
-    ///
-    /// `source: "OCR"` is the provenance marker the server has accepted since
-    /// v1.25 and that the client never produced until now.
-    static func body(for row: LabScanRow, takenAt: String) -> LabResultCreate {
-        let numeric: Double?
-        let qualitative: String?
-        switch row.resultType {
-        case .numeric:
-            numeric = LocaleDecimalParser.parse(row.value)
-            qualitative = nil
-        case .qualitative:
-            numeric = nil
-            qualitative = row.qualitativeText.trimmingCharacters(in: .whitespaces)
+    /// LAB-OCR — writes the confirmed rows through `POST /api/labs/ocr/commit`
+    /// (at most 400 per request). Written rows leave the list; a row the
+    /// server skipped (already there, or a unit its marker cannot take) stays,
+    /// switched off and flagged, so saving again does not repeat it.
+    private func commitThroughServer(_ batch: [LabScanRow], repository: LabsOCRRepository) async -> Bool {
+        let takenAtISO = ISO8601DateFormatter().string(from: takenAt)
+        var written = 0
+        var skipped: [LabsOCRCommitResult.Skipped] = []
+        var sentIDs: Set<UUID> = []
+        for chunk in Self.commitChunks(batch, takenAt: takenAtISO) {
+            let key = commitKeys[chunk.body] ?? IdempotencyKey()
+            commitKeys[chunk.body] = key
+            guard let result = try? await repository.commit(chunk.body, idempotencyKey: key) else { break }
+            written += result.insertedCount
+            skipped += result.skipped
+            sentIDs.formUnion(chunk.ids)
         }
-        if let biomarkerId = row.biomarkerId {
-            return LabResultCreate(
-                biomarkerId: biomarkerId,
-                value: numeric,
-                valueText: qualitative,
-                takenAt: takenAt,
-                source: "OCR"
-            )
+        if written > 0 { await labsStore.load() }
+        let skippedNames = Set(skipped.map { Self.normalize($0.analyte) })
+        rows.removeAll { sentIDs.contains($0.id) && !skippedNames.contains(Self.normalize($0.analyte)) }
+        for index in rows.indices where sentIDs.contains(rows[index].id) {
+            rows[index].isIncluded = false
+            rows[index].isLowConfidence = true
         }
-        let unit = row.unit.trimmingCharacters(in: .whitespaces)
-        return LabResultCreate(
-            analyte: row.analyte.trimmingCharacters(in: .whitespaces),
-            value: numeric,
-            valueText: qualitative,
-            unit: unit.isEmpty ? nil : unit,
-            referenceLow: LocaleDecimalParser.parse(row.referenceLow),
-            referenceHigh: LocaleDecimalParser.parse(row.referenceHigh),
-            takenAt: takenAt,
-            source: "OCR"
+        saveSummary = Self.serverCommitSummary(
+            written: written,
+            skipped: skipped.count,
+            allSent: sentIDs.count == batch.count,
+            batchCount: batch.count
         )
-    }
-
-    // MARK: - Analyte matching
-
-    /// Resolve an OCR'd analyte name against the user's biomarker catalog.
-    ///
-    /// Tier 1 — an exact (case/diacritic-insensitive) name match on a catalog
-    /// marker: link it, and the server owns unit + range.
-    /// Tier 2 — no catalog marker, but the name maps onto a known catalogue
-    /// slug: keep it free-text but rewrite the analyte to the slug's canonical
-    /// display name so repeated scans of the same panel converge on one name.
-    static func match(analyte: String, in catalog: [BiomarkerDTO]) -> (biomarkerId: String?, canonicalName: String?) {
-        let needle = normalize(analyte)
-        guard !needle.isEmpty else { return (nil, nil) }
-        if let exact = catalog.first(where: { normalize($0.name) == needle }) {
-            return (exact.id, nil)
-        }
-        guard let slug = BiomarkerExplainer.slug(forName: analyte) else { return (nil, nil) }
-        if let viaSlug = catalog.first(where: { BiomarkerExplainer.slug(forName: $0.name) == slug }) {
-            return (viaSlug.id, nil)
-        }
-        return (nil, BiomarkerExplainer.canonicalDisplayName(forSlug: slug))
+        step = .review
+        return sentIDs.count == batch.count && skipped.isEmpty
     }
 
     /// Flag rows whose analyte repeats inside the batch, or already exists in
@@ -372,11 +420,12 @@ final class LabScanStore {
         var seen: Set<String> = []
         for index in rows.indices {
             let key = Self.normalize(rows[index].analyte)
-            rows[index].isDuplicate = existing.contains(key) || !seen.insert(key).inserted
+            // `||`: a server read may already have flagged the row (`duplicateOf`).
+            rows[index].isDuplicate = rows[index].isDuplicate || existing.contains(key) || !seen.insert(key).inserted
         }
     }
 
-    private static func normalize(_ raw: String) -> String {
+    static func normalize(_ raw: String) -> String {
         raw
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
             .lowercased()

@@ -1,7 +1,4 @@
 import SwiftUI
-#if canImport(UIKit)
-    import UIKit
-#endif
 
 /// `/settings/integrations/apple-health` — die dedizierte Apple-Health-Detailseite.
 ///
@@ -37,6 +34,8 @@ struct AppleHealthIntegrationDetailScreen: View {
     /// standalone (there is nothing server-side to purge). `internal` for `+Cycle`.
     @Environment(BackendAvailability.self) var backend
     @State private var refreshTick: Int = 0
+    /// #154 — whether the HealthKit sheet is answered (`nil`: unknown yet).
+    @State private var sheetAnswered: Bool?
     /// v0.10.0 W-Mood-B — spinner while the State-of-Mind opt-in auth runs.
     @State private var moodSyncInFlight = false
     /// Server-parity v1.16 — cycle purge confirmation + progress/result state.
@@ -68,6 +67,8 @@ struct AppleHealthIntegrationDetailScreen: View {
                 dataTypesCard
             }
             specialSyncsCard
+            // 1.5 ROUTES — "Send routes" under the centred „Erweitert" link.
+            workoutRoutesAdvanced
             // W-B187 (Settings consolidation §A.3) — the one-shot export.zip
             // bulk import folded IN here as a card, so the Integrations list
             // shows ONE "Apple Health" row instead of two confusing peers
@@ -80,9 +81,16 @@ struct AppleHealthIntegrationDetailScreen: View {
         }
         .navigationTitle("Apple Health")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await hkReadiness.refresh() }
+        .task {
+            await hkReadiness.refresh()
+            await refreshSheetAnswered()
+        }
+        .onChange(of: hkReadiness.state) {
+            Task { await refreshSheetAnswered() }
+        }
         .refreshable {
             await hkReadiness.refresh()
+            await refreshSheetAnswered()
             refreshTick &+= 1
         }
         .sensoryFeedback(.success, trigger: refreshTick)
@@ -122,47 +130,25 @@ struct AppleHealthIntegrationDetailScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             writeBackNoticeRow
+            // #154 (MIRROR, 1.5) — one action per state instead of
+            // "Connect" and "Open in Apple Health" whenever a write type was
+            // missing (the pill said "Connected", the button "Connect"). The
+            // review link sits beside the write-back notice it answers.
+            if connectionAction == .reviewWriteAccess {
+                AppleHealthConnectActions(action: .reviewWriteAccess, connect: {})
+            }
             limitedHistoryRow
             serverHealthLine
-            if !hkReadiness.state.isFullyGranted {
-                HLButton(
-                    String(localized: "Connect to Apple Health"),
-                    icon: "heart.fill",
-                    variant: .primary,
-                    isLoading: hkReadiness.isRequestingAuthorization
+            if connectionAction != .reviewWriteAccess {
+                AppleHealthConnectActions(
+                    action: connectionAction,
+                    isRequesting: hkReadiness.isRequestingAuthorization,
+                    showsNoOpHint: hkReadiness.lastAuthorizationWasNoOp
                 ) {
-                    Task { await hkReadiness.requestAuthorization() }
-                }
-                .accessibilityIdentifier("settings.integrations.connectAppleHealth")
-            }
-            // H1 (Betreiber-Befund 2026-07-31): der Weg nach draußen hing an
-            // `lastAuthorizationWasNoOp` — einer In-Memory-Flagge, die jeder
-            // App-Start und jeder frische Request löscht. Wer die Seite öffnete,
-            // ohne vorher in derselben Sitzung getippt zu haben, sah nie einen
-            // Ausweg. Solange nicht alles erteilt ist, ist Apple Health aber die
-            // EINZIGE Stelle, an der sich etwas ändern lässt (iOS fragt nie
-            // zweimal nach demselben Typ) — also steht der Absprung
-            // bedingungslos hier. Die Flagge trägt nur noch den erklärenden
-            // Satz, warum der Sheet eben aufblitzte und sich sofort schloss.
-            if !hkReadiness.state.isFullyGranted, let url = HKReadinessStore.healthAppDeepLink {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    if hkReadiness.lastAuthorizationWasNoOp {
-                        Text("settings.integrations.healthapp_hint")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
+                    Task {
+                        await hkReadiness.requestAuthorization()
+                        await refreshSheetAnswered()
                     }
-                    HLButton(
-                        String(localized: "Open in Apple Health"),
-                        icon: "arrow.up.right.square",
-                        variant: .secondary,
-                        size: .regular
-                    ) {
-                        #if canImport(UIKit)
-                            UIApplication.shared.open(url)
-                        #endif
-                    }
-                    .accessibilityIdentifier("settings.integrations.openHealthApp")
                 }
             }
             HLButton(
@@ -177,6 +163,15 @@ struct AppleHealthIntegrationDetailScreen: View {
             .disabled(hkReadiness.isSyncing)
             .accessibilityIdentifier("settings.integrations.appleHealthManualSync")
         }
+    }
+
+    /// #154 — the card's one action for the current state.
+    private var connectionAction: HKReadinessStore.ConnectionAction {
+        hkReadiness.connectionAction(sheetAnswered: sheetAnswered)
+    }
+
+    private func refreshSheetAnswered() async {
+        sheetAnswered = await hkReadiness.authorizationSheetAnswered()
     }
 
     /// **P2 (R2-status)** — the WRITE-back status, kept strictly separate from
@@ -240,6 +235,8 @@ struct AppleHealthIntegrationDetailScreen: View {
                     ForEach(config.entries) { entry in
                         dataTypeRow(entry: entry)
                     }
+                    // HK-NEW (1.5) — the way back to the new read types.
+                    AppleHealthNewReadTypesLink()
                 }
             } else {
                 HStack {

@@ -424,7 +424,11 @@ extension InsightsMetricScreen {
                 zoomNamespace: fullscreenZoomNamespace,
                 zoomSourceID: Self.zoomSourceID,
                 onTapChart: { presentFullscreenChart = true },
-                rangeDelta: rangeDelta
+                // 1.5 LAB-LINES — a chosen part of the day replaces the
+                // whole-day change line with the part's name.
+                rangeDelta: store.activePartOfDay == nil ? rangeDelta : nil,
+                headline: coachReadHeadline,
+                caption: store.activePartOfDay.map(ChartDetailStore.partOfDayCaption)
             )
         }
     }
@@ -433,17 +437,27 @@ extension InsightsMetricScreen {
 
     /// W5-3 — "vs prior <range>" caption from the already-loaded series (no new
     /// server contract), the chart card's one caption line since 1.4 B2.
-    /// Self-suppresses when `MetricRangeDelta.resolve` finds no coherent prior
-    /// window. #115 · 1.3 / #135 — colour only from a server verdict: the
-    /// series' own `direction` (v1.43), else for weight the snapshot's
-    /// `tiles.weightTrend`; without either the caption stays neutral.
+    /// 1.5 VERDICTS — the series' own `change` with the server's verdict
+    /// (`ChartDetailStore.rangeChange`); on a server before v1.43 the own
+    /// comparison of the loaded points, neutral. Self-suppresses when there is
+    /// nothing to show.
     private var rangeDelta: MetricRangeDelta? {
-        guard let points = store.displaySeries?.points, !points.isEmpty else { return nil }
-        return MetricRangeDelta(
-            points: points,
-            sentiment: store.rangeDeltaSentiment(weightTrend: briefingStore.snapshotBriefing?.weightTrend),
-            range: store.range
-        )
+        guard let change = store.rangeChange else { return nil }
+        switch change.basis {
+        case .firstToLastDay:
+            let units = store.effectiveUnits(settingsStore.unitPreferences)
+            return MetricRangeDelta(
+                source: .server(
+                    delta: store.convertDelta(change.delta, units: units),
+                    unit: store.displayUnit(units: units),
+                    sentiment: change.sentiment ?? .neutral
+                ),
+                range: store.range
+            )
+        case .priorHalf:
+            guard let points = store.displaySeries?.points, !points.isEmpty else { return nil }
+            return MetricRangeDelta(source: .ownComparison(points), range: store.range)
+        }
     }
 
     // MARK: - Target item (drives the header gear + range-delta polarity)

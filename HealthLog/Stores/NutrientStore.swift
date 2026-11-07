@@ -315,12 +315,15 @@ public final class NutrientStore {
         if let idx = rows.firstIndex(where: { $0.nutrient == .water }) {
             let existing = rows[idx]
             let next = max(0, existing.latestAmount + deltaMl)
+            // SUPP — the optimistic total no longer matches the server's
+            // split, so the split waits for the re-read instead of lying.
             rows[idx] = NutrientOverviewRowDTO(
                 nutrient: .water,
                 unit: existing.unit,
                 latestDay: existing.latestDay,
                 latestAmount: next,
-                daysWithData: existing.daysWithData
+                daysWithData: existing.daysWithData,
+                upperLimit: existing.upperLimit
             )
         } else if deltaMl > 0 {
             rows.append(NutrientOverviewRowDTO(

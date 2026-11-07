@@ -20,18 +20,33 @@ public struct HLBadge: View {
         self.tone = tone
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// POLISH-C (F-AX-CAPSULE) — the badge wraps between words, and at an
+    /// accessibility size the capsule becomes a rounded rectangle so two
+    /// lines still read as one badge. It takes no layout priority over the
+    /// text beside it: a large value next to it (a lab result) would be the
+    /// one squeezed then. Where both cannot share a line, the caller stacks
+    /// them at the accessibility sizes (lab card, episode header, assistant
+    /// status).
     public var body: some View {
         HStack(spacing: HLSpace.xs) {
             if let icon { Image(systemName: icon).font(.hlCaption2.weight(.semibold)) }
             Text(title)
                 .font(.hlCaption)
                 .fontWeight(.semibold)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(foreground)
         .padding(.horizontal, HLSpace.sm)
         .padding(.vertical, HLSpace.xs)
         .background(background.opacity(0.18))
-        .clipShape(Capsule())
+        .clipShape(
+            dynamicTypeSize.isAccessibilitySize
+                ? AnyShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
+                : AnyShape(Capsule())
+        )
         .accessibilityElement()
         .accessibilityLabel(title)
     }

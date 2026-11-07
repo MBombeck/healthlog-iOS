@@ -21,7 +21,9 @@ import Foundation
 struct MiniCoachDataBinder {
     let locale: Locale
 
-    init(locale: Locale = Locale(identifier: "de_DE")) {
+    /// The default is the interface language, so a binder built without an
+    /// explicit locale speaks the same language as the prompt around it.
+    init(locale: Locale = AppLanguage.current.locale) {
         self.locale = locale
     }
 
@@ -42,11 +44,13 @@ struct MiniCoachDataBinder {
         moods: [MoodEntry],
         now: Date = Date()
     ) -> String {
-        let language = locale.language.languageCode?.identifier ?? "de"
+        let language = AppLanguage.resolve(locale)
         if measurements.isEmpty, moods.isEmpty {
-            return language == "en"
-                ? "(no measurements or mood entries available in the window)"
-                : "(keine Messungen oder Stimmungseinträge im Zeitfenster verfügbar)"
+            return language.pick(
+                de: "(keine Messungen oder Stimmungseinträge im Zeitfenster verfügbar)",
+                en: "(no measurements or mood entries available in the window)",
+                nl: "(geen metingen of stemmingsregistraties beschikbaar in het tijdvenster)"
+            )
         }
 
         switch category {
@@ -68,13 +72,14 @@ struct MiniCoachDataBinder {
     private func renderLatestPerKind(
         measurements: [Measurement],
         moods: [MoodEntry],
-        language: String
+        language: AppLanguage
     ) -> String {
         var lines: [String] = []
         let grouped = Dictionary(grouping: measurements, by: \.kind)
         // Audit B-4 — `selectableCases`, not `allCases`: the coach must not be
-        // handed a reading whose type this build cannot name.
-        for kind in MetricKind.selectableCases {
+        // handed a reading whose type this build cannot name. HK-NEW (1.5):
+        // nor one the server keeps off every model (`isModelFenced`).
+        for kind in MetricKind.coachCases {
             guard let latest = grouped[kind]?.max(by: { $0.recordedAt < $1.recordedAt }) else { continue }
             lines.append(format(measurement: latest, language: language))
         }
@@ -82,13 +87,15 @@ struct MiniCoachDataBinder {
         // latest NAMEABLE entry; the coach is handed no mood line at all when
         // this build can name none.
         if let latestMood = MoodEntry.scored(moods).max(by: { $0.entry.recordedAt < $1.entry.recordedAt }) {
-            let header = language == "en" ? "mood" : "Stimmung"
+            let header = moodLabel(language)
             lines.append("\(header): \(latestMood.score)/5")
         }
         let count = measurements.count
-        let header = language == "en"
-            ? "Latest reading per metric (\(count) total measurements):"
-            : "Letzter Wert je Metrik (\(count) Messungen insgesamt):"
+        let header = language.pick(
+            de: "Letzter Wert je Metrik (\(count) Messungen insgesamt):",
+            en: "Latest reading per metric (\(count) total measurements):",
+            nl: "Laatste waarde per meting (\(count) metingen in totaal):"
+        )
         return header + "\n" + lines.joined(separator: "\n")
     }
 
@@ -97,19 +104,22 @@ struct MiniCoachDataBinder {
         measurements: [Measurement],
         moods: [MoodEntry],
         now: Date,
-        language: String
+        language: AppLanguage
     ) -> String {
         let cutoff = now.addingTimeInterval(-7 * 24 * 3600)
         let window = measurements.filter { $0.recordedAt >= cutoff }
         let moodWindow = moods.filter { $0.recordedAt >= cutoff }
-        let header = language == "en"
-            ? "Window: last 7 days (\(window.count) measurements, \(moodWindow.count) mood entries)"
-            : "Zeitraum: letzte 7 Tage (\(window.count) Messungen, \(moodWindow.count) Stimmungseinträge)"
+        let header = language.pick(
+            de: "Zeitraum: letzte 7 Tage (\(window.count) Messungen, \(moodWindow.count) Stimmungseinträge)",
+            en: "Window: last 7 days (\(window.count) measurements, \(moodWindow.count) mood entries)",
+            nl: "Periode: laatste 7 dagen (\(window.count) metingen, \(moodWindow.count) stemmingsregistraties)"
+        )
         var lines: [String] = [header]
         let grouped = Dictionary(grouping: window, by: \.kind)
         // Audit B-4 — `selectableCases`, not `allCases`: the coach must not be
-        // handed a reading whose type this build cannot name.
-        for kind in MetricKind.selectableCases {
+        // handed a reading whose type this build cannot name. HK-NEW (1.5):
+        // nor one the server keeps off every model (`isModelFenced`).
+        for kind in MetricKind.coachCases {
             guard let group = grouped[kind], !group.isEmpty else { continue }
             lines.append(summarise(kind: kind, group: group, language: language))
         }
@@ -118,7 +128,7 @@ struct MiniCoachDataBinder {
             let scores = MoodEntry.scored(moodWindow).map(\.score)
             if let minScore = scores.min(), let maxScore = scores.max() {
                 let avg = Double(scores.reduce(0, +)) / Double(scores.count)
-                let label = language == "en" ? "mood" : "Stimmung"
+                let label = moodLabel(language)
                 lines.append(String(format: "%@: min %d, max %d, avg %.1f", label, minScore, maxScore, avg))
             }
         }
@@ -132,22 +142,33 @@ struct MiniCoachDataBinder {
         measurements: [Measurement],
         moods: [MoodEntry],
         now _: Date,
-        language: String
+        language: AppLanguage
     ) -> String {
         let sorted = measurements.sorted(by: { $0.recordedAt < $1.recordedAt })
         guard let first = sorted.first, let last = sorted.last else {
-            return language == "en"
-                ? "(no measurements in window)"
-                : "(keine Messungen im Zeitfenster)"
+            return language.pick(
+                de: "(keine Messungen im Zeitfenster)",
+                en: "(no measurements in window)",
+                nl: "(geen metingen in het tijdvenster)"
+            )
         }
-        let header = language == "en"
-            ? "History window: \(sorted.count) measurements between earliest and latest entry"
-            : "Verlaufsfenster: \(sorted.count) Messungen zwischen erstem und letztem Eintrag"
+        let header = language.pick(
+            de: "Verlaufsfenster: \(sorted.count) Messungen zwischen erstem und letztem Eintrag",
+            en: "History window: \(sorted.count) measurements between earliest and latest entry",
+            nl: "Verloopvenster: \(sorted.count) metingen tussen eerste en laatste registratie"
+        )
         var lines = [header]
-        lines.append((language == "en" ? "earliest: " : "frühester Eintrag: ") + format(measurement: first, language: language))
-        lines.append((language == "en" ? "latest: " : "letzter Eintrag: ") + format(measurement: last, language: language))
+        let earliest = language.pick(de: "frühester Eintrag: ", en: "earliest: ", nl: "eerste registratie: ")
+        let latest = language.pick(de: "letzter Eintrag: ", en: "latest: ", nl: "laatste registratie: ")
+        lines.append(earliest + format(measurement: first, language: language))
+        lines.append(latest + format(measurement: last, language: language))
         if !moods.isEmpty {
-            lines.append((language == "en" ? "mood entries in window: " : "Stimmungseinträge im Fenster: ") + String(moods.count))
+            let moodCount = language.pick(
+                de: "Stimmungseinträge im Fenster: ",
+                en: "mood entries in window: ",
+                nl: "stemmingsregistraties in het tijdvenster: "
+            )
+            lines.append(moodCount + String(moods.count))
         }
         return lines.joined(separator: "\n")
     }
@@ -157,39 +178,51 @@ struct MiniCoachDataBinder {
         measurements: [Measurement],
         moods: [MoodEntry],
         now: Date,
-        language: String
+        language: AppLanguage
     ) -> String {
         let weekAgo = now.addingTimeInterval(-7 * 24 * 3600)
         let twoWeeksAgo = now.addingTimeInterval(-14 * 24 * 3600)
         let recent = measurements.filter { $0.recordedAt >= weekAgo }
         let prior = measurements.filter { $0.recordedAt >= twoWeeksAgo && $0.recordedAt < weekAgo }
-        let header = language == "en"
-            ? "Comparison: last 7 days (recent, \(recent.count) measurements) vs. previous 7 days (prior, \(prior.count) measurements)"
-            : "Vergleich: letzte 7 Tage (jetzt, \(recent.count) Messungen) vs. vorletzte 7 Tage (davor, \(prior.count) Messungen)"
+        let header = language.pick(
+            de: "Vergleich: letzte 7 Tage (jetzt, \(recent.count) Messungen) vs. vorletzte 7 Tage (davor, \(prior.count) Messungen)",
+            en: "Comparison: last 7 days (recent, \(recent.count) measurements) vs. previous 7 days (prior, \(prior.count) measurements)",
+            nl: "Vergelijking: laatste 7 dagen (nu, \(recent.count) metingen) vs. de 7 dagen daarvoor (daarvoor, \(prior.count) metingen)"
+        )
+        // The row words echo the header's labels; the English rows used to
+        // carry the German "jetzt" / "davor" under an English header.
+        let nowWord = language.pick(de: "jetzt", en: "recent", nl: "nu")
+        let priorWord = language.pick(de: "davor", en: "prior", nl: "daarvoor")
         var lines: [String] = [header]
         let recentGrouped = Dictionary(grouping: recent, by: \.kind)
         let priorGrouped = Dictionary(grouping: prior, by: \.kind)
         // Audit B-4 — `selectableCases`, not `allCases`: the coach must not be
-        // handed a reading whose type this build cannot name.
-        for kind in MetricKind.selectableCases {
+        // handed a reading whose type this build cannot name. HK-NEW (1.5):
+        // nor one the server keeps off every model (`isModelFenced`).
+        for kind in MetricKind.coachCases {
             let recentGroup = recentGrouped[kind] ?? []
             let priorGroup = priorGrouped[kind] ?? []
             guard !(recentGroup.isEmpty && priorGroup.isEmpty) else { continue }
             let label = displayName(for: kind, language: language)
-            lines.append("\(label): jetzt \(recentGroup.count), davor \(priorGroup.count)")
+            lines.append("\(label): \(nowWord) \(recentGroup.count), \(priorWord) \(priorGroup.count)")
         }
         if !moods.isEmpty {
             let recentMood = moods.filter { $0.recordedAt >= weekAgo }.count
             let priorMood = moods.filter { $0.recordedAt >= twoWeeksAgo && $0.recordedAt < weekAgo }.count
-            let label = language == "en" ? "mood entries" : "Stimmungseinträge"
-            lines.append("\(label): jetzt \(recentMood), davor \(priorMood)")
+            let label = language.pick(de: "Stimmungseinträge", en: "mood entries", nl: "stemmingsregistraties")
+            lines.append("\(label): \(nowWord) \(recentMood), \(priorWord) \(priorMood)")
         }
         return lines.joined(separator: "\n")
     }
 
     // MARK: - Formatting helpers
 
-    private func format(measurement: Measurement, language: String) -> String {
+    /// The word for a mood line in the digest.
+    private func moodLabel(_ language: AppLanguage) -> String {
+        language.pick(de: "Stimmung", en: "mood", nl: "stemming")
+    }
+
+    private func format(measurement: Measurement, language: AppLanguage) -> String {
         let label = displayName(for: measurement.kind, language: language)
         let unit = measurement.kind.unit
         let valueString = switch measurement.value {
@@ -200,7 +233,7 @@ struct MiniCoachDataBinder {
         return "\(label): \(valueString) (\(dateString))"
     }
 
-    private func summarise(kind: MetricKind, group: [Measurement], language: String) -> String {
+    private func summarise(kind: MetricKind, group: [Measurement], language: AppLanguage) -> String {
         let label = displayName(for: kind, language: language)
         let scalars: [Double] = group.compactMap { m in
             if case let .scalar(v) = m.value { v } else { nil }
@@ -214,102 +247,114 @@ struct MiniCoachDataBinder {
         return "\(label): n=\(group.count)"
     }
 
-    // swiftlint:disable:next cyclomatic_complexity
-    private func displayName(for kind: MetricKind, language: String) -> String {
-        if language == "en" {
-            switch kind {
-            case .weight: return "weight"
-            case .bloodPressure: return "blood pressure"
-            case .pulse: return "pulse"
-            case .glucose: return "glucose"
-            case .bodyFat: return "body fat"
-            case .bodyTemperature: return "temperature"
-            case .spo2: return "SpO2"
-            case .bodyWater: return "body water"
-            case .boneMass: return "bone mass"
-            case .sleep: return "sleep"
-            case .steps: return "steps"
-            case .restingHeartRate: return "resting heart rate"
-            case .hrv: return "HRV"
-            case .vo2Max: return "VO2 max"
-            case .walkingSpeed: return "walking speed"
-            case .walkingAsymmetry: return "walking asymmetry"
-            case .walkingStepLength: return "step length"
-            case .walkingDoubleSupport: return "walking double support"
-            case .walkingSteadiness: return "walking steadiness"
-            case .respiratoryRate: return "respiratory rate"
-            case .audioExposureEnvironment: return "environmental audio exposure"
-            case .audioExposureHeadphone: return "headphone audio exposure"
-            case .bmi: return "BMI"
-            case .activeEnergy: return "active energy"
-            case .flightsClimbed: return "flights climbed"
-            case .distanceWalkingRunning: return "walking and running distance"
-            case .timeInDaylight: return "time in daylight"
-            // v0.11 W21 — web-parity body-composition + cardio additions.
-            case .fatFreeMass: return "fat-free mass"
-            case .leanBodyMass: return "lean body mass"
-            case .muscleMass: return "muscle mass"
-            case .skinTemperature: return "skin temperature"
-            case .pulseWaveVelocity: return "pulse-wave velocity"
-            case .vascularAge: return "vascular age"
-            case .visceralFat: return "visceral fat"
-            case .walkingHeartRate: return "walking heart rate"
-            case .fatMass: return "fat mass"
-            // v0.13.1 IC — v1.10.0 additive HealthKit signals.
-            case .falls: return "falls"
-            case .sixMinuteWalk: return "six-minute walk distance"
-            case .stairAscentSpeed: return "stair ascent speed"
-            case .stairDescentSpeed: return "stair descent speed"
-            case .breathingDisturbances: return "breathing disturbances"
-            case .cardioRecovery: return "cardio recovery"
-            case .wristTemperature: return "wrist temperature"
-            // v0.14.6 — v1.12.8 WHOOP-native types.
-            case .averageHeartRate: return "average heart rate"
-            case .maxHeartRate: return "max heart rate"
-            case .sleepDisturbanceCount: return "sleep disturbances"
-            // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).
-            case .ansCharge: return "autonomic charge"
-            case .cardioLoad: return "cardio load"
-            case .sleepScore: return "sleep score"
-            case .bodyTemperatureDeviation: return "body temperature deviation"
-            // v0158 — v1.25 clinical measurement types.
-            case .painNRS: return "pain"
-            case .gripStrength: return "grip strength"
-            case .waistCircumference: return "waist circumference"
-            case .waistToHeight: return "waist-to-height ratio"
-            // Build 3 / item 3.3 — the 21 decoder catch-up types. These strings
-            // are the EN prompt vocabulary the coach binder speaks, not UI copy.
-            case .phq9Score: return "PHQ-9 score"
-            case .gad7Score: return "GAD-7 score"
-            case .who5Score: return "WHO-5 well-being score"
-            case .sciScore: return "sleep condition indicator"
-            case .recoveryScore: return "recovery score"
-            case .stressScore: return "stress score"
-            case .strainScore: return "strain score"
-            case .hrvRMSSD: return "heart rate variability (RMSSD)"
-            case .dayStrain: return "day strain"
-            case .workoutStrain: return "workout strain"
-            case .sleepPerformance: return "sleep performance"
-            case .sleepEfficiency: return "sleep efficiency"
-            case .sleepConsistency: return "sleep consistency"
-            case .sleepNeed: return "sleep need"
-            case .energyExpenditureKJ: return "energy expenditure"
-            case .resilience: return "resilience"
-            case .irregularRhythmNotification: return "irregular rhythm notification"
-            case .highHeartRateEvent: return "high heart rate event"
-            case .lowHeartRateEvent: return "low heart rate event"
-            case .walkingSteadinessEvent: return "walking steadiness event"
-            case .breathingDisturbanceEvent: return "breathing disturbance event"
-            // Build 7 / item 7.3 — mood (EN prompt vocabulary).
-            case .mood: return "mood"
-            // Audit B-4 — the audio-exposure event joins the EN prompt
-            // vocabulary; `.unknown` names itself as unnamed, and never reaches
-            // a digest anyway (the loops walk `selectableCases`).
-            case .audioExposureEvent: return "loud audio notification"
-            case .unknown: return "unknown metric"
-            }
+    /// English prompts use the fixed vocabulary below; German and Dutch read
+    /// the catalogue name, which is in the interface language.
+    private func displayName(for kind: MetricKind, language: AppLanguage) -> String {
+        switch language {
+        case .en: englishName(for: kind)
+        case .de, .nl: kind.displayName
         }
-        return kind.displayName
+    }
+
+    // swiftlint:disable:next cyclomatic_complexity
+    private func englishName(for kind: MetricKind) -> String {
+        switch kind {
+        case .weight: "weight"
+        case .bloodPressure: "blood pressure"
+        case .pulse: "pulse"
+        case .glucose: "glucose"
+        case .bodyFat: "body fat"
+        case .bodyTemperature: "temperature"
+        case .spo2: "SpO2"
+        case .bodyWater: "body water"
+        case .boneMass: "bone mass"
+        case .sleep: "sleep"
+        case .steps: "steps"
+        case .restingHeartRate: "resting heart rate"
+        case .hrv: "HRV"
+        case .vo2Max: "VO2 max"
+        case .walkingSpeed: "walking speed"
+        case .walkingAsymmetry: "walking asymmetry"
+        case .walkingStepLength: "step length"
+        case .walkingDoubleSupport: "walking double support"
+        case .walkingSteadiness: "walking steadiness"
+        case .respiratoryRate: "respiratory rate"
+        case .audioExposureEnvironment: "environmental audio exposure"
+        case .audioExposureHeadphone: "headphone audio exposure"
+        case .bmi: "BMI"
+        case .activeEnergy: "active energy"
+        case .flightsClimbed: "flights climbed"
+        case .distanceWalkingRunning: "walking and running distance"
+        case .timeInDaylight: "time in daylight"
+        // v0.11 W21 — web-parity body-composition + cardio additions.
+        case .fatFreeMass: "fat-free mass"
+        case .leanBodyMass: "lean body mass"
+        case .muscleMass: "muscle mass"
+        case .skinTemperature: "skin temperature"
+        case .pulseWaveVelocity: "pulse-wave velocity"
+        case .vascularAge: "vascular age"
+        case .visceralFat: "visceral fat"
+        case .walkingHeartRate: "walking heart rate"
+        case .fatMass: "fat mass"
+        // v0.13.1 IC — v1.10.0 additive HealthKit signals.
+        case .falls: "falls"
+        case .sixMinuteWalk: "six-minute walk distance"
+        case .stairAscentSpeed: "stair ascent speed"
+        case .stairDescentSpeed: "stair descent speed"
+        case .breathingDisturbances: "breathing disturbances"
+        case .cardioRecovery: "cardio recovery"
+        case .wristTemperature: "wrist temperature"
+        // v0.14.6 — v1.12.8 WHOOP-native types.
+        case .averageHeartRate: "average heart rate"
+        case .maxHeartRate: "max heart rate"
+        case .sleepDisturbanceCount: "sleep disturbances"
+        // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).
+        case .ansCharge: "autonomic charge"
+        case .cardioLoad: "cardio load"
+        case .sleepScore: "sleep score"
+        case .bodyTemperatureDeviation: "body temperature deviation"
+        // v0158 — v1.25 clinical measurement types.
+        case .painNRS: "pain"
+        case .gripStrength: "grip strength"
+        case .waistCircumference: "waist circumference"
+        case .waistToHeight: "waist-to-height ratio"
+        // Build 3 / item 3.3 — the 21 decoder catch-up types. These strings
+        // are the EN prompt vocabulary the coach binder speaks, not UI copy.
+        case .phq9Score: "PHQ-9 score"
+        case .gad7Score: "GAD-7 score"
+        case .who5Score: "WHO-5 well-being score"
+        case .sciScore: "sleep condition indicator"
+        case .recoveryScore: "recovery score"
+        case .stressScore: "stress score"
+        case .strainScore: "strain score"
+        case .hrvRMSSD: "heart rate variability (RMSSD)"
+        case .dayStrain: "day strain"
+        case .workoutStrain: "workout strain"
+        case .sleepPerformance: "sleep performance"
+        case .sleepEfficiency: "sleep efficiency"
+        case .sleepConsistency: "sleep consistency"
+        case .sleepNeed: "sleep need"
+        case .energyExpenditureKJ: "energy expenditure"
+        case .resilience: "resilience"
+        case .irregularRhythmNotification: "irregular rhythm notification"
+        case .highHeartRateEvent: "high heart rate event"
+        case .lowHeartRateEvent: "low heart rate event"
+        case .walkingSteadinessEvent: "walking steadiness event"
+        case .breathingDisturbanceEvent: "breathing disturbance event"
+        // Build 7 / item 7.3 — mood (EN prompt vocabulary).
+        case .mood: "mood"
+        // Audit B-4 — the audio-exposure event joins the EN prompt
+        // vocabulary; `.unknown` names itself as unnamed, and never reaches
+        // a digest anyway (the loops walk `selectableCases`).
+        case .audioExposureEvent: "loud audio notification"
+        case .unknown: "unknown metric"
+        // #162 — Garmin types (EN prompt vocabulary).
+        case .bodyBattery: "Body Battery"
+        case .stressLevel: "stress level"
+        case .trainingReadiness: "training readiness"
+        case .acuteTrainingLoad: "acute training load"
+        case .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes, .stateOfMindValence, .afibBurden: kind.server144PromptName
+        }
     }
 
     private func formatNumber(_ value: Double) -> String {

@@ -258,9 +258,12 @@ import Foundation
             // put a mood the person never expressed into the system Health app,
             // where other apps read it.
             guard let score = entry.score else { return }
+            // HK-NEW (1.5) — the origin marker lets the valence loop guard
+            // (`StateOfMindValencePolicy`) know this sample even without its source.
             let metadata: [String: Any] = [
                 HKMetadataKeyExternalUUID: entry.id,
-                HKMetadataKeyWasUserEntered: true
+                HKMetadataKeyWasUserEntered: true,
+                HealthKitSampleOwnership.appOriginMetadataKey: HealthKitSampleOwnership.appOriginMetadataValue
             ]
             // Score 1..5 → HKStateOfMind.Valence -1.0 ... 1.0 via the shared
             // mapping (let `valenceClassification` derive — never set manually).

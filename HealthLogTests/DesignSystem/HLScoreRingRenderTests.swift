@@ -92,7 +92,10 @@ struct HLScoreRingRenderTests {
         .background(Color.white)
 
         let renderer = ImageRenderer(content: view)
-        renderer.scale = 1
+        // Scale 2, not 1: at 1× the centre text paints only about 50 fully red
+        // pixels (48 on iOS 27.2, 52 on iOS 26.5, same binary, the rest is
+        // anti-aliased), so the floor below sat on the rasterizer's rounding.
+        renderer.scale = 2
         let image = try #require(renderer.uiImage, "ring failed to render")
         let cg = try #require(image.cgImage, "no cgImage")
 
@@ -110,14 +113,9 @@ struct HLScoreRingRenderTests {
         ))
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        // Red-dominant rather than near-pure red: the iOS 27 runtime draws the
-        // centre text with lighter antialiasing, so few pixels reach full
-        // saturation. The default ink is grey and never red-dominant.
         var red = 0
         for index in stride(from: 0, to: pixels.count, by: 4) where pixels[index] > 180
-            && Int(pixels[index]) - Int(pixels[index + 1]) > 80
-            && Int(pixels[index]) - Int(pixels[index + 2]) > 80
-            && pixels[index + 3] > 200
+            && pixels[index + 1] < 80 && pixels[index + 2] < 80 && pixels[index + 3] > 200
         {
             red += 1
         }

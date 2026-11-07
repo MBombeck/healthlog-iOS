@@ -71,9 +71,20 @@ struct McpTokenMintSheet: View {
                 }
             }
             // R2 / #115 A3 — a mint the server wants a fresh proof for:
-            // confirm, then mint again with the elevation.
-            .stepUpConfirmation(store.stepUp) { await mint() }
+            // confirm, then mint again with the elevation. SEC — on a server
+            // that reads the proof the store asks before the first attempt.
+            // POLISH-C (C1) — an account that turns out to hold nothing to
+            // prove (no factor, no passkey) mints on the token instead.
+            .stepUpConfirmation(
+                store.stepUp,
+                waiveWhen: { !McpStore.accountNeedsProof($0) },
+                onWaived: { store.waiveProof() },
+                onConfirmed: { await mint() }
+            )
         }
+        // SEC — closed, swiped down or unmounted by the privacy shield: a
+        // proof given for this sheet does not outlive it.
+        .onDisappear { store.abandonMint() }
     }
 
     private func mint() async {

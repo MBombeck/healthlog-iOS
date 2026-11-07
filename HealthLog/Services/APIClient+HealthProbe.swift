@@ -58,15 +58,10 @@ public extension APIClient {
         // purpose of detecting a live captive portal.
         req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         req.timeoutInterval = max(1, timeout)
-        // CF-Access headers travel on every request when configured; the
-        // public health route ignores them, but a Cloudflare-Access-fronted
-        // instance still needs them to reach the origin at all.
-        if let id = environment.cfAccessClientID {
-            req.setValue(id, forHTTPHeaderField: "cf-access-client-id")
-        }
-        if let token = environment.cfAccessClientToken {
-            req.setValue(token, forHTTPHeaderField: "cf-access-client-token")
-        }
+        // Proxy access headers (GH-iOS #27) travel on every request when
+        // configured; the public health route ignores them, but an instance
+        // behind Cloudflare Access or Pangolin needs them to reach the origin.
+        environment.applyAccessHeaders(to: &req)
 
         do {
             let (data, response) = try await session.data(for: req)

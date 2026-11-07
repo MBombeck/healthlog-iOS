@@ -297,6 +297,12 @@ public extension MedicationsRepository {
         /// ``MedicationTrackIntakeWrite/value(server:edited:scheduleChanged:)``.
         public let trackIntake: Bool?
 
+        /// **v1.42.2 — record doses automatically** (MED-PLUS). Omitted (nil) →
+        /// unchanged server-side; named only when the person flipped the switch
+        /// (``MedicationAutoMarkTakenFormValue/write``). Outside the initialiser
+        /// so every caller stays as it was.
+        public var autoMarkTaken: Bool?
+
         /// **Read-modify-write safety (R1 risk 5).** Every field is optional;
         /// the server applies only the keys present. When `schedules` is
         /// supplied it REPLACES the full schedule list server-side, so a

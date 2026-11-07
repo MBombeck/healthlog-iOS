@@ -54,6 +54,15 @@ targets:
         # Exakte Hosts; ein fuehrendes `*.` erlaubt direkte Subdomains.
         HLPasskeyRelyingPartyHosts:
           - "healthlog.example.com"
+        # --- SSO-Rueckweg ueber Universal Link (SEC 1.5) --------------------
+        # Spiegel der `applinks:`/`webcredentials:`-Domains unten, aus
+        # demselben Grund wie oben. Nur fuer diese exakten Hosts darf die
+        # native SSO-Anmeldung ueber `https` zurueckkehren
+        # (`ASWebAuthenticationSession.Callback.https`), und auch dann nur,
+        # wenn der Server den Rueckweg ankuendigt. Sonst, und fuer jeden
+        # anderen Host, bleibt es bei `healthlog://oidc-callback` mit PKCE.
+        HLAppLinkHosts:
+          - "healthlog.example.com"
     entitlements:
       properties:
         # `webcredentials:` ist Pflicht fuer den Passkey-WebAuthn-Austausch,

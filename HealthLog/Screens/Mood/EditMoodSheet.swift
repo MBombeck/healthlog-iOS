@@ -251,7 +251,7 @@ struct EditMoodSheet: View {
         switch reason {
         case .capabilityNotAllowed:
             String(localized: "Tag suggestions are currently disabled.")
-        case .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady, .frameworkUnavailable:
+        case .deviceIneligible, .appleIntelligenceDisabled, .modelNotReady, .frameworkUnavailable, .languageUnsupported:
             String(localized: "On-device suggestions are not available on this device.")
         case .safetyRefused:
             String(localized: "Suggestions were held back by the safety filter.")

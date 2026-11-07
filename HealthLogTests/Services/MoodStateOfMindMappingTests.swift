@@ -76,6 +76,15 @@ struct MoodStateOfMindMappingTests {
         }
 
         @available(iOS 18.0, *)
+        @Test("Dutch tags map like their German and English twins")
+        func dutchTags() {
+            #expect(MoodStateOfMindMapping.labels(forTags: ["Gestrest"]) == [.stressed])
+            #expect(MoodStateOfMindMapping.labels(forTags: ["dankbaar", "moe"]) == [.grateful, .drained])
+            #expect(MoodStateOfMindMapping.associations(forTags: ["werk"]) == [.work])
+            #expect(MoodStateOfMindMapping.associations(forTags: ["Gezin", "slaap"]) == [.family, .selfCare])
+        }
+
+        @available(iOS 18.0, *)
         @Test("unmatched tags are dropped (not round-tripped)")
         func unmatchedTagsDropped() {
             #expect(MoodStateOfMindMapping.labels(forTags: ["xyzzy", "frei-text"]).isEmpty)

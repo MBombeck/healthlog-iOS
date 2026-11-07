@@ -13,6 +13,8 @@ import Foundation
 /// `cumulativeHourBuckets` and `syncTriggerBackfill` (v1.43, #138) gate
 /// the hourly stats rows and the `backfill` trigger; ``ModuleGate`` hands
 /// them to ``KnownServerVersion`` (see `ServerFeatures+KnownServerVersion`).
+/// `lifeCircumstances` (v1.43, #132) opens "Life circumstances" under
+/// "About me".
 /// This is the one reader of the block: every flag the app acts on lives here.
 public struct ServerFeatures: Decodable, Sendable, Equatable {
     public let trackIntake: Bool
@@ -22,21 +24,25 @@ public struct ServerFeatures: Decodable, Sendable, Equatable {
     public let cumulativeHourBuckets: Bool
     /// `syncTrigger: "backfill"` on the measurement batch.
     public let syncTriggerBackfill: Bool
+    /// The life-circumstance routes (`/api/anamnesis/life-circumstances`).
+    public let lifeCircumstances: Bool
 
     public init(
         trackIntake: Bool = false,
         biomarkerMerge: Bool = false,
         cumulativeHourBuckets: Bool = false,
-        syncTriggerBackfill: Bool = false
+        syncTriggerBackfill: Bool = false,
+        lifeCircumstances: Bool = false
     ) {
         self.trackIntake = trackIntake
         self.biomarkerMerge = biomarkerMerge
         self.cumulativeHourBuckets = cumulativeHourBuckets
         self.syncTriggerBackfill = syncTriggerBackfill
+        self.lifeCircumstances = lifeCircumstances
     }
 
     private enum CodingKeys: String, CodingKey {
-        case trackIntake, biomarkerMerge, cumulativeHourBuckets, syncTriggerBackfill
+        case trackIntake, biomarkerMerge, cumulativeHourBuckets, syncTriggerBackfill, lifeCircumstances
     }
 
     /// Each flag on its own: a mistyped one reads as `false`, never costs the
@@ -47,6 +53,7 @@ public struct ServerFeatures: Decodable, Sendable, Equatable {
         biomarkerMerge = (try? c.decodeIfPresent(Bool.self, forKey: .biomarkerMerge)) == true
         cumulativeHourBuckets = (try? c.decodeIfPresent(Bool.self, forKey: .cumulativeHourBuckets)) == true
         syncTriggerBackfill = (try? c.decodeIfPresent(Bool.self, forKey: .syncTriggerBackfill)) == true
+        lifeCircumstances = (try? c.decodeIfPresent(Bool.self, forKey: .lifeCircumstances)) == true
     }
 }
 

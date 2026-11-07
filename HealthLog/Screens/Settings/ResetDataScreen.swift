@@ -27,6 +27,7 @@ struct ResetDataScreen: View {
     }
 
     @Environment(\.appContainer) private var container
+    @Environment(AuthStore.self) private var authStore
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
@@ -40,6 +41,10 @@ struct ResetDataScreen: View {
     /// structurally cannot satisfy. Renders the web-routing card instead of a
     /// retry banner, mirroring `DeleteAccountScreen.stepUpWebURL`.
     @State private var stepUpWebURL: URL?
+    /// KONTO (#151) — a 1.46 server keeps a copy an admin can restore
+    /// until `restorableUntil`; older servers wipe for good. Decides the copy.
+    @State private var policy: AccountDeletionPolicy = .initial()
+    @State private var receipt: DataWipeReceipt?
 
     /// Per-locale fixed: `LÖSCHEN` (DE) / `DELETE` (EN). Same key the account
     /// deletion screen uses, so the app has exactly one type-confirm vocabulary.
@@ -71,6 +76,7 @@ struct ResetDataScreen: View {
         .navigationTitle("resetData.navTitle")
         .navigationBarTitleDisplayMode(.inline)
         .interactiveDismissDisabled(isResetting)
+        .task { policy = await authStore.accountDeletionPolicy() }
     }
 
     // MARK: - Header
@@ -91,14 +97,14 @@ struct ResetDataScreen: View {
 
     private var explainStep: some View {
         VStack(alignment: .leading, spacing: HLSpace.lg) {
-            Text("resetData.explain.intro")
+            Text(policy.isImmediate ? LocalizedStringKey("resetData.explain.intro") : "resetData.grace.intro")
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
 
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 bullet("resetData.explain.bullet.health")
                 bullet("resetData.explain.bullet.tokens")
-                bullet("resetData.explain.bullet.irreversible")
+                bullet(Text(verbatim: AccountDeletionCopy.resetFinalLine(policy)))
             }
 
             // The distinguishing promise of this screen vs. account deletion.
@@ -109,7 +115,7 @@ struct ResetDataScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Toggle(isOn: $consentChecked) {
-                Text("resetData.explain.consent")
+                Text(policy.isImmediate ? LocalizedStringKey("resetData.explain.consent") : "resetData.grace.consent")
                     .font(.hlBody)
                     .foregroundStyle(HLText.primary)
             }
@@ -137,6 +143,10 @@ struct ResetDataScreen: View {
     }
 
     private func bullet(_ text: LocalizedStringKey) -> some View {
+        bullet(Text(text))
+    }
+
+    private func bullet(_ text: Text) -> some View {
         HStack(alignment: .top, spacing: HLSpace.sm) {
             Image(systemName: "circle.fill")
                 // 6pt list-marker dot — same micro-geometry as DeleteAccountScreen.
@@ -144,7 +154,7 @@ struct ResetDataScreen: View {
                 .font(.system(size: 6))
                 .foregroundStyle(HLText.secondary)
                 .padding(.top, HLSpace.sm)
-            Text(text)
+            text
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
         }
@@ -203,7 +213,7 @@ struct ResetDataScreen: View {
                         .font(.hlHeadline)
                         .foregroundStyle(HLText.primary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("resetData.success.body")
+                    Text(verbatim: AccountDeletionCopy.wipeSuccessMessage(receipt ?? DataWipeReceipt(restorableUntil: nil)))
                         .font(.hlBody)
                         .foregroundStyle(HLText.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -295,7 +305,7 @@ struct ResetDataScreen: View {
         resetError = nil
         defer { isResetting = false }
         do {
-            try await container.accountDataResetRepo.resetAllData()
+            receipt = try await container.accountDataResetRepo.resetAllData()
             // The server wiped the record; drop every in-process cache so the
             // app does not keep painting data that no longer exists. Reuses the
             // account-deletion cleanup hook — same local-wipe semantics, minus
@@ -307,13 +317,23 @@ struct ResetDataScreen: View {
                 stepUpWebURL = container.environment.baseURL?.appendingPathComponent("/settings/data")
                 return
             }
-            resetError = err.localizedDescription
+            resetError = Self.resetErrorText(err)
         } catch {
             resetError = String(localized: "Unknown error")
         }
     }
 
     // MARK: - AccessibilityIdentifiers
+
+    /// KONTO — 503 `data_wipe.copy_failed` (1.46.0) deleted nothing: the
+    /// safety copy could not be written. Say exactly that, never "failed"
+    /// alone, which would leave the person guessing what is left.
+    static func resetErrorText(_ error: HLError) -> String {
+        if case .server(503, AccountDeletionWire.copyFailedCode, _) = error {
+            return String(localized: "resetData.error.copyFailed")
+        }
+        return error.localizedDescription
+    }
 
     static let consentToggleIdentifier = "resetData.consentToggle"
     static let continueButtonIdentifier = "resetData.continueButton"

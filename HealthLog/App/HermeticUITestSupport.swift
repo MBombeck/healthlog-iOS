@@ -1,5 +1,6 @@
 #if DEBUG
     import Foundation
+    import os
 
     /// **W-HERMETIC-E2E (v0152).** Debug-only UI-test infrastructure that boots
     /// the app into a deterministic, network-free authenticated state.
@@ -366,19 +367,38 @@
             request
         }
 
+        /// PERF (1.5) — one line per answered request, read from the host with
+        /// `log show --predicate 'subsystem == "hl.perf"'` to count what a
+        /// screen asks for. Fixture paths only, no account data.
+        private static let perfTrace = Logger(subsystem: "hl.perf", category: "hermetic")
+
         override func startLoading() {
             let path = request.url?.path ?? "/"
+            let perfMethod = request.httpMethod ?? "GET"
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            Self.perfTrace.notice("request \(perfMethod, privacy: .public) \(path, privacy: .public)")
             // Phase 08 — the document filter contract is about *which* answer is
             // on screen, so the fixture router needs the query, not just the
             // path. Everything without a Phase-8 scenario resolves exactly as
             // before through the same path-keyed table.
-            let (status, body) = HermeticFixtures.response(
+            let base = {
+                HermeticFixtures.response(
+                    forPath: path,
+                    method: self.request.httpMethod ?? "GET",
+                    query: self.request.url.flatMap {
+                        URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems
+                    } ?? []
+                )
+            }
+            // 1.5 COACH-R — the v1.41 Coach overlay, only under `-uitest-coach-r`.
+            // LIFE (1.5.0) — the writable life circumstances read the request
+            // body, so they answer before the Coach overlay and the path-keyed table.
+            // 1.5 LAB-LINES — timeline module, lab marker, part of day, usual range (`-uitest-lab-lines`).
+            let (status, body) = LifeFixtures.response(for: request) ?? CoachRFixtures.response(
                 forPath: path,
                 method: request.httpMethod ?? "GET",
-                query: request.url.flatMap {
-                    URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems
-                } ?? []
-            )
+                base: base
+            ) ?? LabLinesFixtures.response(for: request, base: base) ?? base()
             let fallbackURL = URL(string: HermeticUITestSupport.seededBaseURL) ?? URL(fileURLWithPath: "/")
             let url = request.url ?? fallbackURL
             // 12-12 third pass — the marketing overlay's avatar route answers
@@ -404,10 +424,29 @@
                 return
             }
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            // 1.5 COACH-R — a Coach stream that keeps running for a moment.
+            if let split = CoachRFixtures.split(forPath: path, method: request.httpMethod ?? "GET") {
+                client?.urlProtocol(self, didLoad: split.head)
+                pendingTail = split.tail
+                perform(#selector(deliverTail), with: nil, afterDelay: CoachRFixtures.tailDelay)
+                return
+            }
             client?.urlProtocol(self, didLoad: body)
             client?.urlProtocolDidFinishLoading(self)
         }
 
-        override func stopLoading() {}
+        private var stopped = false
+        private var pendingTail: Data?
+
+        /// Runs on the loading thread's run loop, after the delay.
+        @objc private func deliverTail() {
+            guard !stopped, let tail = pendingTail else { return }
+            client?.urlProtocol(self, didLoad: tail)
+            client?.urlProtocolDidFinishLoading(self)
+        }
+
+        override func stopLoading() {
+            stopped = true
+        }
     }
 #endif

@@ -166,8 +166,17 @@ struct SyncDiagnosticsReport: Equatable {
             "  last accepted: \(stampOrNever(snapshot.ledger.lastAcceptedBucket))",
             "  last run: \(gateEvent(snapshot.ledger.lastEvent))",
             "  last held by: \(gateEvent(snapshot.ledger.lastSuppression))",
-            "  raw fallback days: \(snapshot.rawFallbackDayCount)"
+            "  raw fallback days: \(snapshot.rawFallbackDayCount)",
+            // SYNC-HR — the sweep in flight with its age and generation.
+            "  in flight: \(inFlight(snapshot.activity, now: Date()))"
         ]
+    }
+
+    static func inFlight(_ activity: HRBucketSweepActivity?, now: Date) -> String {
+        guard let activity else { return "none" }
+        let age = Int(now.timeIntervalSince(activity.startedAt))
+        return "generation \(activity.generation), since \(stamp(activity.startedAt)), age \(age)s" +
+            (activity.isOverdue(now: now) ? ", overdue" : "")
     }
 
     private static func gateEvent(_ event: HRBucketSyncLedger.Event?) -> String {

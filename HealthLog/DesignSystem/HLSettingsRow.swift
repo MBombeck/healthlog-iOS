@@ -240,6 +240,8 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     /// `nil` ⇒ Push-Zeile (Chevron + `NavigationLink`).
     private let presents: Presents?
     private let destination: Destination?
+    /// SET-ROUTE — a push by value (`NavigationLink(value:)`), see the value init.
+    private let valueLink: ((AnyView) -> NavigationLink<AnyView, Never>)?
     private let action: (() -> Void)?
     private let trailing: Trailing
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -265,6 +267,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
         self.labelTintOverride = labelTintOverride
         presents = nil
         self.destination = destination()
+        valueLink = nil
         action = nil
         self.trailing = trailing()
     }
@@ -291,7 +294,54 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
         self.labelTintOverride = labelTintOverride
         self.presents = presents
         destination = nil
+        valueLink = nil
         self.action = action
+        self.trailing = trailing()
+    }
+
+    /// Push-Zeile per Wert (SET-ROUTE, #153): appends `value` to the
+    /// enclosing stack's path, so the page survives the privacy shield
+    /// rebuilding the window. A `navigationDestination(for:)` of the stack
+    /// resolves it; same chevron as the destination init.
+    public init(
+        icon: String? = nil,
+        title: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
+        presents _: Push,
+        value: some Hashable
+    ) where Destination == EmptyView, Trailing == EmptyView {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        role = .standard
+        labelTintOverride = nil
+        presents = nil
+        destination = nil
+        valueLink = { label in NavigationLink(value: value) { label } }
+        action = nil
+        trailing = EmptyView()
+    }
+
+    /// Push-Zeile per Wert mit Trailing (POLISH-C, C2): the same as above
+    /// with a state pill beside the chevron, for the provider rows of
+    /// Integrations.
+    public init(
+        icon: String? = nil,
+        title: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
+        presents _: Push,
+        value: some Hashable,
+        @ViewBuilder trailing: () -> Trailing
+    ) where Destination == EmptyView {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        role = .standard
+        labelTintOverride = nil
+        presents = nil
+        destination = nil
+        valueLink = { label in NavigationLink(value: value) { label } }
+        action = nil
         self.trailing = trailing()
     }
 
@@ -329,39 +379,60 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     /// From XXL on, where a name and a pill no longer share one line, it
     /// moves under the label (like `HLSettingsRow`'s stacked layout) instead
     /// of squeezing it.
+    ///
+    /// POLISH-C (F-PSEUDO-INTEG) — below XXL a title without subtitle that
+    /// does not fit beside its pill (long translations, double-length
+    /// pseudo text) takes the stacked form too, instead of being pressed
+    /// into syllables ("With-ings").
     @ViewBuilder
     private var label: some View {
         if dynamicTypeSize >= .xxLarge {
-            // The accessory takes the row's full width under it, so a pill
-            // still reads "Verbunden" in one piece at the largest size.
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                HStack(alignment: .top, spacing: HLSpace.md) {
-                    if let icon {
-                        HLSettingsIconChip(symbol: icon, tint: chipTint)
-                    }
-                    labels
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    trailingGlyph
-                }
-                trailing
+            stackedLabel
+        } else if subtitle == nil {
+            ViewThatFits(in: .horizontal) {
+                oneLineLabel(titleFits: true)
+                stackedLabel
             }
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
         } else {
-            HStack(spacing: HLSpace.md) {
+            oneLineLabel(titleFits: false)
+        }
+    }
+
+    private var stackedLabel: some View {
+        // The accessory takes the row's full width under it, so a pill
+        // still reads "Verbunden" in one piece at the largest size.
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
+            HStack(alignment: .top, spacing: HLSpace.md) {
                 if let icon {
                     HLSettingsIconChip(symbol: icon, tint: chipTint)
                 }
                 labels
-                    .layoutPriority(1)
-                Spacer(minLength: HLSpace.sm)
-                trailing
-                    .fixedSize()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 trailingGlyph
             }
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
+            trailing
         }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    /// `titleFits`: the title keeps its one-line width, so this form only
+    /// fits where the title and the pill share the line unbroken.
+    private func oneLineLabel(titleFits: Bool) -> some View {
+        HStack(spacing: HLSpace.md) {
+            if let icon {
+                HLSettingsIconChip(symbol: icon, tint: chipTint)
+            }
+            labels
+                .fixedSize(horizontal: titleFits, vertical: false)
+                .layoutPriority(1)
+            Spacer(minLength: HLSpace.sm)
+            trailing
+                .fixedSize()
+            trailingGlyph
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 
     private var labels: some View {
@@ -396,56 +467,13 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
         if let destination {
             NavigationLink { destination } label: { label }
                 .buttonStyle(.plain)
+        } else if let valueLink {
+            valueLink(AnyView(label))
+                .buttonStyle(.plain)
         } else if let action {
             Button(role: role == .destructive ? .destructive : nil, action: action) { label }
                 .buttonStyle(.plain)
         }
-    }
-}
-
-public extension HLSettingsActionRow where Trailing == EmptyView {
-    /// Convenience — Push-Zeile ohne zusätzliches Trailing-Beiwerk.
-    init(
-        icon: String? = nil,
-        title: LocalizedStringKey,
-        subtitle: LocalizedStringKey? = nil,
-        role: Role = .standard,
-        labelTintOverride: Color? = nil,
-        presents: Push,
-        @ViewBuilder destination: () -> Destination
-    ) {
-        self.init(
-            icon: icon,
-            title: title,
-            subtitle: subtitle,
-            role: role,
-            labelTintOverride: labelTintOverride,
-            presents: presents,
-            trailing: { EmptyView() },
-            destination: destination
-        )
-    }
-
-    /// Convenience — Aktions-Zeile ohne zusätzliches Trailing-Beiwerk.
-    init(
-        icon: String? = nil,
-        title: LocalizedStringKey,
-        subtitle: LocalizedStringKey? = nil,
-        role: Role = .standard,
-        labelTintOverride: Color? = nil,
-        presents: Presents,
-        action: @escaping () -> Void
-    ) where Destination == EmptyView {
-        self.init(
-            icon: icon,
-            title: title,
-            subtitle: subtitle,
-            role: role,
-            labelTintOverride: labelTintOverride,
-            presents: presents,
-            trailing: { EmptyView() },
-            action: action
-        )
     }
 }
 
@@ -518,58 +546,5 @@ public struct HLSettingsIconChip: View {
                     .foregroundStyle(HLText.secondary)
             }
         }
-    }
-}
-
-// MARK: - Stat row
-
-/// **1.4 B4 — one label and its value.** At the standard sizes the value sits
-/// trailing and wraps in full; at an accessibility size it moves under its
-/// label, so neither is squeezed into a column of syllables ("Bundle / -ID",
-/// "de-v.health-log.app"). The sync diagnostics, its server view and About
-/// share it; a value never stops after a few lines ("47 nicht…").
-struct HLSettingsStatRow: View {
-    let label: Text
-    let value: String
-    let tint: Color
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    init(label: Text, value: String, tint: Color = HLText.secondary) {
-        self.label = label
-        self.value = value
-        self.tint = tint
-    }
-
-    var body: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                labelText
-                valueText(alignment: .leading)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-        } else {
-            HStack(alignment: .firstTextBaseline) {
-                labelText
-                Spacer(minLength: HLSpace.md)
-                valueText(alignment: .trailing)
-            }
-            .accessibilityElement(children: .combine)
-        }
-    }
-
-    private var labelText: some View {
-        label
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.primary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func valueText(alignment: TextAlignment) -> some View {
-        Text(verbatim: value)
-            .font(.hlBody.monospacedDigit())
-            .foregroundStyle(tint)
-            .multilineTextAlignment(alignment)
-            .fixedSize(horizontal: false, vertical: true)
     }
 }

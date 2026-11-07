@@ -87,6 +87,15 @@ public actor OAuthIntegrationRepository {
     }
 
     /// Revokes the link. `POST` (server contract) with an empty body.
+    /// KONTO (#149) — the Fitbit turndown, read from the consolidated
+    /// `GET /api/integrations/status` (the only read that carries it). `nil`
+    /// for every other provider and for a server without the field.
+    public func retirement() async throws -> FitbitRetirement? {
+        guard provider == .fitbit else { return nil }
+        let req: APIRequest<IntegrationsRetirementPayload> = .get("/api/integrations/status")
+        return try await api.send(req).fitbit
+    }
+
     public func disconnect() async throws {
         let req: APIRequest<EmptyPayload> = try .post("\(base)/disconnect", body: EmptyBody())
         try await api.sendVoid(req)

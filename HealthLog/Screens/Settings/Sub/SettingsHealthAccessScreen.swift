@@ -444,6 +444,12 @@ enum HealthAccessTypeNaming {
         "HKQuantityTypeIdentifierNumberOfTimesFallen": "health.permissions.type.numberOfTimesFallen",
         // B5 (1.4) — waist circumference joins the read set.
         "HKQuantityTypeIdentifierWaistCircumference": "health.permissions.type.waistCircumference",
+        // HK-NEW (1.5) — the server-v1.44 read types (State of Mind is below).
+        "HKQuantityTypeIdentifierAppleExerciseTime": "health.permissions.type.exerciseTime",
+        "HKQuantityTypeIdentifierAppleStandTime": "health.permissions.type.standTime",
+        "HKCategoryTypeIdentifierAppleStandHour": "health.permissions.type.standHour",
+        "HKCategoryTypeIdentifierMindfulSession": "health.permissions.type.mindfulSession",
+        "HKQuantityTypeIdentifierAtrialFibrillationBurden": "health.permissions.type.afibBurden",
         // v0.14.8 W-HKREAD — seven categorical EVENT classes read by the
         // `HeartHealthEventImporter`. Read-only (never written back), but they
         // join the always-on read transparency list and so need names too.

@@ -234,17 +234,39 @@ public struct NotificationPreferencesPayload: Codable, Sendable, Equatable {
     /// `nil` on a legacy server; the iOS-local reminder defaults its hour to
     /// 22 in that case.
     public let mood: MoodNotificationPrefs?
+    /// KONTO (#149, server 1.43.11) — the server's own per-event default
+    /// for a (channel, event) with no stored row. Wins over the mirrored table
+    /// in ``NotificationEventDefaults``, which stays the fallback for an older
+    /// server (and for an event this map leaves out). Optional, so a payload
+    /// cached by 1.4.1 still decodes.
+    public let eventDefaults: [String: Bool]?
 
     public init(
         channels: [NotificationChannel],
         preferences: [NotificationPreference],
         eventTypes: [String],
-        mood: MoodNotificationPrefs? = nil
+        mood: MoodNotificationPrefs? = nil,
+        eventDefaults: [String: Bool]? = nil
     ) {
         self.channels = channels
         self.preferences = preferences
         self.eventTypes = eventTypes
         self.mood = mood
+        self.eventDefaults = eventDefaults
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case channels, preferences, eventTypes, mood, eventDefaults
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        channels = try c.decode([NotificationChannel].self, forKey: .channels)
+        preferences = try c.decode([NotificationPreference].self, forKey: .preferences)
+        eventTypes = try c.decode([String].self, forKey: .eventTypes)
+        mood = try c.decodeIfPresent(MoodNotificationPrefs.self, forKey: .mood)
+        // Tolerant: a malformed map is the same as none, never a failed read.
+        eventDefaults = try? c.decodeIfPresent([String: Bool].self, forKey: .eventDefaults)
     }
 
     /// The local-clock hour (0–23) for the evening mood reminder, clamped to a
@@ -277,7 +299,7 @@ public struct NotificationPreferencesPayload: Codable, Sendable, Equatable {
         if let pref = preferences.first(where: { $0.channelId == channelId && $0.eventType == eventType }) {
             return pref.enabled
         }
-        return NotificationEventDefaults.isOn(eventType)
+        return eventDefaults?[eventType] ?? NotificationEventDefaults.isOn(eventType)
     }
 }
 

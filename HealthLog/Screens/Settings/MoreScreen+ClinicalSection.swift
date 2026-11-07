@@ -20,9 +20,7 @@ extension MoreScreen {
         // point moved one hop deeper into `AboutMeScreen`. The
         // illness/allergies/family descriptors still live in `Layout`
         // (consumed by the hub), just no longer as direct rows here.
-        NavigationLink {
-            AboutMeScreen()
-        } label: {
+        NavigationLink(value: MoreRoute.aboutMe) {
             HLSettingsRow(
                 icon: Layout.aboutMeRow.icon,
                 title: LocalizedStringKey(Layout.aboutMeRow.title),
@@ -40,9 +38,7 @@ extension MoreScreen {
         // The CycleGate hides this row for ineligible / opted-out users, and
         // it is hard-gated behind `FeatureFlag.cycleTracking` (default OFF).
         if container?.cycleGate.isCycleTrackingAvailable == true {
-            NavigationLink {
-                CycleScreen()
-            } label: {
+            NavigationLink(value: SettingsRoute.cycle) {
                 HLSettingsRow(
                     icon: Layout.cycleRow.icon,
                     title: LocalizedStringKey(Layout.cycleRow.title),
@@ -60,9 +56,7 @@ extension MoreScreen {
         // dead end. A non-eligible user who wants to opt in still can, via
         // the opt-in toggle on the Apple-Health integration screen directly.
         if container?.cycleGate.isCycleTrackingAvailable == true {
-            NavigationLink {
-                AppleHealthIntegrationDetailScreen()
-            } label: {
+            NavigationLink(value: SettingsRoute.appleHealthDetail) {
                 HLSettingsRow(
                     icon: Layout.cycleSettingsRow.icon,
                     title: LocalizedStringKey(Layout.cycleSettingsRow.title),
@@ -75,9 +69,7 @@ extension MoreScreen {
         // `labs` server module (default-on). Promoted out of the generic
         // "Records & achievements" drawer into the clinical spine (web parity).
         if container?.moduleGate.isEnabled(.labs) != false {
-            NavigationLink {
-                LabsScreen()
-            } label: {
+            NavigationLink(value: MoreRoute.labs) {
                 HLSettingsRow(
                     icon: Layout.labsRow.icon,
                     title: LocalizedStringKey(Layout.labsRow.title),
@@ -95,9 +87,7 @@ extension MoreScreen {
         // `IllnessJournalScreen` + its `.illness` module gate are
         // unchanged; only the entry point moved back out of the hub.
         if container?.moduleGate.isEnabled(.illness) != false {
-            NavigationLink {
-                IllnessJournalScreen()
-            } label: {
+            NavigationLink(value: MoreRoute.illness) {
                 HLSettingsRow(
                     icon: Layout.illnessRow.icon,
                     title: LocalizedStringKey(Layout.illnessRow.title),
@@ -110,9 +100,7 @@ extension MoreScreen {
         // (server ships it OFF by default). Same `!= false` gate idiom; the
         // vault self-gates to an enable-CTA if the route 403's mid-flight.
         if container?.moduleGate.isEnabled(.inboundDocuments) != false {
-            NavigationLink {
-                DocumentsScreen()
-            } label: {
+            NavigationLink(value: MoreRoute.documents) {
                 HLSettingsRow(
                     icon: Layout.documentsRow.icon,
                     title: LocalizedStringKey(Layout.documentsRow.title),
@@ -126,9 +114,7 @@ extension MoreScreen {
         // default-on `!= false` idiom; the screen self-gates to the
         // enable-in-settings hint if the route 403's mid-flight.
         if container?.moduleGate.isEnabled(.nutrients) != false {
-            NavigationLink {
-                NutrientListScreen()
-            } label: {
+            NavigationLink(value: MoreRoute.nutrients) {
                 HLSettingsRow(
                     icon: Layout.nutritionRow.icon,
                     title: LocalizedStringKey(Layout.nutritionRow.title),
@@ -142,9 +128,7 @@ extension MoreScreen {
         // the rows above; the screen self-gates to the disabled hint if the
         // `/api/environment` route 403's mid-flight.
         if container?.moduleGate.isEnabled(.environment) != false {
-            NavigationLink {
-                EnvironmentScreen()
-            } label: {
+            NavigationLink(value: MoreRoute.environment) {
                 HLSettingsRow(
                     icon: Layout.environmentRow.icon,
                     title: LocalizedStringKey(Layout.environmentRow.title),
@@ -164,9 +148,7 @@ extension MoreScreen {
         // anyone who had switched the module off. Same default-on
         // `!= false` idiom as the illness/documents rows above.
         if container?.moduleGate.isEnabled(.mentalHealth) != false {
-            NavigationLink {
-                MentalWellbeingScreen()
-            } label: {
+            NavigationLink(value: MentalWellbeingRoute()) {
                 HLSettingsRow(
                     icon: Layout.mentalWellbeingRow.icon,
                     title: LocalizedStringKey(Layout.mentalWellbeingRow.title),
@@ -180,9 +162,7 @@ extension MoreScreen {
         // or be free-text — gating would orphan reminders the user can
         // still create). The deep path (gear → Notifications → preventive
         // card → Manage) still works; this is the direct front door.
-        NavigationLink {
-            MeasurementRemindersScreen()
-        } label: {
+        NavigationLink(value: SettingsRoute.checkups) {
             HLSettingsRow(
                 icon: Layout.vorsorgeRow.icon,
                 title: LocalizedStringKey(Layout.vorsorgeRow.title),
@@ -191,9 +171,7 @@ extension MoreScreen {
         }
         .accessibilityIdentifier(Layout.vorsorgeRow.accessibilityIdentifier)
         // 1.0.3 (App Review 1.4.1) — Medical sources hub. CORE, never gated.
-        NavigationLink {
-            MedicalSourcesScreen()
-        } label: {
+        NavigationLink(value: MoreRoute.medicalSources) {
             HLSettingsRow(
                 icon: Layout.medicalSourcesRow.icon,
                 title: LocalizedStringKey(Layout.medicalSourcesRow.title),

@@ -298,7 +298,7 @@ public struct PhotoOfMedSheet: View {
         private func runPipeline(on image: UIImage) async {
             do {
                 let ocr = try await ocrService.recognise(image)
-                let outcome = await extractionService.extract(from: ocr.rawText, locale: .current)
+                let outcome = await extractionService.extract(from: ocr.rawText, locale: AppLanguage.current.locale)
                 if let draft = outcome.draft {
                     state = .preview(draft: draft, rawText: ocr.rawText)
                     return

@@ -23,8 +23,15 @@ concurrency:
 
 jobs:
   build-test:
-    runs-on: [self-hosted, macOS, healthlog-mini]
+    # 1.5 CI-FORK: pull requests from forks never run on the Mac mini. They
+    # get a GitHub-hosted macOS runner (free for public repos), which installs
+    # the pinned Xcode and tools itself (the "hosted runner" steps below). The
+    # runner mini-public additionally rejects fork jobs in its job-started
+    # hook, because a fork can edit this file. The same condition decides
+    # HEALTHLOG_RUNNER; the contract test keeps the two in step.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'macos-26' || fromJSON('["self-hosted", "macOS", "healthlog-mini"]') }}
     env:
+      HEALTHLOG_RUNNER: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'hosted' || 'mini' }}
       # Two runners (dev + public mirror) share one machine lock; a run may
       # legitimately wait for the other's test step or for a release freeze.
       HEALTHLOG_XCODE_GATE_WAIT_SECONDS: "7200"
@@ -38,6 +45,50 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Hosted runner only: select Xcode 27.2 from the image or stop with a
+      # clear message. Nothing is downloaded silently in its place.
+      - name: Select Xcode (hosted runner)
+        if: env.HEALTHLOG_RUNNER == 'hosted'
+        run: |
+          app="/Applications/Xcode_27.2.app"
+          if [[ ! -d "$app" ]]; then
+            echo "::error::Xcode 27.2 is not on this runner image; available:" >&2
+            ls -d /Applications/Xcode*.app >&2 || true
+            exit 1
+          fi
+          sudo xcode-select -s "$app/Contents/Developer"
+
+      # Hosted runner only: the release gates' exact tool versions, from the
+      # upstream release archives, each checked against a pinned SHA-256.
+      - name: Install pinned tooling (hosted runner)
+        if: env.HEALTHLOG_RUNNER == 'hosted'
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/hl-tools"
+          mkdir -p "$tools/bin"
+          fetch() {
+            curl -fsSL --retry 3 -o "$tools/$1" "$2"
+            echo "$3  $tools/$1" | shasum -a 256 -c -
+          }
+          fetch xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+          fetch swiftformat.zip https://github.com/nicklockwood/SwiftFormat/releases/download/0.63.0/swiftformat.zip 28c7802e11fa5ae113d903066439c6bb1be20a8ac1ad9709c42616a7e273fb0f
+          fetch swiftlint.zip https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0
+          unzip -q "$tools/xcodegen.zip" -d "$tools"
+          unzip -q -o "$tools/swiftformat.zip" -d "$tools/bin"
+          unzip -q -o "$tools/swiftlint.zip" -d "$tools/swiftlint"
+          cp "$tools/swiftlint/swiftlint" "$tools/bin/swiftlint"
+          chmod +x "$tools/bin/swiftformat" "$tools/bin/swiftlint" "$tools/xcodegen/bin/xcodegen"
+          echo "$tools/xcodegen/bin" >>"$GITHUB_PATH"
+          echo "$tools/bin" >>"$GITHUB_PATH"
+
+      # Hosted runner only: mlx-swift needs the separate Metal toolchain
+      # component of Xcode 27 (docs/runbook.md). The Mac mini must already
+      # have it; "Verify Tooling" below checks both runners.
+      - name: Provide Metal toolchain (hosted runner)
+        if: env.HEALTHLOG_RUNNER == 'hosted'
+        run: |
+          xcodebuild -showComponent MetalToolchain | grep -q "^Status: installed$" || xcodebuild -downloadComponent MetalToolchain
 
       # C1 (audit v0.16.2): CI must run an Xcode with a Swift 6.2+ toolchain
       # — SpeziScheduler 1.2.20 (exact-pinned direct dep) ships a
@@ -61,6 +112,9 @@ jobs:
           xcodegen --version
           [[ "$(swiftformat --version)" == "0.63.0" ]] || { echo "swiftformat must be 0.63.0, is $(swiftformat --version)" >&2; exit 1; }
           [[ "$(swiftlint version)" == "0.65.1" ]] || { echo "swiftlint must be 0.65.1, is $(swiftlint version)" >&2; exit 1; }
+          # mlx-swift compiles Metal shaders; Xcode 27 ships the Metal
+          # toolchain as a separate component (docs/runbook.md).
+          xcodebuild -showComponent MetalToolchain | grep -q "^Status: installed$" || { echo "Metal toolchain missing: xcodebuild -downloadComponent MetalToolchain" >&2; exit 1; }
 
       - name: Verify pinned server contract
         # The pinned-contract evidence lives in `.planning/`, which the public
@@ -71,6 +125,10 @@ jobs:
         run: |
           bash scripts/verify-server-contract-fixtures.sh
           bash scripts/verify-server-contract-fixtures.sh --self-test
+          # 1.5 POLISH-C — every iOS `/api/...` string against the pinned
+          # server route inventory (v1.47.0) and the exceptions ledger. The
+          # self-test ends with the live run over the real repository.
+          bash scripts/test-verify-route-matrix.sh
 
       - name: Verify CI release gate contract
         run: scripts/test-ci-workflow-contract.sh
@@ -98,6 +156,7 @@ jobs:
           bash scripts/lint-strict-baseline.sh --self-test
           bash scripts/lint-strict-baseline.sh
           # i18n boundary (v0.8.0 W5): localization-API-scoped German-leak gate.
+          python3 scripts/i18n-guard.py --self-test
           python3 scripts/i18n-guard.py HealthLog
           # UI-Standard E8 (R18) — Katalog-Hygiene, von U9 verdrahtet: das
           # Skript existiert seit W0, lief aber nur von Hand. Es prueft
@@ -109,6 +168,21 @@ jobs:
           # permission prompts and the Swift-composed strings. Self-test first.
           python3 scripts/check-visible-punctuation.py --self-test
           python3 scripts/check-visible-punctuation.py
+          # 1.5 Z1 — catalog workbench (R2 3.3). Self-tests first, so a check
+          # that no longer bites fails before it can wave the catalogs
+          # through: the catalog writer, the merge driver, the format gate.
+          bash scripts/test-xcstrings-add.sh
+          python3 scripts/l10n/merge-xcstrings.py --self-test
+          python3 scripts/l10n/check-catalog-format.py --self-test
+          python3 scripts/l10n/fill-placeholders.py --self-test
+          # 1.5 L10N-FINAL — the medical sign-off never approves an English
+          # placeholder; it runs only in ABN, its self-test runs here.
+          python3 scripts/l10n/signoff-medical.py --self-test
+          # Specifiers, CLDR plurals, empty values and required languages in
+          # all five catalogs, languages.json against CFBundleLocalizations;
+          # medical keys awaiting review are reported (--release fails on them
+          # in the freeze pregates, not here).
+          python3 scripts/l10n/check-catalog-format.py
 
       - name: Generate Xcode project
         run: xcodegen
@@ -139,8 +213,24 @@ jobs:
       # classes dismiss it, but the timing occasionally beats them
       # (CANDIDATE-FREEZE.md §2R). The release producer keeps its single-shot
       # gate; CI reports a genuine failure only when both iterations fail.
+      # Not on the hosted runner: fork runs stay short (build, unit suite,
+      # SPM core); the UI gate runs on the Mac mini for every own branch and
+      # in the release producer.
       - name: Test — release UI gate (iOS Simulator)
+        if: env.HEALTHLOG_RUNNER != 'hosted'
         run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -retry-tests-on-failure -test-iterations 2 -only-testing:HealthLogUITests/AuthJourneyUITest -only-testing:HealthLogUITests/LoginBounceUITests -only-testing:HealthLogUITests/WebLoginJourneyUITest
+
+      # 1.5 MATRIX — public #2 (build 273): a NON-weak reference to a HealthKit
+      # symbol that only exists from iOS 26 aborted the launch on iOS 18 in
+      # dyld, before any line of the app ran. Only the Release binary shows the
+      # real links (in Debug the code sits in HealthLog.debug.dylib), so this
+      # step builds Release through the same gate and checks the main binary.
+      # Self-test first, live check second, on every runner.
+      - name: Release links (no strong iOS 26 symbols)
+        run: |
+          bash scripts/verify-no-strong-ios26-symbols.sh --self-test
+          scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- build -configuration Release -skipMacroValidation CODE_SIGN_IDENTITY=-
+          bash scripts/verify-no-strong-ios26-symbols.sh "/tmp/dd-hl-ci-${{ github.run_id }}/Build/Products/Release-iphonesimulator/HealthLog.app/HealthLog"
 
       - name: Free the gate caches
         if: always()

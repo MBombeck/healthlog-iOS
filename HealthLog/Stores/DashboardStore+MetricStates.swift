@@ -614,9 +614,9 @@ extension DashboardStore {
              .phq9Score, .gad7Score, .who5Score, .sciScore,
              .recoveryScore, .stressScore, .strainScore, .hrvRMSSD,
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
-             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
-             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent,
+             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
+             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence, .afibBurden,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
              // Build 7 / item 7.3 — mood is not a `Measurement`; no series
              // endpoint. The tile renders from the summary snapshot.
              .mood,

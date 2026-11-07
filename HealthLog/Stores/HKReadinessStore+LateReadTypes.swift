@@ -44,12 +44,69 @@ public extension HKReadinessStore {
     /// after the one attempt, so a declined request never comes back.
     ///
     /// - Returns: `true` when the sheet was requested.
+    ///
+    /// HK-NEW (1.5): types that need an explanation first (``LateReadType/announced``)
+    /// are left out here. They are asked only from the dashboard card or the
+    /// Apple Health settings page, after the person read what is new
+    /// (``requestAnnouncedReadAuthorization()``), so an update never opens a
+    /// system sheet out of nowhere.
     @discardableResult
     func requestLateReadAuthorizationIfNeeded() async -> Bool {
         #if canImport(HealthKit)
-            await requestLateReadAuthorizationIfNeeded(lateReadTypes())
+            await requestLateReadAuthorizationIfNeeded(lateReadTypes().filter { !$0.announced })
         #else
             false
+        #endif
+    }
+
+    /// HK-NEW (1.5) — the per-user flag prefix of one announced type.
+    nonisolated static func announcedReadRequestedKeyPrefix(for identifier: String) -> String {
+        "hl.healthkit.lateRead." + identifier + "."
+    }
+
+    /// HK-NEW (1.5) — the flags of the announced types go with the user, like
+    /// the RMSSD and waist flags.
+    nonisolated static func clearAnnouncedReadFlags(for userId: String?, in defaults: UserDefaults) {
+        for identifier in HealthKitServer144Types.lateReadIdentifiers {
+            defaults.removeObject(forKey: announcedReadRequestedKeyPrefix(for: identifier) + partitionToken(for: userId))
+        }
+    }
+
+    /// HK-NEW (1.5) — the announced types this person would be asked for now:
+    /// resolved, stored by the server, not yet decided here (``ignoringFlags``
+    /// `false`, the dashboard card) or simply still unanswered in iOS
+    /// (``ignoringFlags`` `true`, the settings page, which stays a way back
+    /// after "Not now"). Identifiers in the order of the table.
+    func pendingAnnouncedReadTypes(ignoringFlags: Bool = false) async -> [String] {
+        #if canImport(HealthKit)
+            await announcedCandidates(ignoringFlags: ignoringFlags).map(\.type.identifier)
+        #else
+            []
+        #endif
+    }
+
+    /// HK-NEW (1.5) — "Allow" on the card or the settings link: one system
+    /// sheet for the announced types still open. Flags are set after the one
+    /// attempt, so the card does not come back.
+    @discardableResult
+    func requestAnnouncedReadAuthorization(ignoringFlags: Bool = false) async -> Bool {
+        #if canImport(HealthKit)
+            let ask = await announcedCandidates(ignoringFlags: ignoringFlags)
+            guard !ask.isEmpty else { return false }
+            return await requestReadSheet(for: ask)
+        #else
+            false
+        #endif
+    }
+
+    /// HK-NEW (1.5) — "Not now" on the card: the open announced types count
+    /// as decided for the automatic paths. Nothing is asked; the settings page
+    /// still offers them while iOS calls them unanswered.
+    func declineAnnouncedReadTypes() async {
+        #if canImport(HealthKit)
+            for entry in await announcedCandidates(ignoringFlags: false) {
+                defaults.set(true, forKey: entry.flag)
+            }
         #endif
     }
 
@@ -61,6 +118,9 @@ public extension HKReadinessStore {
             let type: HKObjectType?
             let flagPrefix: String
             let serverAccepts: Bool
+            /// HK-NEW (1.5) — asked only after the person read an explanation
+            /// (dashboard card, settings link), never by the foreground path.
+            var announced = false
         }
 
         /// The types this build adds after the first sheet, as this system and
@@ -81,7 +141,39 @@ public extension HKReadinessStore {
                         defaults: defaults
                     )
                 )
-            ]
+            ] + HealthKitServer144Types.lateReadIdentifiers.map { identifier in
+                // HK-NEW (1.5) — server v1.44 (or its `acceptedTypes`), after
+                // an explanation.
+                LateReadType(
+                    type: HealthKitServer144Types.readType(for: identifier),
+                    flagPrefix: Self.announcedReadRequestedKeyPrefix(for: identifier),
+                    serverAccepts: HealthKitServerTypeGate.serverAccepts(identifier, defaults: defaults),
+                    announced: true
+                )
+            }
+        }
+
+        /// HK-NEW (1.5) — the announced candidates the system still calls
+        /// unanswered. Same rule as the automatic path; `ignoringFlags` lets the
+        /// settings page offer a type the card was dismissed for.
+        internal func announcedCandidates(
+            ignoringFlags: Bool,
+            from candidates: [LateReadType]? = nil
+        ) async -> [(type: HKObjectType, flag: String)] {
+            let announced = (candidates ?? lateReadTypes()).filter(\.announced)
+            let token = Self.partitionToken(for: currentUserID)
+            let open: [(type: HKObjectType, flag: String)]
+            if ignoringFlags {
+                guard hasEverRequestedAuthorization else { return [] }
+                open = announced.compactMap { candidate in
+                    guard let type = candidate.type, candidate.serverAccepts else { return nil }
+                    return (type, candidate.flagPrefix + token)
+                }
+            } else {
+                open = openLateReadTypes(announced, token: token)
+            }
+            guard !open.isEmpty, let service = healthKit as? any HealthKitServiceProtocol else { return [] }
+            return await unansweredLateReadTypes(open, service: service, recordAnswered: !ignoringFlags)
         }
 
         /// The RMSSD half of the rule on its own, with its two platform facts
@@ -107,6 +199,16 @@ public extension HKReadinessStore {
                   !Task.isCancelled else { return false }
             let ask = await unansweredLateReadTypes(open, service: service)
             guard !ask.isEmpty, currentUserID == ownerUserID, !Task.isCancelled else { return false }
+            return await requestReadSheet(for: ask)
+        }
+
+        /// One read-only system sheet for `ask`; the flags are set after the
+        /// attempt.
+        private func requestReadSheet(for ask: [(type: HKObjectType, flag: String)]) async -> Bool {
+            guard let service = healthKit as? any HealthKitServiceProtocol,
+                  let owner = currentUserID,
+                  !owner.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !Task.isCancelled else { return false }
             do {
                 try await service.requestAuthorization(read: Set(ask.map(\.type)), write: [])
                 for entry in ask {
@@ -147,13 +249,14 @@ public extension HKReadinessStore {
         /// status the system cannot give leaves it for a later foreground.
         private func unansweredLateReadTypes(
             _ open: [(type: HKObjectType, flag: String)],
-            service: any HealthKitServiceProtocol
+            service: any HealthKitServiceProtocol,
+            recordAnswered: Bool = true
         ) async -> [(type: HKObjectType, flag: String)] {
             var ask: [(type: HKObjectType, flag: String)] = []
             for entry in open {
                 switch await service.authorizationRequestStatus(toShare: [], read: [entry.type]) {
                 case .unnecessary:
-                    defaults.set(true, forKey: entry.flag)
+                    if recordAnswered { defaults.set(true, forKey: entry.flag) }
                 case .shouldRequest:
                     ask.append(entry)
                 default:

@@ -93,19 +93,24 @@ public struct PaginatedIntakeEvent: Codable, Sendable, Hashable, Identifiable {
     public let skipped: Bool
     public let scheduledFor: Date
     public let injectionSite: String?
+    /// v1.42.2 — recorded by the server (`autoMarkTaken`), not the person.
+    /// `nil` from an older server.
+    public let autoRecorded: Bool?
 
     public init(
         id: String,
         takenAt: Date?,
         skipped: Bool,
         scheduledFor: Date,
-        injectionSite: String? = nil
+        injectionSite: String? = nil,
+        autoRecorded: Bool? = nil
     ) {
         self.id = id
         self.takenAt = takenAt
         self.skipped = skipped
         self.scheduledFor = scheduledFor
         self.injectionSite = injectionSite
+        self.autoRecorded = autoRecorded
     }
 }
 

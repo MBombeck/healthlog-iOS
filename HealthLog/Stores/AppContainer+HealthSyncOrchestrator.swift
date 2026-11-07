@@ -3,7 +3,7 @@ import Foundation
 // Phase 07 Wave 4 — the composition half of the orchestrator.
 //
 // `HealthSyncOrchestrator` deliberately knows nothing about this app: it takes
-// eleven `Sendable` closures and returns eleven named results. This file is the
+// twelve `Sendable` closures and returns twelve named results. This file is the
 // only place where those closures become HealthKit work, and the only place
 // where "which account is this for" is asked on their behalf.
 //
@@ -12,7 +12,7 @@ import Foundation
 // BGAppRefresh wake, the foreground revalidate, the manual "Jetzt syncen" and
 // the silent push — already funnels through `SpeziCollectionTrigger`, so wiring
 // the complete plan in edits no call site Plan 07-09 owns and adds no new direct
-// trigger. What changes is what a trigger *reaches*: eleven named capabilities
+// trigger. What changes is what a trigger *reaches*: twelve named capabilities
 // instead of the thirty-five sample types alone.
 //
 // Static and by-value, like `installAppOwnedHealthCollection`: every handle it
@@ -20,7 +20,7 @@ import Foundation
 // adapters need neither `self` nor an isolation hop to reach them.
 
 extension AppContainer {
-    /// Everything the eleven adapters need, in one value.
+    /// Everything the twelve adapters need, in one value.
     ///
     /// A struct rather than eleven parameters because the alternative is a
     /// twelve-argument function that trips `function_parameter_count` and reads
@@ -45,6 +45,8 @@ extension AppContainer {
         let backgroundSync: BackgroundSyncCoordinator
         let keychain: KeychainStoring
         let sessionRegistry: AuthenticatedSessionLeaseRegistry
+        /// MIRROR (1.5) — the one list request of the background server mirror.
+        let measurementsRepo: MeasurementsRepository
     }
 
     /// Collects the handles off the finished container and installs the pass.
@@ -66,7 +68,8 @@ extension AppContainer {
                 cycleRepo: cycleRepo,
                 backgroundSync: backgroundSync,
                 keychain: keychain,
-                sessionRegistry: authenticatedSessionRegistry
+                sessionRegistry: authenticatedSessionRegistry,
+                measurementsRepo: measurementsRepo
             ),
             report: { pass in
                 await Self.publishHealthSyncPass(pass, to: syncStateStore)
@@ -101,7 +104,7 @@ extension AppContainer {
         #endif
     }
 
-    /// The eleven adapters. Every argument is labelled, so a new
+    /// The twelve adapters. Every argument is labelled, so a new
     /// `HealthSyncCapability` breaks this function until someone decides what it
     /// means here — which is the entire point of the registry being a compiler
     /// problem rather than a review problem.
@@ -124,21 +127,7 @@ extension AppContainer {
                 #endif
             },
             workoutImport: { context in
-                // Through the coordinator's own hook, so the authenticated-user
-                // resolution and the post-ingest workout-list revalidation that
-                // `wireWorkoutBackgroundSync` owns still apply — and so the
-                // `WorkoutSyncDiagnosticContext` provenance still names the wake.
-                let mode: WorkoutSyncPassMode = context.budget.incrementalOnly ? .incrementalOnly : .processing
-                let didWork = await handles.backgroundSync.runWorkoutSync(
-                    mode: mode,
-                    source: workoutSource(for: context.trigger)
-                )
-                // `false` means "no authenticated user, no wired importer, or an
-                // incremental wake with no anchor yet": nothing was lost and
-                // nothing was proven, which is what `deferred` says.
-                return didWork
-                    ? .ran(.workoutImport)
-                    : HealthSyncCapabilityResult(capability: .workoutImport, disposition: .deferred)
+                await runWorkoutImport(handles.backgroundSync, context: context)
             },
             ecgUpload: { _ in
                 // Deliberately not admission-annotated. Plan 07-06 kept the ECG
@@ -156,7 +145,8 @@ extension AppContainer {
             },
             heartRateBuckets: { context in
                 guard let sync = handles.hrBuckets else { return .unsupported(.heartRateBuckets) }
-                await sync.triggerHRBucketSync(lookbackHours: context.budget.incrementalOnly ? 6 : 48)
+                // SYNC-HR — the window reaches the sweep: when it closes, the sweep is abandoned and its query stopped.
+                await sync.triggerHRBucketSync(lookbackHours: context.budget.incrementalOnly ? 6 : 48, isExpired: context.isExpired)
                 return .ran(.heartRateBuckets)
             },
             nutrientDailyTotals: { _ in
@@ -207,6 +197,49 @@ extension AppContainer {
                 return didDrain
                     ? .ran(.outboxDrain)
                     : HealthSyncCapabilityResult(capability: .outboxDrain, disposition: .deferred)
+            },
+            serverMirror: { context in
+                await ServerMirrorBackgroundPass.run(context, environment: serverMirrorEnvironment(handles))
+            }
+        )
+    }
+
+    /// The `workoutImport` capability for one pass. Through the coordinator's
+    /// own hook, so the authenticated-user resolution and the post-ingest
+    /// workout-list revalidation that `wireWorkoutBackgroundSync` owns still
+    /// apply — and so the `WorkoutSyncDiagnosticContext` provenance still names
+    /// the wake. (MIRROR (1.5) moved it out of the registry body unchanged, to
+    /// make room for the server mirror.)
+    private static func runWorkoutImport(
+        _ backgroundSync: BackgroundSyncCoordinator,
+        context: HealthSyncRunContext
+    ) async -> HealthSyncCapabilityResult {
+        let mode: WorkoutSyncPassMode = context.budget.incrementalOnly ? .incrementalOnly : .processing
+        let didWork = await backgroundSync.runWorkoutSync(mode: mode, source: workoutSource(for: context.trigger))
+        // `false` means "no authenticated user, no wired importer, or an
+        // incremental wake with no anchor yet": nothing was lost and nothing was
+        // proven, which is what `deferred` says.
+        return didWork
+            ? .ran(.workoutImport)
+            : HealthSyncCapabilityResult(capability: .workoutImport, disposition: .deferred)
+    }
+
+    /// **MIRROR (1.5, public #28)** — what the background server mirror reads:
+    /// the measurement list as its source, the HealthKit service as its bounded
+    /// writer, the remembered server version, standalone mode and the account
+    /// the session registry admits right now.
+    static func serverMirrorEnvironment(_ handles: HealthSyncCapabilityHandles) -> ServerMirrorBackgroundPass.Environment {
+        let repo = handles.measurementsRepo
+        let keychain = handles.keychain
+        let registry = handles.sessionRegistry
+        return ServerMirrorBackgroundPass.Environment(
+            source: repo,
+            writer: handles.healthKit as? any BoundedServerMirrorWriting,
+            serverIsNewEnough: { KnownServerVersion.isAtLeast(ServerMirrorBackgroundPass.minimumServerVersion) },
+            isStandalone: { repo.standalone?.isActive == true },
+            lease: {
+                guard let owner = keychain.getString(forKey: KeychainKey.userID) else { return nil }
+                return registry.capture(ownerID: owner)
             }
         )
     }

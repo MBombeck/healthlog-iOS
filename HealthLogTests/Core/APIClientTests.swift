@@ -62,20 +62,50 @@ struct APIClientTests {
         #expect(capturedIdem != nil)
     }
 
-    @Test("CF-Access headers attached when configured")
+    /// GH-iOS #27 — Cloudflare documents `CF-Access-Client-Id` and
+    /// `CF-Access-Client-Secret`; until 1.4.1 the secret went out as
+    /// `cf-access-client-token`, which Cloudflare ignores.
+    @Test("CF-Access headers use Cloudflare's documented names")
     func cfHeaders() async {
-        let (api, _) = makeClient(cf: ("client-id", "client-token"))
+        let (api, _) = makeClient(cf: ("client-id", "client-secret"))
         nonisolated(unsafe) var captured: [String: String] = [:]
         MockURLProtocol.install { req in
-            for h in ["cf-access-client-id", "cf-access-client-token"] {
+            for h in ["CF-Access-Client-Id", "CF-Access-Client-Secret", "cf-access-client-token"] {
                 captured[h] = req.value(forHTTPHeaderField: h)
             }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(#"{"data":null}"#.utf8))
         }
         let req: APIRequest<EmptyPayload> = .get("/api/x")
         _ = try? await api.send(req)
-        #expect(captured["cf-access-client-id"] == "client-id")
-        #expect(captured["cf-access-client-token"] == "client-token")
+        #expect(captured["CF-Access-Client-Id"] == "client-id")
+        #expect(captured["CF-Access-Client-Secret"] == "client-secret")
+        #expect(captured["cf-access-client-token"] == nil)
+    }
+
+    @Test("Stored access headers travel on every API request")
+    func storedAccessHeaders() async {
+        let env = AppEnvironment(
+            baseURL: URL(string: "https://test.healthlog.local"),
+            accessHeaders: [
+                ServerAccessHeader(name: "P-Access-Token-Id", value: "pid"),
+                ServerAccessHeader(name: "P-Access-Token", value: "ptoken")
+            ],
+            bundleID: "dev.healthlog.app",
+            appVersion: "0.1.0",
+            buildNumber: "1"
+        )
+        let api = APIClient(environment: env, keychain: InMemoryKeychain(), sessionConfiguration: .mock())
+        nonisolated(unsafe) var captured: [String: String] = [:]
+        MockURLProtocol.install { req in
+            for h in ["P-Access-Token-Id", "P-Access-Token"] {
+                captured[h] = req.value(forHTTPHeaderField: h)
+            }
+            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(#"{"data":null}"#.utf8))
+        }
+        let req: APIRequest<EmptyPayload> = .get("/api/x")
+        _ = try? await api.send(req)
+        #expect(captured["P-Access-Token-Id"] == "pid")
+        #expect(captured["P-Access-Token"] == "ptoken")
     }
 
     @Test("401 throws unauthorized")

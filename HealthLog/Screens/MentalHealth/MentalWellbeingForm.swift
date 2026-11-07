@@ -3,10 +3,15 @@ import SwiftUI
 /// One-question-at-a-time check-in driven entirely by the instrument registry.
 /// Answering advances between scored items, while submission always requires a
 /// deliberate button tap. PHQ-9 alone has an optional, unscored final question.
+///
+/// 1.5.0 (L10N-MH): stems, items and answer labels are the server's wording in
+/// the interface language (``MentalHealthStore/activeWording``), never catalogue
+/// strings. Where that text is not a validated translation the header says so
+/// in one line and a centred text link below switches to the English original
+/// and back.
 struct MentalWellbeingForm: View {
     @Bindable var store: MentalHealthStore
 
-    @Environment(\.locale) private var locale
     @State private var step = 0
 
     private var instrument: MentalHealthInstrument {
@@ -36,6 +41,9 @@ struct MentalWellbeingForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xl) {
             instrumentHeader
+            if store.translationIsUnvalidated {
+                wordingToggle
+            }
             progressHeader
 
             Group {
@@ -62,12 +70,12 @@ struct MentalWellbeingForm: View {
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if !instrument.hasValidatedItems(locale: locale.identifier) {
-                Text("mentalHealth.validatedInEnglishNote")
+            if store.translationIsUnvalidated {
+                Text("mentalHealth.wording.unvalidatedNote")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("mentalHealth.validatedInEnglishNote")
+                    .accessibilityIdentifier("mentalHealth.wording.unvalidatedNote")
             }
             // 1.0.3 (1.4.1) — screening, not diagnosis: stated before the first
             // question, not just on the result.
@@ -77,6 +85,25 @@ struct MentalWellbeingForm: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("mentalHealth.form.disclaimer")
         }
+    }
+
+    /// The switch between the reader's translation and the English original,
+    /// a quiet centred text link under the header (the "Erweitert" pattern).
+    private var wordingToggle: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { store.toggleEnglishOriginal() }
+        } label: {
+            Text(store.showsEnglishOriginal ? "mentalHealth.wording.showTranslation" : "mentalHealth.wording.showOriginal")
+                .font(.hlSubhead.weight(.semibold))
+                .foregroundStyle(HLText.secondary)
+                .multilineTextAlignment(.center)
+                .frame(minHeight: 44)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(store.isSubmitting)
+        .accessibilityIdentifier("mentalHealth.wording.toggle")
     }
 
     private var progressHeader: some View {
@@ -106,20 +133,22 @@ struct MentalWellbeingForm: View {
 
     private func questionStep(_ index: Int) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            if let stemKey = instrument.stemKey(forItem: index) {
-                Text(LocalizedStringKey(stemKey))
+            if let stem = wording?.stem(instrument.stemIDs[index]) {
+                Text(spoken(stem))
                     .font(.hlCaption)
                     .foregroundStyle(HLText.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text(itemText(index))
+            Text(spoken(wording?.item(index) ?? ""))
                 .font(.hlHeadline)
                 .foregroundStyle(HLText.primary)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("mentalHealth.item.\(index).text")
 
             MentalHealthOptionPicker(
-                optionKeyPrefix: instrument.optionKeyPrefix(forItem: index),
+                labels: anchorLabels(forItem: index),
+                language: store.activeWordingLanguage,
                 values: instrument.optionOrder,
                 selected: store.answers.indices.contains(index) ? store.answers[index] : -1,
                 accessibilityPrefix: "mentalHealth.item.\(index)",
@@ -137,14 +166,15 @@ struct MentalWellbeingForm: View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
             // 1.4 B2 — "(optional)" rides on the question instead of a
             // sentence under it.
-            (Text("mentalHealth.functionalTitle") + Text(verbatim: " ")
+            (Text(spoken(wording?.functional?.title ?? "")) + Text(verbatim: " ")
                 + Text("mentalHealth.functionalOptional").foregroundStyle(HLText.secondary))
                 .font(.hlHeadline)
                 .foregroundStyle(HLText.primary)
                 .fixedSize(horizontal: false, vertical: true)
 
             MentalHealthOptionPicker(
-                optionKeyPrefix: "mentalHealth.functional",
+                labels: Dictionary(uniqueKeysWithValues: (0 ... 3).map { ($0, wording?.functional?.anchor($0) ?? "") }),
+                language: store.activeWordingLanguage,
                 values: [0, 1, 2, 3],
                 selected: store.functionalDifficulty ?? -1,
                 accessibilityPrefix: "mentalHealth.functional",
@@ -194,8 +224,21 @@ struct MentalWellbeingForm: View {
         }
     }
 
-    private func itemText(_ index: Int) -> LocalizedStringKey {
-        localizedKey("mentalHealth.items.\(instrument.keySegment).\(index + 1)")
+    private var wording: QuestionnaireWording? {
+        store.activeWording
+    }
+
+    private func anchorLabels(forItem index: Int) -> [Int: String] {
+        let group = instrument.anchorGroup(forItem: index)
+        return Dictionary(uniqueKeysWithValues: instrument.optionOrder.map {
+            ($0, wording?.anchor(group: group, value: $0) ?? "")
+        })
+    }
+
+    /// Questionnaire text tagged with its language, so VoiceOver reads the
+    /// English original in English under a German or Dutch interface.
+    private func spoken(_ text: String) -> AttributedString {
+        MentalHealthOptionPicker.spoken(text, language: store.activeWordingLanguage)
     }
 
     private func localizedKey(_ key: String) -> LocalizedStringKey {
@@ -204,8 +247,10 @@ struct MentalWellbeingForm: View {
 }
 
 /// Vertical single-select rows used by both scored and optional questions.
+/// The labels are questionnaire text (server wording), not catalogue keys.
 struct MentalHealthOptionPicker: View {
-    let optionKeyPrefix: String
+    let labels: [Int: String]
+    let language: AppLanguage
     let values: [Int]
     let selected: Int
     let accessibilityPrefix: String
@@ -221,14 +266,13 @@ struct MentalHealthOptionPicker: View {
 
     private func optionRow(_ value: Int) -> some View {
         let isSelected = selected == value
-        let optionKey = "\(optionKeyPrefix).\(value)"
         return Button {
             onSelect(value)
         } label: {
             HStack(spacing: HLSpace.sm) {
                 Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
                     .foregroundStyle(isSelected ? HLAccent.userBrandTint : HLText.tertiary)
-                Text(LocalizedStringKey(optionKey))
+                Text(Self.spoken(labels[value] ?? "", language: language))
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -246,5 +290,12 @@ struct MentalHealthOptionPicker: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("\(accessibilityPrefix).option.\(value)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// `text` with its language attached for speech.
+    static func spoken(_ text: String, language: AppLanguage) -> AttributedString {
+        var attributed = AttributedString(text)
+        attributed.languageIdentifier = language.rawValue
+        return attributed
     }
 }

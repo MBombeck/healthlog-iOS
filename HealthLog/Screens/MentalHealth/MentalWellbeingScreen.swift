@@ -5,7 +5,6 @@ import SwiftUI
 /// per-instrument detail sheet.
 struct MentalWellbeingScreen: View {
     @Environment(\.appContainer) private var container
-    @Environment(\.locale) private var locale
 
     @State private var store: MentalHealthStore?
     @State private var showAbortConfirm = false
@@ -441,6 +440,13 @@ private struct MentalHealthDetailHistoryRow: View {
                     .font(.hlSubhead.weight(.semibold))
                     .foregroundStyle(HLText.primary)
                     .monospacedDigit()
+            }
+            if row.wording == .unvalidatedTranslation {
+                Text("mentalHealth.wording.historyUnvalidated")
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("mentalHealth.history.wordingNote")
             }
             if row.item9Flagged {
                 Button {

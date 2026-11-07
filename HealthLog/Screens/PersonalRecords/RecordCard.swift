@@ -28,6 +28,7 @@ struct RecordCard: View {
     /// default setting but now scales with Dynamic Type (accessibility text
     /// sizes were previously ignored by the pixel-locked `hlMetric(32)`).
     @ScaledMetric(relativeTo: .largeTitle) private var valueSize: CGFloat = 32
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Button {
@@ -62,9 +63,13 @@ struct RecordCard: View {
                 .font(.hlIcon(HLIconSize.lg))
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
+            // POLISH-B (SHOTS F-REC-1) — a long German metric name
+            // ("HERZFREQUENZVARIABILITÄT") was cut; it shrinks further on one
+            // line, and from the accessibility sizes on it wraps.
             HLSectionLabel(verbatim: metricLabel)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.55)
+                .allowsTightening(true)
         }
     }
 
@@ -129,13 +134,15 @@ struct RecordCard: View {
         .accessibilityHidden(true)
     }
 
+    /// POLISH-B (SHOTS F-REC-1) — the time over the chip, both whole. Side by
+    /// side in a half-width card they read "vor 2 Mona…" and "Neuer Rekord
+    /// !" even at the default size.
     private var footer: some View {
-        HStack(spacing: HLSpace.xs) {
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
             Text(relativeDateLabel)
                 .font(.hlCaption)
                 .foregroundStyle(HLText.secondary)
-                .lineLimit(1)
-            Spacer(minLength: 0)
+                .fixedSize(horizontal: false, vertical: true)
             deltaChip
         }
     }

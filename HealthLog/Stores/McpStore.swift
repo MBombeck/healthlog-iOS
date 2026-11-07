@@ -24,13 +24,67 @@ public final class McpStore {
     public private(set) var freshToken: ApiTokenMintResponse?
 
     /// R2 / #115 A3 — set when the server wants a fresh proof for a mint;
-    /// the mint sheet asks for it and mints again.
-    public let stepUp = StepUpRetry()
+    /// the mint sheet asks for it and mints again. SEC — on a server that reads
+    /// the proof, the store asks before the first attempt (``mintToken(name:scope:)``).
+    public let stepUp: StepUpRetry
 
     private let repo: McpRepository
+    private let proofUpFront: @MainActor () async -> Bool
 
-    public init(repo: McpRepository) {
+    /// - Parameters:
+    ///   - proofUpFront: whether a mint needs a step-up elevation before it is
+    ///     sent. The screen passes ``resolveProofUpFront(security:)``; without
+    ///     one the store asks for the proof (fail closed).
+    ///   - now: the clock the held elevation ages against (tests).
+    public init(
+        repo: McpRepository,
+        proofUpFront: (@MainActor () async -> Bool)? = nil,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.repo = repo
+        self.proofUpFront = proofUpFront ?? { true }
+        stepUp = StepUpRetry(now: now)
+    }
+
+    /// A mint the proof was waived for: the account turned out to hold
+    /// nothing to prove (``waiveProof()``), or the server said so
+    /// (`auth.stepup.mfa_not_enrolled`). Spent by the next mint.
+    @ObservationIgnored private var proofWaived = false
+
+    /// POLISH-C (C1, #163 B1) — the server's `elevation-if-enrolled` rule
+    /// for `POST /api/mcp/tokens`, mirrored: an account with a second factor
+    /// (an authenticator or a security key) or a passkey brings a fresh
+    /// proof; one without any of them (most SSO-only accounts) mints on the
+    /// token. The server version plays no part, so an unknown version or a
+    /// failed `GET /api/version` can never let an enrolled account's
+    /// credential leave without the proof.
+    ///
+    /// Anything short of a loaded status counts as enrolled: not loaded yet,
+    /// a failed read, a server without the native status route
+    /// (`.unavailable`), and a status without `proofMethods` (server before
+    /// 1.46.2), where a passkey cannot be ruled out. The proof sheet then
+    /// asks; if no proof is possible, the server's `mfa_not_enrolled` lets
+    /// the mint go without one (``mintToken(name:scope:)``).
+    nonisolated static func accountNeedsProof(_ state: AccountSecurityStore.TwoFactorState) -> Bool {
+        guard case let .loaded(status) = state else { return true }
+        if status.totp.enabled || !status.webauthn.isEmpty { return true }
+        guard let methods = status.proofMethods else { return true }
+        return methods.contains("passkey")
+    }
+
+    /// The gate at the moment of a mint: the account's second-factor status,
+    /// read once if it is not loaded yet.
+    static func resolveProofUpFront(security: AccountSecurityStore) async -> Bool {
+        if case .loaded = security.twoFactor {} else { await security.loadTwoFactor() }
+        return accountNeedsProof(security.twoFactor)
+    }
+
+    /// The proof sheet learned that this account holds nothing to prove: the
+    /// next mint goes on the token, once.
+    public func waiveProof() {
+        proofWaived = true
+        stepUp.cancel()
+        if error == StepUpRetry.requiredMessage { error = nil }
     }
 
     /// Tokens that can still be used — the ones worth revoking.
@@ -135,16 +189,32 @@ public final class McpStore {
 
     /// Mint a connector token. On success the raw secret lands in
     /// ``freshToken`` for the show-once sheet.
+    ///
+    /// SEC — when ``proofUpFront`` holds, nothing is sent without a fresh
+    /// elevation: the store asks for one (``StepUpRetry/require()``) and
+    /// returns; the sheet re-runs the mint once the proof is given. A closed
+    /// proof sheet, an elevation past ``StepUpRetry/maximumAge`` and one dropped
+    /// by ``abandonMint()`` all end here again.
     @discardableResult
     public func mintToken(name: String, scope: McpTokenScope) async -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isMinting else { return false }
+        // Claimed before the first suspension: a second tap finds `isMinting`
+        // set and the elevation gone.
         isMinting = true
         error = nil
         defer { isMinting = false }
+        let elevation = stepUp.take()
+        let waived = proofWaived
+        proofWaived = false
+        if elevation == nil, !waived, await proofUpFront() {
+            stepUp.require()
+            error = StepUpRetry.requiredMessage
+            return false
+        }
 
         do {
-            freshToken = try await repo.mintToken(name: trimmed, scope: scope, elevation: stepUp.take())
+            freshToken = try await mintOnce(name: trimmed, scope: scope, elevation: elevation)
             tokens = await (try? repo.listTokens()) ?? tokens
             return true
         } catch let err as HLError {
@@ -154,6 +224,27 @@ public final class McpStore {
             self.error = String(localized: "Couldn't create the token. Please try again.")
             return false
         }
+    }
+
+    /// One mint. A proof the server cannot use because the account has no
+    /// second factor (`auth.stepup.mfa_not_enrolled`) is no reason to stop:
+    /// the server's own rule lets such an account mint on the token, so the
+    /// mint goes once more without it.
+    private func mintOnce(name: String, scope: McpTokenScope, elevation: String?) async throws -> ApiTokenMintResponse {
+        do {
+            return try await repo.mintToken(name: name, scope: scope, elevation: elevation)
+        } catch let err as HLError where elevation != nil && SecurityStepUp.isMfaNotEnrolled(err) {
+            return try await repo.mintToken(name: name, scope: scope, elevation: nil)
+        }
+    }
+
+    /// SEC — the mint sheet went away (closed, swiped down, or unmounted by
+    /// the privacy shield when the app left the foreground): a proof given for
+    /// it, or asked for it, is not carried to a later mint.
+    public func abandonMint() {
+        stepUp.cancel()
+        proofWaived = false
+        if error == StepUpRetry.requiredMessage { error = nil }
     }
 
     /// Drop the raw secret once the show-once sheet is dismissed.
@@ -173,6 +264,7 @@ public final class McpStore {
         error = nil
         revoking = []
         stepUp.cancel()
+        proofWaived = false
     }
 }
 

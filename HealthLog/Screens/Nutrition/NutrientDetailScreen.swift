@@ -43,13 +43,23 @@ struct NutrientDetailScreen: View {
                     .font(.hlTitle2)
                     .foregroundStyle(HLText.primary)
 
+                NutrientSourceBreakdownView(breakdown: store.latestBreakdown(for: code))
+
                 if let reference = series.reference {
                     referenceProgress(amount: latest?.amount ?? 0, reference: reference, unit: series.unit)
                 } else {
-                    // Honest to the server contract: no sex on file → no reference.
-                    Text("nutrients.detail.reference.unknown")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                    // Honest to the server contract: a code without a reference
+                    // of its own (DHA, EPA) says so; otherwise the reference is
+                    // sex-split and the profile has no sex on file.
+                    Group {
+                        if NutrientDisplay.missingReferenceMeansNoSex(for: code) {
+                            Text("nutrients.detail.reference.unknown")
+                        } else {
+                            Text("nutrients.detail.reference.none")
+                        }
+                    }
+                    .font(.hlCaption)
+                    .foregroundStyle(HLText.tertiary)
                 }
             }
             .padding(.vertical, HLSpace.xxs)
@@ -111,7 +121,9 @@ struct NutrientDetailScreen: View {
         Section(header: Text("nutrients.detail.section.history")) {
             ForEach(ordered) { point in
                 HStack {
-                    Text(point.day)
+                    // POLISH-A F-SUPP-1 — the day in the user's date format,
+                    // not the wire's `YYYY-MM-DD`.
+                    Text(verbatim: RelatedRecordFormat.date(point.day) ?? point.day)
                         .font(.hlBody.monospacedDigit())
                         .foregroundStyle(point.amount > 0 ? HLText.primary : HLText.tertiary)
                     Spacer(minLength: HLSpace.sm)

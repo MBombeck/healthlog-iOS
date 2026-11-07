@@ -237,15 +237,67 @@ public extension MedicationsStore {
         await update(id: id, patch: .init(active: true))
     }
 
-    /// **End the course** — sets `endsOn` to `date` (default today) via
-    /// `PUT /api/medications/[id]`. The medication stays `active` but its
-    /// recurrence is floored at `endsOn`, so no further doses are scheduled
-    /// after that day (the server caps every cadence by the course window).
-    /// Unlike pause this is a schedule edit, not an activity flip — a med the
-    /// user finished their course of, not one they temporarily suspended.
+    /// **End the course.** With `canEndCourse` on the row (server 1.46.0,
+    /// #1280) the server ends it now (`POST …/courses/end`): from `endedAt` on
+    /// nothing is due or reminded, so the local plan drops tonight's reminder
+    /// at once. An older server keeps the 1.4 way, `PUT endsOn = today`
+    /// (whole-day: the course still doses through the evening).
     @discardableResult
     func endMedication(id: String, on date: Date = .now) async -> WriteOutcome {
-        await update(id: id, patch: .init(endsOn: ProfileDay.key(for: date))) // #115 1.5: the account's day
+        guard medications.first(where: { $0.id == id })?.serverEndsCourseNow == true else {
+            return await update(id: id, patch: .init(endsOn: ProfileDay.key(for: date))) // #115 1.5: the account's day
+        }
+        guard let sessionLease = captureAuthenticatedSessionLease() else { return .failed(.canceled) }
+        let result: EndMedicationCourseResult
+        do {
+            result = try await repo.endCourse(medicationID: id)
+            try sessionLease.requireCurrent()
+        } catch let HLError.server(status, _, _) where status == 409 {
+            // Not running any more (ended elsewhere): nothing to end, re-read the row.
+            guard authenticatedEffectIsCurrent(sessionLease) else { return .failed(.canceled) }
+            await load(force: true)
+            return authenticatedEffectIsCurrent(sessionLease) ? .success : .failed(.canceled)
+        } catch {
+            // Never queued: "now" replayed later would end at another moment.
+            guard authenticatedEffectIsCurrent(sessionLease) else { return .failed(.canceled) }
+            let wrapped = error as? HLError ?? .unknown(String(describing: error))
+            self.error = wrapped
+            return .failed(wrapped)
+        }
+        bumpMutationGeneration() // H-3 — protect this optimistic end
+        medications = medications.map { $0.id == id ? $0.endingCourse(result, now: date) : $0 }
+        reconcileSpeziSchedulerIfAvailable()
+        guard let swr else { return .success }
+        await swr.writeThrough(.medicationsList, value: medications)
+        guard authenticatedEffectIsCurrent(sessionLease) else { return .failed(.canceled) }
+        // The server tombstoned the placeholders from `endedAt` on.
+        await swr.invalidate([
+            todayIntakesKey,
+            dashboardSummaryKey,
+            .healthScore,
+            .medicationsCompliance(days: Self.complianceDaysWindow)
+        ])
+        return authenticatedEffectIsCurrent(sessionLease) ? .success : .failed(.canceled)
+    }
+
+    /// **Start a new course** today (server v1.40, `POST …/courses`), offered
+    /// only where the row says `canStartCourse` (never to a delegate). The
+    /// answer is the course, so the list is re-read for the medication's window.
+    @discardableResult
+    func startCourse(id: String, on date: Date = .now) async -> WriteOutcome {
+        guard medications.first(where: { $0.id == id })?.offersCourseStart == true,
+              let sessionLease = captureAuthenticatedSessionLease() else { return .failed(.canceled) }
+        do {
+            try await repo.startCourse(medicationID: id, startsOn: ProfileDay.key(for: date))
+            try sessionLease.requireCurrent()
+        } catch {
+            guard authenticatedEffectIsCurrent(sessionLease) else { return .failed(.canceled) }
+            let wrapped = error as? HLError ?? .unknown(String(describing: error))
+            self.error = wrapped
+            return .failed(wrapped)
+        }
+        await load(force: true)
+        return authenticatedEffectIsCurrent(sessionLease) ? .success : .failed(.canceled)
     }
 
     /// **M2** — best-effort fetch of the saved list layout. Quietly keeps the
@@ -314,22 +366,6 @@ public extension MedicationsStore {
             listLayout = previous
             return .failed(wrapped)
         }
-    }
-
-    /// Derived: rows the user has not archived (UI's "active" tab).
-    ///
-    /// **M2** — honours the saved per-account manual `order` from
-    /// `/api/medications/layout` so the list matches the web/other devices.
-    /// An empty saved order is a pure passthrough (plain server order).
-    var activeMedications: [Medication] {
-        listLayout.applied(to: medications.filter(\.active), id: \.id)
-    }
-
-    /// Derived: archived rows, newest-first.
-    var archivedMedications: [Medication] {
-        medications
-            .filter { !$0.active }
-            .sorted { ($0.archivedAt ?? .distantPast) > ($1.archivedAt ?? .distantPast) }
     }
 
     private func archiving(_ medication: Medication, at timestamp: Date) -> Medication {

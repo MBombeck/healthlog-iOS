@@ -22,7 +22,9 @@ struct MedicationOCRServiceTests {
     @Test("recognise(cgImage:) reads upright text and returns a non-empty result")
     func recognisesUprightText() async throws {
         let image = try Self.renderImage(lines: ["Metformin 500 mg"])
-        let service = MedicationOCRService()
+        // Languages pinned: the default now follows the interface language
+        // (nl-NL first for a Dutch runner), and this test asserts the label.
+        let service = MedicationOCRService(recognitionLanguages: ["de-DE", "en-US"])
         let result = try await service.recognise(cgImage: image)
         // Vision may break "Metformin 500 mg" into one or two observations
         // depending on font rendering — assert the combined raw text.
@@ -92,6 +94,50 @@ struct MedicationOCRServiceTests {
             height: v1Top.size.height
         )
         #expect(abs(v1TopConverted.origin.y - 0.15) < 0.0001)
+    }
+
+    // MARK: - Recognition languages (Dutch interface)
+
+    @Test("the interface language leads, German and English follow")
+    func defaultLanguagesLeadWithInterfaceLanguage() {
+        #expect(MedicationOCRService.defaultRecognitionLanguages(for: .de) == ["de-DE", "en-US"])
+        #expect(MedicationOCRService.defaultRecognitionLanguages(for: .en) == ["en-US", "de-DE"])
+    }
+
+    @Test("every interface language keeps German and English in the pass", arguments: AppLanguage.allCases)
+    func everyLanguageKeepsGermanAndEnglish(language: AppLanguage) {
+        let languages = MedicationOCRService.defaultRecognitionLanguages(for: language)
+        #expect(languages.contains("de-DE"))
+        #expect(languages.contains("en-US"))
+        #expect(Set(languages).count == languages.count)
+    }
+
+    @Test("a Dutch reader gets nl-NL first")
+    func defaultLanguagesPutDutchFirstForDutchReader() {
+        #expect(MedicationOCRService.defaultRecognitionLanguages(for: .nl) == ["nl-NL", "de-DE", "en-US"])
+    }
+
+    @Test("languages Vision cannot recognise are dropped in order")
+    func unsupportedLanguagesAreDropped() {
+        let usable = MedicationOCRService.usableRecognitionLanguages(
+            requested: ["nl-NL", "de-DE", "en-US"],
+            supported: ["en-US", "fr-FR", "de-DE"]
+        )
+        #expect(usable == ["de-DE", "en-US"])
+    }
+
+    @Test("an empty supported list keeps the request unchanged")
+    func emptySupportedListKeepsRequest() {
+        let usable = MedicationOCRService.usableRecognitionLanguages(requested: ["nl-NL", "de-DE"], supported: [])
+        #expect(usable == ["nl-NL", "de-DE"])
+    }
+
+    @Test("this device's Vision build accepts the default language list")
+    func defaultListRecognisesOnThisDevice() async throws {
+        let image = try Self.renderImage(lines: ["Metformine 500 mg"])
+        let service = MedicationOCRService(recognitionLanguages: MedicationOCRService.defaultRecognitionLanguages(for: .nl))
+        let result = try await service.recognise(cgImage: image)
+        #expect(result.rawText.lowercased().contains("500"))
     }
 
     // MARK: - Renderer

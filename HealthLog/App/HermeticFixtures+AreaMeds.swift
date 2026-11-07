@@ -32,11 +32,23 @@
             method: String,
             query: [URLQueryItem] = []
         ) -> (status: Int, body: Data)? {
-            if let cycle = AreaCycleFixtures.response(forPath: path, method: method) { return cycle }
+            // RELATED (1.5.0) — single reads with `related`, only under `-uitest-related`;
+            // MED-PLUS (1.5.0) — the course routes, only under `-uitest-med-plus`.
+            if let related = RelatedFixtures.response(forPath: path, method: method)
+                ?? MedPlusFixtures.response(forPath: path, method: method) { return related }
+            // SUPP (1.5.0) — a supplement and the nutrient split, only under `-uitest-supp`;
+            // SUPP-EDIT — the catalogue, the composition PUT and a label read, only under `-uitest-supp-edit`.
+            if let supp = SuppEditFixtures.response(forPath: path, method: method)
+                ?? SuppFixtures.response(forPath: path, method: method, query: query) { return supp }
+            // SYMPTOM (1.5.0) — symptoms filed against the episodes, only under `-uitest-symptom`.
+            if let cycleOrSymptom = SymptomFixtures.response(forPath: path, method: method, query: query)
+                ?? AreaCycleFixtures.response(forPath: path, method: method) { return cycleOrSymptom }
             if let illness = AreaIllnessFixtures.response(forPath: path, method: method, query: query) { return illness }
             // 1.4 B4-c — the per-medication routes and the notification settings.
             if let detail = AreaMedsDetailFixtures.response(forPath: path, method: method, query: query) { return detail }
-            if let notifications = AreaNotificationsFixtures.response(forPath: path, method: method) { return notifications }
+            // POLISH-C (F-REL-1) — and the single read behind "Related": the list's row.
+            if let other = AreaNotificationsFixtures.response(forPath: path, method: method)
+                ?? (method == "GET" ? singleMedication(forPath: path) : nil) { return other }
             return switch (method, path) {
             case ("GET", "/api/medications"):
                 medications()
@@ -80,10 +92,21 @@
                         ?? NSNull()
                     row["todayEventCount"] = AreaMedsDetailFixtures.todayEventCount(medicationID: id)
                 }
-                guard row["name"] as? String == "Trulicity" else { return row }
+                guard row["name"] as? String == "Trulicity" else { return MedPlusFixtures.decorate(row) }
                 return row.merging(["treatmentClass": "GLP1"]) { _, new in new }
             }
-            guard let data = try? JSONSerialization.data(withJSONObject: classed + [recordOnly]) else { return nil }
+            guard let data = try? JSONSerialization.data(withJSONObject: classed + [recordOnly] + SuppFixtures.listRows) else { return nil }
+            return (200, data)
+        }
+
+        /// `GET /api/medications/{id}` for a row of ``medications()``.
+        private static func singleMedication(forPath path: String) -> (Int, Data)? {
+            let prefix = "/api/medications/"
+            let id = String(path.dropFirst(prefix.count))
+            guard path.hasPrefix(prefix), !id.isEmpty, !id.contains("/"),
+                  let list = medications().flatMap({ try? JSONSerialization.jsonObject(with: $0.1) as? [[String: Any]] }),
+                  let row = list.first(where: { $0["id"] as? String == id }),
+                  let data = try? JSONSerialization.data(withJSONObject: row) else { return nil }
             return (200, data)
         }
 

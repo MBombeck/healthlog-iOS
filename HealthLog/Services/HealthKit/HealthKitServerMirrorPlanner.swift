@@ -37,7 +37,9 @@ import Foundation
     ///
     /// 0. **B5 (1.4)** — the person's direction for its kind lets HealthLog
     ///    write it (``HealthKitWriteBackPolicy``; unknown writes nothing),
-    /// 1. source and kind are mirror-eligible (`shouldMirrorFromServer`),
+    /// 1. the server allows the row and its kind has a write type
+    ///    (`shouldMirrorFromServer`; MIRROR (1.5): the row's own
+    ///    `appleHealthMirror`, the source rule only where the key is missing),
     /// 2. none of its server ids is excluded — claimed by a write in flight on
     ///    this device, or deleted from Apple Health by the user
     ///    (``HealthKitMirrorTombstones``) — and none was seen earlier in the batch,
@@ -71,6 +73,14 @@ import Foundation
             /// count: it can stay unknown, and the one-shot would then fetch the
             /// whole history again on every refresh.
             var decided = true
+            /// MIRROR (1.5) — rows (readings, not samples) the plan writes.
+            var rowCount = 0
+            /// MIRROR (1.5) — candidates the plan never looked at because it
+            /// reached its row limit or was told to stop. The next pass sees
+            /// them again; the probes skip whatever this one wrote.
+            var unexamined = 0
+            /// MIRROR (1.5) — `true` when `shouldStop` ended the plan early.
+            var stopped = false
         }
 
         /// The metadata every mirrored sample carries: the server id (dedup and
@@ -84,10 +94,17 @@ import Foundation
             ]
         }
 
+        /// MIRROR (1.5, public #28) — `rowLimit` caps how many readings one
+        /// plan writes (the background pass allows 50), and `shouldStop` is
+        /// asked before every candidate (the background window). Both default
+        /// to "no bound", which is the foreground page and the history pass.
+        /// A bound plan is still whole: every reading in it has all its samples.
         static func plan(
             _ measurements: [Measurement],
             excluding excluded: Set<String>,
-            probe: HealthKitServerMirrorProbe
+            probe: HealthKitServerMirrorProbe,
+            rowLimit: Int = .max,
+            shouldStop: @Sendable () -> Bool = { false }
         ) async -> Plan {
             var plan = Plan()
             var seen = excluded
@@ -103,7 +120,12 @@ import Foundation
             guard !candidates.isEmpty else { return plan }
             // One question per pass, for every type a candidate would write.
             let readable = await probe.earliestAuthorizedDates(sampleTypes(of: candidates))
-            for measurement in candidates {
+            for (index, measurement) in candidates.enumerated() {
+                if plan.rowCount >= rowLimit || shouldStop() {
+                    plan.stopped = plan.rowCount < rowLimit
+                    plan.unexamined = candidates.count - index
+                    break
+                }
                 let ids = measurement.serverMirrorLinkageIDs
                 guard seen.isDisjoint(with: ids) else { continue }
                 seen.formUnion(ids)
@@ -121,8 +143,53 @@ import Foundation
                     metadata: metadata(for: measurement)
                 ))
                 plan.linkageIDs.append(contentsOf: ids)
+                plan.rowCount += 1
             }
             return plan
+        }
+
+        /// MIRROR (1.5) — the counts of a plan that saved nothing (yet).
+        static func outcome(of plan: Plan) -> ServerMirrorWriteOutcome {
+            ServerMirrorWriteOutcome(decided: plan.decided, unexamined: plan.unexamined, stopped: plan.stopped)
+        }
+
+        /// **MIRROR (1.5, public #28)** — saves a plan, or nothing. `isExpired`
+        /// is asked once more right before the save: a window that closed while
+        /// the plan was probing writes nothing, so a wake never leaves half a
+        /// batch behind, and the planned rows wait for the next window. The save
+        /// itself is one `HKHealthStore.save` of whole readings (a blood
+        /// pressure as its correlation), so it lands complete or not at all.
+        static func commit(
+            isolation: isolated (any Actor)? = #isolation,
+            _ plan: Plan,
+            isExpired: @Sendable () -> Bool,
+            save: ([HKObject]) async throws -> Void
+        ) async -> ServerMirrorWriteOutcome {
+            var outcome = outcome(of: plan)
+            guard !plan.objects.isEmpty else { return outcome }
+            guard !isExpired() else {
+                outcome.stopped = true
+                outcome.unexamined += plan.rowCount
+                return outcome
+            }
+            do {
+                try await save(plan.objects)
+                outcome.written = plan.rowCount
+                // Count is operator-grade (no PHI).
+                // swiftlint:disable:next hllog_public_privacy_interpolation
+                HLLog.healthKit.debug(
+                    "HK server-mirror: \(plan.samples.count, privacy: .public) Sample(s) gespiegelt."
+                )
+            } catch {
+                outcome.saveFailed = true
+                outcome.unexamined += plan.rowCount
+                // Localized HK error string is operator-grade diagnostics.
+                // swiftlint:disable:next hllog_public_privacy_interpolation
+                HLLog.healthKit.warning(
+                    "HK server-mirror write fehlgeschlagen: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+            return outcome
         }
 
         /// Every sample type the candidates would write.

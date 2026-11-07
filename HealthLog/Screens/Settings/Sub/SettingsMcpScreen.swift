@@ -20,6 +20,7 @@ import SwiftUI
 struct SettingsMcpScreen: View {
     @Environment(BackendAvailability.self) private var backend
     @Environment(AuthStore.self) private var authStore
+    @Environment(AccountSecurityStore.self) private var security
     @Environment(\.appContainer) private var container
 
     @State private var store: McpStore?
@@ -49,7 +50,10 @@ struct SettingsMcpScreen: View {
         }
         .task {
             guard backend.hasServer, store == nil, let api = container?.api else { return }
-            let s = McpStore(repo: McpRepository(api: api))
+            // POLISH-C (C1) — the proof follows the account's factors, not
+            // the server version (#163 B1, `elevation-if-enrolled`).
+            let security = security
+            let s = McpStore(repo: McpRepository(api: api)) { await McpStore.resolveProofUpFront(security: security) }
             store = s
             await s.load()
         }

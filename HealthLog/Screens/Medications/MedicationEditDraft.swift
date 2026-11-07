@@ -46,6 +46,8 @@ struct MedicationEditDraft: Equatable {
     /// The resolved raw per-slot doses (baseline merged with the edits).
     var slotUnitsPerDose: [String: Double]
     var intake: MedicationTrackIntakeFormValue
+    /// MED-PLUS (v1.42.2) — the "record doses automatically" switch.
+    var autoMarkTaken: MedicationAutoMarkTakenFormValue
     var scheduleBaseline: MedicationCadenceLogic.ScheduleSnapshot?
     /// The delivery booleans the PUT carries (`nil` = leave the server value).
     var liveActivityEnabled: Bool?
@@ -76,6 +78,7 @@ struct MedicationEditDraft: Equatable {
         graceMinutes = state.graceMinutes
         slotUnitsPerDose = state.slotUnitsPerDose
         intake = MedicationTrackIntakeFormValue(tracked: state.trackIntake, server: state.serverTrackIntake)
+        autoMarkTaken = state.autoMarkTaken
         scheduleBaseline = Self.snapshot(of: state)
         liveActivityEnabled = nil
         criticalAlarmEnabled = nil
@@ -134,7 +137,7 @@ struct MedicationEditDraft: Equatable {
                 slotUnitsPerDose: slotUnitsPerDose
             )
             : nil
-        return MedicationsRepository.MedicationPatch(
+        var patch = MedicationsRepository.MedicationPatch(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             dose: dose.trimmingCharacters(in: .whitespacesAndNewlines),
             treatmentClass: treatmentClass != treatmentClassBaseline ? treatmentClass.wireValue : nil,
@@ -160,5 +163,7 @@ struct MedicationEditDraft: Equatable {
             asNeeded: write?.asNeeded,
             trackIntake: MedicationTrackIntakeWrite.value(intake, scheduleChanged: scheduleChanged)
         )
+        patch.autoMarkTaken = autoMarkTaken.write
+        return patch
     }
 }

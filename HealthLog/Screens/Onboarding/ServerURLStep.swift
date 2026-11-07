@@ -32,9 +32,16 @@ import SwiftUI
 /// the trust-boundary sheet or the direct Keychain write fires.
 ///
 /// **Persistence:** writes the chosen URL to Keychain under
-/// `KeychainKey.serverURL`. The next request issued by APIClient picks it
-/// up through `AppContainer.reloadEnvironment()` which is called from
-/// `OnboardingFlow` immediately before transitioning to the auth step.
+/// `KeychainKey.serverURL`, and the access headers next to it, once the user
+/// confirms the host. The next request issued by APIClient picks both up
+/// through `AppContainer.reloadEnvironment()`, called right before the flow
+/// moves on to the auth step.
+///
+/// **Draft (#153):** what is typed here lives in the container's
+/// `OnboardingDraftStore` until then, in memory only. The privacy shield
+/// rebuilds the window whenever the scene goes inactive (a password manager,
+/// the app switcher), and the address and header values must be waiting when
+/// the user comes back.
 struct ServerURLStep: View {
     let onContinue: () -> Void
 
@@ -49,7 +56,8 @@ struct ServerURLStep: View {
 
     @Environment(\.appContainer) private var container
 
-    @State private var customURLString: String = ""
+    /// Only without a container (previews); otherwise the container's draft.
+    @State private var fallbackDraft = OnboardingDraftStore()
     @State private var probeState: ProbeState = .idle
     @State private var validationError: AppEnvironment.URLValidationError?
     /// Set when a probe succeeds — gates the trust-boundary sheet (H-2
@@ -63,12 +71,28 @@ struct ServerURLStep: View {
     /// once connectivity returns). Cleared whenever the URL text changes.
     @State private var lastValidatedURL: URL?
     @FocusState private var urlFocused: Bool
+    /// GH-iOS #27 — a server behind Cloudflare Access or Pangolin rejects the
+    /// probe below unless its headers are set, so they are offered here, before
+    /// the first request, and not only in Settings. Folded away under
+    /// "Advanced"; the probe sends them from the draft, and they are stored
+    /// with the address when the user confirms the host.
+    @State private var accessHeadersError: String?
 
     enum ProbeState: Equatable {
         case idle
         case probing
         case reachable
+        /// #149 — the server answered 503: it is starting. Offered a retry.
+        case starting
         case unreachable(String)
+    }
+
+    private var draft: OnboardingDraftStore {
+        container?.onboardingDraft ?? fallbackDraft
+    }
+
+    private var form: Binding<ServerAddressDraft> {
+        Binding(get: { draft.server }, set: { draft.server = $0 })
     }
 
     var body: some View {
@@ -101,19 +125,44 @@ struct ServerURLStep: View {
                 // address of their own HealthLog instance.
                 VStack(spacing: HLSpace.md) {
                     customURLEditor
+                    advancedToggle
+                    if draft.server.showsAdvanced {
+                        ServerAccessHeadersEditor(rows: form.headerRows, onChange: {
+                            accessHeadersError = nil
+                            // A probe answered without these headers says
+                            // nothing about the server with them.
+                            probeState = .idle
+                        })
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        if let accessHeadersError {
+                            ServerAccessHeadersErrorLine(text: accessHeadersError)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
                 }
                 .padding(.horizontal, HLSpace.lg)
                 .onAppear {
-                    // Kein eingebauter Host wird angeboten oder vorbelegt. Was
-                    // vorbelegt wird, ist ausschliesslich die BEREITS von diesem
-                    // Nutzer eingetragene Adresse — R1: wer sich vertippt hat,
-                    // soll den Tippfehler korrigieren koennen statt die ganze
-                    // Adresse blind neu zu tippen. Nur beim ersten Mal (noch
-                    // nichts hinterlegt) bleibt das Feld leer.
-                    if customURLString.isEmpty, let container {
-                        customURLString = AppEnvironment
-                            .currentBaseURL(keychain: container.keychain)?
-                            .absoluteString ?? ""
+                    // #153 — filled from what is stored once per run; a
+                    // later visit (back from the sign-in step, or the window
+                    // rebuilt by the privacy shield) keeps the user's edits.
+                    if !draft.server.isSeeded, let container {
+                        let rows = ServerAccessHeadersEditor.rows(
+                            from: ServerAccessHeaders.load(keychain: container.keychain)
+                        )
+                        // Kein eingebauter Host wird angeboten oder vorbelegt. Was
+                        // vorbelegt wird, ist ausschliesslich die BEREITS von diesem
+                        // Nutzer eingetragene Adresse — R1: wer sich vertippt hat,
+                        // soll den Tippfehler korrigieren koennen statt die ganze
+                        // Adresse blind neu zu tippen. Nur beim ersten Mal (noch
+                        // nichts hinterlegt) bleibt das Feld leer.
+                        let address = AppEnvironment.currentBaseURL(keychain: container.keychain)?.absoluteString
+                        draft.server = ServerAddressDraft(
+                            address: draft.server.address.isEmpty ? (address ?? "") : draft.server.address,
+                            // Already configured: show it rather than hide it.
+                            showsAdvanced: draft.server.showsAdvanced || !rows.isEmpty,
+                            headerRows: draft.server.headerRows.isEmpty ? rows : draft.server.headerRows,
+                            isSeeded: true
+                        )
                     }
                     Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 200_000_000)
@@ -126,6 +175,9 @@ struct ServerURLStep: View {
                 }
                 if case let .unreachable(msg) = probeState {
                     inlineError(text: msg)
+                }
+                if probeState == .starting {
+                    startingNotice
                 }
                 // audit 02 · C-2 — offline tolerance: a failed reachability
                 // probe no longer hard-blocks. The user keeps a valid, typed
@@ -170,7 +222,7 @@ struct ServerURLStep: View {
                         size: .large,
                         isLoading: probeState == .probing
                     ) {
-                        Task { await commit(urlString: customURLString) }
+                        Task { await commit(urlString: draft.server.address) }
                     }
                     .accessibilityIdentifier("onboarding.serverURLContinue")
                 }
@@ -221,7 +273,7 @@ struct ServerURLStep: View {
                 Text("Address")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                TextField(String(localized: "onboarding.serverurl.placeholder"), text: $customURLString)
+                TextField(String(localized: "onboarding.serverurl.placeholder"), text: form.address)
                     .accessibilityIdentifier("onboarding.serverCustom")
                     .focused($urlFocused)
                     .textInputAutocapitalization(.never)
@@ -233,7 +285,7 @@ struct ServerURLStep: View {
                     .padding(HLSpace.md)
                     .background(HLColor.surfaceElevated)
                     .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
-                    .onChange(of: customURLString) { _, _ in
+                    .onChange(of: draft.server.address) { _, _ in
                         validationError = nil
                         probeState = .idle
                         lastValidatedURL = nil
@@ -242,6 +294,47 @@ struct ServerURLStep: View {
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
             }
+        }
+    }
+
+    /// GH-iOS #27 — a centred text link under the address card; the editor
+    /// unfolds beneath it. Most people never need it, so it stays one quiet
+    /// word until tapped.
+    private var advancedToggle: some View {
+        Button {
+            // Unfolding hands the screen to the editor; the keyboard would
+            // otherwise cover what just opened.
+            if !draft.server.showsAdvanced { urlFocused = false }
+            withAnimation(.easeInOut(duration: 0.25)) { draft.server.showsAdvanced.toggle() }
+        } label: {
+            HStack(spacing: HLSpace.xs) {
+                Text("Advanced")
+                    .font(.hlSubhead.weight(.semibold))
+                // Same expander glyph as Settings › API tokens.
+                Image(systemName: draft.server.showsAdvanced ? "chevron.up" : "chevron.down")
+                    .font(.hlIcon(HLIconSize.sm))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(HLText.secondary)
+            .frame(minHeight: 44)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("onboarding.serverURLAccessHeaders")
+        .accessibilityValue(draft.server.showsAdvanced ? Text("Expanded") : Text("Collapsed"))
+    }
+
+    /// #149 — the server is starting: the sentence and a retry, nothing
+    /// about a wrong address.
+    private var startingNotice: some View {
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
+            inlineError(text: String(localized: "Your server is starting up. Try again in a moment."))
+            HLButton(String(localized: "Try again"), variant: .secondary) {
+                Task { await commit(urlString: draft.server.address) }
+            }
+            .accessibilityIdentifier("onboarding.serverURLRetry")
+            .padding(.horizontal, HLSpace.xl)
         }
     }
 
@@ -287,14 +380,27 @@ struct ServerURLStep: View {
             validationError = .malformed
             return
         }
+        // GH-iOS #27 — the probe sends the headers from the draft; nothing is
+        // stored before the user confirms the host (#153). An invalid list
+        // stops here, next to its fields.
+        let headers: [ServerAccessHeader]
+        do {
+            headers = try ServerAccessHeaders.normalized(ServerAccessHeadersEditor.headers(from: draft.server.headerRows))
+        } catch {
+            accessHeadersError = ServerAccessHeadersEditor.saveFailureMessage(for: error)
+            draft.server.showsAdvanced = true
+            return
+        }
         probeState = .probing
-        let reachable = await probe(url: url)
+        let reachable = await probe(url: url, headers: headers)
         switch reachable {
         case .reachable:
             probeState = .reachable
             // Every typed host gets the trust-boundary sheet so the user
             // explicitly confirms what they connect to before it is persisted.
             trustBoundaryURL = IdentifiableURL(url: url)
+        case .starting:
+            probeState = .starting
         case let .unreachable(reason):
             probeState = .unreachable(reason)
             // Stash the valid URL so "Continue anyway" can proceed offline
@@ -306,12 +412,24 @@ struct ServerURLStep: View {
         }
     }
 
-    /// Writes the resolved URL to Keychain, reloads the app environment,
-    /// and advances the flow. Called from either the default-instance path
-    /// (commit → directly) or the trust-boundary sheet's confirm CTA.
+    /// Writes the access headers and the resolved URL to Keychain, reloads the
+    /// app environment, and advances the flow. Called from the trust-boundary
+    /// sheet's confirm CTA, the moment the draft becomes the configuration.
     @MainActor
     private func persistAndContinue(url: URL) async {
         if let container {
+            do {
+                try ServerAccessHeaders.save(
+                    ServerAccessHeadersEditor.headers(from: draft.server.headerRows),
+                    keychain: container.keychain
+                )
+            } catch {
+                accessHeadersError = ServerAccessHeadersEditor.saveFailureMessage(for: error)
+                draft.server.showsAdvanced = true
+                trustBoundaryURL = nil
+                probeState = .idle
+                return
+            }
             do {
                 try AppEnvironment.setCustomBaseURL(url, keychain: container.keychain)
                 await container.reloadEnvironment()
@@ -333,24 +451,42 @@ struct ServerURLStep: View {
     /// is SPKI-checked against the bundled pin set before we persist
     /// it to Keychain — see H-2. Self-hosted hosts fall back to default
     /// server-trust validation. Short-timeout, no caching.
-    private func probe(url: URL) async -> ProbeState {
+    private func probe(url: URL, headers: [ServerAccessHeader]) async -> ProbeState {
         // v0.7.1 H-1 — transport + cert-pinning extracted to
         // `ServerReachabilityProbe` (Services layer). The View only maps
         // the typed outcome onto its own localized copy.
-        let outcome = await ServerReachabilityProbe().probe(url: url, userAgent: "HealthLog-iOS-Onboarding/1")
+        let outcome = await ServerReachabilityProbe().probe(
+            url: url,
+            userAgent: "HealthLog-iOS-Onboarding/1",
+            accessHeaders: headers
+        )
+        return Self.probeState(for: outcome)
+    }
+
+    /// The typed probe outcome as this step's state and copy. Pure, so the
+    /// sentence a 503 produces is unit-pinned (#149).
+    static func probeState(for outcome: ServerReachabilityProbe.Outcome) -> ProbeState {
         switch outcome {
         case .malformedURL:
-            return .unreachable(String(localized: "onboarding.serverurl.probe.expandFailed"))
+            .unreachable(String(localized: "onboarding.serverurl.probe.expandFailed"))
         case .reachable:
-            return .reachable
+            .reachable
         case .notHealthLogServer:
-            return .unreachable(String(localized: "onboarding.serverurl.probe.notHealthLog"))
+            .unreachable(String(localized: "onboarding.serverurl.probe.notHealthLog"))
+        case .serverStarting:
+            .starting
         case let .unexpectedStatus(code):
-            return .unreachable(String(format: String(localized: "onboarding.serverurl.probe.status"), code))
+            .unreachable(String(format: String(localized: "onboarding.serverurl.probe.status"), code))
+        case let .redirectedToOtherHost(host):
+            .unreachable(
+                String(
+                    localized: "The server forwarded to \(host). If it sits behind Cloudflare Access or Pangolin, set up the access headers first."
+                )
+            )
         case .nonHTTPResponse:
-            return .unreachable(String(localized: "onboarding.serverurl.probe.nonHTTP"))
+            .unreachable(String(localized: "onboarding.serverurl.probe.nonHTTP"))
         case let .transportFailure(description):
-            return .unreachable(String(format: String(localized: "onboarding.serverurl.probe.transport"), description))
+            .unreachable(String(format: String(localized: "onboarding.serverurl.probe.transport"), description))
         }
     }
 }

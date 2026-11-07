@@ -1,0 +1,9 @@
+{
+  "_doc": "Which languages the string catalogs carry and how strictly they are gated. `required`: every gap fails CI (check-strings.sh, check-catalog-format.py, xcstrings-add.py). `pending`: gaps are counted and reported, nothing fails; a new language starts here and becomes `required` after its translation pass. Every language in CFBundleLocalizations (all five targets in project.yml) must be listed here, and every `required` language must be in CFBundleLocalizations. See docs/localization.md.",
+  "sourceLanguage": "en",
+  "languages": {
+    "de": "required",
+    "en": "required",
+    "nl": "required"
+  }
+}

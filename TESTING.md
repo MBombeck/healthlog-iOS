@@ -95,6 +95,6 @@ See `.planning/ROADMAP.md` for phase breakdown. Current state:
 GitHub Actions runs the CI source-contract self-test, `swiftformat --lint`, the
 fail-closed exact SwiftLint warning-baseline self-test and live gate, the i18n
 and string-catalog gates, `xcodegen`, `xcodebuild build`, `xcodebuild test`, and
-`swift build` (HealthLogCore SPM target) on every PR. The `macos-26` runner uses
-the exact Xcode 26.6 release/archive toolchain pinned in `project.yml`. See
+`swift build` (HealthLogCore SPM target) on every PR. The self-hosted Mac mini runner uses
+the exact Xcode 27.2 release/archive toolchain pinned in `project.yml`. See
 `.github/workflows/ci.yml`.

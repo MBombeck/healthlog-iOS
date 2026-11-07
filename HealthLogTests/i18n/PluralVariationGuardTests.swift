@@ -1,4 +1,5 @@
 import Foundation
+@testable import HealthLog
 import Testing
 
 /// audit-v0162 L10N-3 — regression lock for the user-facing count keys that
@@ -8,7 +9,7 @@ import Testing
 ///
 /// Two invariants:
 ///  1. The curated set of count keys keeps a well-formed one/other plural in
-///     BOTH `de` and `en` — so a future xcstrings reflow cannot silently
+///     every `required` language (CatalogLanguages) — so a future xcstrings reflow cannot silently
 ///     re-flatten them back to the count-1-wrong form.
 ///  2. Any key in the catalog that carries a plural variation is well-formed
 ///     (non-empty `one` AND `other` in every localization it declares).
@@ -45,7 +46,7 @@ struct PluralVariationGuardTests {
         "workout.hrZones.a11y.summary %lld"
     ]
 
-    @Test("Required count keys carry a well-formed one/other plural in DE and EN")
+    @Test("Required count keys carry a well-formed one/other plural in every required language")
     func requiredKeysArePluralized() throws {
         let catalog = try Self.loadCatalog()
         var problems: [String] = []
@@ -54,7 +55,9 @@ struct PluralVariationGuardTests {
                 problems.append("\(key): missing from catalog")
                 continue
             }
-            for lang in ["de", "en"] {
+            // 1.5 L10N-CORE: every `AppLanguage` the language list marks
+            // `required` (de, en today; nl once L10N-FINAL flips it).
+            for lang in CatalogLanguages.required {
                 guard let plural = Self.plural(entry: entry, language: lang) else {
                     problems.append("\(key)/\(lang): no plural variation")
                     continue

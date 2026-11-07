@@ -400,9 +400,9 @@ public enum DashboardWidgetId {
         case .phq9Score, .gad7Score, .who5Score, .sciScore,
              .recoveryScore, .stressScore, .strainScore, .hrvRMSSD,
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
-             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience,
-             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent: nil
+             .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
+             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence, .afibBurden,
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad: nil
         // Audit B-4 — neither belongs on the dashboard grid: the audio-exposure
         // event is a list/detail occurrence like its five siblings, and a kind
         // this build cannot name has nothing to persist a layout slot under.

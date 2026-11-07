@@ -129,7 +129,12 @@ import Testing
             #expect(Set(log.uploads.keys) == Set(HealthKitCumulativeTypeConfig.defaults.map(\.identifier)))
             #expect(log.uploads.values.allSatisfy { $0.trigger == "background" && $0.count == 2 })
             #expect(log.uploads.values.allSatisfy { $0.at == StatsSweepHarness.now })
-            #expect(log.lastSweep == .init(at: StatsSweepHarness.now, trigger: "background", count: 10))
+            // HK-NEW (1.5): seven day-total types now (the two ring minutes joined), two days each.
+            #expect(log.lastSweep == .init(
+                at: StatsSweepHarness.now,
+                trigger: "background",
+                count: HealthKitCumulativeTypeConfig.defaults.count * 2
+            ))
             // Another account reads its own (empty) record.
             #expect(HealthKitStatsUploadLogStore.load(ownerID: "someone-else", defaults: harness.defaults).uploads.isEmpty)
         }

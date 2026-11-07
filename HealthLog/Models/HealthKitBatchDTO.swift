@@ -168,15 +168,29 @@ public struct HealthKitBatchResponseDTO: Codable, Sendable, Equatable {
         public let index: Int
         public let status: HealthKitEntryStatus
         public let reason: String?
+        /// 1.5 FIX-DATA (#126) — only on a `value_out_of_range` skip
+        /// (server v1.39.1): the value after conversion into the stored unit,
+        /// the number the band was checked against.
+        public let convertedValue: Double?
+        /// Only on a `value_out_of_range` skip: the band that refused it.
+        public let range: HealthKitValueRange?
 
-        public init(index: Int, status: HealthKitEntryStatus, reason: String? = nil) {
+        public init(
+            index: Int,
+            status: HealthKitEntryStatus,
+            reason: String? = nil,
+            convertedValue: Double? = nil,
+            range: HealthKitValueRange? = nil
+        ) {
             self.index = index
             self.status = status
             self.reason = reason
+            self.convertedValue = convertedValue
+            self.range = range
         }
 
         private enum CodingKeys: String, CodingKey {
-            case index, status, reason
+            case index, status, reason, convertedValue, range
         }
 
         public init(from decoder: any Decoder) throws {
@@ -184,7 +198,24 @@ public struct HealthKitBatchResponseDTO: Codable, Sendable, Equatable {
             index = try c.decodeIfPresent(Int.self, forKey: .index) ?? -1
             status = try c.decodeIfPresent(HealthKitEntryStatus.self, forKey: .status) ?? .unknown
             reason = try c.decodeIfPresent(String.self, forKey: .reason)
+            // Diagnostic detail only: a malformed one is dropped, never the entry.
+            convertedValue = try? c.decodeIfPresent(Double.self, forKey: .convertedValue)
+            range = try? c.decodeIfPresent(HealthKitValueRange.self, forKey: .range)
         }
+    }
+}
+
+/// The plausibility band a `value_out_of_range` skip names, in the stored unit;
+/// both edges inclusive (`AppleHealthBatchEntryResult.range`, server v1.39.1).
+public struct HealthKitValueRange: Codable, Sendable, Equatable {
+    public let min: Double
+    public let max: Double
+    public let unit: String
+
+    public init(min: Double, max: Double, unit: String) {
+        self.min = min
+        self.max = max
+        self.unit = unit
     }
 }
 

@@ -28,6 +28,8 @@ extension EditProfileScreen {
                 .accessibilityIdentifier("editProfile.fullName")
             } label: {
                 Text("Full name")
+                    // POLISH-C (F-PROF-1): the label wraps, the field gives way.
+                    .layoutPriority(1)
             }
             LabeledContent {
                 TextField(
@@ -39,6 +41,8 @@ extension EditProfileScreen {
                 .accessibilityIdentifier("editProfile.insurerName")
             } label: {
                 Text("Health insurer")
+                    // POLISH-C (F-PROF-1): the label wraps, the field gives way.
+                    .layoutPriority(1)
             }
             LabeledContent {
                 TextField(
@@ -55,6 +59,8 @@ extension EditProfileScreen {
                 .accessibilityIdentifier("editProfile.insuranceNumber")
             } label: {
                 Text("Insurance number")
+                    // POLISH-C (F-PROF-1): the label wraps, the field gives way.
+                    .layoutPriority(1)
             }
             LabeledContent {
                 TextField(
@@ -71,6 +77,8 @@ extension EditProfileScreen {
                 .accessibilityIdentifier("editProfile.insurerIkNumber")
             } label: {
                 Text("Insurer ID (IK)")
+                    // POLISH-C (F-PROF-1): the label wraps, the field gives way.
+                    .layoutPriority(1)
             }
         } header: {
             Text("Patient identity")

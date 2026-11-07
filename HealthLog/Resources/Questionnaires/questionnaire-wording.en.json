@@ -1,0 +1,235 @@
+{
+  "_doc": "Questionnaire wording copied from the HealthLog server. Do not edit: run scripts/l10n/sync-questionnaire-wording.py --server-ref <tag>. See docs/localization.md.",
+  "language": "en",
+  "serverRef": "v1.46.6",
+  "serverCommit": "2c8140a50270a39852b57103785fc867bc2d47f6",
+  "generator": "scripts/l10n/sync-questionnaire-wording.py",
+  "punctuation": [
+    {
+      "instrument": "PHQ9",
+      "field": "items[5]",
+      "printed": "yourself — or that",
+      "shown": "yourself, or that",
+      "reason": "The em dash before \"or\" becomes a comma, as the app has shown this item since 1.1.1."
+    },
+    {
+      "instrument": "PHQ9",
+      "field": "items[7]",
+      "printed": "the opposite — being",
+      "shown": "the opposite: being",
+      "reason": "The em dash after \"Or the opposite\" becomes a colon, as the app has shown this item since 1.1.1."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.1",
+      "printed": "46–60 min",
+      "shown": "46 to 60 min",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.2",
+      "printed": "31–45 min",
+      "shown": "31 to 45 min",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.3",
+      "printed": "16–30 min",
+      "shown": "16 to 30 min",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.4",
+      "printed": "0–15 min",
+      "shown": "0 to 15 min",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.nights.0",
+      "printed": "5–7",
+      "shown": "5 to 7",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.nights.4",
+      "printed": "0–1",
+      "shown": "0 to 1",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.1",
+      "printed": "7–12 months",
+      "shown": "7 to 12 months",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.2",
+      "printed": "3–6 months",
+      "shown": "3 to 6 months",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.3",
+      "printed": "1–2 months",
+      "shown": "1 to 2 months",
+      "reason": "A range between two numbers reads with the range word \"to\" instead of an en dash."
+    }
+  ],
+  "instruments": {
+    "PHQ9": {
+      "serverFile": "src/lib/mental-health/wording/phq9/en.ts",
+      "serverBlob": "761ce8c2bce340c2f7531bcb67f702e0ab87f20e",
+      "validated": true,
+      "source": "Pfizer Inc., Patient Health Questionnaire-9 (PHQ-9), the English original, read from https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/PHQ-9_English.pdf. Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or distribute.",
+      "stems": {
+        "period": "Over the last 2 weeks, how often have you been bothered by any of the following problems?"
+      },
+      "items": [
+        "Little interest or pleasure in doing things",
+        "Feeling down, depressed, or hopeless",
+        "Trouble falling or staying asleep, or sleeping too much",
+        "Feeling tired or having little energy",
+        "Poor appetite or overeating",
+        "Feeling bad about yourself, or that you are a failure or have let yourself or your family down",
+        "Trouble concentrating on things, such as reading the newspaper or watching television",
+        "Moving or speaking so slowly that other people could have noticed. Or the opposite: being so fidgety or restless that you have been moving around a lot more than usual",
+        "Thoughts that you would be better off dead, or of hurting yourself in some way"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Not at all",
+          "1": "Several days",
+          "2": "More than half the days",
+          "3": "Nearly every day"
+        }
+      },
+      "functional": {
+        "title": "If you checked off any problems, how difficult have these problems made it for you to do your work, take care of things at home, or get along with other people?",
+        "anchors": {
+          "0": "Not difficult at all",
+          "1": "Somewhat difficult",
+          "2": "Very difficult",
+          "3": "Extremely difficult"
+        }
+      }
+    },
+    "GAD7": {
+      "serverFile": "src/lib/mental-health/wording/gad7/en.ts",
+      "serverBlob": "9535f19a6ddf6b04141c27b923807293ed4d77d8",
+      "validated": true,
+      "source": "Pfizer Inc., Generalized Anxiety Disorder 7-item scale (GAD-7), the English original, read from https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/GAD-7_English.pdf. Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or distribute.",
+      "stems": {
+        "period": "Over the last 2 weeks, how often have you been bothered by the following problems?"
+      },
+      "items": [
+        "Feeling nervous, anxious, or on edge",
+        "Not being able to stop or control worrying",
+        "Worrying too much about different things",
+        "Trouble relaxing",
+        "Being so restless that it is hard to sit still",
+        "Becoming easily annoyed or irritable",
+        "Feeling afraid as if something awful might happen"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Not at all",
+          "1": "Several days",
+          "2": "More than half the days",
+          "3": "Nearly every day"
+        }
+      }
+    },
+    "WHO5": {
+      "serverFile": "src/lib/mental-health/wording/who5/en.ts",
+      "serverBlob": "047322584c1dfef2b563e6457030fe1bf095f96d",
+      "validated": true,
+      "source": "World Health Organization. The World Health Organization-Five Well-Being Index (WHO-5). Geneva: World Health Organization; 2024 (WHO/UCN/MSD/MHE/2024.1), https://www.who.int/publications/m/item/WHO-UCN-MSD-MHE-2024.01. Licence: CC BY-NC-SA 3.0 IGO.",
+      "stems": {
+        "period": "Over the last two weeks …"
+      },
+      "items": [
+        "I have felt cheerful and in good spirits",
+        "I have felt calm and relaxed",
+        "I have felt active and vigorous",
+        "I woke up feeling fresh and rested",
+        "My daily life has been filled with things that interest me"
+      ],
+      "anchors": {
+        "all": {
+          "0": "At no time",
+          "1": "Some of the time",
+          "2": "Less than half of the time",
+          "3": "More than half of the time",
+          "4": "Most of the time",
+          "5": "All of the time"
+        }
+      }
+    },
+    "SCI": {
+      "serverFile": "src/lib/mental-health/wording/sci/en.ts",
+      "serverBlob": "8488c5e2a8d3e3e94bd17ca39a1897c5cda42e44",
+      "validated": true,
+      "source": "Espie CA, Kyle SD, Hames P, et al. The Sleep Condition Indicator: a clinical screening tool to evaluate insomnia disorder. BMJ Open 2014;4:e004183, https://bmjopen.bmj.com/content/4/3/e004183. © Sleepio Limited; free for non-commercial use (CC BY-NC).",
+      "stems": {
+        "finally": "Finally …",
+        "impact": "Thinking about the past month, to what extent has poor sleep …",
+        "night": "Thinking about a typical night in the last month …"
+      },
+      "items": [
+        "… how long does it take you to fall asleep?",
+        "… if you then wake up during the night … how long are you awake for in total? (add all the wakenings up)",
+        "… how many nights a week do you have a problem with your sleep?",
+        "… how would you rate your sleep quality?",
+        "… affected your mood, energy, or relationships?",
+        "… affected your concentration, productivity, or ability to stay awake?",
+        "… troubled you in general?",
+        "… how long have you had a problem with your sleep?"
+      ],
+      "anchors": {
+        "duration": {
+          "0": "≥ 61 min",
+          "1": "46 to 60 min",
+          "2": "31 to 45 min",
+          "3": "16 to 30 min",
+          "4": "0 to 15 min"
+        },
+        "impact": {
+          "0": "Very much",
+          "1": "Much",
+          "2": "Somewhat",
+          "3": "A little",
+          "4": "Not at all"
+        },
+        "nights": {
+          "0": "5 to 7",
+          "1": "4",
+          "2": "3",
+          "3": "2",
+          "4": "0 to 1"
+        },
+        "problemDuration": {
+          "0": "> 1 year",
+          "1": "7 to 12 months",
+          "2": "3 to 6 months",
+          "3": "1 to 2 months",
+          "4": "I don't have a problem / < 1 month"
+        },
+        "quality": {
+          "0": "Very poor",
+          "1": "Poor",
+          "2": "Average",
+          "3": "Good",
+          "4": "Very good"
+        }
+      }
+    }
+  }
+}

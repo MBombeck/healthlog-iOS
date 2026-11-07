@@ -15,12 +15,25 @@ extension AppRouter {
         case .settingsIntegrations:
             requestSettingsIntegrations()
         case .checkups:
+            focusedVisitId = nil
+            openMoreDestination(.checkups)
+        case let .checkupsVisit(id):
+            // VISIT — `/checkups?visit=<id>`: Vorsorge, whose "Nächster
+            // Termin" shows that visit while it is booked.
+            focusVisit(id)
             openMoreDestination(.checkups)
         case .cycle:
             openMoreDestination(.cycle)
         default:
             break
         }
+    }
+
+    /// VISIT — name the visit "Nächster Termin" on Vorsorge shows next
+    /// (``NextVisitSection``); it falls back to the soonest when that visit is
+    /// no longer booked.
+    func focusVisit(_ id: String?) {
+        focusedVisitId = id
     }
 
     /// Mehr, Einstellungen, then `leaf`.

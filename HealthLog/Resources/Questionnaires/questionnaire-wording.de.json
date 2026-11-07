@@ -1,0 +1,221 @@
+{
+  "_doc": "Questionnaire wording copied from the HealthLog server. Do not edit: run scripts/l10n/sync-questionnaire-wording.py --server-ref <tag>. See docs/localization.md.",
+  "language": "de",
+  "serverRef": "v1.46.6",
+  "serverCommit": "2c8140a50270a39852b57103785fc867bc2d47f6",
+  "generator": "scripts/l10n/sync-questionnaire-wording.py",
+  "punctuation": [
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.1",
+      "printed": "46–60 Min.",
+      "shown": "46 bis 60 Min.",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.2",
+      "printed": "31–45 Min.",
+      "shown": "31 bis 45 Min.",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.3",
+      "printed": "16–30 Min.",
+      "shown": "16 bis 30 Min.",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.4",
+      "printed": "0–15 Min.",
+      "shown": "0 bis 15 Min.",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.nights.0",
+      "printed": "5–7",
+      "shown": "5 bis 7",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.nights.4",
+      "printed": "0–1",
+      "shown": "0 bis 1",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.1",
+      "printed": "7–12 Monate",
+      "shown": "7 bis 12 Monate",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.2",
+      "printed": "3–6 Monate",
+      "shown": "3 bis 6 Monate",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.3",
+      "printed": "1–2 Monate",
+      "shown": "1 bis 2 Monate",
+      "reason": "A range between two numbers reads with the range word \"bis\" instead of an en dash."
+    }
+  ],
+  "instruments": {
+    "PHQ9": {
+      "serverFile": "src/lib/mental-health/wording/phq9/de.ts",
+      "serverBlob": "f15935608a957c7faf8a88492db20dd51c0e34c3",
+      "validated": true,
+      "source": "Pfizer Inc., PHQ-9, official translation \"German for Germany\", read from https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/PHQ9_German%20for%20Germany.pdf. Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or distribute.",
+      "stems": {
+        "period": "Wie oft fühlten Sie sich im Verlauf der letzten 2 Wochen durch die folgenden Beschwerden beeinträchtigt?"
+      },
+      "items": [
+        "Wenig Interesse oder Freude an Ihren Tätigkeiten",
+        "Niedergeschlagenheit, Schwermut oder Hoffnungslosigkeit",
+        "Schwierigkeiten, ein- oder durchzuschlafen, oder vermehrter Schlaf",
+        "Müdigkeit oder Gefühl, keine Energie zu haben",
+        "Verminderter Appetit oder übermäßiges Bedürfnis zu essen",
+        "Schlechte Meinung von sich selbst; Gefühl, ein Versager zu sein oder die Familie enttäuscht zu haben",
+        "Schwierigkeiten, sich auf etwas zu konzentrieren, z. B. beim Zeitungslesen oder Fernsehen",
+        "Waren Ihre Bewegungen oder Ihre Sprache so verlangsamt, dass es auch anderen auffallen würde? Oder waren Sie im Gegenteil „zappelig“ oder ruhelos und hatten dadurch einen stärkeren Bewegungsdrang als sonst?",
+        "Gedanken, dass Sie lieber tot wären oder sich Leid zufügen möchten"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Überhaupt nicht",
+          "1": "An einzelnen Tagen",
+          "2": "An mehr als der Hälfte der Tage",
+          "3": "Beinahe jeden Tag"
+        }
+      },
+      "functional": {
+        "title": "Wenn eines oder mehrere der bisher in diesem Fragebogen beschriebenen Probleme bei Ihnen vorliegen, geben Sie bitte an, wie sehr diese Probleme es Ihnen erschwert haben, Ihre Arbeit zu tun, Ihren Haushalt zu regeln oder mit anderen Menschen zurecht zu kommen:",
+        "anchors": {
+          "0": "Überhaupt nicht erschwert",
+          "1": "Etwas erschwert",
+          "2": "Stark erschwert",
+          "3": "Extrem erschwert"
+        }
+      }
+    },
+    "GAD7": {
+      "serverFile": "src/lib/mental-health/wording/gad7/de.ts",
+      "serverBlob": "6a117b603c50ab7cd77832f5a0b52867cc83814f",
+      "validated": true,
+      "source": "Löwe B et al., \"Gesundheitsfragebogen für Patienten (GAD-7)\", German version © Bernd Löwe 2015, Universitätsklinikum Hamburg-Eppendorf; validation: Löwe et al., Med Care 2008;46:266-274. Read from the copy distributed by LMU München, https://cms-cdn.lmu.de/media/lmu/downloads/diversity/wecare/gad-7_deutsch.pdf (the UKE distributes the same form). Pfizer distributes no \"German for Germany\" GAD-7; this is the German form the validation used. Reproduction free, as for the PHQ family.",
+      "stems": {
+        "period": "Wie oft fühlten Sie sich im Verlauf der letzten 2 Wochen durch die folgenden Beschwerden beeinträchtigt?"
+      },
+      "items": [
+        "Nervosität, Ängstlichkeit oder Anspannung",
+        "Nicht in der Lage sein, Sorgen zu stoppen oder zu kontrollieren",
+        "Übermäßige Sorgen bezüglich verschiedener Angelegenheiten",
+        "Schwierigkeiten zu entspannen",
+        "Rastlosigkeit, so dass Stillsitzen schwer fällt",
+        "Schnelle Verärgerung oder Gereiztheit",
+        "Gefühl der Angst, so als würde etwas Schlimmes passieren"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Überhaupt nicht",
+          "1": "An einzelnen Tagen",
+          "2": "An mehr als der Hälfte der Tage",
+          "3": "Beinahe jeden Tag"
+        }
+      }
+    },
+    "WHO5": {
+      "serverFile": "src/lib/mental-health/wording/who5/de.ts",
+      "serverBlob": "111021e609075531dd529eb8e217f74f553426a5",
+      "validated": true,
+      "source": "Psychiatric Research Unit (WHO Collaborating Centre in Mental Health, Mental Health Centre North Zealand) translation, republished by WHO beside WHO/UCN/MSD/MHE/2024.1 (licence CC BY-NC-SA 3.0 IGO). German, 1998 version (\"WHO (Fünf) - Fragebogen zum Wohlbefinden\"), read from https://cdn.who.int/media/docs/default-source/mental-health/five-well-being-index-(who-5)/who-5_german.pdf.",
+      "stems": {
+        "period": "In den letzten zwei Wochen …"
+      },
+      "items": [
+        "… war ich froh und guter Laune",
+        "… habe ich mich ruhig und entspannt gefühlt",
+        "… habe ich mich energisch und aktiv gefühlt",
+        "… habe ich mich beim Aufwachen frisch und ausgeruht gefühlt",
+        "… war mein Alltag voller Dinge, die mich interessieren"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Zu keinem Zeitpunkt",
+          "1": "Ab und zu",
+          "2": "Etwas weniger als die Hälfte der Zeit",
+          "3": "Etwas mehr als die Hälfte der Zeit",
+          "4": "Meistens",
+          "5": "Die ganze Zeit"
+        }
+      }
+    },
+    "SCI": {
+      "serverFile": "src/lib/mental-health/wording/sci/de.ts",
+      "serverBlob": "2512f58a09d22507a450cb980f02100c2451a829",
+      "validated": false,
+      "source": null,
+      "stems": {
+        "finally": "Zum Schluss …",
+        "impact": "Wenn Sie an den letzten Monat denken: In welchem Ausmaß hat schlechter Schlaf …",
+        "night": "Wenn Sie an eine typische Nacht im letzten Monat denken …"
+      },
+      "items": [
+        "… wie lange brauchen Sie, um einzuschlafen?",
+        "… wenn Sie dann in der Nacht aufwachen … wie lange sind Sie insgesamt wach? (Zählen Sie alle Wachphasen zusammen.)",
+        "… in wie vielen Nächten pro Woche haben Sie ein Problem mit Ihrem Schlaf?",
+        "… wie würden Sie Ihre Schlafqualität bewerten?",
+        "… Ihre Stimmung, Ihre Energie oder Ihre Beziehungen beeinträchtigt?",
+        "… Ihre Konzentration, Ihre Leistungsfähigkeit oder Ihre Fähigkeit, wach zu bleiben, beeinträchtigt?",
+        "… Sie insgesamt belastet?",
+        "… wie lange haben Sie schon ein Problem mit Ihrem Schlaf?"
+      ],
+      "anchors": {
+        "duration": {
+          "0": "≥ 61 Min.",
+          "1": "46 bis 60 Min.",
+          "2": "31 bis 45 Min.",
+          "3": "16 bis 30 Min.",
+          "4": "0 bis 15 Min."
+        },
+        "impact": {
+          "0": "Sehr stark",
+          "1": "Stark",
+          "2": "Mäßig",
+          "3": "Ein wenig",
+          "4": "Überhaupt nicht"
+        },
+        "nights": {
+          "0": "5 bis 7",
+          "1": "4",
+          "2": "3",
+          "3": "2",
+          "4": "0 bis 1"
+        },
+        "problemDuration": {
+          "0": "> 1 Jahr",
+          "1": "7 bis 12 Monate",
+          "2": "3 bis 6 Monate",
+          "3": "1 bis 2 Monate",
+          "4": "Ich habe kein Problem / < 1 Monat"
+        },
+        "quality": {
+          "0": "Sehr schlecht",
+          "1": "Schlecht",
+          "2": "Mittelmäßig",
+          "3": "Gut",
+          "4": "Sehr gut"
+        }
+      }
+    }
+  }
+}

@@ -12,8 +12,9 @@ import Foundation
 /// `@Generable OnDeviceBriefing` (iOS 26+) and the legacy server-AI surfaces
 /// when reused (R4 §5.2). Logging stays PII-free — never log raw output text.
 public actor MDRSafetyFilter {
-    /// Regex pattern + the matrix row in R4 §5 it covers.
-    private struct Pattern {
+    /// Regex pattern + the matrix row in R4 §5 it covers. Internal, not
+    /// private, only so `MDRSafetyFilter+Dutch.swift` can build its rows.
+    struct Pattern {
         let regex: NSRegularExpression
         let matrixRow: Int
         let label: String
@@ -30,108 +31,8 @@ public actor MDRSafetyFilter {
         }
     }
 
-    /// **R19b (1.0.3, App Review 1.4.1)** — the two ways a match can be the
-    /// thing the app *wants* rather than the thing the matrix forbids.
-    ///
-    /// Both are deliberately different in scope, because the two false
-    /// positives are different in kind. A citation's verb is forbidden only
-    /// because of who its subject is, so the exemption has to attach to that
-    /// verb — `overlapping`. A possibility handed to a clinician is forbidden
-    /// only because of what stands next to it, so that exemption reads the
-    /// sentence — `sentenceCarries`.
-    private struct Exemption {
-        enum Scope {
-            /// The flagged token is itself part of the exempting phrase — the
-            /// cited body IS the subject of the recommendation. Scoped to the
-            /// match, so a second recommendation in the same sentence (this
-            /// time addressed to the reader) is untouched.
-            case overlappingMatch
-            /// The sentence around the match carries the exempting phrase.
-            case sentence
-        }
-
-        let scope: Scope
-        let phrase: NSRegularExpression
-        /// **Anti-laundering.** Never excuse when the sentence ALSO names one
-        /// of these. Without it, "talk to your doctor" becomes a suffix that
-        /// launders any advice at all — "Ich empfehle dir eine höhere Dosis,
-        /// besprich das mit deiner Ärztin" would walk straight through. A
-        /// hand-off is a substitute for advice, never a wrapper around it.
-        var blockedBy: NSRegularExpression?
-    }
-
-    /// The concrete objects that make a recommendation a clinical instruction
-    /// rather than a route to a clinician. Present in the sentence, no hand-off
-    /// exemption applies.
-    private static let concreteIntervention =
-        // swiftlint:disable:next force_try
-        try! NSRegularExpression(
-            pattern: #"\b(Dosis|Dosierung|Tablette|Spritze|Therapie|Medikament\w*|"#
-                + #"dose|dosage|tablet|medication|therapy|treatment)\b"#,
-            options: .caseInsensitive
-        )
-
-    /// A recommendation whose subject is a named guideline body. The 1.4.1
-    /// citation policy relies on these bodies; a filter
-    /// that calls "Die ESH-Leitlinien empfehlen …" prescriptive advice refuses
-    /// the citation itself.
-    ///
-    /// `recommends?` is what R23's `bare_recommend_en` row fires on, so this
-    /// exemption is what keeps "WHO recommends 150 minutes …" out of the
-    /// refusal path. `empfiehlt`/`empfehlen` guard nothing today (the German
-    /// row-8 regex matches `empfehl` + e/en/et only); they are listed so the
-    /// exemption stays correct if a later row widens.
-    private static let citedBodyRecommends =
-        // swiftlint:disable:next force_try
-        try! NSRegularExpression(
-            pattern: #"\b(Leitlinien?|ESH|ESC|AHA|ACC|ADA|WHO|EMA|guidelines?)\s+"#
-                + #"(empfiehlt|empfehlen|recommends?|recommend)\b"#,
-            options: .caseInsensitive
-        )
-
-    /// The clinician hand-off. **R21 widened it** with "talk to your doctor":
-    /// the two new bare-prescriptive rows below are built from the same words as
-    /// the hand-off sentence the prompt actually wants, so the exemption has to
-    /// know every ordinary way of naming that route, not just "ask" and
-    /// "discuss".
-    ///
-    /// R11 asks the model for "1-3 questions or
-    /// observations the person can discuss with their doctor", so the sentence
-    /// "ask your doctor whether this could point to hypertension" is not a
-    /// diagnostic claim leaking through — it is the requested output shape.
-    /// Without the possibility word the sentence never reaches the row-9
-    /// patterns at all, so this exemption can only ever soften the pairing.
-    private static let clinicianHandOff =
-        // swiftlint:disable:next force_try
-        try! NSRegularExpression(
-            pattern: #"(ask\s+your\s+doctor|talk\s+to\s+your\s+(doctor|clinician)|"#
-                + #"discuss(ing)?\s+(this\s+)?with\s+your\s+(doctor|clinician)|"#
-                + #"mit\s+(deiner|Ihrer)\s+Ärztin|mit\s+(deinem|Ihrem)\s+Arzt|"#
-                + #"ärztlich\s+(abklären|besprechen))"#,
-            options: .caseInsensitive
-        )
-
-    /// The two row-8 exemptions, named once. Every recommendation row carries
-    /// the same pair, so spelling the struct out at each call site only invited
-    /// them to drift apart — which is precisely the bug fix round 1 found (the
-    /// old `prescriptive` row had one of the two and behaved differently from
-    /// its English twin as a result).
-    private static var citationExemption: Exemption {
-        Exemption(scope: .overlappingMatch, phrase: citedBodyRecommends, blockedBy: concreteIntervention)
-    }
-
-    private static var handOffExemption: Exemption {
-        Exemption(scope: .sentence, phrase: clinicianHandOff, blockedBy: concreteIntervention)
-    }
-
-    /// The row-9 hand-off, WITHOUT the concrete-intervention guard: "this could
-    /// point to hypertension, ask your doctor" names no intervention, and
-    /// blocking on those words there would refuse ordinary talking points.
-    private static var handOffExemptionUnguarded: Exemption {
-        Exemption(scope: .sentence, phrase: clinicianHandOff)
-    }
-
-    /// 25-pattern matrix per R4 §5.1.
+    /// 44-pattern matrix per R4 §5.1: the 25 German/English rows below plus
+    /// the 19 Dutch twins in `MDRSafetyFilter+Dutch.swift`.
     ///
     /// **Arithmetic, corrected in fix round 2.** The header used to say
     /// "20-pattern matrix (15 base rows from I-1 + 5 Mini-Coach extensions)".
@@ -141,6 +42,10 @@ public actor MDRSafetyFilter {
     /// stood at **22** before 1.0.3. From there: R19b added **no** rows (it
     /// added exemptions to three existing ones), R21 added the two
     /// bare-prescriptive rows, and R23 added `bare_recommend_en` → **25**.
+    /// Dutch (nl) added **19**, one `_nl` twin per German/English row family
+    /// (the bilingual `prescriptive` row and `bare_recommend_en` share one
+    /// twin, `prescriptive_nl`) → **44**. Every row runs on every text, so the
+    /// Dutch rows can only make the filter stricter.
     /// `MDRSafetyFilterExemptionsTests.matrixSizeUnchanged` pins the total.
     /// Each entry is annotated with the pattern row in the safety matrix so
     /// reviewers can cross-reference.
@@ -151,7 +56,9 @@ public actor MDRSafetyFilter {
     /// softeners; 9 = reflective-suggestive condition floating) close
     /// gaps the conversational surface re-opens that the briefing
     /// (one-shot, no user echo) didn't have.
-    private static let patterns: [Pattern] = // swiftlint:disable force_try
+    private static let patterns: [Pattern] = basePatterns + dutchPatterns
+
+    private static let basePatterns: [Pattern] = // swiftlint:disable force_try
         [
             // Row 7 — Predictive language ("wird steigen", "wird morgen steigen", "will rise", "predicted peak")
             Pattern(
@@ -200,7 +107,8 @@ public actor MDRSafetyFilter {
             ),
             Pattern(
                 regex: try! NSRegularExpression(
-                    pattern: #"\b(Diagnose|du\s+leidest\s+an|du\s+hast\s+eine\s+Krankheit|you\s+have\s+(a\s+condition|hypertension|diabetes))\b"#,
+                    pattern: #"\b(Diagnose|du\s+leidest\s+(an|unter)|Sie\s+leiden\s+(an|unter)|du\s+hast\s+eine\s+Krankheit|"#
+                        + #"you\s+have\s+(a\s+condition|hypertension|diabetes)|you\s+(suffer|are\s+suffering)\s+from)\b"#,
                     options: .caseInsensitive
                 ),
                 matrixRow: 9,
@@ -209,7 +117,15 @@ public actor MDRSafetyFilter {
             // Row 11 — Causal medical claim
             Pattern(
                 regex: try! NSRegularExpression(
-                    pattern: #"\b(verursacht|kausal|hat\s+Schuld|liegt\s+an|because\s+of\s+your|caused\s+by\s+your)\b.{0,30}(Blutdruck|Stress|Puls|Schlaf|blood\s+pressure|stress|pulse|sleep)"#,
+                    pattern: #"\b(verursacht|kausal|hat\s+Schuld|liegt\s+an|because\s+of\s+your|caused\s+by\s+your)\b.{0,30}(Blutdruck|Stress|Puls|Schlaf|blood\s+pressure|stress|pulse|sleep)|"#
+                        // 1.5 — the effect first, like `causal_nl`: "Dein hoher
+                        // Puls kommt vom Stress", "Your pulse is caused by stress".
+                        // "liegt an" stays verb-first only ("liegt an der oberen
+                        // Grenze" is a level, not a cause).
+                        + #"\b(Blutdruck|Stress|Puls|Herzfrequenz|Schlaf|Gewicht|Blutzucker|blood\s+pressure|stress|pulse|"#
+                        + #"heart\s+rate|sleep|weight|blood\s+sugar|glucose)\w*[^.!?]{0,40}?\b((kommt|kommen)\s+(vom|durch)|"#
+                        + #"wird\s+(\w+\s+){0,3}verursacht|(ist|sind)\s+(eine\s+)?Folge|(is|are)\s+(\w+\s+)?caused\s+by|"#
+                        + #"(is|are)\s+due\s+to|results?\s+from|(is|are)\s+(\w+\s+)?(triggered|driven)\s+by)\b"#,
                     options: .caseInsensitive
                 ),
                 matrixRow: 11,
@@ -236,7 +152,17 @@ public actor MDRSafetyFilter {
             // Row 8 (extended) — therapy change suggestion
             Pattern(
                 regex: try! NSRegularExpression(
-                    pattern: #"\b(Therapie\s+(ändern|anpassen|umstellen)|change\s+your\s+(therapy|medication|treatment))\b"#,
+                    pattern: #"\b(Therapie\s+(ändern|anpassen|umstellen)|change\s+your\s+(therapy|medication|treatment)|"#
+                        // 1.5 — as broad as `therapy_change_nl`: stopping a
+                        // therapy and changing a dose, imperative or infinitive.
+                        + #"(setz|setze|brich|breche)\s+(deine|die|Ihre)\s+(Therapie|Medikation|Medikamente|Behandlung|Tabletten)\s+ab|"#
+                        + #"(Therapie|Medikation|Medikamente|Behandlung)\s+(absetzen|abbrechen|stoppen|pausieren)|"#
+                        + #"(ändere|passe|stelle)\s+(deine|die|Ihre)\s+(Therapie|Medikation|Behandlung|Dosis|Dosierung)|"#
+                        + #"(erhöhe|senke|reduziere|verringere|steigere|verdopple)\s+(deine|die|Ihre)\s+(Dosis|Dosierung)|"#
+                        + #"(Dosis|Dosierung)\s+(erhöhen|senken|reduzieren|verringern|steigern|verdoppeln)|"#
+                        + #"(stop|quit|discontinue|pause|adjust|switch)\s+(taking\s+)?(your|the)\s+"#
+                        + #"(therapy|medication|medicine|treatment|pills|tablets|dose|dosage)|"#
+                        + #"(raise|lower|reduce|double)\s+your\s+(dose|dosage))\b"#,
                     options: .caseInsensitive
                 ),
                 matrixRow: 8,
@@ -449,18 +375,39 @@ public actor MDRSafetyFilter {
     /// Safe to call from anywhere (no PII surfaced — caller log is
     /// responsible).
     public func containsForbiddenPattern(in text: String) -> Bool {
-        guard !text.isEmpty else { return false }
-        let range = NSRange(text.startIndex..., in: text)
-        for pattern in Self.patterns {
-            guard hasCountingMatch(of: pattern, in: text, range: range) else { continue }
-            // Static regulatory-matrix metadata (row id + label) — never model/user text.
-            // swiftlint:disable:next hllog_public_privacy_interpolation
-            HLLog.api.error(
-                "MDRSafetyFilter blocked output (matrix row \(pattern.matrixRow, privacy: .public), label \(pattern.label, privacy: .public))"
-            )
-            return true
+        guard let pattern = firstCountingPattern(in: text, among: Self.patterns) else { return false }
+        // Static regulatory-matrix metadata (row id + label) — never model/user text.
+        // swiftlint:disable:next hllog_public_privacy_interpolation
+        HLLog.api.error(
+            "MDRSafetyFilter blocked output (matrix row \(pattern.matrixRow, privacy: .public), label \(pattern.label, privacy: .public))"
+        )
+        return true
+    }
+
+    /// The rows written for one language. German and English share the
+    /// bilingual base rows; every other language brings its own twins. The
+    /// switch is exhaustive on purpose: a new ``AppLanguage`` case does not
+    /// compile until it names its rows, and ``OnDeviceLanguageGate`` keeps
+    /// every on-device feature off for a language whose list is empty.
+    /// ``containsForbiddenPattern(in:)`` still runs ALL rows on every text.
+    static func rows(for language: AppLanguage) -> [Pattern] {
+        switch language {
+        case .de, .en: basePatterns
+        case .nl: dutchPatterns
         }
-        return false
+    }
+
+    /// Tests only: does one language's own rows refuse `text`? Proves a
+    /// language is guarded by its own rows, not by luck in another
+    /// language's regex.
+    func containsForbiddenPattern(in text: String, rowsOf language: AppLanguage) -> Bool {
+        firstCountingPattern(in: text, among: Self.rows(for: language)) != nil
+    }
+
+    private func firstCountingPattern(in text: String, among rows: [Pattern]) -> Pattern? {
+        guard !text.isEmpty else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        return rows.first { hasCountingMatch(of: $0, in: text, range: range) }
     }
 
     /// Does this pattern have a match that its exemption does not excuse?

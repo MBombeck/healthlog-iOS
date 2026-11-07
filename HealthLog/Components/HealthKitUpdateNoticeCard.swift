@@ -51,6 +51,10 @@ struct HealthKitUpdateNoticeCard: View {
                 card(for: variant)
                     .transition(transition)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dismissed)
+            } else if sheetStatus != nil {
+                // HK-NEW (1.5) — the new read types, in this card's slot and
+                // only when it has nothing to say itself.
+                HealthKitNewReadTypesCard()
             }
         }
         .task(id: readiness.state) { await refreshSheetStatus() }

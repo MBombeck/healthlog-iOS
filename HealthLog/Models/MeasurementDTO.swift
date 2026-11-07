@@ -31,6 +31,8 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
     public let updatedAt: Date?
     /// #146 (v1.43.7) — night and naps of a sleep row, see ``SleepNightSplit``.
     public internal(set) var sleepSplit: SleepNightSplit?
+    /// MIRROR (1.5, #152) — `appleHealthMirror` by key presence (`MeasurementDTO+MirrorFlag.swift`).
+    public internal(set) var appleHealthMirror: Bool?
 
     public init(
         id: String,
@@ -65,21 +67,18 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
         case glucoseContext, externalId, createdAt, updatedAt
     }
 
-    /// **CU-18 — tolerant `glucoseContext`-Decode.** `GlucoseContext` ist ein
-    /// geschlossenes Vier-Fall-Enum ohne Unbekannt-Fall (bewusst: es speist die
-    /// Picker über `CaseIterable`, ein Sammelfall würde dort als Auswahl
-    /// auftauchen). Ein neues Server-Literal warf deshalb MITTEN im
-    /// `MeasurementWireDTO`-Decode: auf der Listenroute fing
-    /// `TolerantMeasurementWire` das ab und verwarf die ganze Zeile, jeder
-    /// Einzel-Measurement-Decode (`POST`/`PATCH`-Response, `GET …/{id}`) fiel
-    /// hart als `HLError.decoding` um.
+    /// **CU-18 — tolerant `glucoseContext`-Decode.** `GlucoseContext` ist ein geschlossenes
+    /// Vier-Fall-Enum ohne Unbekannt-Fall (bewusst: es speist die Picker über `CaseIterable`, ein
+    /// Sammelfall würde dort als Auswahl auftauchen). Ein neues Server-Literal warf deshalb MITTEN im
+    /// `MeasurementWireDTO`-Decode: auf der Listenroute fing `TolerantMeasurementWire` das ab und
+    /// verwarf die ganze Zeile, jeder Einzel-Measurement-Decode (`POST`/`PATCH`-Response,
+    /// `GET …/{id}`) fiel hart als `HLError.decoding` um.
     ///
-    /// Der Decoder liest das Feld daher als rohen String und mappt es
-    /// nachgelagert: unbekanntes Literal → `nil` + Log-Warnung, **die Zeile
-    /// überlebt vollständig**. Wir erfinden keinen Kontext — lieber gar kein
-    /// Label als ein falsches. Alle übrigen Felder behalten exakt das
-    /// synthetisierte Verhalten (unbekannter `type`/`source` wirft weiterhin,
-    /// dafür existiert der Listen-Tolerant-Wrapper).
+    /// Der Decoder liest das Feld daher als rohen String und mappt es nachgelagert: unbekanntes
+    /// Literal → `nil` + Log-Warnung, **die Zeile überlebt vollständig**. Wir erfinden keinen Kontext —
+    /// lieber gar kein Label als ein falsches. Alle übrigen Felder behalten exakt das synthetisierte
+    /// Verhalten (unbekannter `type`/`source` wirft weiterhin, dafür existiert der
+    /// Listen-Tolerant-Wrapper).
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -95,6 +94,7 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         sleepSplit = type == .sleepDuration ? SleepNightSplit(sleepRowFrom: decoder) : nil
+        appleHealthMirror = Self.decodeAppleHealthMirror(from: decoder)
     }
 
     /// Reads `glucoseContext` as a raw string and maps it onto the closed enum.
@@ -343,6 +343,28 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     /// `BREATHING_DISTURBANCES` count that already had a case.
     case breathingDisturbanceEvent = "BREATHING_DISTURBANCE_EVENT"
 
+    // MARK: - #162 — Garmin types (server v1.47.0), read-only ingest
+
+    case bodyBattery = "BODY_BATTERY"
+    case stressLevel = "STRESS_LEVEL"
+    case trainingReadiness = "TRAINING_READINESS"
+    case acuteTrainingLoad = "ACUTE_TRAINING_LOAD"
+
+    // MARK: - HK-NEW (1.5) — Apple Health types the server maps since v1.44.0
+
+    /// Exercise ring minutes, a day total (`minutes`).
+    case exerciseMinutes = "EXERCISE_MINUTES"
+    /// Stand ring minutes, a day total (`minutes`).
+    case standMinutes = "STAND_MINUTES"
+    /// Stood hours, one per stood-hour sample or a day's count (`hours`).
+    case standHours = "STAND_HOURS"
+    /// Mindful session minutes (`minutes`), privacy-sensitive on the server.
+    case mindfulMinutes = "MINDFUL_MINUTES"
+    /// State of Mind valence −1…1 (`valence`), privacy-sensitive.
+    case stateOfMindValence = "STATE_OF_MIND_VALENCE"
+    /// AFib burden in percent of the week (`%`), privacy-sensitive.
+    case afibBurden = "AFIB_BURDEN"
+
     // MARK: - Audit B-4 — the arm for a type the server adds after this build
 
     /// Audit B-4 — a `MeasurementType` this build does not know.
@@ -457,6 +479,18 @@ public extension ServerMeasurementType {
         case .lowHeartRateEvent: .lowHeartRateEvent
         case .walkingSteadinessEvent: .walkingSteadinessEvent
         case .breathingDisturbanceEvent: .breathingDisturbanceEvent
+        // #162 — Garmin, one kind each (BODY_BATTERY is not recovery, STRESS_LEVEL is not STRESS_SCORE).
+        case .bodyBattery: .bodyBattery
+        case .stressLevel: .stressLevel
+        case .trainingReadiness: .trainingReadiness
+        case .acuteTrainingLoad: .acuteTrainingLoad
+        // HK-NEW (1.5) — server v1.44, one kind each.
+        case .exerciseMinutes: .exerciseMinutes
+        case .standMinutes: .standMinutes
+        case .standHours: .standHours
+        case .mindfulMinutes: .mindfulMinutes
+        case .stateOfMindValence: .stateOfMindValence
+        case .afibBurden: .afibBurden
         // Audit B-4 — a type this build does not know keeps its row on the
         // generic kind. `nil` stays reachable for a future server type that
         // genuinely has no domain representation; nothing takes it today.
@@ -505,16 +539,13 @@ public extension MeasurementWireDTO {
             // list shape).
             .scalar(Self.sleepHours(from: value, unit: unit))
         } else if type == .bloodGlucose {
-            // W-B183 — DEFENSIVE glucose unit-at-source guard ahead of server
-            // v1.17. `MetricKind.glucose.unit` hardcodes "mg/dL" and every
-            // glucose surface interprets the domain scalar AS mg/dL. Today's
-            // production (server ≤ v1.16.x) sends glucose WITHOUT a `unit`
-            // token, so the absent-unit path MUST stay a verbatim passthrough.
-            // When v1.17 starts stamping per-value units we normalise mmol/L →
-            // mg/dL (×18.0182) so the domain scalar is always mg/dL and the
-            // hardcoded display unit never lies. An unrecognised token is the
-            // dangerous case: rather than apply a wrong ~18× factor we keep the
-            // raw server value (no scaling) + log — see `glucoseMgdl(from:unit:)`.
+            // W-B183 — DEFENSIVE glucose unit-at-source guard ahead of server v1.17. `MetricKind.glucose.unit`
+            // hardcodes "mg/dL" and every glucose surface interprets the domain scalar AS mg/dL. Today's production
+            // (server ≤ v1.16.x) sends glucose WITHOUT a `unit` token, so the absent-unit path MUST stay a verbatim
+            // passthrough. When v1.17 starts stamping per-value units we normalise mmol/L → mg/dL (×18.0182) so the
+            // domain scalar is always mg/dL and the hardcoded display unit never lies. An unrecognised token is the
+            // dangerous case: rather than apply a wrong ~18× factor we keep the raw server value (no scaling) + log —
+            // see `glucoseMgdl(from:unit:)`.
             .scalar(Self.glucoseMgdl(from: value, unit: unit))
         } else {
             .scalar(value)
@@ -539,6 +570,7 @@ public extension MeasurementWireDTO {
             glucoseContext: glucoseContext
         )
         measurement.sleepSplit = sleepSplit
+        measurement.appleHealthMirror = appleHealthMirror
         return measurement
     }
 
@@ -645,79 +677,6 @@ public struct MeasurementCreateDTO: Encodable, Sendable {
     }
 }
 
-/// Server-List-Response.
-///
-/// **v0.6.2.1 — tolerant `measurements` decode (F3 drill-down fix).** The
-/// Prisma `MeasurementType` enum on the server is a superset of
-/// `ServerMeasurementType` here — it also carries `ACTIVITY_STEPS`,
-/// `SLEEP_DURATION`, `ACTIVE_ENERGY_BURNED`, `FLIGHTS_CLIMBED`,
-/// `WALKING_RUNNING_DISTANCE`, `AUDIO_EXPOSURE_*` and any future
-/// server-only type. Whenever an
-/// HK-batch upload (or Withings sync) populates one of those rows, every
-/// drill-down that calls `GET /api/measurements?limit=400` saw the whole
-/// `[MeasurementWireDTO]` decode reject with `dataCorrupted` on the
-/// unknown enum case, leaving the user staring at "Daten konnten nicht
-/// gelesen werden" with an empty list. Operator hit this on the Steps
-/// chart (845 entries) on 2026-05-24.
-///
-/// Same tolerant pattern as `TolerantMetricKind` (v0.4.0 A4-Audit row 5)
-/// — log + drop unknown rows, keep the array intact for the known
-/// metrics the iOS surfaces actually render.
-public struct MeasurementListWireResponse: Codable, Sendable {
-    public let measurements: [MeasurementWireDTO]
-    public let meta: MeasurementListResponse.ListMeta?
-
-    public init(measurements: [MeasurementWireDTO], meta: MeasurementListResponse.ListMeta? = nil) {
-        self.measurements = measurements
-        self.meta = meta
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case measurements
-        case meta
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let tolerant = try container.decode([TolerantMeasurementWire].self, forKey: .measurements)
-        measurements = tolerant.compactMap(\.value)
-        meta = try container.decodeIfPresent(MeasurementListResponse.ListMeta.self, forKey: .meta)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(measurements, forKey: .measurements)
-        try container.encodeIfPresent(meta, forKey: .meta)
-    }
-}
-
-/// Tolerant element wrapper used inside `MeasurementListWireResponse` so a
-/// single row carrying a `type` outside `ServerMeasurementType` (e.g.
-/// `ACTIVITY_STEPS` until the iOS enum catches up) doesn't reject the whole
-/// 400-row page. Mirrors `TolerantMetricKind`'s "log + continue" contract.
-private struct TolerantMeasurementWire: Decodable {
-    let value: MeasurementWireDTO?
-
-    init(from decoder: Decoder) throws {
-        do {
-            value = try MeasurementWireDTO(from: decoder)
-        } catch {
-            // Best-effort surface the offending `type` for diagnostics —
-            // every other field is uninteresting once the enum check fails.
-            let container = try? decoder.container(keyedBy: DiagnosticKey.self)
-            let rawType = try? container?.decodeIfPresent(String.self, forKey: .type)
-            HLLog.api.warning(
-                "Dropping measurement wire row with unsupported type \(rawType ?? "<unknown>", privacy: .public)"
-            )
-            value = nil
-        }
-    }
-
-    private enum DiagnosticKey: String, CodingKey {
-        case type
-    }
-}
-
 /// Aggregator: nimmt eine Liste BP-getrennter Wire-Records und führt sie zu Domain-Measurements
 /// zusammen (gleicher `measuredAt` + gleiche `source` → eine BP-Messung).
 public enum MeasurementAggregator {
@@ -742,7 +701,7 @@ public enum MeasurementAggregator {
         var bps: [Measurement] = []
         for (_, pair) in byDate {
             if let sys = pair.sys, let dia = pair.dia {
-                bps.append(Measurement(
+                var reading = Measurement(
                     id: sys.id, // primary id is systolic
                     kind: .bloodPressure,
                     recordedAt: sys.measuredAt,
@@ -755,7 +714,9 @@ public enum MeasurementAggregator {
                     // this the diastolic peer silently keeps its old value
                     // on every BP edit (per AC10 audit finding).
                     bloodPressureDiastolicId: dia.id
-                ))
+                )
+                reading.appleHealthMirror = MeasurementWireDTO.pairedAppleHealthMirror(sys, dia)
+                bps.append(reading)
             } else if let only = pair.sys ?? pair.dia, let measurement = only.toDomain() {
                 // `only` is always a BP wire row, whose `metricKind` is non-nil,
                 // so `toDomain()` never returns nil here — the `if let` is just
@@ -764,97 +725,5 @@ public enum MeasurementAggregator {
             }
         }
         return (others + bps).sorted(by: { $0.recordedAt > $1.recordedAt })
-    }
-}
-
-/// Patch body for `PATCH /api/measurements/[id]`. All fields optional —
-/// server applies only the keys that are present.
-///
-/// **BP-pair semantics (T-1):** `value` is the systolic component on the
-/// systolic-row PATCH und der `diastolic`-Wert (wenn gesetzt) trägt den
-/// diastolischen Wert für den paired-PATCH auf die `BLOOD_PRESSURE_DIA`-
-/// Peer-Row. Das `diastolic`-Feld wird *nicht* an den Server geschickt —
-/// es ist nur eine clientseitige Intent-Trag-Hilfe, die das Repository
-/// in zwei einzelne wire-PATCH-Calls fanoutet. Custom `CodingKeys` filtern
-/// es aus der serialisierten JSON.
-public struct MeasurementPatch: Codable, Sendable {
-    public let value: Double?
-    public let measuredAt: Date?
-    public let notes: String?
-    /// Client-side intent for BP pair-update. Suppressed from JSON
-    /// serialization (server does not accept it on `PATCH
-    /// /api/measurements/[id]`). The repo fans out by issuing a second
-    /// PATCH against the diastolic peer with `value = diastolic` instead.
-    public let diastolic: Double?
-    /// Client-side intent for glucose-context edits (T-2). Suppressed from
-    /// JSON serialization — server-side `MeasurementPatch` Zod-schema in
-    /// `src/lib/validations/measurement.ts` currently only accepts value /
-    /// measuredAt / notes (server-team flagged as SB-25 to add this on
-    /// PATCH post-v1.4.30). Until then the context survives via two paths:
-    ///
-    /// 1. **Edit-Sheet → optimistic-write:** the UI carries
-    ///    `glucoseContext` through the optimistic `Measurement` injected
-    ///    into the store snapshot, so the row visually reflects the new
-    ///    context immediately. On the wire only value/measuredAt/notes go
-    ///    out — the server-persisted context stays at its original value.
-    /// 2. **Outbox-replay survives via the pair-aware payload in
-    ///    `OutboxQueue.Payloads.UpdateMeasurement`** (`glucoseContext`
-    ///    field). Replay re-hydrates the patch with the persisted intent.
-    public let glucoseContext: GlucoseContext?
-
-    public init(
-        value: Double? = nil,
-        measuredAt: Date? = nil,
-        notes: String? = nil,
-        diastolic: Double? = nil,
-        glucoseContext: GlucoseContext? = nil
-    ) {
-        self.value = value
-        self.measuredAt = measuredAt
-        self.notes = notes
-        self.diastolic = diastolic
-        self.glucoseContext = glucoseContext
-    }
-
-    private enum WireCodingKeys: String, CodingKey {
-        case value
-        case measuredAt
-        case notes
-    }
-
-    /// Wire encoding: emit value / measuredAt / notes only. `diastolic`
-    /// (T-1) und `glucoseContext` (T-2) sind intentional suppressed —
-    /// beide sind client-side fan-out / intent-Signale, keine server-
-    /// accepted fields. Server schema:
-    /// `src/lib/validations/measurement.ts` only knows the three wire keys.
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: WireCodingKeys.self)
-        try container.encodeIfPresent(value, forKey: .value)
-        try container.encodeIfPresent(measuredAt, forKey: .measuredAt)
-        try container.encodeIfPresent(notes, forKey: .notes)
-    }
-
-    /// Wire decoding: read the three documented server fields. `diastolic`
-    /// + `glucoseContext` are only ever populated client-side (Edit-Sheet
-    /// → repo), so when decoding from persisted outbox payloads or wire
-    /// responses we keep them `nil`. Outbox round-trips that need these
-    /// fields use the pair-aware payload in
-    /// `OutboxQueue.Payloads.UpdateMeasurement`.
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: WireCodingKeys.self)
-        value = try container.decodeIfPresent(Double.self, forKey: .value)
-        measuredAt = try container.decodeIfPresent(Date.self, forKey: .measuredAt)
-        notes = try container.decodeIfPresent(String.self, forKey: .notes)
-        diastolic = nil
-        glucoseContext = nil
-    }
-}
-
-/// Request body for `DELETE /api/measurements/by-external-ids` — bulk
-/// reconciliation when HK deletes propagate from the system Health app.
-public struct ExternalIDBatch: Codable, Sendable {
-    public let externalIds: [String]
-    public init(externalIds: [String]) {
-        self.externalIds = externalIds
     }
 }

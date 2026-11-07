@@ -246,6 +246,49 @@ next cert renewal.
 
 ---
 
+## Behind Cloudflare Access, Pangolin or another proxy
+
+If your instance sits behind a zero-trust proxy, the app has to show the proxy its credentials
+on every request, before HealthLog itself sees anything. Since 1.4.1 you set them in the app:
+
+- **During setup:** on the server address step, tap **Advanced** below the address card. The headers unfold underneath and are stored when you tap Continue.
+- **Later:** Settings, Server, **Access headers**.
+
+The sheet has presets that fill in the header names:
+
+| Proxy | Headers |
+|---|---|
+| Cloudflare Access (service token) | `CF-Access-Client-Id`, `CF-Access-Client-Secret` |
+| Pangolin (access token) | `P-Access-Token-Id`, `P-Access-Token` |
+
+**Other header** takes any name your proxy checks. Up to eight headers; names the app sets itself
+(`Authorization`, `Cookie`, `X-Device-Id`, `Idempotency-Key` and the like) are refused.
+
+How they are handled:
+
+- Stored in the iOS Keychain on this device only, per install, not per account.
+- Sent only to the server address you configured: API calls, background Health sync, uploads
+  and the health and reachability checks. Requests to anything else (your own AI provider,
+  WHOOP) never carry them.
+- A redirect to a different host drops them, together with the sign-in token. A proxy that
+  answers with its own login page therefore never receives your secret, and the address check
+  tells you it was forwarded instead of calling the server reachable.
+
+**What the headers cannot cover:** sign-in that runs in the system browser sheet (SSO and
+passkeys through your instance's web login). iOS gives the app no way to add headers there.
+Email and password sign-in works through the proxy as is. For browser sign-in, let the browser
+through on its own, for example with a second Access policy that admits you through your
+identity provider.
+
+For Cloudflare Access: create a service token under Access, Service Auth, and add a policy with
+the action **Service Auth** that includes it to the application protecting your HealthLog host.
+
+Builds you make yourself can still ship a Cloudflare pair in `Info.plist` (`CFAccess` with
+`ClientID` and `ClientSecret`; the older key `ClientToken` is still read). Headers set in the app
+win over it.
+
+---
+
 ## See also
 
 - **[security.md → Certificate pinning explained](security.md#certificate-pinning-explained)** —

@@ -38,6 +38,7 @@
       "mentalHealth.considerProfessional": "R16 Klasse 4 + R18 — serverseitig lieferbar.",
       "mentalHealth.considerWellbeing": "R16 Klasse 4 + R18 — serverseitig lieferbar.",
       "mentalHealth.disclaimer": "R16 Klasse 4 + R18 — serverseitig lieferbar.",
+      "life.auditC.intro": "R16 Klasse 4 + R18 — AUDIT-C ist ein Screening-Instrument wie PHQ-9/GAD-7; Wortlaut des Servers (records.life.auditC.intro).",
       "mentalHealth.followUpHint.gad7": "R16 Klasse 4 — GAD-7-Band, nicht verhandelbar.",
       "mentalHealth.followUpHint.phq9": "R16 Klasse 4 — PHQ-9-Band, nicht verhandelbar.",
       "mentalHealth.followUpHint.sci": "R16 Klasse 4 — SCI-Band, nicht verhandelbar.",

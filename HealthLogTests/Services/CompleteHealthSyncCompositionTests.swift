@@ -13,9 +13,9 @@ import Testing
 struct CompleteHealthSyncCompositionTests {
     // MARK: - Inventories
 
-    @Test("the sample registry is exactly the thirty-six collected identifiers plus the OS-gated ones")
+    @Test("the sample registry is exactly the forty-two collected identifiers plus the OS-gated ones")
     func sampleRegistryIsExact() {
-        #expect(HealthLogSampleTypeRegistry.baseIdentifiers.count == 36)
+        #expect(HealthLogSampleTypeRegistry.baseIdentifiers.count == 42)
         #expect(HealthLogSampleTypeRegistry.knownIdentifiers.count == HealthLogSampleTypeRegistry.expectedCount)
         #expect(HealthLogSampleTypeRegistry.contains("HKQuantityTypeIdentifierHeartRate"))
         #expect(HealthLogSampleTypeRegistry.contains("HKQuantityTypeIdentifierTimeInDaylight"))
@@ -25,7 +25,8 @@ struct CompleteHealthSyncCompositionTests {
     @Test("every non-sample importer is a distinct named capability")
     func nonSampleImportersAreNamed() {
         let nonSample = HealthSyncCapability.allCases.filter { !$0.isSampleCollection }
-        #expect(nonSample.count == 10)
+        // MIRROR (1.5) — the server mirror is the eleventh.
+        #expect(nonSample.count == 11)
         #expect(Set(nonSample.map(\.source)).count == nonSample.count)
         #expect(Set(HealthSyncCapability.allCases.map(\.rawValue)).count == HealthSyncCapability.allCases.count)
 

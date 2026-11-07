@@ -48,6 +48,51 @@ struct MoodServerAnalyticsTests {
         #expect(series.avg30LastMonth == 2.9)
     }
 
+    @Test("1.5 VERDICTS — the server's direction drives the mood arrow")
+    func serverDirectionDrivesArrow() throws {
+        let series = try Self.decodeSeries()
+        #expect(series.direction7 == .up)
+        #expect(series.direction30 == .up)
+        let entries = [MoodEntry(id: "e1", recordedAt: Self.now, score: 5, tags: [])]
+        let insight = MoodInsights.compute(entries: entries, now: Self.now, calendar: Self.utc, enrichment: series)
+        #expect(insight.trendDirection == .up)
+        #expect(MoodHeroSummary.symbol(for: insight.trendDirection) == "arrow.up.right")
+    }
+
+    @Test("#151 — a null slope is no trend: no arrow, no own slope in its place")
+    func nullSlopeIsNoTrend() throws {
+        let json = #"""
+        {"entries":[{"date":"2023-11-14","score":3.0,"samples":1}],
+         "summary":{"slope7":null,"slope30":{"slope":null,"direction":null,"confidence":null}}}
+        """#
+        let series = try JSONDecoder.hlDefault.decode(MoodAnalyticsEnrichment.self, from: Data(json.utf8))
+        #expect(series.slope7 == nil)
+        #expect(series.slope30 == nil)
+        #expect(series.direction30 == nil)
+        let entries = (0 ..< 7).map { offset in
+            MoodEntry(id: "e\(offset)", recordedAt: Self.now.addingTimeInterval(Double(-offset) * 86400), score: 5 - offset % 5, tags: [])
+        }
+        let insight = MoodInsights.compute(entries: entries, now: Self.now, calendar: Self.utc, enrichment: series)
+        #expect(insight.slope7 == nil)
+        #expect(insight.trendDirection == nil)
+        #expect(MoodHeroSummary.symbol(for: insight.trendDirection) == nil)
+        #expect(MoodHeroSummary.symbol(for: .unknown) == nil)
+    }
+
+    @Test("a cache written before 1.5 (bare numbers) still decodes, without a direction; the new cache keeps it")
+    func cacheRoundTrip() throws {
+        let old = #"{"entries":[],"summary":{"slope7":0.12,"slope30":-0.03}}"#
+        let decoded = try JSONDecoder.hlDefault.decode(MoodAnalyticsEnrichment.self, from: Data(old.utf8))
+        #expect(decoded.slope7 == 0.12)
+        #expect(decoded.direction7 == nil)
+        let fresh = try Self.decodeSeries()
+        let again = try JSONDecoder.hlDefault.decode(
+            MoodAnalyticsEnrichment.self, from: JSONEncoder().encode(fresh)
+        )
+        #expect(again == fresh)
+        #expect(again.direction30 == .up)
+    }
+
     @Test("the server's profile-day means are the spine, not a device-calendar bucketing")
     func serverDaysAreTheSpine() throws {
         let series = try Self.decodeSeries()

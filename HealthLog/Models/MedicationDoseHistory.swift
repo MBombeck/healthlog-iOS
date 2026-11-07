@@ -146,6 +146,10 @@ public struct MedicationDoseHistoryRow: Codable, Sendable, Hashable, Identifiabl
         /// und ein künftiges sechstes Literal müssen alle decodieren statt zu
         /// werfen. Typisiert über ``MedicationDoseHistoryRow/provenance``.
         public let source: String?
+        /// **v1.42.2 `autoRecorded`** — the server recorded this dose itself
+        /// (`autoMarkTaken`). It counts as taken everywhere; the row says
+        /// "Recorded automatically". `nil` from an older server.
+        public let autoRecorded: Bool?
 
         public init(
             id: String?,
@@ -154,7 +158,8 @@ public struct MedicationDoseHistoryRow: Codable, Sendable, Hashable, Identifiabl
             skipped: Bool,
             autoMissed: Bool? = nil,
             doseTaken: String? = nil,
-            source: String? = nil
+            source: String? = nil,
+            autoRecorded: Bool? = nil
         ) {
             self.id = id
             self.scheduledFor = scheduledFor
@@ -163,6 +168,7 @@ public struct MedicationDoseHistoryRow: Codable, Sendable, Hashable, Identifiabl
             self.autoMissed = autoMissed
             self.doseTaken = doseTaken
             self.source = source
+            self.autoRecorded = autoRecorded
         }
     }
 

@@ -6,6 +6,8 @@ import SwiftUI
 /// + the `Derived<T>` correlation on appear (both tolerated defensively).
 struct IllnessEpisodeDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appContainer) private var container
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let store: IllnessStore
     let episode: IllnessEpisodeDTO
@@ -16,6 +18,8 @@ struct IllnessEpisodeDetailScreen: View {
     @State private var showResolveConfirm = false
     @State private var showDeleteConfirm = false
     @State private var actionError: String?
+    /// #141 — the list row carries no `related`; the single read does.
+    @State private var related = RelatedRecordsModel()
 
     init(store: IllnessStore, episode: IllnessEpisodeDTO) {
         self.store = store
@@ -32,6 +36,7 @@ struct IllnessEpisodeDetailScreen: View {
                 }
                 logDayButton
                 timelineCard
+                EpisodeSymptomsSection(store: store, episode: current)
                 IllnessCorrelationSection(
                     correlation: store.correlation,
                     isLoading: store.isLoadingCorrelation
@@ -40,6 +45,7 @@ struct IllnessEpisodeDetailScreen: View {
                 // episode (module-gated; renders nothing when `inboundDocuments`
                 // is off). Mirrors the web `episode-documents-card`.
                 EpisodeDocumentsCard(episodeId: current.id)
+                RelatedRecordsLoadedSection(model: related)
                 if let actionError {
                     HLFormErrorText(actionError)
                 }
@@ -52,6 +58,11 @@ struct IllnessEpisodeDetailScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .task { await onAppear() }
+        .task(id: current.id) {
+            guard let repo = container?.illnessRepo else { return }
+            let id = current.id
+            await related.load { try await repo.episode(id: id).related?.items }
+        }
         .sheet(isPresented: $showEdit) {
             EditEpisodeSheet(store: store, episode: current) { updated in
                 current = updated
@@ -110,10 +121,19 @@ struct IllnessEpisodeDetailScreen: View {
         }
     }
 
+    private var badgeLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
+            : AnyLayout(HStackLayout(spacing: HLSpace.xs))
+    }
+
     private var headerCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.xs) {
+                // POLISH-C (F-AX-EPISODE) — at an accessibility text size the
+                // badges stand under each other instead of being squeezed
+                // into one letter per line.
+                badgeLayout {
                     IllnessNeutralBadge(title: current.type.localizedLabel, icon: current.type.icon)
                     IllnessNeutralBadge(title: current.lifecycle.localizedLabel, tone: .info)
                     if !current.isActive {

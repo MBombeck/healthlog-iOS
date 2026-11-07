@@ -280,10 +280,10 @@
 
             var verdicts = PageVerdicts()
             do {
-                let outcomes = try await Self.marking(asBackfill) {
-                    try await admitting(lease) {
-                        try await uploader.upload(posted, requiring: authenticationLease)
-                    }
+                // SYNC-TRIG (1.5) — the mark rides on the upload call, not on
+                // a task-local around it.
+                let outcomes = try await admitting(lease) {
+                    try await uploader.upload(posted, requiring: authenticationLease, asBackfill: asBackfill)
                 }
                 verdicts = PageVerdicts(outcomes)
             } catch let refusal as HealthSyncLeaseRefusal {
@@ -341,7 +341,11 @@
                                 nonterminalIndexes.insert(offset + verdict.index)
                             } else {
                                 refused.append(
-                                    HealthKitSkippedEntry(entry: outcome.chunk[verdict.index], reason: verdict.reason ?? "unknown")
+                                    HealthKitSkippedEntry(
+                                        entry: outcome.chunk[verdict.index],
+                                        reason: verdict.reason ?? "unknown",
+                                        detail: verdict.detail
+                                    )
                                 )
                             }
                         }
@@ -441,7 +445,7 @@
         ) async -> Bool {
             guard let retry, let lease else { return false }
             // A2 (1.4) — the word this page went out under, kept for its replay.
-            let trigger = await Self.marking(asBackfill) { uploader.wireSyncTrigger }
+            let trigger = uploader.wireSyncTrigger(asBackfill: asBackfill)
             guard let envelope = HealthSyncRetryEnvelope(
                 ownerID: lease.ownerID,
                 source: lease.source,
@@ -500,17 +504,6 @@
             if error is BatchBackoffError { return true }
             let hlError = error as? HLError
             return hlError == .offline || hlError == .network(.connectionLost)
-        }
-
-        /// A2 (1.4, R-A7) — runs `body` under the backfill mark when the page
-        /// belongs to the history walk. Only the POST and its durable retry
-        /// carry it; the sweeps a page kicks keep their own trigger.
-        private static func marking<T: Sendable>(
-            _ asBackfill: Bool,
-            _ body: () async throws -> T
-        ) async rethrows -> T {
-            guard asBackfill else { return try await body() }
-            return try await SyncTriggerContext.bindingBackfill { try await body() }
         }
 
         private static func unreachableOutcome(postedCount: Int) -> HealthSyncPageOutcome {

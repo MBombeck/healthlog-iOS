@@ -30,6 +30,15 @@ extension ActiveMedicationsSection {
             timeZone: timeZone,
             now: now
         )
+        // MED (#151, DST day 2026-10-25) — a medication that doses today
+        // marks today's slot: the latest one already due, else the next one
+        // today. The look-back below once reached back to YESTERDAY's 20:00
+        // when tapped before tonight's 20:00 (or after the web had taken it
+        // and the today list missed the row), and the server re-stamped
+        // yesterday's dose. Only a medication with no slot today looks back.
+        if let todaySlot = todaySlot(entries: entries, context: context, now: now, timeZone: timeZone) {
+            return todaySlot
+        }
         // Look back up to 60 days for the most-recent already-due slot at/under
         // `now`; that is the dose the user is acting on. Falls forward to the
         // soonest upcoming occurrence only when nothing is yet due in the look-back.
@@ -59,5 +68,28 @@ extension ActiveMedicationsSection {
             }
         }
         return soonestUpcoming ?? now
+    }
+
+    /// Today's slot for an ad-hoc tap (profile day, DST-safe calendar bounds):
+    /// the latest occurrence at or before `now`, else the first one after it.
+    /// `nil` when the medication has no occurrence today.
+    nonisolated static func todaySlot(
+        entries: [ScheduleEntry],
+        context: MedicationRecurrenceEngine.Context,
+        now: Date,
+        timeZone: TimeZone
+    ) -> Date? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let startOfToday = calendar.startOfDay(for: now)
+        guard let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: startOfToday) else { return nil }
+        let today = entries.filter { $0.cadence != .asNeeded }.flatMap { entry in
+            MedicationRecurrenceEngine.occurrences(
+                in: startOfToday ... startOfTomorrow.addingTimeInterval(-1),
+                entry: entry,
+                context: context
+            ).map(\.at)
+        }
+        return today.filter { $0 <= now }.max() ?? today.filter { $0 > now }.min()
     }
 }

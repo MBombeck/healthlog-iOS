@@ -91,6 +91,14 @@
             query: [URLQueryItem]
         ) -> (status: Int, body: Data)? {
             guard method == "GET" else { return nil }
+            // 1.5 BP-TOD — a 1.47 server with blood pressure by time of day (`-uitest-bp-tod`).
+            // 1.5 MOVE — a connected Dawarich under Environment (`-uitest-move`), same branch.
+            // 1.5 VISIT — a booked visit with its window (`-uitest-visit`).
+            // 1.5 SEC — the account's proof methods (`-uitest-sec`).
+            if let overlay = BloodPressureTimeOfDayFixtures.response(forPath: path, query: query)
+                ?? MovementFixtures.response(forPath: path)
+                ?? VisitFixtures.response(forPath: path)
+                ?? SecFixtures.response(forPath: path) { return overlay }
             if let records = SweepRecordFixtures.response(forPath: path, query: query) { return records }
             func value(_ name: String) -> String? {
                 query.first { $0.name == name }?.value
@@ -110,7 +118,12 @@
             // show their real states instead of "could not be read". Only in
             // the sweep: the auth journeys keep the version-less server their
             // login tests are about (`HermeticUITestSupport.webLoginRoutesArgument`).
-            if path == "/api/version" { return ok(#"{ "data": { "version": "1.43.10" }, "error": null }"#) }
+            // 1.5 KONTO — `-uitest-konto` photographs a 1.46 server (`KontoFixtures`).
+            if path ==
+                "/api/version"
+            {
+                return KontoFixtures.response(forPath: path) ?? ok(#"{ "data": { "version": "1.43.10" }, "error": null }"#)
+            }
             if path == "/api/measurements/series" {
                 guard let kind = value("kind"), let entry = series.first(where: { $0.seriesKind == kind }) else {
                     return nil

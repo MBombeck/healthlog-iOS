@@ -27,7 +27,7 @@ import Synchronization
             return .cancelled
         case let .server(status, _, _) where status < 500:
             return .serverRejected
-        case .refusedWithReason, .aiUnavailable, .moduleDisabled, .serverNotConfigured:
+        case .refusedWithReason, .aiUnavailable, .moduleDisabled, .serverNotConfigured, .accountDeletionPending:
             return .serverRejected
         default:
             return .transport
@@ -475,6 +475,8 @@ import Synchronization
         ) async -> WorkoutDirectPageMappingOutcome {
             let attach: (any WorkoutHeartRateSeriesSyncServicing)? =
                 Self.shouldAttachSeries(workoutCount: workouts.count) ? series : nil
+            // 1.5 ROUTES — routes only ride on the same small pages as series.
+            let withRoutes = routes.pageMayCarryRoutes(workoutCount: workouts.count)
             var dtos: [WorkoutIngestDTO] = []
             var successfulEmptySeriesCount = 0
             dtos.reserveCapacity(workouts.count)
@@ -487,9 +489,15 @@ import Synchronization
                 guard leaseIsCurrent() else { return .cancelled }
                 switch disposition {
                 case let .notRequested(dto), let .attached(dto):
-                    dtos.append(dto)
+                    guard let routed = await routed(dto, of: workout, if: withRoutes, leaseIsCurrent) else {
+                        return .cancelled
+                    }
+                    dtos.append(routed)
                 case let .empty(dto):
-                    dtos.append(dto)
+                    guard let routed = await routed(dto, of: workout, if: withRoutes, leaseIsCurrent) else {
+                        return .cancelled
+                    }
+                    dtos.append(routed)
                     successfulEmptySeriesCount += 1
                 case let .failed(failure):
                     return .failed(failure)
@@ -503,6 +511,29 @@ import Synchronization
                 dtos: dtos,
                 successfulEmptySeriesCount: successfulEmptySeriesCount
             )
+        }
+
+        /// The DTO with its route when the page may carry one; `nil` when
+        /// the pass was cancelled or the lease went away during the read.
+        private func routed(
+            _ dto: WorkoutIngestDTO,
+            of workout: HKWorkout,
+            if withRoutes: Bool,
+            _ leaseIsCurrent: @Sendable () -> Bool
+        ) async -> WorkoutIngestDTO? {
+            guard withRoutes else { return dto }
+            guard let result = try? await routes.attach(to: dto, of: workout), leaseIsCurrent() else {
+                return nil
+            }
+            switch result.outcome {
+            case let .attached(_, thinnedFrom):
+                await MainActor.run { WorkoutRouteDiagnostics.shared.recordAttached(thinned: thinnedFrom != nil) }
+            case .failed:
+                await MainActor.run { WorkoutRouteDiagnostics.shared.recordFailure() }
+            case .notRequested, .none:
+                break
+            }
+            return result.dto
         }
 
         static func shouldAttachSeries(workoutCount: Int) -> Bool {

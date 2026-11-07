@@ -273,12 +273,11 @@ struct AskCoachSheet: View {
             // "what I'm looking at" disclosure under each server-arm reply (CO4),
             // and the calm empty-state on-device note (`privateProvenanceNote`)
             // still names the private path before the first turn.
-            if isTranscriptEmpty(store: store) {
-                emptyStateHeader(store: store)
-                    .padding(.horizontal, HLSpace.lg)
-                    .padding(.top, HLSpace.lg)
-                    .padding(.bottom, HLSpace.md)
-            }
+            // POLISH-B B1 — the welcome and the chips scroll with the
+            // transcript (`CoachTranscriptView.emptyHeader`). Above it, outside
+            // any scroll view, they were a fixed block: at the accessibility
+            // sizes taller than the room above the keyboard, so on iOS 26.5 the
+            // composer and its send button ended up under the keyboard.
             chatView(store: store)
         }
         // The `usingServerFallback` / `usingBYO` store flags still gate other
@@ -368,15 +367,21 @@ struct AskCoachSheet: View {
     @ViewBuilder
     private func chatView(store: CoachConversationStore) -> some View {
         #if canImport(SpeziChat)
-            CoachTranscriptView(store: store, seed: seed)
-                .overlay(alignment: .top) {
-                    if let error = store.lastError {
-                        errorBanner(error)
-                            .padding(.horizontal, HLSpace.lg)
-                            .padding(.top, HLSpace.sm)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
+            CoachTranscriptView(
+                store: store,
+                seed: seed,
+                emptyHeader: isTranscriptEmpty(store: store)
+                    ? AnyView(emptyStateHeader(store: store).padding(.top, HLSpace.sm).padding(.bottom, HLSpace.xs))
+                    : nil
+            )
+            .overlay(alignment: .top) {
+                if let error = store.lastError {
+                    errorBanner(error)
+                        .padding(.horizontal, HLSpace.lg)
+                        .padding(.top, HLSpace.sm)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
+            }
         #else
             VStack(spacing: HLSpace.md) {
                 Spacer()

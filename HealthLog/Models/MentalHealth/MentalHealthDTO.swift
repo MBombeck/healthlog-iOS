@@ -24,6 +24,21 @@ import Foundation
 // Responses are wrapped in the standard `{ data: … }` envelope, unwrapped by
 // `APIClient.send`. Instant fields stay raw `String` (the wire is ISO-8601).
 
+// MARK: - Wording
+
+/// Which text an administration was answered in (server 1.46.0+, `wording` on
+/// every row; `ASSESSMENT_WORDINGS` in `wording/types.ts`).
+public enum AssessmentWording: String, Codable, Sendable, Equatable, Hashable {
+    /// The published validated text for the row's language (the original for
+    /// English).
+    case validated
+    /// HealthLog's own translation where no validated one exists; the result
+    /// is orientation only and the surfaces say so.
+    case unvalidatedTranslation = "unvalidated_translation"
+    /// The English original, chosen by a reader of another language.
+    case originalEn = "original_en"
+}
+
 // MARK: - MentalHealthAssessmentDTO
 
 /// One completed screener administration (`MentalHealthAssessment`). The raw
@@ -42,6 +57,10 @@ public struct MentalHealthAssessmentDTO: Codable, Sendable, Equatable, Identifia
     public let crisisShownAt: String?
     public let takenAt: String
     public let createdAt: String
+    /// Server 1.46.0+: which text the answers were given in. `nil` on older
+    /// servers, on rows recorded before 1.46 and for a value this client does
+    /// not know; those rows render as in 1.4.
+    public let wording: AssessmentWording?
 
     public init(
         id: String,
@@ -53,7 +72,8 @@ public struct MentalHealthAssessmentDTO: Codable, Sendable, Equatable, Identifia
         item9Flagged: Bool,
         crisisShownAt: String?,
         takenAt: String,
-        createdAt: String
+        createdAt: String,
+        wording: AssessmentWording? = nil
     ) {
         self.id = id
         self.instrument = instrument
@@ -65,6 +85,7 @@ public struct MentalHealthAssessmentDTO: Codable, Sendable, Equatable, Identifia
         self.crisisShownAt = crisisShownAt
         self.takenAt = takenAt
         self.createdAt = createdAt
+        self.wording = wording
     }
 
     public init(from decoder: Decoder) throws {
@@ -85,6 +106,9 @@ public struct MentalHealthAssessmentDTO: Codable, Sendable, Equatable, Identifia
         crisisShownAt = try c.decodeIfPresent(String.self, forKey: .crisisShownAt)
         takenAt = try c.decodeIfPresent(String.self, forKey: .takenAt) ?? ""
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
+        // Lossy: an absent, null or unknown value is "not stated", never a
+        // reason to drop the row.
+        wording = (try? c.decodeIfPresent(String.self, forKey: .wording)).flatMap(AssessmentWording.init(rawValue:))
     }
 }
 
@@ -139,9 +163,17 @@ public struct CreateAssessmentRequest: Codable, Sendable, Equatable {
     public let items: [Int]
     /// Optional functional-impairment follow-up (0–3) — NOT scored into the total.
     public let functionalDifficulty: Int?
-    /// The validated wording's locale actually presented ("de" / "en"), so the
-    /// server resolves the matching crisis-resource set + records the locale.
+    /// The interface language the questionnaire was presented in, with the
+    /// device region (``AppLanguage/regionTag``: "de-AT", "nl-BE", "en-US"),
+    /// so the server reads the wording language and resolves the crisis set of
+    /// the country. Free text up to 16 characters on every server since 1.25.
     public let locale: String?
+    /// `true` when the reader switched from their language's unvalidated
+    /// translation to the English original. The server records the
+    /// administration's wording from this and `locale` (`original_en`); `nil`
+    /// leaves the field out, which is what an older server gets
+    /// (``MentalHealthStore/englishOriginalField()``).
+    public let englishOriginal: Bool?
     /// #39 / server v1.25 — client provenance (`assessmentSourceEnum ∈
     /// {"WEB","IOS"}`; server defaults to `"WEB"`). iOS always sends `"IOS"` so
     /// its administrations are attributed correctly instead of mis-tagged WEB.
@@ -158,6 +190,7 @@ public struct CreateAssessmentRequest: Codable, Sendable, Equatable {
         items: [Int],
         functionalDifficulty: Int? = nil,
         locale: String? = nil,
+        englishOriginal: Bool? = nil,
         source: String? = nil,
         externalId: String? = nil
     ) {
@@ -165,6 +198,7 @@ public struct CreateAssessmentRequest: Codable, Sendable, Equatable {
         self.items = items
         self.functionalDifficulty = functionalDifficulty
         self.locale = locale
+        self.englishOriginal = englishOriginal
         self.source = source
         self.externalId = externalId
     }
@@ -175,12 +209,13 @@ public struct CreateAssessmentRequest: Codable, Sendable, Equatable {
         try c.encode(items, forKey: .items)
         try c.encodeIfPresent(functionalDifficulty, forKey: .functionalDifficulty)
         try c.encodeIfPresent(locale, forKey: .locale)
+        try c.encodeIfPresent(englishOriginal, forKey: .englishOriginal)
         try c.encodeIfPresent(source, forKey: .source)
         try c.encodeIfPresent(externalId, forKey: .externalId)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case instrument, items, functionalDifficulty, locale, source, externalId
+        case instrument, items, functionalDifficulty, locale, englishOriginal, source, externalId
     }
 }
 

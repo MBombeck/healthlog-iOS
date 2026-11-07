@@ -493,6 +493,19 @@ private extension MetricKind {
         case .lowHeartRateEvent: "lowHeartRateEvent"
         case .walkingSteadinessEvent: "walkingSteadinessEvent"
         case .breathingDisturbanceEvent: "breathingDisturbanceEvent"
+        // #162 — Garmin types: no series kind server-side (list page only),
+        // so `kindSupportsSeries` short-circuits before these keys are used.
+        case .bodyBattery: "bodyBattery"
+        case .stressLevel: "stressLevel"
+        case .trainingReadiness: "trainingReadiness"
+        case .acuteTrainingLoad: "acuteTrainingLoad"
+        // HK-NEW (1.5) — no series kind server-side either (list page only).
+        case .exerciseMinutes: "exerciseMinutes"
+        case .standMinutes: "standMinutes"
+        case .standHours: "standHours"
+        case .mindfulMinutes: "mindfulMinutes"
+        case .stateOfMindValence: "stateOfMindValence"
+        case .afibBurden: "afibBurden"
         // Build 7 / item 7.3 — mood is not a `Measurement` and has no
         // `/api/measurements/series` kind; `kindSupportsSeries` short-circuits
         // before this key is ever used, so the token is unused-but-auditable.

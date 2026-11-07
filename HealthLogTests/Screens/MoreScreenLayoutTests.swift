@@ -420,6 +420,12 @@ struct MoreScreenLayoutTests {
         // comma as the only separator. The sentence is otherwise untouched,
         // including the word „irreversible", which is the contract copy this
         // clause exists to protect.
-        #expect(MoreScreen.Layout.deleteAccountRow.subtitle == "Irreversible, the server removes all data")
+        //
+        // **Amended 1.5.0 (KONTO, #151).** From server 1.46.0 a deletion
+        // locks the account and an admin can undo it inside the grace window,
+        // so „irreversible" is no longer true for every server. The row says
+        // what holds for both generations; the deletion screen says whether
+        // and when it becomes final (`AccountDeletionCopy`).
+        #expect(MoreScreen.Layout.deleteAccountRow.subtitle == "more.deleteAccount.subtitle")
     }
 }

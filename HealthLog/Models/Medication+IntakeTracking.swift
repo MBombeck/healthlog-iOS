@@ -73,42 +73,12 @@ public extension Medication {
     }
 
     func replacingSchedule(_ schedule: MedicationSchedule) -> Medication {
-        Medication(
-            id: id,
-            name: name,
-            dose: dose,
-            treatmentClass: treatmentClass,
-            category: category,
-            dosesPerUnit: dosesPerUnit,
-            unitsPerDose: unitsPerDose,
-            schedule: schedule,
-            lastTakenAt: lastTakenAt,
-            todayEventCount: todayEventCount,
-            notificationsEnabled: notificationsEnabled,
-            active: active,
-            archivedAt: archivedAt,
-            startsOn: startsOn,
-            endsOn: endsOn,
-            oneShot: oneShot,
-            asNeeded: asNeeded,
-            trackIntake: trackIntake,
-            recordedSchedule: recordedSchedule,
-            deliveryForm: deliveryForm,
-            createdAt: createdAt,
-            nextDueAt: nextDueAt,
-            nextDueOverdue: nextDueOverdue,
-            liveActivityEnabled: liveActivityEnabled,
-            criticalAlarmEnabled: criticalAlarmEnabled,
-            trackInjectionSites: trackInjectionSites,
-            allowedInjectionSites: allowedInjectionSites,
-            externalSource: externalSource,
-            externalId: externalId,
-            pausedAt: pausedAt,
-            stockDosesRemaining: stockDosesRemaining,
-            runwayDays: runwayDays,
-            courseStatus: courseStatus,
-            intakeActionable: intakeActionable
-        ).carryingCategoryLabel(categoryLabel).carryingRemindersActive(remindersActive)
+        // MED (1.5.0): a copy, not a rebuild, so every `var` field (the
+        // category label, the course actions and whatever later waves add)
+        // travels along.
+        var copy = self
+        copy.schedule = schedule
+        return copy
     }
 }
 

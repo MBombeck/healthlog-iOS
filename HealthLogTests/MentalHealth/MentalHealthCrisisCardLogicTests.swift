@@ -23,7 +23,9 @@ struct MentalHealthCrisisCardLogicTests {
         ("116 123", "tel:116123"),
         ("988", "tel:988"),
         ("911", "tel:911"),
-        ("112", "tel:112")
+        ("112", "tel:112"),
+        ("0800-0113", "tel:08000113"),
+        ("808 24 24 24", "tel:808242424")
     ])
     func phoneLinesBecomeTel(_ input: String, _ expected: String) {
         #expect(MentalHealthCrisisCard.link(for: input)?.absoluteString == expected)
@@ -33,7 +35,9 @@ struct MentalHealthCrisisCardLogicTests {
         ("telefonseelsorge.de", "https://telefonseelsorge.de"),
         ("krisenchat.de", "https://krisenchat.de"),
         ("findahelpline.com", "https://findahelpline.com"),
-        ("FindAHelpline.com", "https://findahelpline.com")
+        ("FindAHelpline.com", "https://findahelpline.com"),
+        ("113.nl", "https://113.nl"),
+        ("cvv.org.br/chat", "https://cvv.org.br/chat")
     ])
     func domainsBecomeHttps(_ input: String, _ expected: String) {
         #expect(MentalHealthCrisisCard.link(for: input)?.absoluteString == expected)
@@ -43,7 +47,11 @@ struct MentalHealthCrisisCardLogicTests {
         "Text HOME to 741741", // US Crisis Text Line — words + digits, not a dialable line
         "Rufe 0800 111 0 111 an", // free-text with a number embedded → not a bare number
         "", // empty
-        "   " // whitespace only
+        "   ", // whitespace only
+        "-", // a lone hyphen is no number
+        "113-", // nor a number that ends in a hyphen
+        "/chat", // a path without a host
+        ".nl" // a dot without a name
     ])
     func instructionsRemainPlainText(_ input: String) {
         #expect(MentalHealthCrisisCard.link(for: input) == nil)
@@ -80,20 +88,60 @@ struct MentalHealthCrisisCardLogicTests {
         assertLink(intl, id: "findahelpline", contact: "findahelpline.com", is: .https("https://findahelpline.com"))
     }
 
-    @Test("every contact in every bundled set resolves without trapping (total over real data)")
-    func allBundledContactsResolveTotally() {
-        for locale in ["de", "en-US", "en"] {
-            let set = CrisisResourceFallback.forLocale(locale)
-            for resource in set.resources {
-                for contact in resource.contacts {
-                    // link(for:) is total: it returns a URL or nil, never crashes,
-                    // and any URL it returns is a tel: or https: scheme.
-                    if let url = MentalHealthCrisisCard.link(for: contact) {
-                        #expect(url.scheme == "tel" || url.scheme == "https")
-                    }
+    /// v1.46.6 brought hyphenated numbers ("0800-0113") and a chat path
+    /// ("cvv.org.br/chat"); before L10N-MH both rendered as dead text.
+    @Test("Netherlands, Belgium, Portugal, Brazil — every new contact is tappable")
+    func newRegionContactsResolve() {
+        let nl = CrisisResourceFallback.forLocale("nl-NL")
+        assertLink(nl, id: "zelfmoordpreventie113", contact: "113", is: .tel("tel:113"))
+        assertLink(nl, id: "zelfmoordpreventie113", contact: "0800-0113", is: .tel("tel:08000113"))
+        assertLink(nl, id: "zelfmoordpreventie113", contact: "113.nl", is: .https("https://113.nl"))
+        let be = CrisisResourceFallback.forLocale("nl-BE")
+        assertLink(be, id: "zelfmoordlijn1813", contact: "1813", is: .tel("tel:1813"))
+        assertLink(be, id: "zelfmoordlijn1813", contact: "zelfmoord1813.be", is: .https("https://zelfmoord1813.be"))
+        let pt = CrisisResourceFallback.forLocale("pt-PT")
+        assertLink(pt, id: "sns24", contact: "808 24 24 24", is: .tel("tel:808242424"))
+        assertLink(pt, id: "sosVozAmiga", contact: "213 544 545", is: .tel("tel:213544545"))
+        assertLink(pt, id: "sosVozAmiga", contact: "sosvozamiga.org", is: .https("https://sosvozamiga.org"))
+        let br = CrisisResourceFallback.forLocale("br")
+        assertLink(br, id: "cvv", contact: "188", is: .tel("tel:188"))
+        assertLink(br, id: "cvv", contact: "cvv.org.br/chat", is: .https("https://cvv.org.br/chat"))
+        let pt2 = CrisisResourceFallback.forLocale("pt-BR")
+        assertLink(pt2, id: "samu", contact: "192", is: .tel("tel:192"))
+    }
+
+    /// Every bundled contact line is a link, except the one instruction the
+    /// US set carries on purpose.
+    @Test(
+        "every contact in every bundled set resolves to a link, bar the SMS instruction",
+        arguments: ["de", "de-AT", "de-CH", "en-US", "en", "br", "pt-PT", "pt-BR", "nl-NL", "nl-BE", "nl"]
+    )
+    func allBundledContactsResolve(locale: String) {
+        let set = CrisisResourceFallback.forLocale(locale)
+        for resource in set.resources {
+            for contact in resource.contacts {
+                let url = MentalHealthCrisisCard.link(for: contact)
+                if contact == "Text HOME to 741741" {
+                    #expect(url == nil)
+                } else {
+                    #expect(url?.scheme == "tel" || url?.scheme == "https", "\(locale): \(contact)")
                 }
             }
         }
+    }
+
+    // MARK: - Names
+
+    @Test("Every bundled resource has a name; an unknown id shows no raw key")
+    func resourceNames() {
+        for locale in ["de", "de-AT", "de-CH", "en-US", "en", "br", "pt-PT", "pt-BR", "nl-NL", "nl-BE", "nl"] {
+            for resource in CrisisResourceFallback.forLocale(locale).resources {
+                let name = MentalHealthCrisisCard.name(for: resource.id)
+                #expect(name?.isEmpty == false, "\(resource.id) has no name")
+                #expect(name?.hasPrefix("mentalHealth.") == false)
+            }
+        }
+        #expect(MentalHealthCrisisCard.name(for: "aLineThisBuildDoesNotKnow") == nil)
     }
 
     // MARK: - Item-9 gating NEVER keys on total / band

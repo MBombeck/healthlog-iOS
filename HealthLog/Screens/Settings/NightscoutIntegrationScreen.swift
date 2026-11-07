@@ -158,8 +158,7 @@ struct NightscoutIntegrationScreen: View {
                 .accessibilityIdentifier("settings.nightscout.urlField")
 
             SecureField(String(localized: "nightscout.tokenPlaceholder"), text: $tokenDraft)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+                .hlSecretEntry()
                 .accessibilityIdentifier("settings.nightscout.tokenField")
 
             HLSettingsToggleRow(

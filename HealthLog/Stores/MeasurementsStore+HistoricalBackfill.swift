@@ -16,6 +16,9 @@ import Foundation
 /// **Invariants reused from the b198 mirror (no reinvention):**
 /// - Source whitelist `.withings` / `.import_` / `.manual` — via the shared
 ///   `MeasurementSource.serverMirrorEligible` policy the mirror also reads.
+///   MIRROR (1.5): against server 1.46.0+ the walk asks for the rows the server
+///   marks (`appleHealthMirror=true`), and the mirror decides per row by that
+///   flag, falling back to the source rule only where the key is missing.
 /// - `HKMetadataKeyExternalUUID = measurement.id` on every sample (anti-dup;
 ///   the read foreign-filter drops it on read-back → no echo loop).
 /// - Per-sample `existsInHealth` externalUUID probe (skips what the latest-page
@@ -51,17 +54,41 @@ public extension MeasurementsStore {
         2
     }
 
+    /// **MIRROR (1.5, #152, server #1272) — v3.** Against a server known to
+    /// be 1.46.0 or later the pass pages `?type=…&appleHealthMirror=true` per
+    /// mirror-writable kind instead of one fetch per source, so it also reaches
+    /// EXTERNAL readings from a token the person switched on. It runs once more
+    /// after the update (a 1.4.1 install has v2 stored) and then never again
+    /// for that account. Against an older or unknown server the target stays
+    /// v2: the per-source walk, exactly as in 1.4, and a v2 already done is not
+    /// repeated. Every row still goes through the mirror's own decision and
+    /// both duplicate probes, so the rows v2 already wrote are skipped.
+    private static var serverFlagBackfillSchemaVersion: Int {
+        3
+    }
+
+    /// The version this account's pass should reach against this server.
+    private func historicalBackfillTarget() -> (version: Int, usesServerFlag: Bool) {
+        let usesServerFlag = KnownServerVersion.isAtLeast(
+            Measurement.appleHealthMirrorMinimumServerVersion,
+            defaults: serverVersionDefaults
+        )
+        return usesServerFlag
+            ? (Self.serverFlagBackfillSchemaVersion, true)
+            : (Self.historicalBackfillSchemaVersion, false)
+    }
+
     /// Builds a marker from the owner captured before the task's first await.
     /// The live user provider is never consulted by suspended backfill work.
     private static func historicalBackfillMarkerKey(ownerID: String) -> String {
         historicalBackfillKeyPrefix + backfillPartitionToken(for: ownerID)
     }
 
-    private func hasCompletedHistoricalBackfill(markerKey: String) -> Bool {
+    private func hasCompletedHistoricalBackfill(markerKey: String, target: Int) -> Bool {
         let stored = backfillDefaults.integer(forKey: markerKey)
         // `integer(forKey:)` returns 0 for an absent key — below v1, so the gate
         // opens on first eligible launch.
-        return stored >= Self.historicalBackfillSchemaVersion
+        return stored >= target
     }
 
     /// **Trigger.** Called from the SWR `.fresh` arm right after the latest-page
@@ -77,7 +104,8 @@ public extension MeasurementsStore {
         guard historicalBackfillTask == nil else { return }
         guard let lease = captureAuthenticatedSessionLease() else { return }
         let markerKey = Self.historicalBackfillMarkerKey(ownerID: lease.ownerID)
-        guard !hasCompletedHistoricalBackfill(markerKey: markerKey) else { return }
+        let target = historicalBackfillTarget()
+        guard !hasCompletedHistoricalBackfill(markerKey: markerKey, target: target.version) else { return }
 
         let repo = repo
         let taskID = UUID()
@@ -87,11 +115,13 @@ public extension MeasurementsStore {
             let cleanPass = await Self.performHistoricalBackfill(
                 repo: repo,
                 healthKit: healthKit,
-                lease: lease
+                lease: lease,
+                usesServerFlag: target.usesServerFlag
             )
             finishHistoricalBackfill(
                 taskID: taskID,
                 markerKey: markerKey,
+                version: target.version,
                 lease: lease,
                 cleanPass: cleanPass
             )
@@ -109,6 +139,7 @@ public extension MeasurementsStore {
     private func finishHistoricalBackfill(
         taskID: UUID,
         markerKey: String,
+        version: Int,
         lease: AuthenticatedSessionLease,
         cleanPass: Bool
     ) {
@@ -121,7 +152,7 @@ public extension MeasurementsStore {
         guard historicalBackfillTaskID == taskID,
               cleanPass,
               authenticatedEffectIsCurrent(lease) else { return }
-        backfillDefaults.set(Self.historicalBackfillSchemaVersion, forKey: markerKey)
+        backfillDefaults.set(version, forKey: markerKey)
     }
 
     /// Idempotently cancels and awaits the exact work handles retained by this
@@ -151,16 +182,24 @@ public extension MeasurementsStore {
     internal nonisolated static func performHistoricalBackfill(
         repo: MeasurementsRepository,
         healthKit: AnyHealthKitWriter,
-        lease: AuthenticatedSessionLease
+        lease: AuthenticatedSessionLease,
+        usesServerFlag: Bool = false
     ) async -> Bool {
         var history: [Measurement] = []
         var fetchedKindCount = 0
         do {
             for kind in MetricKind.serverMirrorWritableKinds.sorted(by: { $0.rawValue < $1.rawValue }) {
                 var kindHadRows = false
-                for source in MeasurementSource.serverMirrorEligible {
+                // MIRROR (1.5) — v3: one flag-filtered walk per kind; v2: one
+                // fetch per eligible source.
+                let fetches: [MeasurementSource?] = usesServerFlag ? [nil] : MeasurementSource.serverMirrorEligible
+                for source in fetches {
                     try lease.requireCurrent()
-                    let rows = try await repo.historyForBackfill(kind: kind, source: source)
+                    let rows: [Measurement] = if let source {
+                        try await repo.historyForBackfill(kind: kind, source: source)
+                    } else {
+                        try await repo.historyForMirrorBackfill(kind: kind)
+                    }
                     try lease.requireCurrent()
                     if !rows.isEmpty {
                         history.append(contentsOf: rows)

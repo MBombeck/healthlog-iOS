@@ -57,12 +57,15 @@ struct HealthKitSkippedEntry: Sendable, Equatable {
     let nutrient: NutrientIntakeEntryDTO?
     let mood: StateOfMindSkippedSample?
     let reason: String
+    /// 1.5 FIX-DATA — what the server said about the value, when it said it.
+    var detail: HealthKitRefusalDetail?
 
-    init(entry: HealthKitBatchEntryDTO, reason: String) {
+    init(entry: HealthKitBatchEntryDTO, reason: String, detail: HealthKitRefusalDetail? = nil) {
         self.entry = entry
         nutrient = nil
         mood = nil
         self.reason = reason
+        self.detail = detail
     }
 
     init(nutrient: NutrientIntakeEntryDTO, reason: String) {
@@ -81,6 +84,20 @@ struct HealthKitSkippedEntry: Sendable, Equatable {
 
     var id: String {
         HealthKitSkippedRow.identity(entry: entry, nutrient: nutrient, mood: mood)
+    }
+}
+
+/// 1.5 FIX-DATA (#126) — a `value_out_of_range` refusal's own words: the
+/// value after the server's unit conversion and the band it broke. Either may
+/// be absent (an older server sends neither); nil when both are.
+struct HealthKitRefusalDetail: Codable, Sendable, Equatable {
+    let convertedValue: Double?
+    let range: HealthKitValueRange?
+
+    init?(convertedValue: Double?, range: HealthKitValueRange?) {
+        guard convertedValue != nil || range != nil else { return nil }
+        self.convertedValue = convertedValue
+        self.range = range
     }
 }
 
@@ -108,6 +125,9 @@ struct HealthKitSkippedRow: Codable, Sendable, Equatable, Identifiable {
     var mood: StateOfMindSkippedSample?
     /// The server's latest reason for refusing it.
     var reason: String
+    /// 1.5 FIX-DATA — the latest refusal's value and band; absent from files
+    /// written before 1.5 and from servers older than v1.39.1.
+    var detail: HealthKitRefusalDetail?
     let firstSkippedAt: Date
     var lastAttemptAt: Date
     var attempts: Int
@@ -288,6 +308,7 @@ actor HealthKitSkippedRowRegister {
         for item in skipped {
             if let index = file.rows.firstIndex(where: { $0.ownerID == owner && $0.id == item.id }) {
                 file.rows[index].reason = item.reason
+                file.rows[index].detail = item.detail
                 // A nutrient day-total is re-read before every post: keep the
                 // latest amount (the identity is the day and the nutrient).
                 if let nutrient = item.nutrient { file.rows[index].nutrient = nutrient }
@@ -302,6 +323,7 @@ actor HealthKitSkippedRowRegister {
                         nutrient: item.nutrient,
                         mood: item.mood,
                         reason: item.reason,
+                        detail: item.detail,
                         firstSkippedAt: now,
                         lastAttemptAt: now,
                         attempts: 1,
@@ -401,6 +423,8 @@ struct HealthKitBatchRowVerdict: Sendable, Equatable {
     let index: Int
     let status: HealthKitEntryStatus
     let reason: String?
+    /// 1.5 FIX-DATA — from `entries[]` only; `skipped[]` carries no detail.
+    var detail: HealthKitRefusalDetail?
 
     /// The only three words that mean the row is in the server's state.
     var isStored: Bool {
@@ -415,7 +439,12 @@ extension BatchUploadOutcome {
     var rowVerdicts: [HealthKitBatchRowVerdict] {
         var byIndex: [Int: HealthKitBatchRowVerdict] = [:]
         for entry in response.entries where chunk.indices.contains(entry.index) && byIndex[entry.index] == nil {
-            byIndex[entry.index] = HealthKitBatchRowVerdict(index: entry.index, status: entry.status, reason: entry.reason)
+            byIndex[entry.index] = HealthKitBatchRowVerdict(
+                index: entry.index,
+                status: entry.status,
+                reason: entry.reason,
+                detail: HealthKitRefusalDetail(convertedValue: entry.convertedValue, range: entry.range)
+            )
         }
         for skipped in response.skipped where chunk.indices.contains(skipped.index) {
             if let existing = byIndex[skipped.index] {
@@ -423,7 +452,8 @@ extension BatchUploadOutcome {
                     byIndex[skipped.index] = HealthKitBatchRowVerdict(
                         index: skipped.index,
                         status: .skipped,
-                        reason: skipped.reason
+                        reason: skipped.reason,
+                        detail: existing.detail
                     )
                 }
             } else {

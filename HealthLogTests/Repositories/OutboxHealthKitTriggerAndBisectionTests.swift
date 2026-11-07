@@ -110,7 +110,19 @@ struct OutboxHealthKitTriggerAndBisectionTests {
         }
     }
 
-    static func makeReplay(outbox: OutboxQueue) -> OutboxReplayService {
+    /// SYNC-TRIG (1.5) — a server that takes every trigger (v1.43 with
+    /// `syncTriggerBackfill`), so a kept word replays unchanged.
+    static func currentServer() -> SyncTriggerContext {
+        let context = SyncTriggerContext()
+        context.noteServerVersion(ServerVersionInfo(version: "1.47.0"))
+        context.noteServerFeatures([.syncTriggerBackfill])
+        return context
+    }
+
+    static func makeReplay(
+        outbox: OutboxQueue,
+        server: SyncTriggerContext = currentServer()
+    ) -> OutboxReplayService {
         let keychain = InMemoryKeychain()
         try? keychain.setString("bearer-a2", forKey: KeychainKey.authToken)
         try? keychain.setString(owner, forKey: KeychainKey.userID)
@@ -122,7 +134,8 @@ struct OutboxHealthKitTriggerAndBisectionTests {
             medicationsRepo: MedicationsRepository(api: api, outbox: outbox),
             currentUserProvider: { owner },
             maxAttempts: 8,
-            attemptBackoff: 0
+            attemptBackoff: 0,
+            syncTriggerGate: server
         )
     }
 

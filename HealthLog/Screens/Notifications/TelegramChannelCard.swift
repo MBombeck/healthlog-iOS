@@ -38,9 +38,7 @@ struct TelegramChannelCard: View {
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
                     SecureField(tokenPlaceholder, text: $botTokenDraft)
-                        .textContentType(.password)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        .hlSecretEntry()
                         .accessibilityIdentifier("notifications.telegram.tokenField")
                 }
 

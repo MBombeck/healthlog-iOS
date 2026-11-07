@@ -94,13 +94,19 @@ struct HeroStrip: View {
             if !stacked {
                 Spacer(minLength: HLSpace.xs)
             }
-            if let delta = store.deltaVsPriorWindow {
-                // A360-5 — the prior-window delta + its label both convert for
-                // the re-unitable weight/BP families (purely multiplicative;
-                // glucose series deltas are already in the user's unit), so the
-                // chip never mixes a converted label with a canonical magnitude.
-                HeroDeltaChip(delta: store.convertDelta(delta, units: units), unit: store.displayUnit(units: units))
-                    .fixedSize()
+            if let change = store.rangeChange {
+                // 1.5 VERDICTS — the server's change and verdict when it sends
+                // them, else (older server) the own comparison in neutral.
+                // A360-5 — the delta + its label both convert for the
+                // re-unitable weight/BP families (purely multiplicative; glucose
+                // series deltas are already in the user's unit).
+                HeroDeltaChip(
+                    delta: store.convertDelta(change.delta, units: units),
+                    unit: store.displayUnit(units: units),
+                    sentiment: change.sentiment,
+                    basis: change.basis
+                )
+                .fixedSize()
             }
         }
         Text(latest.at, format: .dateTime.weekday(.wide).day().month().hour().minute())
@@ -204,6 +210,11 @@ struct ChartCard: View {
     /// 1.4 B2 — the "vs prior month" delta reads the drawn series, so it is the
     /// chart card's one caption line instead of a loose line below the page.
     var rangeDelta: MetricRangeDelta?
+    /// 1.5 LAB-LINES — the card's line above the chart (the usual range from
+    /// `coach-read`) and, in place of the change line, what the chart is
+    /// narrowed to (a part of the day). `nil` for none.
+    var headline: String?
+    var caption: String?
 
     var body: some View {
         // DASHBOARD-CHARTS-BUG-FIX (2026-05-16): `series` is the chart's
@@ -213,38 +224,49 @@ struct ChartCard: View {
         // keine Daten" only once a load has finished empty. The old 3 s
         // timeout that degraded a slow load to „Noch keine Daten" is gone.
         switch ChartCardPhase.resolve(
-            pointCount: store.chartPoints.count,
+            pointCount: store.chartCardPoints.count,
             dataState: store.dataState,
-            isLoading: store.isLoading,
-            hasError: store.error != nil
+            isLoading: store.chartCardIsLoading,
+            hasError: store.chartCardHasError
         ) {
         case .chart:
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    if let headline {
+                        cardLine(headline, identifier: "chart.card.headline")
+                    }
                     chartView
                         .frame(height: HLChartStyle.heightRegular)
                         // #55 — dim the populated chart while a reload is in flight
                         // so a range change reads as "updating", never frozen.
-                        .opacity(store.isLoading ? 0.45 : 1)
+                        .opacity(store.chartCardIsLoading ? 0.45 : 1)
                         .overlay {
-                            if store.isLoading {
+                            if store.chartCardIsLoading {
                                 reloadAffordance
                             }
                         }
-                        .hlAnimation(.easeInOut(duration: 0.2), value: store.isLoading)
+                        .hlAnimation(.easeInOut(duration: 0.2), value: store.chartCardIsLoading)
                         // The dimmed chart is decorative during a reload — let
                         // VoiceOver announce the loading state instead of reading
                         // out the stale (about-to-change) data series.
-                        .accessibilityValue(store.isLoading ? Text(String(localized: "Loading")) : Text(""))
-                    rangeDelta
+                        .accessibilityValue(store.chartCardIsLoading ? Text(String(localized: "Loading")) : Text(""))
+                        // A11Y (1.5) — the chart is what opens full screen. On
+                        // the card the button trait reached every line in it,
+                        // so the headline and the comparison line read as
+                        // buttons too, each with a hit area of one text line.
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityHint(Text(String(localized: "Double-tap to open the chart full screen")))
+                    if let caption {
+                        cardLine(caption, identifier: "chart.card.caption")
+                    } else {
+                        rangeDelta
+                    }
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture { onTapChart() }
             // W3b C1 — zoom-morph source for the fullscreen cover (iOS 18+).
             .matchedTransitionSource(id: zoomSourceID, in: zoomNamespace)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(Text(String(localized: "Double-tap to open the chart full screen")))
         case .singlePoint:
             // Series landed but only one point — Apple-Health "Need more
             // data" copy. Independent of dataState (which may still be
@@ -257,7 +279,10 @@ struct ChartCard: View {
             // 1.4 B1: a failed load says so, with the shared retry face,
             // instead of passing for an empty history.
             HLCard {
-                HLRetryUnavailableView { await store.load() }
+                HLRetryUnavailableView {
+                    await store.load()
+                    await store.loadPartOfDay()
+                }
             }
             .accessibilityIdentifier("chart.card.failed")
         case .loading:
@@ -270,6 +295,16 @@ struct ChartCard: View {
                     .frame(height: HLChartStyle.heightRegular)
             }
         }
+    }
+
+    /// 1.5 LAB-LINES — one quiet line inside the card.
+    private func cardLine(_ text: String, identifier: String) -> some View {
+        Text(verbatim: text)
+            .font(.hlSubhead)
+            .foregroundStyle(HLText.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier(identifier)
     }
 
     /// #55 — the in-chart "updating" affordance shown over the dimmed populated
@@ -291,12 +326,12 @@ struct ChartCard: View {
     /// >= 2`, so we force-unwrap the series here — the precondition is local.
     @ViewBuilder
     private var chartView: some View {
-        let points = store.chartPoints
+        let points = store.chartCardPoints
         // #115 P2 — the plot, the y-axis and the audio graph read in the
         // account's unit (`plotPoints`), the same unit as the hero and the
         // stats row. The scrub callout still receives the canonical point
         // (`points`) because it converts the value itself.
-        let plotted = store.plotPoints(units: units)
+        let plotted = store.plotPoints(points, units: units)
         if points.count >= 2 {
             Chart {
                 // #135 — the server's reference lines (v1.43) under the series.
@@ -413,7 +448,7 @@ struct ChartCard: View {
             .accessibilityChartDescriptor(
                 ChartDescriptor(
                     descriptor: ChartsAccessibility.makeDescriptor(
-                        for: store.accessibilitySeries(units: units),
+                        for: store.chartCardAccessibilitySeries(units: units),
                         kind: kind,
                         unit: store.displayUnit(units: units)
                     )

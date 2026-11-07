@@ -40,9 +40,12 @@
             let actions = digest.rail.flatMap(\.boundedActions)
             #expect(actions.count == 3)
             for action in actions.prefix(2) {
-                #expect(TodayHeroActionRoute.resolve(intent: action.intent, href: action.href) == .checkupsList)
                 #expect(TodayHeroCopy.actionLabel(action.labelKey) != action.labelKey, "label key resolves")
             }
+            // 1.5 VISIT — one named visit opens Vorsorge with that visit,
+            // several open it with the soonest.
+            #expect(TodayHeroActionRoute.resolve(intent: actions[0].intent, href: actions[0].href) == .visit(id: "enc_7f3a"))
+            #expect(TodayHeroActionRoute.resolve(intent: actions[1].intent, href: actions[1].href) == .checkupsList)
             // 1.43.11: the old intent with the new href keeps its front door.
             #expect(TodayHeroActionRoute.resolve(intent: actions[2].intent, href: actions[2].href) == .checkupFrontDoor)
         }
@@ -65,7 +68,7 @@
 
         @Test("the appointment push opens the Vorsorge list")
         func appointmentPush() {
-            #expect(DeepLinkRoute.fromPushPath("/checkups?visit=enc_7f3a") == .checkups)
+            #expect(DeepLinkRoute.fromPushPath("/checkups?visit=enc_7f3a") == .checkupsVisit(id: "enc_7f3a"))
             #expect(DeepLinkRoute.fromPushPath("/checkups?view=visits") == .checkups)
             #expect(DeepLinkRoute.fromPushPath("/checkups") == .checkups)
         }

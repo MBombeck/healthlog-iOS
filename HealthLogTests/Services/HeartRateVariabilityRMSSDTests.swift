@@ -152,10 +152,12 @@
             #expect(!HealthKitServerTypeGate.serverAccepts(rmssd, defaults: defaults))
         }
 
-        @Test("every other type, SDNN included, is never gated")
+        @Test("every other type, SDNN included, is never gated (HK-NEW: the six v1.44 types have their own gate)")
         func otherTypesPass() throws {
             let defaults = try Self.makeDefaults()
-            for identifier in HealthLogSampleTypeRegistry.baseIdentifiers {
+            for identifier in HealthLogSampleTypeRegistry.baseIdentifiers
+                where HealthKitServerTypeGate.minimumServerVersionByIdentifier[identifier] == nil
+            {
                 #expect(HealthKitServerTypeGate.serverAccepts(identifier, defaults: defaults), "\(identifier)")
             }
             HealthKitServerTypeGate.record(ServerVersionInfo(version: "1.30.0"), defaults: defaults)
@@ -180,8 +182,14 @@
 
             HealthKitServerTypeGate.record(ServerVersionInfo(version: "1.42.0"), defaults: defaults)
             let new = AppOwnedHealthCollectionCoordinator.serverCollectable(ios27, serverAccepts: gate)
-            #expect(new == ios27)
+            #expect(new == ios27.filter { !HealthKitServer144Types.registryIdentifiers.contains($0) })
             #expect(new.count == 37)
+
+            // HK-NEW (1.5) — the six v1.44 types join from v1.44 on.
+            HealthKitServerTypeGate.record(ServerVersionInfo(version: "1.44.0"), defaults: defaults)
+            let all = AppOwnedHealthCollectionCoordinator.serverCollectable(ios27, serverAccepts: gate)
+            #expect(all == ios27)
+            #expect(all.count == 43)
         }
 
         @Test("on this system the pass collects the registry minus what the server cannot store")
@@ -190,7 +198,10 @@
                 AppOwnedHealthCollectionCoordinator.collectedTypeIdentifiers
             )
             #expect(Set(live).isSubset(of: HealthLogSampleTypeRegistry.knownIdentifiers))
-            #expect(Set(HealthLogSampleTypeRegistry.baseIdentifiers).isSubset(of: Set(live)))
+            // Everything without a minimum server version is always collected.
+            let ungated = HealthLogSampleTypeRegistry.baseIdentifiers
+                .subtracting(HealthKitServerTypeGate.minimumServerVersionByIdentifier.keys)
+            #expect(ungated.isSubset(of: Set(live)))
         }
     }
 #endif

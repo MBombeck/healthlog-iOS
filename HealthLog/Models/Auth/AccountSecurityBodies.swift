@@ -486,12 +486,21 @@ public struct MfaStatus: Decodable, Sendable, Equatable {
     public let recoveryCodesRemaining: Int
     public let webauthn: [SecurityKey]
     public let passkeyNudgeDismissed: Bool
+    /// KONTO (#157, server 1.46.2) — see `MfaStatus+ProofMethods.swift`.
+    public let proofMethods: [String]?
 
-    public init(totp: Totp, recoveryCodesRemaining: Int, webauthn: [SecurityKey], passkeyNudgeDismissed: Bool) {
+    public init(
+        totp: Totp,
+        recoveryCodesRemaining: Int,
+        webauthn: [SecurityKey],
+        passkeyNudgeDismissed: Bool,
+        proofMethods: [String]? = nil
+    ) {
         self.totp = totp
         self.recoveryCodesRemaining = recoveryCodesRemaining
         self.webauthn = webauthn
         self.passkeyNudgeDismissed = passkeyNudgeDismissed
+        self.proofMethods = proofMethods
     }
 }
 

@@ -5,5 +5,5 @@
 "NSAlarmKitUsageDescription" = "HealthLog provides loud alarms for time-critical medications that you explicitly enable. They can break through Silent mode and Focus so you do not miss an important dose.";
 "NSSpeechRecognitionUsageDescription" = "HealthLog uses speech recognition to turn your dictated Coach question into text, on device where available. You review the text before sending it.";
 "NSMicrophoneUsageDescription" = "HealthLog uses the microphone so you can dictate a Coach question. The recording is converted to text on device and is not stored.";
-"NSCameraUsageDescription" = "HealthLog uses the camera to read medication packages and lab reports on device, or to upload scans you select to your document vault on your configured HealthLog server.";
+"NSCameraUsageDescription" = "HealthLog uses the camera to read medication packages and lab reports on device, or to upload scans you select to your document vault on your configured HealthLog server. When you choose to, a photo of a lab report or label is also sent to your HealthLog server to be read.";
 "NSBluetoothAlwaysUsageDescription" = "HealthLog connects to blood-pressure monitors over Bluetooth (today that means Omron cuffs), so your readings arrive automatically.";

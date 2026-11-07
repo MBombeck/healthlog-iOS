@@ -1,0 +1,688 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Log blood glucose in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasse Blutzucker in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log blood glucose in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg bloedglucose vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Record my blood sugar in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meinen Blutzucker in ${applicationName} erfassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record my blood sugar in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg mijn bloedsuiker vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Add a glucose reading to ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuckerwert in ${applicationName} eintragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a glucose reading to ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg een glucosemeting toe aan ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log my blood sugar with ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blutzucker messen mit ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log my blood sugar with ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg mijn bloedsuiker vast met ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log a measurement in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messung in ${applicationName} eintragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log a measurement in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg een meting vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Record a measurement in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messwert in ${applicationName} erfassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record a measurement in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sla een meting op in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log ${kind} in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${kind} in ${applicationName} eintragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log ${kind} in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg ${kind} vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Add a ${kind} reading to ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${kind} in ${applicationName} erfassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a ${kind} reading to ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg een ${kind}-meting toe aan ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log my weight in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasse mein Gewicht in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log my weight in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg mijn gewicht vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log a value in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wert in ${applicationName} eintragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log a value in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg een waarde vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log ${metric} in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${metric} in ${applicationName} eintragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log ${metric} in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg ${metric} vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Add a value to ${metric} in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wert für ${metric} in ${applicationName} eintragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a value to ${metric} in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg een waarde toe aan ${metric} in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log blood pressure in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasse Blutdruck in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log blood pressure in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg bloeddruk vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Record my blood pressure in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meinen Blutdruck in ${applicationName} erfassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record my blood pressure in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg mijn bloeddruk vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Add a blood pressure reading to ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blutdruckwert in ${applicationName} eintragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a blood pressure reading to ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg een bloeddrukmeting toe aan ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log my mood in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasse meine Stimmung in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log my mood in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg mijn stemming vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Record how I feel in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In ${applicationName} erfassen, wie es mir geht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record how I feel in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg vast hoe ik me voel in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Add a mood entry to ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stimmungseintrag in ${applicationName} anlegen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a mood entry to ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg een stemming toe aan ${applicationName}"
+          }
+        }
+      }
+    },
+    "How am I feeling in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie geht es mir in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How am I feeling in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoe voel ik me in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Mark medication taken in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medikament als genommen markieren in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark medication taken in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markeer medicatie als ingenomen in ${applicationName}"
+          }
+        }
+      }
+    },
+    "I took my medication in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ich habe meine Medikamente genommen in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I took my medication in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ik heb mijn medicatie ingenomen in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log a dose in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einnahme in ${applicationName} eintragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log a dose in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg een dosis vast in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Did I take my medication today in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Habe ich heute meine Medikamente genommen in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Did I take my medication today in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heb ik vandaag mijn medicatie ingenomen in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Show my adherence in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Einnahme-Quote in ${applicationName} zeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show my adherence in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toon mijn therapietrouw in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Have I taken my meds in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Habe ich meine Medikamente genommen in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Have I taken my meds in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heb ik mijn medicijnen ingenomen in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Check my medication compliance in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Einnahmen in ${applicationName} prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check my medication compliance in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controleer mijn medicatie in ${applicationName}"
+          }
+        }
+      }
+    },
+    "What's my adherence rate in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie ist meine Einnahme-Quote in ${applicationName}"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What's my adherence rate in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wat is mijn therapietrouw in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Did I take my ${medication} in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Habe ich ${medication} in ${applicationName} genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Did I take my ${medication} in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heb ik mijn ${medication} ingenomen in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Have I taken ${medication} in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${medication} in ${applicationName} schon genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Have I taken ${medication} in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heb ik ${medication} ingenomen in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Check if I took ${medication} in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In ${applicationName} prüfen, ob ich ${medication} genommen habe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check if I took ${medication} in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controleer in ${applicationName} of ik ${medication} heb ingenomen"
+          }
+        }
+      }
+    },
+    "Did I take my ${medication} today in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Habe ich heute mein ${medication} in ${applicationName} genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Did I take my ${medication} today in ${applicationName}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heb ik vandaag mijn ${medication} ingenomen in ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

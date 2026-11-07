@@ -260,7 +260,9 @@
                 }
                 return Self.response(req, 200, #"{"data":[],"error":null}"#)
             }
-            let store = McpStore(repo: McpRepository(api: api))
+            // The reactive path: a server that does not take the proof up front
+            // (POLISH-C: the account holds no factor, ``McpStore/accountNeedsProof(_:)`` is false).
+            let store = McpStore(repo: McpRepository(api: api), proofUpFront: { false })
 
             #expect(await store.mintToken(name: "Claude", scope: .read) == false)
             #expect(store.stepUp.isRequested)

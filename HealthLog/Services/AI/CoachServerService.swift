@@ -29,7 +29,8 @@ import Foundation
 /// invoking `respond(...)`. The server enforces its own
 /// `requireAssistantSurface("coach")` feature-flag + per-user budget.
 public actor CoachServerService {
-    private let api: APIClientProtocol
+    /// Internal so the 1.5 trail read (`+Frames`) can use it.
+    let api: APIClientProtocol
     private let encoder: JSONEncoder
 
     public init(api: APIClientProtocol, encoder: JSONEncoder = .hlDefault) {
@@ -46,8 +47,8 @@ public actor CoachServerService {
     ///   - conversationId: `nil` for a new conversation, otherwise the
     ///     id the server returned on a previous turn so the thread
     ///     continues.
-    ///   - locale: `"de"` / `"en"` so the server renders refusal copy in
-    ///     the right language.
+    ///   - locale: `"de"` / `"en"` for refusal copy in that language; `nil`
+    ///     lets the server resolve any other interface language itself.
     /// - Returns: the assistant reply text + the (new-or-existing)
     ///   conversation id so the caller can continue the thread.
     /// - Throws: ``CoachServerError`` for transport, decode, or
@@ -55,18 +56,15 @@ public actor CoachServerService {
     public func respond(
         message: String,
         conversationId: String?,
-        locale: String,
+        locale: String?,
         scope: CoachScopeWire? = nil,
         prefill: String? = nil,
-        onToken: (@MainActor @Sendable (String) async -> Void)? = nil
+        decision: TurnDecision? = nil,
+        onToken: (@MainActor @Sendable (String) async -> Void)? = nil,
+        onActivity: (@MainActor @Sendable (CoachActivity) async -> Void)? = nil
     ) async throws -> Reply {
-        let body = ChatRequestBody(
-            conversationId: conversationId,
-            message: message,
-            locale: locale,
-            scope: scope,
-            prefill: prefill
-        )
+        var body = ChatRequestBody(conversationId: conversationId, message: message, locale: locale, scope: scope, prefill: prefill)
+        body.decision = decision
         // A first-turn create gets an Idempotency-Key (the server caches
         // the conversation create under it); follow-up turns reuse the
         // conversationId for dedup, so the key is only load-bearing on
@@ -94,11 +92,11 @@ public actor CoachServerService {
             // blank-line terminator). A cancellation propagates out of the
             // for-await.
             guard let payload = reassembler.feed(line) else { continue }
-            await Self.ingestPayload(payload, into: &acc, onToken: onToken)
+            await Self.ingestPayload(payload, into: &acc, onToken: onToken, onActivity: onActivity)
         }
         // Flush a final event that arrived without a trailing blank line.
         if let payload = reassembler.flush() {
-            await Self.ingestPayload(payload, into: &acc, onToken: onToken)
+            await Self.ingestPayload(payload, into: &acc, onToken: onToken, onActivity: onActivity)
         }
         return try acc.finalize()
     }
@@ -129,6 +127,10 @@ public actor CoachServerService {
         /// turns. Render-only — the quiet token footer paints `totalTokens` +
         /// `model`, never a client recompute.
         public let usage: CoachUsage?
+        /// 1.5 COACH-R (v1.41) — a fact the Coach saved or proposes, and a plan
+        /// it proposes (`memoryNote` / `planProposal` frames). `nil` otherwise.
+        public var memoryNote: CoachMemoryNote?
+        public var planProposal: CoachPlanProposal?
 
         public init(
             text: String,
@@ -394,6 +396,8 @@ public actor CoachServerService {
         private var suggestion: CoachReminderSuggestion?
         private var provenance: CoachProvenance?
         private var usage: CoachUsage?
+        private var memoryNote: CoachMemoryNote?
+        private var planProposal: CoachPlanProposal?
         private var sawAnyFrame = false
         private var providerErrorCode: String?
 
@@ -420,6 +424,10 @@ public actor CoachServerService {
                 // Keep the last valid one; a malformed payload decodes to nil and
                 // is ignored (the `?? provenance` keeps any earlier valid value).
                 provenance = frame.metricSource ?? provenance
+            case "memoryNote", "planProposal":
+                // 1.5 COACH-R (v1.41) — kept as data; nothing is decided here.
+                memoryNote = frame.note?.value ?? memoryNote
+                planProposal = frame.proposal?.value ?? planProposal
             default:
                 break // additive evolution — ignore unknown frame types
             }
@@ -436,7 +444,7 @@ public actor CoachServerService {
             guard !cleaned.isEmpty else {
                 throw CoachServerError.emptyReply
             }
-            return Reply(
+            var reply = Reply(
                 text: cleaned,
                 conversationId: conversationId,
                 messageId: messageId,
@@ -444,6 +452,9 @@ public actor CoachServerService {
                 provenance: provenance,
                 usage: usage
             )
+            reply.memoryNote = memoryNote
+            reply.planProposal = planProposal
+            return reply
         }
     }
 
@@ -454,11 +465,15 @@ public actor CoachServerService {
     private nonisolated static func ingestPayload(
         _ payload: String,
         into acc: inout FrameAccumulator,
-        onToken: (@MainActor @Sendable (String) async -> Void)?
+        onToken: (@MainActor @Sendable (String) async -> Void)?,
+        onActivity: (@MainActor @Sendable (CoachActivity) async -> Void)?
     ) async {
         guard let frame = frame(fromEventPayload: payload) else { return }
         if frame.type == "token", let token = frame.token, !token.isEmpty {
             await onToken?(token)
+        }
+        if frame.type == "activity", let activity = frame.activity?.value {
+            await onActivity?(activity)
         }
         acc.ingest(frame)
     }
@@ -470,83 +485,6 @@ public actor CoachServerService {
         let json = payload.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !json.isEmpty, let frameData = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(StreamFrame.self, from: frameData)
-    }
-
-    /// **BH-final-diff H5 — SSE multi-`data:`-line reassembly.** A single SSE
-    /// event may legitimately span MULTIPLE `data:` lines that must be re-joined
-    /// with `\n` before decoding; the previous per-line decoder `try?`-decoded
-    /// each physical line, so a split frame silently dropped its tokens.
-    ///
-    /// But the app's own streams (and the test stubs) emit one COMPLETE `data:`
-    /// JSON object per line with NO blank-line separator between events. A naive
-    /// "accumulate until blank line" reassembler would merge those back-to-back
-    /// frames into one undecodable blob. So the dispatch is **decode-driven**:
-    ///
-    ///   - Buffered `data:` lines are joined with `\n` and emitted when (a) a
-    ///     blank line (the spec event terminator) is seen, or (b) a NEW `data:`
-    ///     line arrives while the already-buffered payload ALONE forms a complete
-    ///     (decodable) event — proving the previous event ended without a blank
-    ///     line. A genuinely split frame's partial buffer does NOT decode, so it
-    ///     keeps accumulating until the joined payload is whole.
-    ///
-    /// Tolerant of proxy newline variants: a line is fed already split on
-    /// `\n`/`\r\n` boundaries; a lone `\r` left on a line is stripped. Non-`data:`
-    /// SSE fields (`event:`, `id:`, `retry:`, comments `:`) are ignored.
-    struct SSEEventReassembler {
-        private var dataLines: [String] = []
-        /// Predicate that returns `true` when the joined buffer already forms a
-        /// complete (decodable) event — drives the no-blank-line dispatch.
-        private let isComplete: (String) -> Bool
-
-        /// - Parameter isComplete: returns `true` when the candidate joined
-        ///   payload decodes to a full event. Defaults to "non-empty" for callers
-        ///   that only need blank-line framing.
-        init(isComplete: @escaping (String) -> Bool = { !$0.isEmpty }) {
-            self.isComplete = isComplete
-        }
-
-        /// Feed one physical SSE line. Returns a completed event payload when the
-        /// line terminates one (a blank line, OR a new `data:` line that follows
-        /// an already-complete buffer); otherwise `nil`.
-        mutating func feed(_ rawLine: some StringProtocol) -> String? {
-            // Strip a trailing lone CR (CRLF transports where only `\n` split).
-            let line = rawLine.hasSuffix("\r") ? String(rawLine.dropLast()) : String(rawLine)
-            if line.isEmpty {
-                return flush()
-            }
-            // SSE comment line (starts with ':') — ignore.
-            guard !line.hasPrefix(":") else { return nil }
-            guard let colon = line.firstIndex(of: ":") else {
-                // A field name with no value (e.g. a bare "data") — per spec the
-                // value is empty; only meaningful for `data`.
-                if line == "data" { dataLines.append("") }
-                return nil
-            }
-            let field = line[line.startIndex ..< colon]
-            guard field == "data" else { return nil } // ignore event:/id:/retry:
-            var value = String(line[line.index(after: colon)...])
-            // Per spec, a single leading space after the colon is stripped.
-            if value.hasPrefix(" ") { value.removeFirst() }
-            // Decode-driven dispatch: if the buffer ALREADY forms a complete
-            // event, this new `data:` line begins the NEXT event — emit the prior
-            // one first (no blank-line separator), then start fresh.
-            var completed: String?
-            if !dataLines.isEmpty, isComplete(dataLines.joined(separator: "\n")) {
-                completed = flush()
-            }
-            dataLines.append(value)
-            return completed
-        }
-
-        /// Emit any buffered event payload (joined with `\n`) and reset. Returns
-        /// `nil` when nothing is buffered. Call at end-of-stream to flush a final
-        /// event that was not newline-terminated.
-        mutating func flush() -> String? {
-            guard !dataLines.isEmpty else { return nil }
-            let payload = dataLines.joined(separator: "\n")
-            dataLines.removeAll(keepingCapacity: true)
-            return payload
-        }
     }
 
     private struct StreamFrame: Decodable {
@@ -563,6 +501,11 @@ public actor CoachServerService {
         let metricSource: CoachProvenance?
         /// CO5 (v0154) — present only on the `done` frame (server v1.18.9+).
         let usage: CoachUsage?
+        /// 1.5 COACH-R (v1.41) — `activity`, `memoryNote`, `planProposal`.
+        /// A malformed payload reads as `nil` and never costs the frame.
+        let activity: LenientFrameValue<CoachActivity>?
+        let note: LenientFrameValue<CoachMemoryNote>?
+        let proposal: LenientFrameValue<CoachPlanProposal>?
     }
 }
 

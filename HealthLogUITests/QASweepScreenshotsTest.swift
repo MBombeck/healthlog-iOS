@@ -13,8 +13,12 @@ import XCTest
 /// Environment (forwarded by xcodebuild with the `TEST_RUNNER_` prefix):
 /// - `HL_SWEEP_OUT` — absolute host directory the PNGs land in (the simulator
 ///   shares the host filesystem, the same seam `MarketingScreenshotsTest` uses).
-/// - `HL_SWEEP_LANG` — `de` or `en` (default `en`).
+/// - `HL_SWEEP_LANG` — `de`, `en`, `nl` or `pseudo` (``UITestLanguage``,
+///   default `en`).
 /// - `HL_SWEEP_XXL` — `1` launches at the accessibility text size AX-XXL.
+/// - `HL_SWEEP_XXL_SIZE` — with `HL_SWEEP_XXL=1`, the content size category
+///   to launch at instead (for example
+///   `UICTContentSizeCategoryAccessibilityXXXL`, the largest).
 /// - `HL_SWEEP_APPEARANCE` — `light` launches with the app's light
 ///   appearance (Settings → Aussehen); the default is the app's dark one.
 ///
@@ -28,12 +32,17 @@ final class QASweepScreenshotsTest: XCTestCase {
         env["HL_SWEEP_OUT"] ?? ""
     }
 
-    var language: String {
-        env["HL_SWEEP_LANG"] ?? "en"
+    var language: UITestLanguage {
+        UITestLanguage(environmentValue: env["HL_SWEEP_LANG"])
     }
 
     var isXXL: Bool {
         env["HL_SWEEP_XXL"] == "1"
+    }
+
+    /// The content size category of an `isXXL` launch.
+    var xxlCategory: String {
+        env["HL_SWEEP_XXL_SIZE"] ?? "UICTContentSizeCategoryAccessibilityXXL"
     }
 
     var app = XCUIApplication()
@@ -394,9 +403,7 @@ final class QASweepScreenshotsTest: XCTestCase {
 
     func boot(extra: [String] = []) {
         app = XCUIApplication()
-        var arguments = [
-            "-AppleLanguages", "(\(language))",
-            "-AppleLocale", language == "de" ? "de_DE" : "en_US",
+        var arguments = language.launchArguments + [
             "-uitest-phase8", "insightsAccessibility",
             "-uitest-marketing",
             "-uitest-sweep",
@@ -404,7 +411,7 @@ final class QASweepScreenshotsTest: XCTestCase {
             "-hl.healthkit.workoutReadMigrated.hermetic-user", "true"
         ]
         if isXXL {
-            arguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXL"]
+            arguments += ["-UIPreferredContentSizeCategoryName", xxlCategory]
         }
         if env["HL_SWEEP_APPEARANCE"] == "light" {
             arguments += HermeticAppearance.lightArguments

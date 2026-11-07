@@ -567,6 +567,7 @@ public final class HKReadinessStore {
         defaults.removeObject(forKey: workoutReadRearmPendingKey(for: userId))
         defaults.removeObject(forKey: rmssdReadRequestedKey(for: userId))
         defaults.removeObject(forKey: waistReadRequestedKey(for: userId))
+        clearAnnouncedReadFlags(for: userId, in: defaults)
     }
 
     // MARK: - Persistence

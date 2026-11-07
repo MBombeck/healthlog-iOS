@@ -59,7 +59,7 @@ The demo holds about a year of synthetic data. You can browse all of it, but cha
 - **Apple Watch, widgets and Shortcuts.** A Watch app with complications, home screen and lock screen widgets, App Intents for Siri and Shortcuts ("Did I take my medication?"), and Spotlight search for your medications.
 - **Sharing with your doctor.** You choose what is included, the time range and the format: a link you can revoke, a PDF report, or a ZIP of the record. There is also a doctor report based on FHIR with LOINC codes.
 
-The app is available in English and German.
+The app is available in English, German and Dutch. How it picks its language and how a new one gets in: [docs/localization.md](docs/localization.md).
 
 ## What syncs with Apple Health
 
@@ -139,7 +139,7 @@ xcodegen
 open HealthLog.xcodeproj    # scheme: HealthLog
 ```
 
-You need a Mac with macOS 15 or later and Xcode 26.6 (the pinned toolchain, see `project.yml` and CI). Device installs need an Apple Developer account; simulator builds don't.
+You need a Mac with macOS 15 or later and Xcode 27.2 with the Metal toolchain component (the pinned toolchain, see `project.yml` and CI). Device installs need an Apple Developer account; simulator builds don't.
 
 The platform-independent core also builds without Xcode:
 

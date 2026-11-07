@@ -163,7 +163,11 @@ struct LabReportParserTests {
             ("Hepatitis B positiv", "Hepatitis B", "positiv"),
             ("Troponin grenzwertig", "Troponin", "grenzwertig"),
             ("HIV-Suchtest nicht nachweisbar", "HIV-Suchtest", "nicht nachweisbar"),
-            ("Rheumafaktor borderline", "Rheumafaktor", "borderline")
+            ("Rheumafaktor borderline", "Rheumafaktor", "borderline"),
+            // Dutch reports use the same shapes.
+            ("Borrelia-IgG negatief", "Borrelia-IgG", "negatief"),
+            ("Hepatitis B positief", "Hepatitis B", "positief"),
+            ("HIV-screening niet aantoonbaar", "HIV-screening", "niet aantoonbaar")
         ]
     )
     func qualitativeRows(line: String, analyte: String, result: String) throws {
@@ -192,6 +196,10 @@ struct LabReportParserTests {
             "Laborbericht",
             "Parameter Ergebnis Einheit Referenzbereich",
             "Referenzbereich",
+            "Laboratoriumuitslag",
+            "Bepaling Uitslag Eenheid Referentiewaarde",
+            "Afnamedatum: 12-03-2026",
+            "Pagina 1 van 3",
             "Seite 1 von 3",
             "Page 2 of 4",
             "Probenentnahme: 12.03.2026",
