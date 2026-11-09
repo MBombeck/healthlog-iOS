@@ -91,7 +91,9 @@ PUNCTUATION = [
 ]
 
 # Range word for "<number>–<number>" in answer labels.
-RANGE_WORD = {"de": "bis", "en": "to", "nl": "tot"}
+RANGE_WORD = {"de": "bis", "en": "to", "nl": "tot", "ko": "~"}
+# Korean writes a range with a tilde and no spaces ("46~60분"), not a word.
+RANGE_TIGHT = {"ko"}
 RANGE = re.compile(r"(\d)–(\d)")
 
 
@@ -341,7 +343,8 @@ def apply_punctuation(language: str, instrument: str, wording: dict, table=PUNCT
         word = RANGE_WORD.get(language)
         if word is None:
             raise SystemExit(f"{instrument}/{language} {path}: no range word for {language!r} in RANGE_WORD")
-        shown = RANGE.sub(lambda m: f"{m.group(1)} {word} {m.group(2)}", text)
+        gap = "" if language in RANGE_TIGHT else " "
+        shown = RANGE.sub(lambda m: f"{m.group(1)}{gap}{word}{gap}{m.group(2)}", text)
         _set(wording, path, shown)
         changes.append({
             "field": path, "printed": text, "shown": shown,

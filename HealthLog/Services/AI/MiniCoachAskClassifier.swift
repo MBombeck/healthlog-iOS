@@ -166,6 +166,52 @@ public actor MiniCoachAskClassifier {
                 ),
                 reason: .promptInjection,
                 label: "injection_nl"
+            ),
+            // Korean rows (ko). Hangul takes particles, so no `\b`. Advice asks:
+            // "어떻게 해야 해?", "약을 줄여도 될까?".
+            DenyPattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"(어떻게|뭘|무엇을)\s*해야|해야\s*(할까|하나|돼|되나|합니까|할지)|하는\s*게\s*좋(을까|아|나|은가)|"#
+                        + #"추천해\s*(줘|주세요)|권해\s*(줘|주세요)|조언|어떻게\s*하면\s*(좋|나아|개선|건강)|"#
+                        + #"(약|용량|복용량)[^?]{0,20}(늘려도|줄여도|끊어도|중단해도|건너뛰어도|먹어도|드셔도)"#,
+                    options: .caseInsensitive
+                ),
+                reason: .adviceRequest,
+                label: "advice_ko"
+            ),
+            // Korean diagnosis asks, for the same reason as `diagnosis_nl`:
+            // "고혈압" contains "혈압", so "나 고혈압인가?" would otherwise
+            // pass as a data lookup.
+            DenyPattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"(고혈압|저혈압|당뇨|부정맥|심방세동|수면\s*무호흡|질환|질병|병)(이|가|인|일)\s*[^?]{0,6}"#
+                        + #"(있나|있을까|있는\s*건가|있는\s*걸까|아닐까|인가|일까|맞나|걸까)|"#
+                        + #"(고혈압|저혈압|당뇨|부정맥|심방세동|수면\s*무호흡|질환|질병)(인가|일까|인\s*걸까|인\s*건가|인지)|"#
+                        + #"진단|아픈\s*(건가|걸까)"#,
+                    options: .caseInsensitive
+                ),
+                reason: .outOfScope,
+                label: "diagnosis_ko"
+            ),
+            // Korean prediction asks ("다음 주에 체중이 줄어들까?").
+            DenyPattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"(오를까|올라갈까|내려갈까|떨어질까|높아질까|낮아질까|늘어날까|줄어들까|좋아질까|나빠질까|예측|전망)|"#
+                        + #"(앞으로|다음\s*(주|달)|내일)[^?]{0,20}(까|어떻게)"#,
+                    options: .caseInsensitive
+                ),
+                reason: .predictionRequest,
+                label: "prediction_ko"
+            ),
+            // Korean injection markers.
+            DenyPattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"(이전|앞의|앞선|모든|위의)\s*(지시|지침|규칙|명령|프롬프트)[^.!?]{0,6}(무시|잊)|"#
+                        + #"다른\s*역할|역할을\s*바꿔|처럼\s*행동해"#,
+                    options: .caseInsensitive
+                ),
+                reason: .promptInjection,
+                label: "injection_ko"
             )
         ]
     // swiftlint:enable force_try
@@ -195,6 +241,14 @@ public actor MiniCoachAskClassifier {
                 category: .comparison,
                 label: "compare_nl"
             ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"비교|대비|보다\s*(높|낮|많|적)"#,
+                    options: .caseInsensitive
+                ),
+                category: .comparison,
+                label: "compare_ko"
+            ),
             // Historic — explicit past date phrasing.
             Pattern(
                 regex: try! NSRegularExpression(
@@ -218,6 +272,14 @@ public actor MiniCoachAskClassifier {
                 category: .historicLookup,
                 label: "historic_nl"
             ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"\d{1,2}\s*월\s*\d{1,2}\s*일|지난\s*(달|해|분기)|작년|저번\s*달"#,
+                    options: .caseInsensitive
+                ),
+                category: .historicLookup,
+                label: "historic_ko"
+            ),
             // Period summary — "wie war meine woche", "how was my week".
             Pattern(
                 regex: try! NSRegularExpression(
@@ -237,6 +299,14 @@ public actor MiniCoachAskClassifier {
                 ),
                 category: .periodSummary,
                 label: "period_nl"
+            ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"(이번|지난)\s*(주|한\s*주|달|한\s*달)|(일주일|한\s*주|한\s*달)\s*(동안|요약|어땠)|(주간|월간)\s*(요약|정리)"#,
+                    options: .caseInsensitive
+                ),
+                category: .periodSummary,
+                label: "period_ko"
             ),
             // Data lookup — "letzter Wert", "current", "highest",
             // direct metric names, "was ist mein". Permissive
@@ -260,6 +330,14 @@ public actor MiniCoachAskClassifier {
                 category: .dataLookup,
                 label: "lookup_phrasing_nl"
             ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"최근|마지막|가장\s*(높|낮)|최고|최저|현재"#,
+                    options: .caseInsensitive
+                ),
+                category: .dataLookup,
+                label: "lookup_phrasing_ko"
+            ),
             // Metric-name fallback. If the user just mentions a metric
             // ("blutdruck?", "weight?"), treat as data-lookup.
             Pattern(
@@ -277,6 +355,14 @@ public actor MiniCoachAskClassifier {
                 ),
                 category: .dataLookup,
                 label: "metric_name_nl"
+            ),
+            Pattern(
+                regex: try! NSRegularExpression(
+                    pattern: #"혈압|맥박|심박|체중|몸무게|수면|걸음|혈당|체온|산소"#,
+                    options: .caseInsensitive
+                ),
+                category: .dataLookup,
+                label: "metric_name_ko"
             )
         ]
     // swiftlint:enable force_try
@@ -330,7 +416,7 @@ public actor MiniCoachAskClassifier {
     }
 
     /// The deny rows each interface language owns, by label: its advice,
-    /// prediction and injection asks (and Dutch diagnosis asks, see
+    /// prediction and injection asks (and Dutch and Korean diagnosis asks, see
     /// `diagnosis_nl`). Exhaustive on purpose, like
     /// ``MDRSafetyFilter/rows(for:)``: a new ``AppLanguage`` case does not
     /// compile until it names its rows.
@@ -339,6 +425,7 @@ public actor MiniCoachAskClassifier {
         case .de: ["advice_de", "prediction_de", "injection_de"]
         case .en: ["advice_en", "prediction_en", "injection_en"]
         case .nl: ["advice_nl", "diagnosis_nl", "prediction_nl", "injection_nl"]
+        case .ko: ["advice_ko", "diagnosis_ko", "prediction_ko", "injection_ko"]
         }
     }
 

@@ -3,7 +3,7 @@ import Foundation
 /// **The language the app's own interface renders in.**
 ///
 /// iOS resolves `Bundle.main.preferredLocalizations` against the languages the
-/// app ships (`CFBundleLocalizations`: de, en, nl), so its first entry is the
+/// app ships (`CFBundleLocalizations`: de, en, nl, ko), so its first entry is the
 /// language every catalogue string on screen is in. `Locale.current` is the
 /// DEVICE language and can name one the app does not ship: a French phone
 /// renders the English interface, yet `Locale.current.language.languageCode`
@@ -20,6 +20,7 @@ public enum AppLanguage: String, Sendable, CaseIterable, Equatable {
     case de
     case en
     case nl
+    case ko
 
     /// Tests only: pins ``current`` for the running task and its child tasks,
     /// so a request capture can run the same code under every interface
@@ -83,7 +84,7 @@ public enum AppLanguage: String, Sendable, CaseIterable, Equatable {
     public func chatServerCode(serverAcceptsEveryLanguage: Bool) -> String? {
         switch self {
         case .de, .en: rawValue
-        case .nl: serverAcceptsEveryLanguage ? rawValue : nil
+        case .nl, .ko: serverAcceptsEveryLanguage ? rawValue : nil
         }
     }
 
@@ -146,6 +147,7 @@ public enum AppLanguage: String, Sendable, CaseIterable, Equatable {
         case .de: "de_DE"
         case .en: "en_US"
         case .nl: "nl_NL"
+        case .ko: "ko_KR"
         }
     }
 
@@ -158,6 +160,11 @@ public enum AppLanguage: String, Sendable, CaseIterable, Equatable {
         case .de: Locale(identifier: "de_DE")
         case .en: Locale(identifier: "en_GB")
         case .nl: Locale(identifier: "nl_NL")
+        // No Korean locale orders a numeric date day first, and Korean spells
+        // a date year first whatever the pick. The pick therefore governs the
+        // numeric style only (`en_GB`: 17/06/2026); ``HLDateFormat`` renders
+        // the spelled-out styles in Korean.
+        case .ko: Locale(identifier: "en_GB")
         }
     }
 }

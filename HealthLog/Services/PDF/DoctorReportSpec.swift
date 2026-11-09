@@ -419,7 +419,7 @@ public struct DoctorReportSpec: Sendable, Equatable {
 
 // MARK: - Locale gate
 
-/// Report locale — one per interface language (DE, EN, NL). Forced at
+/// Report locale — one per interface language (DE, EN, NL, KO). Forced at
 /// spec-build time so the renderer's date-formatter + section-titles agree
 /// on one language, even when the system locale differs (operator may share
 /// the PDF with an English-speaking specialist).
@@ -427,14 +427,16 @@ public enum ReportLocale: String, Sendable, Equatable, CaseIterable {
     case de
     case en
     case nl
+    case ko
 
     /// The report language for an interface language. Exhaustive on purpose:
-    /// a fourth `AppLanguage` must not compile until the report speaks it.
+    /// a new `AppLanguage` must not compile until the report speaks it.
     public init(_ language: AppLanguage) {
         switch language {
         case .de: self = .de
         case .en: self = .en
         case .nl: self = .nl
+        case .ko: self = .ko
         }
     }
 
@@ -442,7 +444,7 @@ public enum ReportLocale: String, Sendable, Equatable, CaseIterable {
         rawValue
     }
 
-    /// The language's home locale (`de_DE`, `en_US`, `nl_NL`), from
+    /// The language's home locale (`de_DE`, `en_US`, `nl_NL`, `ko_KR`), from
     /// `AppLanguage`. Deliberately not the device region: the report is read
     /// by someone else, often elsewhere (see `ReportLocale+Language.swift`).
     public var foundationIdentifier: String {

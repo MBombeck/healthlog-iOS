@@ -5,7 +5,8 @@ import Foundation
 /// anti-laundering guard they share. Moved here unchanged from
 /// `MDRSafetyFilter.swift` so the actor body stays under the `file_length`
 /// and `type_body_length` caps once every language carries rows; the rows in
-/// `MDRSafetyFilter.swift` and `MDRSafetyFilter+Dutch.swift` attach them.
+/// `MDRSafetyFilter.swift`, `MDRSafetyFilter+Dutch.swift` and
+/// `MDRSafetyFilter+Korean.swift` attach them.
 extension MDRSafetyFilter {
     /// **R19b (1.0.3, App Review 1.4.1)** — the two ways a match can be the
     /// thing the app *wants* rather than the thing the matrix forbids.
@@ -45,7 +46,9 @@ extension MDRSafetyFilter {
         try! NSRegularExpression(
             pattern: #"\b(Dosis|Dosierung|Tablette|Spritze|Therapie|Medikament\w*|"#
                 + #"dose|dosage|tablet|medication|therapy|treatment|"#
-                + #"dosering|tabletten|injectie\w*|spuit\w*|medicijn\w*|medicatie|behandeling\w*|pillen)\b"#,
+                + #"dosering|tabletten|injectie\w*|spuit\w*|medicijn\w*|medicatie|behandeling\w*|pillen)\b|"#
+                // Korean: no `\b`, a particle follows the noun ("용량을").
+                + #"(용량|복용량|알약|정제|주사|치료|처방|약을|약은|약물|투약)"#,
             options: .caseInsensitive
         )
 
@@ -74,7 +77,10 @@ extension MDRSafetyFilter {
                 + #"(beveelt|bevelen|adviseert|adviseren|raadt|raden)\b|"#
                 + #"\baanbeveling\w*\s+van\s+(de\s+)?[\w-]*(richtlijnen?|ESH|ESC|AHA|ACC|ADA|WHO|EMA|NHG|RIVM|Gezondheidsraad)\b|"#
                 + #"\b(volgens|door)\s+(de\s+)?[\w-]*(richtlijnen?|ESH|ESC|AHA|ACC|ADA|WHO|EMA|NHG|RIVM|Gezondheidsraad)\b"#
-                + #"[^.!?]{0,60}?\b(aanbevolen|aanbeveling\w*|aangeraden|geadviseerd)\b"#,
+                + #"[^.!?]{0,60}?\b(aanbevolen|aanbeveling\w*|aangeraden|geadviseerd)\b|"#
+                // Korean puts the verb last: the body, then up to 30 characters,
+                // then the recommendation ("…가이드라인은 주 150분 운동을 권장합니다").
+                + #"(가이드라인|지침|학회|세계보건기구|ESH|ESC|AHA|ACC|ADA|WHO|EMA)[^.!?]{0,30}(권장|권고|권해|추천)"#,
             options: .caseInsensitive
         )
 
@@ -104,7 +110,12 @@ extension MDRSafetyFilter {
                 + #"\b(met|aan|door|bij)\s+(je|jouw|uw|een|de)\s+(huis)?(arts|dokter|behandelaar)\b|"#
                 + #"\bvraag\s+(het\s+)?(ook\s+)?(je|jouw|uw)\s+(huis)?(arts|dokter)\b|"#
                 + #"\braadpleeg\s+(je|jouw|uw|een)\s+(huis)?(arts|dokter)\b|"#
-                + #"\bmedisch\s+(laten\s+)?(beoordelen|onderzoeken|nakijken))"#,
+                + #"\bmedisch\s+(laten\s+)?(beoordelen|onderzoeken|nakijken)|"#
+                // Korean: a clinician with a particle, then talking it over or
+                // asking ("의사와 상의해 보세요", "의사에게 물어보세요"), or the
+                // next appointment ("진료 때 확인해 보세요").
+                + #"(의사|주치의|담당\s*의|전문의|의료진|약사)(와|과|에게|께|한테|랑)[^.!?]{0,20}"#
+                + #"(상담|상의|이야기|물어|여쭤|확인)|진료\s*(때|시|에서)[^.!?]{0,20}(확인|상담|이야기|물어))"#,
             options: .caseInsensitive
         )
 

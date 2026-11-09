@@ -96,7 +96,7 @@ struct MedicationOCRServiceTests {
         #expect(abs(v1TopConverted.origin.y - 0.15) < 0.0001)
     }
 
-    // MARK: - Recognition languages (Dutch interface)
+    // MARK: - Recognition languages
 
     @Test("the interface language leads, German and English follow")
     func defaultLanguagesLeadWithInterfaceLanguage() {
@@ -115,6 +115,11 @@ struct MedicationOCRServiceTests {
     @Test("a Dutch reader gets nl-NL first")
     func defaultLanguagesPutDutchFirstForDutchReader() {
         #expect(MedicationOCRService.defaultRecognitionLanguages(for: .nl) == ["nl-NL", "de-DE", "en-US"])
+    }
+
+    @Test("a Korean reader gets ko-KR first")
+    func defaultLanguagesPutKoreanFirstForKoreanReader() {
+        #expect(MedicationOCRService.defaultRecognitionLanguages(for: .ko) == ["ko-KR", "de-DE", "en-US"])
     }
 
     @Test("languages Vision cannot recognise are dropped in order")

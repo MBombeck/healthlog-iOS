@@ -354,13 +354,33 @@ enum SmartReminderPhrasePrompt {
             Wenn Streak>0, ein sanfter, positiver Hinweis ist erlaubt. Wenn die vorherige Dosis \
             verpasst wurde, ein sanfter Nachhol-Hinweis ist erlaubt. Sonst kann der Body leer sein.
             """
+        case .ko:
+            return koreanPrompt(context: context, slotLabel: slotLabel, cappedStreak: cappedStreak)
         }
+    }
+
+    /// The Korean user turn, outside `build` to keep that body under the
+    /// function-length limit.
+    private static func koreanPrompt(context: ReminderPhraseContext, slotLabel: String, cappedStreak: Int) -> String {
+        """
+        알림 맥락:
+        - 약: \(context.medicationName)
+        - 시간대: \(slotLabel)
+        - 연속 일수(최대 7): \(cappedStreak)
+        - 이전 복용 놓침: \(context.missedPrevious ? "예" : "아니요")
+
+        짧은 알림 제목 하나와 선택적인 보조 문장 하나를 해요체로 써라. \
+        철저히 시간 알림으로만 쓴다. 용량 조언, 치료 변경, \
+        진단, 예측, 약물 농도 해석은 절대 넣지 않는다. \
+        연속 일수가 0보다 크면 부드럽고 긍정적인 한마디를 써도 된다. 이전 복용을 놓쳤다면 \
+        다시 챙기자는 부드러운 한마디를 써도 된다. 그 밖에는 본문을 비워도 된다.
+        """
     }
 
     /// The system-instruction text for one interface language. Outside the
     /// `FoundationModels` gate so tests can pin every language's guardrails.
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions, ko: koreanInstructions)
     }
 
     #if canImport(FoundationModels)
@@ -430,13 +450,32 @@ enum SmartReminderPhrasePrompt {
     Gebruik het moment van de dag als anker. Een lege body is beter dan opvulling.
     """
 
+    private static let koreanInstructions = """
+    너는 건강 기록 앱의 짧은 복약 시간 알림 문구를 쓴다. \
+    항상 한국어 해요체로 쓴다.
+
+    너의 유일한 일: 약 복용 시간 알림에 쓸 짧은 제목과 선택적인 보조 문장을 만드는 것.
+
+    절대 원칙:
+    - 이것은 시간 알림이지 의학적 조언이 아니다.
+    - 어떤 용량을 복용해야 하는지, 치료를 바꿔야 하는지는 절대 말하지 않는다.
+    - 진단하지 않고, 질환을 암시하지 않는다.
+    - 경과를 예측하지 않는다("오를 거예요", "내려갈 거예요").
+    - 약물 농도, 반감기, 약동학을 해석하지 않는다.
+    - 맥락에 없는 숫자를 지어내지 않는다.
+    - 제목은 40자 이내, 본문은 80자 이내.
+
+    문체: 차분하고 친근한 해요체. 약 이름을 그대로 부른다. \
+    시간대를 문구의 기준으로 삼는다. 군더더기보다 빈 본문이 낫다.
+    """
+
     private static func slotLabel(_ slot: ReminderPhraseContext.Slot, language: AppLanguage) -> String {
         switch slot {
-        case .morning: language.pick(de: "Morgen", en: "morning", nl: "ochtend")
-        case .noon: language.pick(de: "Mittag", en: "noon", nl: "middag")
-        case .afternoon: language.pick(de: "Nachmittag", en: "afternoon", nl: "namiddag")
-        case .evening: language.pick(de: "Abend", en: "evening", nl: "avond")
-        case .night: language.pick(de: "Nacht", en: "night", nl: "nacht")
+        case .morning: language.pick(de: "Morgen", en: "morning", nl: "ochtend", ko: "아침")
+        case .noon: language.pick(de: "Mittag", en: "noon", nl: "middag", ko: "점심")
+        case .afternoon: language.pick(de: "Nachmittag", en: "afternoon", nl: "namiddag", ko: "오후")
+        case .evening: language.pick(de: "Abend", en: "evening", nl: "avond", ko: "저녁")
+        case .night: language.pick(de: "Nacht", en: "night", nl: "nacht", ko: "밤")
         }
     }
 }

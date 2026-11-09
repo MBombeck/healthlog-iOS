@@ -56,7 +56,7 @@ public actor MDRSafetyFilter {
     /// softeners; 9 = reflective-suggestive condition floating) close
     /// gaps the conversational surface re-opens that the briefing
     /// (one-shot, no user echo) didn't have.
-    private static let patterns: [Pattern] = basePatterns + dutchPatterns
+    private static let patterns: [Pattern] = basePatterns + dutchPatterns + koreanPatterns
 
     private static let basePatterns: [Pattern] = // swiftlint:disable force_try
         [
@@ -394,6 +394,7 @@ public actor MDRSafetyFilter {
         switch language {
         case .de, .en: basePatterns
         case .nl: dutchPatterns
+        case .ko: koreanPatterns
         }
     }
 

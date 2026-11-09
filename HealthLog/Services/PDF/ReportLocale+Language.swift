@@ -13,6 +13,7 @@ public extension ReportLocale {
         case .de: .de
         case .en: .en
         case .nl: .nl
+        case .ko: .ko
         }
     }
 
@@ -29,24 +30,31 @@ public extension ReportLocale {
     /// `locales` in 1.43.7; an older server answers 422 to it).
     static let dutchExportMinimumServerVersion = "1.43.7"
 
+    /// The first server that takes `ko` there: Korean joined `locales` in
+    /// 1.37.32 ("add Korean as a seventh end-to-end locale").
+    static let koreanExportMinimumServerVersion = "1.37.32"
+
     /// The `locale` for the server-rendered report. German and English always;
-    /// Dutch only from ``dutchExportMinimumServerVersion``, else English, the
-    /// language an unknown reader gets everywhere else.
-    func exportServerCode(serverAcceptsDutch: Bool) -> String {
+    /// Dutch only from ``dutchExportMinimumServerVersion`` and Korean only from
+    /// ``koreanExportMinimumServerVersion``, else English, the language an
+    /// unknown reader gets everywhere else.
+    func exportServerCode(serverAcceptsDutch: Bool, serverAcceptsKorean: Bool = true) -> String {
         switch self {
         case .de, .en: rawValue
         case .nl: serverAcceptsDutch ? rawValue : ReportLocale.en.rawValue
+        case .ko: serverAcceptsKorean ? rawValue : ReportLocale.en.rawValue
         }
     }
 
     func exportServerCode(defaults: UserDefaults = .standard) -> String {
         exportServerCode(
-            serverAcceptsDutch: KnownServerVersion.isAtLeast(Self.dutchExportMinimumServerVersion, defaults: defaults)
+            serverAcceptsDutch: KnownServerVersion.isAtLeast(Self.dutchExportMinimumServerVersion, defaults: defaults),
+            serverAcceptsKorean: KnownServerVersion.isAtLeast(Self.koreanExportMinimumServerVersion, defaults: defaults)
         )
     }
 
     /// The language's own name for the picker ("Deutsch", "English",
-    /// "Nederlands"): a reader choosing a language for someone else looks for
+    /// "Nederlands", "한국어"): a reader choosing a language for someone else looks for
     /// that language's name.
     var endonym: String {
         let locale = Locale(identifier: rawValue)

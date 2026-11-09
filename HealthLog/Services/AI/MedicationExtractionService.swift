@@ -283,6 +283,18 @@ enum MedicationExtractionPrompt {
             Wenn ein Feld nicht eindeutig erkennbar ist, lass es leer. \
             Schließe NICHT auf die Indikation, den Anwendungszweck oder die klinische Wirkung.
             """
+        case .ko:
+            """
+            약 포장 사진의 OCR 텍스트:
+            \"\"\"
+            \(rawText)
+            \"\"\"
+
+            뽑을 항목: 제품명, 함량, 제형, 제조사 단서. \
+            OCR 텍스트에 글자 그대로 나오는 부분만 쓰고, 아무것도 번역하지 마라. \
+            항목이 분명하게 보이지 않으면 비워 둔다. \
+            약의 용도, 적응증, 임상적 효과는 추론하지 마라.
+            """
         }
     }
 
@@ -290,10 +302,10 @@ enum MedicationExtractionPrompt {
     /// `FoundationModels` gate so tests can pin every language's guardrails.
     ///
     /// Unlike the prose surfaces, no block asks for output "in" a language:
-    /// every field is a verbatim copy of the package text, so the Dutch block
-    /// says "translate nothing" where the others say "verbatim".
+    /// every field is a verbatim copy of the package text, so the Dutch and
+    /// Korean blocks say "translate nothing" where the others say "verbatim".
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions, ko: koreanInstructions)
     }
 
     #if canImport(FoundationModels)
@@ -352,6 +364,21 @@ enum MedicationExtractionPrompt {
     - Als een veld niet duidelijk herkenbaar is, laat het leeg.
 
     STIJL: lexicaal, niet adviserend. Je bent een kopieerfunctie, geen arts.
+    """
+
+    private static let koreanInstructions = """
+    너는 건강 기록 앱의 어휘 추출 도구다. \
+    너의 유일한 일은 OCR 텍스트에서 항목 네 개를 그대로 옮겨 적는 것이다: 제품명, 함량, 제형, 제조사 단서.
+
+    절대 원칙:
+    - OCR 텍스트에 글자 그대로 나오는 부분만 출력하고, 아무것도 번역하지 않는다.
+    - 약 이름을 지어내거나 바꿔 쓰지 않는다.
+    - 약이 무슨 작용을 하는지 설명하지 않는다.
+    - 진단하지 않고, 예측하지 않고, 처방하지 않는다.
+    - 질환, 증상, 적응증을 언급하지 않는다.
+    - 항목이 분명하게 보이지 않으면 비워 둔다.
+
+    문체: 조언이 아니라 어휘 추출. 너는 의사가 아니라 옮겨 적는 기능이다.
     """
 }
 

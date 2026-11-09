@@ -83,7 +83,9 @@ struct DoctorReportLanguageTableTests {
                 #expect(line.firstMatch(of: specifier) == nil, "\(locale.rawValue): unfilled specifier in \(line)")
             }
             #expect(lines[0].contains("27") && lines[0].contains("30") && lines[0].contains("Lisinopril"))
-            #expect(lines[1].contains("(2)"))
+            // Korean keeps the medication counter inside the parentheses.
+            let medicationCount = locale == .ko ? "(2개)" : "(2)"
+            #expect(lines[1].contains(medicationCount), "\(locale.rawValue): missing medication count in \(lines[1])")
         }
     }
 
@@ -121,22 +123,31 @@ struct DoctorReportLanguageTableTests {
         #expect(ReportLocale(AppLanguage.resolve("fr-FR")) == .en)
     }
 
-    @Test("the server report takes Dutch only from 1.43.7, English before")
+    @Test("the server report takes Dutch from 1.43.7 and Korean from 1.37.32, English before")
     func exportServerCode() throws {
         #expect(ReportLocale.de.exportServerCode(serverAcceptsDutch: false) == "de")
         #expect(ReportLocale.en.exportServerCode(serverAcceptsDutch: false) == "en")
         #expect(ReportLocale.nl.exportServerCode(serverAcceptsDutch: false) == "en")
         #expect(ReportLocale.nl.exportServerCode(serverAcceptsDutch: true) == "nl")
+        #expect(ReportLocale.ko.exportServerCode(serverAcceptsDutch: false, serverAcceptsKorean: false) == "en")
+        #expect(ReportLocale.ko.exportServerCode(serverAcceptsDutch: false, serverAcceptsKorean: true) == "ko")
+        #expect(ReportLocale.ko.exportServerCode(serverAcceptsDutch: false) == "ko")
         let suite = "DoctorReportLanguageTableTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         #expect(ReportLocale.nl.exportServerCode(defaults: defaults) == "en", "unknown version counts as too old")
+        #expect(ReportLocale.ko.exportServerCode(defaults: defaults) == "en", "unknown version counts as too old")
+        defaults.set("1.37.31", forKey: KnownServerVersion.defaultsKey)
+        #expect(ReportLocale.ko.exportServerCode(defaults: defaults) == "en")
+        defaults.set("1.37.32", forKey: KnownServerVersion.defaultsKey)
+        #expect(ReportLocale.ko.exportServerCode(defaults: defaults) == "ko")
         defaults.set("1.43.6", forKey: KnownServerVersion.defaultsKey)
         #expect(ReportLocale.nl.exportServerCode(defaults: defaults) == "en")
         defaults.set("1.43.7", forKey: KnownServerVersion.defaultsKey)
         #expect(ReportLocale.nl.exportServerCode(defaults: defaults) == "nl")
         defaults.set("1.47.0", forKey: KnownServerVersion.defaultsKey)
         #expect(ReportLocale.nl.exportServerCode(defaults: defaults) == "nl")
+        #expect(ReportLocale.ko.exportServerCode(defaults: defaults) == "ko")
         #expect(ReportLocale.de.exportServerCode(defaults: defaults) == "de")
     }
 

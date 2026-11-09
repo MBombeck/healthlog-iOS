@@ -16,7 +16,8 @@ struct QuestionnaireWordingLockstepTests {
     static let pinnedSHA256: [AppLanguage: String] = [
         .de: "1900e03bf14d7a890c23bdc06c70f41cecccf4694a553d55099f9e38fa81828d",
         .en: "42bac75d75fcb57ed0276666a27740e1dcaa471f640654586765807bfef405c2",
-        .nl: "06bf378da96d1b1cd442e55a05e3aad70edf60ae42415c243c9e3ed26051e5c6"
+        .nl: "06bf378da96d1b1cd442e55a05e3aad70edf60ae42415c243c9e3ed26051e5c6",
+        .ko: "90f7ecaa8553ea1b3d2fc547174df1c330505c6546c078dbca3b5b2ecd980ae3"
     ]
 
     @Test("Every interface language has a pinned file, and the file is what the generator wrote", arguments: AppLanguage.allCases)

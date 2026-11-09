@@ -11,7 +11,7 @@ struct DoctorReportDutchLocaleTests {
 
     @Test("ReportLocale ships one case per interface language")
     func oneCasePerInterfaceLanguage() {
-        #expect(ReportLocale.allCases == [.de, .en, .nl])
+        #expect(ReportLocale.allCases == [.de, .en, .nl, .ko])
         #expect(AppLanguage.allCases.map { ReportLocale($0) } == ReportLocale.allCases)
     }
 

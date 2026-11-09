@@ -307,7 +307,7 @@ struct MDRSafetyFilterExemptionsTests {
 
     @Test("the matrix neither grew nor shrank")
     func matrixSizeUnchanged() {
-        #expect(MDRSafetyFilter.patternCount == 44, "22 before 1.0.3 + 2 (R21) + 1 (R23) + 19 Dutch twins (nl)")
+        #expect(MDRSafetyFilter.patternCount == 63, "22 before 1.0.3 + 2 (R21) + 1 (R23) + 19 Dutch twins (nl) + 19 Korean twins (ko)")
     }
 
     @Test("the untouched rows still refuse")

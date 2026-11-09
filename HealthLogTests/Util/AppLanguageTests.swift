@@ -158,7 +158,7 @@ struct AppLanguageTests {
         let date = try #require(Calendar(identifier: .gregorian).date(from: components))
         let style = try Date.FormatStyle(date: .long, time: .omitted, timeZone: #require(TimeZone(identifier: "UTC")))
         let expectations: [AppLanguage: String] = [.de: "Juni", .en: "June", .nl: "juni"]
-        for language in AppLanguage.allCases {
+        for language in [AppLanguage.de, .en, .nl] {
             let text = date.formatted(style.locale(language.dayMonthYearLocale))
             let month = try #require(expectations[language])
             #expect(text.contains(month), "\(language): \(text)")
@@ -166,8 +166,13 @@ struct AppLanguageTests {
             let monthIndex = try #require(text.range(of: month)?.lowerBound)
             #expect(day < monthIndex, "\(language) must put the day first: \(text)")
         }
+        // Korean has no day-first locale: only numeric DMY uses en_GB.
+        // HLDateFormatTests covers Korean month names in spelled-out styles.
+        let numeric = try Date.FormatStyle(date: .numeric, time: .omitted, timeZone: #require(TimeZone(identifier: "UTC")))
+        #expect(date.formatted(numeric.locale(AppLanguage.ko.dayMonthYearLocale)) == "17/06/2026")
         #expect(AppLanguage.$pinned.withValue(.en) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "en_GB")
         #expect(AppLanguage.$pinned.withValue(.de) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "de_DE")
+        #expect(AppLanguage.$pinned.withValue(.ko) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "en_GB")
         #expect(AppLanguage.$pinned.withValue(.nl) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "nl_NL")
     }
 

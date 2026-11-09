@@ -48,7 +48,7 @@ enum OnDeviceLanguageGate {
     static func ranOnDeviceBeforeTheGate(_ language: AppLanguage) -> Bool {
         switch language {
         case .de, .en: true
-        case .nl: false
+        case .nl, .ko: false
         }
     }
 

@@ -8,15 +8,16 @@ import Foundation
 /// ship) got German prompts and German model output. The builders now resolve
 /// the locale through `AppLanguage.resolve(_: Locale)` (unknown languages
 /// read English, like the interface) and pick their copy here. The switch is
-/// exhaustive on purpose: a fourth interface language fails to compile at
+/// exhaustive on purpose: a new interface language fails to compile at
 /// every prompt instead of silently inheriting one of the others.
 extension AppLanguage {
     /// The variant for this language.
-    func pick<Value>(de: Value, en: Value, nl: Value) -> Value {
+    func pick<Value>(de: Value, en: Value, nl: Value, ko: Value) -> Value {
         switch self {
         case .de: de
         case .en: en
         case .nl: nl
+        case .ko: ko
         }
     }
 }

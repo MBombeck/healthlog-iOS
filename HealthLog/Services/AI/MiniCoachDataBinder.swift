@@ -49,7 +49,8 @@ struct MiniCoachDataBinder {
             return language.pick(
                 de: "(keine Messungen oder Stimmungseinträge im Zeitfenster verfügbar)",
                 en: "(no measurements or mood entries available in the window)",
-                nl: "(geen metingen of stemmingsregistraties beschikbaar in het tijdvenster)"
+                nl: "(geen metingen of stemmingsregistraties beschikbaar in het tijdvenster)",
+                ko: "(기간 안에 측정값이나 기분 기록이 없음)"
             )
         }
 
@@ -94,7 +95,8 @@ struct MiniCoachDataBinder {
         let header = language.pick(
             de: "Letzter Wert je Metrik (\(count) Messungen insgesamt):",
             en: "Latest reading per metric (\(count) total measurements):",
-            nl: "Laatste waarde per meting (\(count) metingen in totaal):"
+            nl: "Laatste waarde per meting (\(count) metingen in totaal):",
+            ko: "지표별 최근 값(전체 측정 \(count)건):"
         )
         return header + "\n" + lines.joined(separator: "\n")
     }
@@ -112,7 +114,8 @@ struct MiniCoachDataBinder {
         let header = language.pick(
             de: "Zeitraum: letzte 7 Tage (\(window.count) Messungen, \(moodWindow.count) Stimmungseinträge)",
             en: "Window: last 7 days (\(window.count) measurements, \(moodWindow.count) mood entries)",
-            nl: "Periode: laatste 7 dagen (\(window.count) metingen, \(moodWindow.count) stemmingsregistraties)"
+            nl: "Periode: laatste 7 dagen (\(window.count) metingen, \(moodWindow.count) stemmingsregistraties)",
+            ko: "기간: 최근 7일(측정 \(window.count)건, 기분 기록 \(moodWindow.count)건)"
         )
         var lines: [String] = [header]
         let grouped = Dictionary(grouping: window, by: \.kind)
@@ -129,7 +132,13 @@ struct MiniCoachDataBinder {
             if let minScore = scores.min(), let maxScore = scores.max() {
                 let avg = Double(scores.reduce(0, +)) / Double(scores.count)
                 let label = moodLabel(language)
-                lines.append(String(format: "%@: min %d, max %d, avg %.1f", label, minScore, maxScore, avg))
+                let row = language.pick(
+                    de: "%@: min %d, max %d, avg %.1f",
+                    en: "%@: min %d, max %d, avg %.1f",
+                    nl: "%@: min %d, max %d, avg %.1f",
+                    ko: "%@: 최소 %d, 최대 %d, 평균 %.1f"
+                )
+                lines.append(String(format: row, label, minScore, maxScore, avg))
             }
         }
         return lines.joined(separator: "\n")
@@ -149,24 +158,27 @@ struct MiniCoachDataBinder {
             return language.pick(
                 de: "(keine Messungen im Zeitfenster)",
                 en: "(no measurements in window)",
-                nl: "(geen metingen in het tijdvenster)"
+                nl: "(geen metingen in het tijdvenster)",
+                ko: "(기간 안에 측정값 없음)"
             )
         }
         let header = language.pick(
             de: "Verlaufsfenster: \(sorted.count) Messungen zwischen erstem und letztem Eintrag",
             en: "History window: \(sorted.count) measurements between earliest and latest entry",
-            nl: "Verloopvenster: \(sorted.count) metingen tussen eerste en laatste registratie"
+            nl: "Verloopvenster: \(sorted.count) metingen tussen eerste en laatste registratie",
+            ko: "기록 기간: 첫 기록과 마지막 기록 사이 측정 \(sorted.count)건"
         )
         var lines = [header]
-        let earliest = language.pick(de: "frühester Eintrag: ", en: "earliest: ", nl: "eerste registratie: ")
-        let latest = language.pick(de: "letzter Eintrag: ", en: "latest: ", nl: "laatste registratie: ")
+        let earliest = language.pick(de: "frühester Eintrag: ", en: "earliest: ", nl: "eerste registratie: ", ko: "첫 기록: ")
+        let latest = language.pick(de: "letzter Eintrag: ", en: "latest: ", nl: "laatste registratie: ", ko: "마지막 기록: ")
         lines.append(earliest + format(measurement: first, language: language))
         lines.append(latest + format(measurement: last, language: language))
         if !moods.isEmpty {
             let moodCount = language.pick(
                 de: "Stimmungseinträge im Fenster: ",
                 en: "mood entries in window: ",
-                nl: "stemmingsregistraties in het tijdvenster: "
+                nl: "stemmingsregistraties in het tijdvenster: ",
+                ko: "기간 안의 기분 기록 수: "
             )
             lines.append(moodCount + String(moods.count))
         }
@@ -187,12 +199,15 @@ struct MiniCoachDataBinder {
         let header = language.pick(
             de: "Vergleich: letzte 7 Tage (jetzt, \(recent.count) Messungen) vs. vorletzte 7 Tage (davor, \(prior.count) Messungen)",
             en: "Comparison: last 7 days (recent, \(recent.count) measurements) vs. previous 7 days (prior, \(prior.count) measurements)",
-            nl: "Vergelijking: laatste 7 dagen (nu, \(recent.count) metingen) vs. de 7 dagen daarvoor (daarvoor, \(prior.count) metingen)"
+            nl: "Vergelijking: laatste 7 dagen (nu, \(recent.count) metingen) vs. de 7 dagen daarvoor (daarvoor, \(prior.count) metingen)",
+            ko: "비교: 최근 7일(최근, 측정 \(recent.count)건)과 그 전 7일(이전, 측정 \(prior.count)건)"
         )
         // The row words echo the header's labels; the English rows used to
         // carry the German "jetzt" / "davor" under an English header.
-        let nowWord = language.pick(de: "jetzt", en: "recent", nl: "nu")
-        let priorWord = language.pick(de: "davor", en: "prior", nl: "daarvoor")
+        let nowWord = language.pick(de: "jetzt", en: "recent", nl: "nu", ko: "최근")
+        let priorWord = language.pick(de: "davor", en: "prior", nl: "daarvoor", ko: "이전")
+        // Korean counts with a counter word ("최근 1건, 이전 0건").
+        let counter = language.pick(de: "", en: "", nl: "", ko: "건")
         var lines: [String] = [header]
         let recentGrouped = Dictionary(grouping: recent, by: \.kind)
         let priorGrouped = Dictionary(grouping: prior, by: \.kind)
@@ -204,13 +219,13 @@ struct MiniCoachDataBinder {
             let priorGroup = priorGrouped[kind] ?? []
             guard !(recentGroup.isEmpty && priorGroup.isEmpty) else { continue }
             let label = displayName(for: kind, language: language)
-            lines.append("\(label): \(nowWord) \(recentGroup.count), \(priorWord) \(priorGroup.count)")
+            lines.append("\(label): \(nowWord) \(recentGroup.count)\(counter), \(priorWord) \(priorGroup.count)\(counter)")
         }
         if !moods.isEmpty {
             let recentMood = moods.filter { $0.recordedAt >= weekAgo }.count
             let priorMood = moods.filter { $0.recordedAt >= twoWeeksAgo && $0.recordedAt < weekAgo }.count
-            let label = language.pick(de: "Stimmungseinträge", en: "mood entries", nl: "stemmingsregistraties")
-            lines.append("\(label): \(nowWord) \(recentMood), \(priorWord) \(priorMood)")
+            let label = language.pick(de: "Stimmungseinträge", en: "mood entries", nl: "stemmingsregistraties", ko: "기분 기록")
+            lines.append("\(label): \(nowWord) \(recentMood)\(counter), \(priorWord) \(priorMood)\(counter)")
         }
         return lines.joined(separator: "\n")
     }
@@ -219,15 +234,15 @@ struct MiniCoachDataBinder {
 
     /// The word for a mood line in the digest.
     private func moodLabel(_ language: AppLanguage) -> String {
-        language.pick(de: "Stimmung", en: "mood", nl: "stemming")
+        language.pick(de: "Stimmung", en: "mood", nl: "stemming", ko: "기분")
     }
 
     private func format(measurement: Measurement, language: AppLanguage) -> String {
         let label = displayName(for: measurement.kind, language: language)
-        let unit = measurement.kind.unit
+        let kind = measurement.kind
         let valueString = switch measurement.value {
-        case let .scalar(v): "\(formatNumber(v)) \(unit)"
-        case let .bloodPressure(s, d): "\(formatNumber(s))/\(formatNumber(d)) \(unit)"
+        case let .scalar(v): withUnit(formatNumber(v), kind: kind, language: language)
+        case let .bloodPressure(s, d): withUnit("\(formatNumber(s))/\(formatNumber(d))", kind: kind, language: language)
         }
         let dateString = ISO8601DateFormatter().string(from: measurement.recordedAt)
         return "\(label): \(valueString) (\(dateString))"
@@ -240,19 +255,57 @@ struct MiniCoachDataBinder {
         }
         if !scalars.isEmpty, let minVal = scalars.min(), let maxVal = scalars.max() {
             let avg = scalars.reduce(0, +) / Double(scalars.count)
-            return String(format: "%@: n=%d, min %.1f, max %.1f, avg %.1f %@", label, group.count, minVal, maxVal, avg, kind.unit)
+            let avgText = withUnit(String(format: "%.1f", avg), kind: kind, language: language)
+            let row = language.pick(
+                de: "%@: n=%d, min %.1f, max %.1f, avg %@",
+                en: "%@: n=%d, min %.1f, max %.1f, avg %@",
+                nl: "%@: n=%d, min %.1f, max %.1f, avg %@",
+                ko: "%@: %d건, 최소 %.1f, 최대 %.1f, 평균 %@"
+            )
+            return String(format: row, label, group.count, minVal, maxVal, avgText)
         }
         // BP rows — fall through with count only; min/max math on
         // tuples would multiply prompt size for marginal model gain.
-        return "\(label): n=\(group.count)"
+        return language.pick(
+            de: "\(label): n=\(group.count)",
+            en: "\(label): n=\(group.count)",
+            nl: "\(label): n=\(group.count)",
+            ko: "\(label): \(group.count)건"
+        )
     }
 
-    /// English prompts use the fixed vocabulary below; German and Dutch read
-    /// the catalogue name, which is in the interface language.
+    /// A number with its unit. Korean attaches its word units to the number
+    /// ("7.5시간", "8000걸음"), the way the Korean interface writes them;
+    /// symbol units (kg, bpm, mmHg) keep the space every language uses.
+    private func withUnit(_ number: String, kind: MetricKind, language: AppLanguage) -> String {
+        let koreanWord = language.pick(de: nil, en: nil, nl: nil, ko: koreanUnitWord(for: kind))
+        guard let koreanWord else { return "\(number) \(kind.unit)" }
+        return number + koreanWord
+    }
+
+    /// The Korean word for a unit the catalogue spells as an abbreviation, or
+    /// for a count the catalogue leaves bare. `nil` keeps the symbol unit.
+    private func koreanUnitWord(for kind: MetricKind) -> String? {
+        switch kind {
+        case .steps: return "걸음"
+        case .flightsClimbed: return "층"
+        default: break
+        }
+        return switch kind.unit {
+        case "h": "시간"
+        case "min": "분"
+        case "years": "세"
+        case "br/min": "회/분"
+        default: nil
+        }
+    }
+
+    /// English prompts use the fixed vocabulary below; German, Dutch and
+    /// Korean read the catalogue name, which is in the interface language.
     private func displayName(for kind: MetricKind, language: AppLanguage) -> String {
         switch language {
         case .en: englishName(for: kind)
-        case .de, .nl: kind.displayName
+        case .de, .nl, .ko: kind.displayName
         }
     }
 

@@ -302,7 +302,8 @@ enum MoodTagExtractionPrompt {
             existingClause = language.pick(
                 de: "\n\nBereits gesetzte Tags (NICHT wiederholen): \(joined)",
                 en: "\n\nTags already on the entry (do NOT repeat): \(joined)",
-                nl: "\n\nTags die al bij de registratie staan (NIET herhalen): \(joined)"
+                nl: "\n\nTags die al bij de registratie staan (NIET herhalen): \(joined)",
+                ko: "\n\n이 기록에 이미 붙은 태그(반복하지 마라): \(joined)"
             )
         }
         switch language {
@@ -344,7 +345,25 @@ enum MoodTagExtractionPrompt {
             Diagnostiziere NICHTS. Empfehle NICHTS. Sage NICHTS vorher. \
             Wenn nichts sauber extrahierbar ist, gib eine leere Liste zurück.
             """
+        case .ko:
+            return koreanPrompt(rawNote: rawNote, existingClause: existingClause)
         }
+    }
+
+    /// The Korean user turn, outside `build` to keep that body under the
+    /// function-length limit.
+    private static func koreanPrompt(rawNote: String, existingClause: String) -> String {
+        """
+        기분 기록 사용자가 자유롭게 쓴 메모:
+        \"\"\"
+        \(rawNote)
+        \"\"\"\(existingClause)
+
+        메모에서 사용자가 다룬 주제를 나타내는 짧은 태그를 최대 5개 뽑아라(각 1-2단어, 문장 금지). \
+        중립적이고 묘사적인 한국어 태그만 쓴다. \
+        아무것도 진단하지 마라. 아무것도 권하지 마라. 아무것도 예측하지 마라. \
+        깔끔하게 뽑을 것이 없으면 빈 목록을 돌려준다.
+        """
     }
 
     /// The system-instruction text for one interface language. Outside the
@@ -354,7 +373,7 @@ enum MoodTagExtractionPrompt {
     /// as the user's free-text tags, so they must read in the interface
     /// language rather than as canonical keys.
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions, ko: koreanInstructions)
     }
 
     #if canImport(FoundationModels)
@@ -416,5 +435,21 @@ enum MoodTagExtractionPrompt {
     - Als er niets zuiver uit te halen is, geef dan een lege lijst terug en verzin GEEN labels.
 
     STIJL: lexicaal, niet adviserend. Je haalt onderwerpen uit tekst, je bent geen arts.
+    """
+
+    private static let koreanInstructions = """
+    너는 기분 기록 앱의 어휘 추출 도구다. \
+    너의 유일한 일은 자유롭게 쓴 기분 메모에서 짧은 태그를 뽑는 것이다. \
+    태그는 항상 한국어로 쓴다.
+
+    절대 원칙:
+    - 짧은 태그만 출력한다(각 1-2단어, 문장은 절대 안 된다).
+    - 진단하지 않고, 예측하지 않고, 처방하지 않는다.
+    - 질환, 질병, 증상, 적응증을 임상 용어로 언급하지 않는다.
+    - 행동을 권하지 않는다.
+    - 수치 사이의 인과 관계를 주장하지 않는다.
+    - 깔끔하게 뽑을 것이 없으면 빈 목록을 돌려주고, 태그를 지어내지 않는다.
+
+    문체: 조언이 아니라 어휘 추출. 너는 의사가 아니라 주제를 뽑는 도구다.
     """
 }

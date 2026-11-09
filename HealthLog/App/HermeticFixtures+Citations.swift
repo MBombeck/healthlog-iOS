@@ -28,7 +28,7 @@
     /// per request; a fixed English string would put an English sentence in the
     /// middle of the German evidence and look exactly like the translation bug
     /// the screenshots are meant to rule out. The prose follows the forced
-    /// display language (de, en, nl), so each run gets its own language,
+    /// display language (de, en, nl, ko), so each run gets its own language,
     /// which is what the server does.
     enum CitationFixtures {
         /// Opt-in. `MedicalSourcesReviewPathUITests` is the only caller.
@@ -118,8 +118,10 @@
         /// would from the server.
         static var correlationsJSON: String {
             let language = AppLanguage.current
-            let diaLabel = language.pick(de: "diastolischer Blutdruck", en: "diastolic blood pressure", nl: "diastolische bloeddruk")
-            let rhrLabel = language.pick(de: "Ruhepuls", en: "resting heart rate", nl: "rusthartslag")
+            let diaLabel = language.pick(
+                de: "diastolischer Blutdruck", en: "diastolic blood pressure", nl: "diastolische bloeddruk", ko: "이완기 혈압"
+            )
+            let rhrLabel = language.pick(de: "Ruhepuls", en: "resting heart rate", nl: "rusthartslag", ko: "안정 시 심박수")
             let firstDE = "Eine längere Schlafdauer geht in deinen Daten allenfalls mit einem leicht "
                 + "höheren diastolischen Blutdruck am Folgetag einher — zu klein, um sich darauf zu "
                 + "stützen, und nie eine Ursache."
@@ -133,8 +135,12 @@
                 + "hogere diastolische bloeddruk de volgende dag, te klein om op te bouwen en nooit een oorzaak."
             let secondNL = "Meer stappen gaan in je gegevens samen met een iets lagere rusthartslag "
                 + "de volgende dag. Dat beschrijft een samenhang, geen effect."
-            let first = language.pick(de: firstDE, en: firstEN, nl: firstNL)
-            let second = language.pick(de: secondDE, en: secondEN, nl: secondNL)
+            let firstKO = "기록에서는 수면 시간이 긴 날 다음 날 이완기 혈압이 조금 더 높은 아주 희미한 "
+                + "기미만 보여요. 기대기엔 너무 작고, 원인은 더더욱 아니에요."
+            let secondKO = "기록에서는 걸음 수가 많은 날 다음 날 안정 시 심박수가 조금 낮은 편이에요. "
+                + "연관을 보여 줄 뿐, 효과는 아니에요."
+            let first = language.pick(de: firstDE, en: firstEN, nl: firstNL, ko: firstKO)
+            let second = language.pick(de: secondDE, en: secondEN, nl: secondNL, ko: secondKO)
             return """
             {
               "discovered": [

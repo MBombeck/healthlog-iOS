@@ -253,7 +253,8 @@
         /// a little lower in the weeks after the start than before it.
         static var efficacyJSON: String {
             let label = AppLanguage.current.pick(
-                de: "Systolischer Blutdruck", en: "Systolic blood pressure", nl: "Systolische bloeddruk"
+                de: "Systolischer Blutdruck", en: "Systolic blood pressure", nl: "Systolische bloeddruk",
+                ko: "수축기 혈압"
             )
             let before = [141, 139, 140, 138, 137, 139]
             let after = [135, 133, 131, 132, 130, 129, 130, 128]

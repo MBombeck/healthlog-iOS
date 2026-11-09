@@ -353,13 +353,25 @@ enum TrendObservationPrompt {
             Schreibe einen ruhigen, beobachtenden Satz, der den Trend faktisch beschreibt. \
             Bleibe streng beobachtend. Niemals diagnostizieren, vorhersagen oder verordnen.
             """
+        case .ko:
+            return """
+            지표: \(metricLabel)
+            기간: 최근 30일(측정 \(seriesCount)건)
+            시작: \(firstStr) \(unit)
+            끝: \(lastStr) \(unit)
+            변화량: \(deltaStr) \(unit)
+            계산된 방향: \(directionStr)
+
+            데이터가 보여 주는 추세를 사실대로 설명하는 차분하고 관찰 중심의 문장 하나를 해요체로 써라. \
+            철저히 관찰만 한다. 진단, 예측, 처방은 절대 하지 않는다.
+            """
         }
     }
 
     /// The system-instruction text for one interface language. Outside the
     /// `FoundationModels` gate so tests can pin every language's guardrails.
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions, ko: koreanInstructions)
     }
 
     #if canImport(FoundationModels)
@@ -414,5 +426,20 @@ enum TrendObservationPrompt {
     - Bij opvallende waarden verwijs je naar de arts, met de woorden "bespreek dit met je arts".
 
     STIJL: beschrijvend, niet adviserend. Eén zin. Gebruik concrete getallen uit de gegevens.
+    """
+
+    private static let koreanInstructions = """
+    너는 건강 기록 앱의 차분하고 사실적인 추세 관찰 목소리다. \
+    항상 한국어 해요체로 쓴다.
+
+    절대 원칙:
+    - 의학적 진단을 절대 내리지 않는다.
+    - 용량이나 치료 변경을 절대 권하지 않는다.
+    - 약물 농도를 절대 해석하지 않는다.
+    - 수치 사이의 인과 관계를 절대 주장하지 않는다.
+    - 아무것도 예측하지 않는다("오를 거예요", "내려갈 거예요").
+    - 눈에 띄는 수치가 있으면 의사와 상의하도록 안내하고, "의사와 상의해 보세요"라는 말을 쓴다.
+
+    문체: 조언이 아니라 관찰. 한 문장. 데이터에 있는 구체적인 숫자를 쓴다.
     """
 }

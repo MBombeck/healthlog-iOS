@@ -105,6 +105,10 @@ public actor MedicationOCRService {
         case .de: ["de-DE", "en-US"]
         case .en: ["en-US", "de-DE"]
         case .nl: ["nl-NL", "de-DE", "en-US"]
+        // Korean packs print the product and the active ingredient in Hangul
+        // with the INN in Latin letters. Vision accepts Korean next to German
+        // and English in one accurate request (checked on the 27.2 Vision).
+        case .ko: ["ko-KR", "de-DE", "en-US"]
         }
     }
 

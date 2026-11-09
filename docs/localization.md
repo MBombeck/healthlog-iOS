@@ -1,6 +1,6 @@
 # Localization
 
-HealthLog speaks German, English and Dutch (Dutch thanks to the contribution in #29). This page describes how the app decides which language it speaks, what it tells the server, the rules for medical text, the on-device model, the doctor report, and how a new language gets in. The checklist at the end was walked through with Dutch in 1.5.
+HealthLog speaks German, English, Dutch and Korean (Dutch thanks to the contribution in #29). This page describes how the app decides which language it speaks, what it tells the server, the rules for medical text, the on-device model, the doctor report, and how a new language gets in. The checklist at the end was walked through with Dutch in 1.5, then with Korean.
 
 ## How the app picks its language
 
@@ -12,7 +12,7 @@ What `AppLanguage` offers:
 
 | | Use |
 |---|---|
-| `AppLanguage.current` | the interface language (`de`, `en`, `nl`) |
+| `AppLanguage.current` | the interface language (`de`, `en`, `nl`, `ko`) |
 | `serverCode` | the `locale` for every server route that takes all interface languages |
 | `chatServerCode()` | the `locale` for the Coach and document chat bodies, see below |
 | `regionTag` | `<language>-<REGION>` from the device region (`nl-BE`, `de-AT`, `en-PT`), for fields that take a free tag |
@@ -50,7 +50,7 @@ scripts/l10n/sync-questionnaire-wording.py --self-test
 
 It reads the server repository at a tag (`--server-repo`, else `$HEALTHLOG_SERVER_REPO`, else `../../HealthLog` from the main checkout) and writes `HealthLog/Resources/Questionnaires/questionnaire-wording.<language>.json` for every `AppLanguage` case. Each file names the tag, the commit and the blob of every module it came from. A new language needs its modules on the server first; the script fails when one is missing. After a run, paste the SHA-256 values it prints into `QuestionnaireWordingLockstepTests`, which fails on any hand edit. `scripts/check-strings.sh` fails if a questionnaire key (`mentalHealth.items.*`, `stems`, `options`, `who5Options`, `sciOptions`, `functional`) comes back into the catalog.
 
-**Punctuation.** The visible-punctuation gate allows no em dash, en dash, middle dot or arrow and gets no exception for questionnaires. Where a printed form uses one, the script applies a reasoned entry of its `PUNCTUATION` table (PHQ-9 item 6 in English and Dutch: the dash before "or"/"of" becomes a comma; item 8 in English: a colon) and turns a range between two numbers in the SCI answers into the language's range word ("46 to 60 min", "46 bis 60 Min.", "46 tot 60 min"). Every change is recorded in the file. A dash the table does not cover fails the run.
+**Punctuation.** The visible-punctuation gate allows no em dash, en dash, middle dot or arrow and gets no exception for questionnaires. Where a printed form uses one, the script applies a reasoned entry of its `PUNCTUATION` table (PHQ-9 item 6 in English and Dutch: the dash before "or"/"of" becomes a comma; item 8 in English: a colon) and turns a range between two numbers in the SCI answers into the language's range word ("46 to 60 min", "46 bis 60 Min.", "46 tot 60 min"; Korean writes a tilde without spaces, "46~60분"). Every change is recorded in the file. A dash the table does not cover fails the run.
 
 **Unvalidated translations.** Where the reader's text is HealthLog's own translation (server 1.46.6: the SCI in German and Dutch), the form says so in one line and offers a centred text link to the English original and back. A reader who answered in the original sends `englishOriginal: true` (server 1.46.0+). Results and history rows read `wording` from the server and say once when the answers were given in an unvalidated translation; a row without the field (before 1.46) looks as it did.
 

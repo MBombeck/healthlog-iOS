@@ -271,7 +271,7 @@ enum OnDeviceBriefingPrompt {
         let scoreLine = if let healthScore {
             "HealthScore: \(healthScore.score)/100" + (healthScore.delta.map { ", Δ \($0)" } ?? "")
         } else {
-            "HealthScore: " + language.pick(de: "keine Daten", en: "no data", nl: "geen gegevens")
+            "HealthScore: " + language.pick(de: "keine Daten", en: "no data", nl: "geen gegevens", ko: "데이터 없음")
         }
         switch language {
         case .en:
@@ -301,13 +301,22 @@ enum OnDeviceBriefingPrompt {
             Erstelle ein ruhiges, beobachtendes Tagesbriefing. Bleibe streng beobachtend. \
             Niemals diagnostizieren, vorhersagen oder verordnen. Bei dünner Datenlage sage es ehrlich.
             """
+        case .ko:
+            return """
+            최근 7일 데이터:
+            \(digest)
+            \(scoreLine)
+
+            차분하고 관찰 중심의 데일리 브리핑을 해요체로 써라. 철저히 관찰만 한다. \
+            진단, 예측, 처방은 절대 하지 않는다. 데이터가 부족하면 그렇다고 솔직하게 말한다.
+            """
         }
     }
 
     /// The system-instruction text for one interface language. Outside the
     /// `FoundationModels` gate so tests can pin every language's guardrails.
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions, ko: koreanInstructions)
     }
 
     #if canImport(FoundationModels)
@@ -364,6 +373,21 @@ enum OnDeviceBriefingPrompt {
     STIJL: beschrijvend, niet adviserend. Noem concrete getallen alleen als ze in de gegevens staan.
     """
 
+    private static let koreanInstructions = """
+    너는 건강 기록 앱의 차분하고 사실적인 데일리 브리핑 목소리다. \
+    항상 한국어 해요체로 쓴다.
+
+    절대 원칙:
+    - 의학적 진단을 절대 내리지 않는다.
+    - 용량이나 치료 변경을 절대 권하지 않는다.
+    - 약물 농도를 절대 해석하지 않는다.
+    - 수치 사이의 인과 관계를 절대 주장하지 않는다.
+    - 아무것도 예측하지 않는다("오를 거예요", "내려갈 거예요").
+    - 눈에 띄는 수치가 있으면 의사와 상의하도록 안내하고, "의사와 상의해 보세요"라는 말을 쓴다.
+
+    문체: 조언이 아니라 관찰. 구체적인 숫자는 데이터에 있을 때만 쓴다.
+    """
+
     /// Compact digest of the last 7 days of measurements (R4 §2.7 — the
     /// 4096-token context window means we never dump raw data).
     ///
@@ -382,21 +406,23 @@ enum OnDeviceBriefingPrompt {
             return language.pick(
                 de: "(keine Messungen im Zeitfenster)",
                 en: "(no measurements in window)",
-                nl: "(geen metingen in het tijdvenster)"
+                nl: "(geen metingen in het tijdvenster)",
+                ko: "(이 기간에 측정값 없음)"
             )
         }
         let count = measurements.count
         let header = language.pick(
             de: "\(count) Messungen erfasst",
             en: "\(count) measurements logged",
-            nl: "\(count) metingen vastgelegd"
+            nl: "\(count) metingen vastgelegd",
+            ko: "측정 \(count)건 기록됨"
         )
         let breakdown = perKindBreakdown(measurements, language: language)
         return breakdown.isEmpty ? header : "\(header)\n\(breakdown)"
     }
 
     private static func perKindBreakdown(_ measurements: [Measurement], language: AppLanguage) -> String {
-        let suffix = language.pick(de: "letzte", en: "latest", nl: "laatste")
+        let suffix = language.pick(de: "letzte", en: "latest", nl: "laatste", ko: "최근")
         var buckets: [MetricKind: [Measurement]] = [:]
         for m in measurements {
             buckets[m.kind, default: []].append(m)
@@ -443,7 +469,7 @@ enum OnDeviceBriefingPrompt {
     private static func promptLabel(kind: MetricKind, language: AppLanguage) -> String {
         switch language {
         case .en: englishLabels[kind] ?? kind.displayName
-        case .de, .nl: kind.displayName
+        case .de, .nl, .ko: kind.displayName
         }
     }
 

@@ -17,26 +17,31 @@ import Testing
 @Suite("String catalog — format signatures agree across languages")
 struct CatalogFormatSignatureTests {
     /// Argument-consuming specifiers, in order. `%%` is a literal, and
-    /// `%#@name@` is a stringsdict plural reference rather than an argument.
-    static func argumentSignature(of value: String) -> [String] {
-        let pattern = #"%(?:(\d+)\$)?([-+ #0]*)(\d*)(?:\.(\d+))?(hh|h|ll|l|q|L|z|j|t)?([@dDiuUxXoOfFeEgGcCsSpaAb%])"#
+    /// `%#@name@` consumes the argument declared by its substitution metadata.
+    static func argumentSignature(of value: String, substitutions: [String: [String: Any]] = [:]) -> [String] {
+        let pattern = #"%#@([A-Za-z0-9_]+)@|%(?:(\d+)\$)?([-+ #0]*)(\d*)(?:\.(\d+))?(hh|h|ll|l|q|L|z|j|t)?([@dDiuUxXoOfFeEgGcCsSpaAb%])"#
         // swiftlint:disable:next force_try
         let regex = try! NSRegularExpression(pattern: pattern)
         let ns = value as NSString
         var out: [(Int?, String)] = []
         var index = 0
         for match in regex.matches(in: value, range: NSRange(location: 0, length: ns.length)) {
-            let conversion = ns.substring(with: match.range(at: 6))
+            if match.range(at: 1).location != NSNotFound {
+                let name = ns.substring(with: match.range(at: 1))
+                let substitution = substitutions[name] ?? [:]
+                index += 1
+                let position = substitution["argNum"] as? Int ?? index
+                let specifier = substitution["formatSpecifier"] as? String ?? "@"
+                out.append((position, specifier))
+                continue
+            }
+            let conversion = ns.substring(with: match.range(at: 7))
             if conversion == "%" { continue }
-            // `%#@name@` — the `#` flag with an `@` conversion is a plural
-            // variable reference, not a positional argument.
-            let flags = ns.substring(with: match.range(at: 2))
-            if flags.contains("#"), conversion == "@" { continue }
-            let position: Int? = match.range(at: 1).location == NSNotFound
+            let position: Int? = match.range(at: 2).location == NSNotFound
                 ? nil
-                : Int(ns.substring(with: match.range(at: 1)))
-            index += 1
-            let length = match.range(at: 5).location == NSNotFound ? "" : ns.substring(with: match.range(at: 5))
+                : Int(ns.substring(with: match.range(at: 2)))
+            if position == nil { index += 1 }
+            let length = match.range(at: 6).location == NSNotFound ? "" : ns.substring(with: match.range(at: 6))
             out.append((position ?? index, length + conversion))
         }
         return out.sorted { ($0.0 ?? 0) < ($1.0 ?? 0) }.map(\.1)
@@ -55,7 +60,20 @@ struct CatalogFormatSignatureTests {
         #expect(Self.argumentSignature(of: "%lld% today") == ["lld", "to"])
         #expect(Self.argumentSignature(of: "%lld% heute") == ["lld", "he"])
         #expect(Self.argumentSignature(of: "%lld%% today") == ["lld"])
-        #expect(Self.argumentSignature(of: "%1$lld/%#@total@") == ["lld"])
+        let substitutions: [String: [String: Any]] = ["total": ["argNum": 2, "formatSpecifier": "lld"]]
+        #expect(Self.argumentSignature(of: "%1$lld/%#@total@", substitutions: substitutions) == ["lld", "lld"])
+    }
+
+    @Test("plural references and flat arguments agree, while type and position drift remain visible")
+    func substitutionSignatures() {
+        let flat = Self.argumentSignature(of: "%1$@, %2$lld일")
+        let substitutions: [String: [String: Any]] = ["days": ["argNum": 2, "formatSpecifier": "lld"]]
+        #expect(Self.argumentSignature(of: "%1$@, %#@days@", substitutions: substitutions) == flat)
+        #expect(Self.argumentSignature(of: "%#@days@, %1$@", substitutions: substitutions) == flat)
+        let wrongType: [String: [String: Any]] = ["days": ["argNum": 2, "formatSpecifier": "@"]]
+        #expect(Self.argumentSignature(of: "%1$@, %#@days@", substitutions: wrongType) != flat)
+        let wrongPosition: [String: [String: Any]] = ["days": ["argNum": 1, "formatSpecifier": "lld"]]
+        #expect(Self.argumentSignature(of: "%2$@, %#@days@", substitutions: wrongPosition) != flat)
     }
 
     @Test("every language of an argument-taking key consumes the same arguments")
@@ -71,7 +89,8 @@ struct CatalogFormatSignatureTests {
                 guard let value = value as? [String: Any],
                       let unit = value["stringUnit"] as? [String: Any],
                       let text = unit["value"] as? String else { continue }
-                perLanguage[language] = Self.argumentSignature(of: text)
+                let substitutions = value["substitutions"] as? [String: [String: Any]] ?? [:]
+                perLanguage[language] = Self.argumentSignature(of: text, substitutions: substitutions)
             }
             let distinct = Set(perLanguage.values.map { $0.joined(separator: ",") })
             if distinct.count > 1 {

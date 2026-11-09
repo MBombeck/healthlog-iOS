@@ -12,10 +12,11 @@ struct InsightsTargetStatusLabelTests {
     func interfaceLanguageLabels() {
         let language = AppLanguage.current
         #expect(InsightsTargetStatusLabel.label(for: "Overweight")
-            == language.pick(de: "Übergewicht", en: "Overweight", nl: "Overgewicht"))
+            == language.pick(de: "Übergewicht", en: "Overweight", nl: "Overgewicht", ko: "과체중"))
         #expect(InsightsTargetStatusLabel.label(for: "Hypertension Grade 1")
-            == language.pick(de: "Hypertonie Grad 1", en: "Hypertension Grade 1", nl: "Hypertensie graad 1"))
-        #expect(InsightsTargetStatusLabel.label(for: "Optimal") == language.pick(de: "Optimal", en: "Optimal", nl: "Optimaal"))
+            == language.pick(de: "Hypertonie Grad 1", en: "Hypertension Grade 1", nl: "Hypertensie graad 1", ko: "고혈압 1기"))
+        #expect(InsightsTargetStatusLabel.label(for: "Optimal")
+            == language.pick(de: "Optimal", en: "Optimal", nl: "Optimaal", ko: "최적"))
     }
 
     @Test("an unknown token stays as the server sent it")

@@ -163,6 +163,9 @@ public enum MedicationDraftHeuristic {
         switch language {
         case .de, .en: doseFormKeywords + dutchDoseFormKeywords
         case .nl: dutchDoseFormKeywords + doseFormKeywords
+        // No Korean lexicon yet: the German, English and Dutch keywords still
+        // catch the Latin dose forms a Korean pack prints next to the Hangul.
+        case .ko: doseFormKeywords + dutchDoseFormKeywords
         }
     }
 

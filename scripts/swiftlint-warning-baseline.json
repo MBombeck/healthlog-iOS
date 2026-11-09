@@ -1045,7 +1045,7 @@
     },
     {
       "file": "HealthLog/Services/AI/MiniCoachDataBinder.swift",
-      "line": 260,
+      "line": 313,
       "character": 13,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 85 lines",
