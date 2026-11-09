@@ -329,28 +329,25 @@ public struct PrivacyFirstPromptBuilder {
     /// bullet list under an English instruction block used to steer the model
     /// back into German mid-answer for an English reviewer.
     ///
-    /// Korean lists with a hyphen and attaches its word units to the number
-    /// ("8000걸음", "7.5시간"), the way the Korean interface writes them.
+    /// Korean attaches its word units to the number ("8000걸음", "7.5시간"),
+    /// the way the Korean interface writes them.
     private nonisolated static func bullets(from snapshot: HealthSnapshot, now: Date, language: AppLanguage) -> [String] {
         var out: [String] = []
-        let mark = language.pick(de: "•", en: "•", nl: "•", ko: "-")
         if let bp = snapshot.latestBP {
             let label = language.pick(de: "Blutdruck", en: "Blood pressure", nl: "Bloeddruk", ko: "혈압")
-            out.append("\(mark) \(label): \(bp.sys)/\(bp.dia) mmHg (\(relativeDay(bp.date, now: now, language: language)))")
+            out.append("• \(label): \(bp.sys)/\(bp.dia) mmHg (\(relativeDay(bp.date, now: now, language: language)))")
         }
         if let pulse = snapshot.latestPulse {
             let label = language.pick(de: "Puls", en: "Pulse", nl: "Hartslag", ko: "맥박")
-            out.append("\(mark) \(label): \(pulse.bpm) bpm (\(relativeDay(pulse.date, now: now, language: language)))")
+            out.append("• \(label): \(pulse.bpm) bpm (\(relativeDay(pulse.date, now: now, language: language)))")
         }
         if let weight = snapshot.latestWeight {
             let label = language.pick(de: "Gewicht", en: "Weight", nl: "Gewicht", ko: "체중")
-            let day = relativeDay(weight.date, now: now, language: language)
-            out.append("\(mark) \(label): \(formatDecimal(weight.kg)) kg (\(day))")
+            out.append("• \(label): \(formatDecimal(weight.kg)) kg (\(relativeDay(weight.date, now: now, language: language)))")
         }
         if let bodyFat = snapshot.latestBodyFat {
             let label = language.pick(de: "Körperfett", en: "Body fat", nl: "Lichaamsvet", ko: "체지방")
-            let day = relativeDay(bodyFat.date, now: now, language: language)
-            out.append("\(mark) \(label): \(formatDecimal(bodyFat.percent)) % (\(day))")
+            out.append("• \(label): \(formatDecimal(bodyFat.percent)) % (\(relativeDay(bodyFat.date, now: now, language: language)))")
         }
         if let steps = snapshot.last7dStepsAvg {
             let label = language.pick(
@@ -360,7 +357,7 @@ public struct PrivacyFirstPromptBuilder {
                 ko: "걸음 수(최근 7일 평균)"
             )
             let value = language.pick(de: "\(steps)", en: "\(steps)", nl: "\(steps)", ko: "\(steps)걸음")
-            out.append("\(mark) \(label): \(value)")
+            out.append("• \(label): \(value)")
         }
         if let sleep = snapshot.last7dSleepAvgHours {
             let label = language.pick(
@@ -371,15 +368,15 @@ public struct PrivacyFirstPromptBuilder {
             )
             let hours = formatDecimal(sleep)
             let value = language.pick(de: "\(hours) h", en: "\(hours) h", nl: "\(hours) h", ko: "\(hours)시간")
-            out.append("\(mark) \(label): \(value)")
+            out.append("• \(label): \(value)")
         }
         if !snapshot.activeMedications.isEmpty {
             let label = language.pick(de: "Aktive Medikamente", en: "Active medications", nl: "Actieve medicatie", ko: "현재 복용 약")
-            out.append("\(mark) \(label): \(snapshot.activeMedications.joined(separator: ", "))")
+            out.append("• \(label): \(snapshot.activeMedications.joined(separator: ", "))")
         }
         if let mood = snapshot.recentMoodAvg {
             let label = language.pick(de: "Stimmung Ø", en: "Mood avg", nl: "Stemming gem.", ko: "기분 평균")
-            out.append("\(mark) \(label): \(mood)/5")
+            out.append("• \(label): \(mood)/5")
         }
         return out
     }
