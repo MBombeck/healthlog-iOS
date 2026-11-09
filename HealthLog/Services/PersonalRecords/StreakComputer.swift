@@ -262,7 +262,7 @@ public enum StreakComputer {
             userId: userId,
             metricType: config.metricType,
             // L1 — catalog copy. Every locale keeps the word the streak
-            // classifiers match on ("Serie" / "streak" / "연속",
+            // classifiers match on ("Serie" / "streak" / "reeks" / "연속",
             // `PersonalRecordsStore.streakRecords`, `MilestoneStrip`).
             metricSlot: String(
                 localized: "records.streak.slot \(formatThreshold(config.streakThreshold)) \(bestLength)"

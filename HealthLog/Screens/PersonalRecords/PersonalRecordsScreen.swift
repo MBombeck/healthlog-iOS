@@ -259,7 +259,7 @@ struct PersonalRecordsScreen: View {
     nonisolated static func gridRecords(_ records: [PersonalRecord]) -> [PersonalRecord] {
         records.filter { record in
             let slot = (record.base.metricSlot ?? "").lowercased()
-            return !(slot.contains("serie") || slot.contains("streak") || slot.contains("연속"))
+            return !(slot.contains("serie") || slot.contains("streak") || slot.contains("연속") || slot.contains("reeks"))
         }
     }
 

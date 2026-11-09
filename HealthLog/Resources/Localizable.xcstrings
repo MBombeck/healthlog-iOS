@@ -145950,7 +145950,7 @@
       }
     },
     "records.streak.slot %@ %lld": {
-      "comment": "Personal records — label of the longest-streak record. %1$@ = daily threshold (e.g. 10,000), %2$lld = streak length in days (always 2 or more). Keep the word 'streak' / 'Serie' / '연속': the screen sorts these records into the streak rail by it.",
+      "comment": "Personal records — label of the longest-streak record. %1$@ = daily threshold (e.g. 10,000), %2$lld = streak length in days (always 2 or more). Keep the word 'streak' / 'Serie' / 'reeks' / '연속': the screen sorts these records into the streak rail by it.",
       "extractionState": "manual",
       "localizations": {
         "de": {
