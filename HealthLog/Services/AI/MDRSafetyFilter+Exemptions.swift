@@ -47,8 +47,10 @@ extension MDRSafetyFilter {
             pattern: #"\b(Dosis|Dosierung|Tablette|Spritze|Therapie|Medikament\w*|"#
                 + #"dose|dosage|tablet|medication|therapy|treatment|"#
                 + #"dosering|tabletten|injectie\w*|spuit\w*|medicijn\w*|medicatie|behandeling\w*|pillen)\b|"#
-                // Korean: no `\b`, a particle follows the noun ("용량을").
-                + #"(용량|복용량|알약|정제|주사|치료|처방|약을|약은|약물|투약)"#,
+                // Korean: no `\b`, a particle follows the noun ("용량을"), and a
+                // pill count or an amount names a dose too ("반 알", "10mg").
+                + #"(용량|복용량|알약|정제|주사|치료|처방|약을|약은|약물|투약)|"#
+                + #"(반|한|두|세)\s*(알|정)|\d+\s*(mg|mcg|IU|단위|정|알)"#,
             options: .caseInsensitive
         )
 
