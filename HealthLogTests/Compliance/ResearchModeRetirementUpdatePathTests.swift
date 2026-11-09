@@ -319,6 +319,9 @@
                 || lowered.contains("researchmode")
                 || lowered.contains("forschungsmodus")
                 || lowered.contains("drug-level view")
+                || lowered.contains("연구 모드")
+                || lowered.contains("연구모드")
+                || lowered.contains("약물 농도 보기")
         }
 
         static func markRed(case identifier: String, detail: String) {

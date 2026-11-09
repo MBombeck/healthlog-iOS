@@ -4,6 +4,7 @@
   "languages": {
     "de": "required",
     "en": "required",
-    "nl": "required"
+    "nl": "required",
+    "ko": "pending"
   }
 }

@@ -21,6 +21,12 @@
             "state": "translated",
             "value": "Opent HealthLog direct om een registratie vast te leggen."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HealthLog를 열어 바로 기록을 입력해요."
+          }
         }
       }
     },
@@ -43,6 +49,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vastleggen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록하기"
           }
         }
       }
@@ -67,6 +79,12 @@
             "state": "translated",
             "value": "Vastleggen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록하기"
+          }
         }
       }
     },
@@ -89,6 +107,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open de stemmingskiezer van HealthLog."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HealthLog의 기분 선택 화면을 열어요."
           }
         }
       },
@@ -114,6 +138,12 @@
             "state": "translated",
             "value": "Stemming vastleggen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분 기록"
+          }
         }
       },
       "comment": "Log-mood control — name shown in the controls gallery"
@@ -137,6 +167,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stemming vastleggen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분 기록"
           }
         }
       },
@@ -162,6 +198,12 @@
             "state": "translated",
             "value": "Markeert je volgende dosis als ingenomen."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음 복용 예정 약을 복용함으로 표시해요."
+          }
         }
       }
     },
@@ -184,6 +226,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volgende dosis: ingenomen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음 복용: 복용함"
           }
         }
       }
@@ -208,6 +256,12 @@
             "state": "translated",
             "value": "Ingenomen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용함"
+          }
         }
       }
     },
@@ -229,6 +283,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Over %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 후 복용 예정"
           }
         }
       }
@@ -252,6 +312,12 @@
             "state": "translated",
             "value": "%@ te laat"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 지남"
+          }
         }
       }
     },
@@ -273,6 +339,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ingenomen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용함"
           }
         }
       }
@@ -297,6 +369,12 @@
             "state": "translated",
             "value": "Ingenomen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용함"
+          }
         }
       }
     },
@@ -319,6 +397,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tik nogmaals om te bevestigen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한 번 더 탭하여 확인"
           }
         }
       }
@@ -343,6 +427,12 @@
             "state": "translated",
             "value": "Tik nogmaals om de inname te bevestigen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한 번 더 탭하면 복용이 확인돼요"
+          }
         }
       }
     },
@@ -364,6 +454,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Registreert %@ als ingenomen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@을(를) 복용함으로 기록해요"
           }
         }
       }
@@ -388,6 +484,12 @@
             "state": "translated",
             "value": "om %@"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 예정"
+          }
         }
       }
     },
@@ -410,6 +512,12 @@
             "state": "translated",
             "value": "te laat"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시간 지남"
+          }
         }
       }
     },
@@ -431,6 +539,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "resterend"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "남음"
           }
         }
       }
@@ -455,6 +569,12 @@
             "state": "translated",
             "value": "Herinnering gesluimerd"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림 미룸"
+          }
         }
       }
     },
@@ -478,6 +598,12 @@
             "state": "translated",
             "value": "Ingenomen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용함"
+          }
         }
       }
     },
@@ -499,6 +625,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ingenomen om %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 복용함"
           }
         }
       }
@@ -523,6 +655,12 @@
             "state": "translated",
             "value": "Je therapietrouw van vandaag als ring."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘의 복약 순응도를 링으로 보여 줘요."
+          }
         }
       }
     },
@@ -545,6 +683,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld van %2$lld doses"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld회 중 %1$lld회 복용"
           }
         }
       }
@@ -569,6 +713,12 @@
             "state": "translated",
             "value": "Therapietrouw"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복약 순응도"
+          }
         }
       }
     },
@@ -591,6 +741,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Therapietrouw vandaag"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘의 복약 순응도"
           }
         }
       }
@@ -615,6 +771,12 @@
             "state": "translated",
             "value": "vandaag"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘"
+          }
         }
       }
     },
@@ -637,6 +799,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Matig"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보통"
           }
         }
       }
@@ -661,6 +829,12 @@
             "state": "translated",
             "value": "Laag"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "낮음"
+          }
         }
       }
     },
@@ -683,6 +857,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sterk"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "높음"
           }
         }
       }
@@ -708,6 +888,12 @@
             "state": "translated",
             "value": "Eigen selectie"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "내 선택"
+          }
         }
       }
     },
@@ -730,6 +916,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Toont je huidige gezondheidsscore als ring."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 건강 점수를 링으로 보여 줘요."
           }
         }
       }
@@ -754,6 +946,12 @@
             "state": "translated",
             "value": "Geen gegevens"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "데이터 없음"
+          }
         }
       }
     },
@@ -776,6 +974,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Score"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "점수"
           }
         }
       }
@@ -800,6 +1004,12 @@
             "state": "translated",
             "value": "Gezondheidsscore"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건강 점수"
+          }
         }
       }
     },
@@ -822,6 +1032,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Toont je meest recente meting."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가장 최근 측정값을 보여 줘요."
           }
         }
       }
@@ -846,6 +1062,12 @@
             "state": "translated",
             "value": "Nog geen meting"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 측정값 없음"
+          }
         }
       }
     },
@@ -868,6 +1090,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Meting"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "측정"
           }
         }
       }
@@ -892,6 +1120,12 @@
             "state": "translated",
             "value": "Laatste meting"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 측정"
+          }
         }
       }
     },
@@ -914,6 +1148,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stemming vastleggen: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분 기록: %@"
           }
         }
       },
@@ -939,6 +1179,12 @@
             "state": "translated",
             "value": "Bekijk je laatste stemming en leg met één tik een nieuwe vast."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 기분을 확인하고 한 번 탭해서 새 기분을 기록해요."
+          }
         }
       },
       "comment": "Mood widget — configuration description"
@@ -962,6 +1208,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vandaag nog niet vastgelegd"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘 기록 없음"
           }
         }
       },
@@ -987,6 +1239,12 @@
             "state": "translated",
             "value": "Stemming"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분"
+          }
         }
       },
       "comment": "Mood widget — header label"
@@ -1010,6 +1268,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vastgelegd om %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 기록함"
           }
         }
       },
@@ -1035,6 +1299,12 @@
             "state": "translated",
             "value": "Hoe gaat het met je?"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분이 어때요?"
+          }
         }
       },
       "comment": "Mood widget — quick-log prompt above the face row"
@@ -1058,6 +1328,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tik om vast te leggen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "탭하여 기록"
           }
         }
       },
@@ -1083,6 +1359,12 @@
             "state": "translated",
             "value": "Stemming"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분"
+          }
         }
       },
       "comment": "Mood widget — configuration display name"
@@ -1107,6 +1389,12 @@
             "state": "translated",
             "value": "Je volgende geplande medicijn met een knop ‘Ingenomen’ voor één tik."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음 복용 예정 약을 “복용함” 버튼 한 번으로 기록해요."
+          }
         }
       }
     },
@@ -1129,6 +1417,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "om %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 예정"
           }
         }
       }
@@ -1153,6 +1447,12 @@
             "state": "translated",
             "value": "Niets gepland"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예정된 복용 없음"
+          }
         }
       }
     },
@@ -1175,6 +1475,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volgende dosis"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음 복용"
           }
         }
       }
@@ -1199,6 +1505,12 @@
             "state": "translated",
             "value": "Ingenomen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용함"
+          }
         }
       }
     },
@@ -1222,6 +1534,12 @@
             "state": "translated",
             "value": "Volgende dosis"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음 복용"
+          }
         }
       }
     },
@@ -1244,6 +1562,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verouderd, open de app"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오래된 정보, 앱을 열어 주세요"
           }
         }
       }

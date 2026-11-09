@@ -1,0 +1,9 @@
+"NSHealthShareUsageDescription" = "HealthLog는 허용한 건강 데이터(활력 징후, 활동, 영양, 수면, 기분, 생리 주기 데이터, 심전도, 운동 및 심박수 데이터, 복용 약 등)를 Apple 건강 앱에서 읽어 표시하고 동기화하며 추세를 계산해요.";
+"NSHealthUpdateUsageDescription" = "HealthLog에 쓰기를 허용하면, 직접 기록한 측정값, 기분 및 생리 주기 기록과 연결한 기기나 가져오기에서 받은 측정값을 Apple 건강 앱에 저장해요.";
+"NSFaceIDUsageDescription" = "HealthLog는 데이터를 보호하기 위해 Face ID를 사용해요.";
+"NSUserNotificationsUsageDescription" = "HealthLog가 복약과 측정 시간을 알려 드려요.";
+"NSAlarmKitUsageDescription" = "직접 켠 시간에 민감한 약에 대해 HealthLog가 큰 소리 알람을 울려요. 중요한 복용을 놓치지 않도록 무음 모드와 집중 모드에서도 울릴 수 있어요.";
+"NSSpeechRecognitionUsageDescription" = "HealthLog는 음성으로 입력한 코치 질문을 텍스트로 바꾸기 위해 음성 인식을 사용하며, 가능하면 기기에서 처리해요. 보내기 전에 텍스트를 직접 확인할 수 있어요.";
+"NSMicrophoneUsageDescription" = "HealthLog는 코치에게 할 질문을 음성으로 입력할 수 있도록 마이크를 사용해요. 녹음은 기기에서 텍스트로 변환되며 저장되지 않아요.";
+"NSCameraUsageDescription" = "HealthLog는 약 포장과 검사 결과지를 기기에서 읽거나, 선택한 스캔을 설정한 HealthLog 서버의 문서 보관함에 올리기 위해 카메라를 사용해요.";
+"NSBluetoothAlwaysUsageDescription" = "HealthLog는 측정값이 자동으로 들어오도록 Bluetooth로 혈압계(현재는 Omron 커프)에 연결해요.";

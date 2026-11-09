@@ -21,6 +21,12 @@
             "state": "translated",
             "value": "%lld van %lld ingenomen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld 복용함"
+          }
         }
       }
     },
@@ -43,6 +49,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld vandaag"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘 %lld건"
           }
         }
       }
@@ -67,6 +79,12 @@
             "state": "translated",
             "value": "Alles gedaan"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모두 완료"
+          }
         }
       }
     },
@@ -89,6 +107,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slecht"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나쁨"
           }
         }
       }
@@ -113,6 +137,12 @@
             "state": "translated",
             "value": "Bloeddruk"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "혈압"
+          }
         }
       }
     },
@@ -135,6 +165,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wijzigen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경"
           }
         }
       }
@@ -159,6 +195,12 @@
             "state": "translated",
             "value": "Kan iPhone niet bereiken"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone에 연결할 수 없음"
+          }
         }
       }
     },
@@ -181,6 +223,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diastolisch"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이완기"
           }
         }
       }
@@ -205,6 +253,12 @@
             "state": "translated",
             "value": "Glucose"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "혈당"
+          }
         }
       }
     },
@@ -227,6 +281,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Goed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "좋음"
           }
         }
       }
@@ -251,6 +311,12 @@
             "state": "translated",
             "value": "Super"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아주 좋음"
+          }
         }
       }
     },
@@ -273,6 +339,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hoe gaat het met je?"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분이 어때요?"
           }
         }
       }
@@ -297,6 +369,12 @@
             "state": "translated",
             "value": "Laatste niet bewaard, tik om opnieuw te proberen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 항목 저장 안 됨, 탭하여 다시 시도"
+          }
         }
       }
     },
@@ -319,6 +397,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Laatste: wordt gesynchroniseerd"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 항목: 동기화 예정"
           }
         }
       }
@@ -343,6 +427,12 @@
             "state": "translated",
             "value": "Later"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나중에"
+          }
         }
       }
     },
@@ -365,6 +455,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vastleggen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록"
           }
         }
       }
@@ -389,6 +485,12 @@
             "state": "translated",
             "value": "Vastgelegd"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록됨"
+          }
         }
       }
     },
@@ -411,6 +513,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Legt deze stemming vast"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 기분을 기록해요"
           }
         }
       }
@@ -435,6 +543,12 @@
             "state": "translated",
             "value": "Beroerd"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아주 나쁨"
+          }
         }
       }
     },
@@ -457,6 +571,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Medicatie"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "약"
           }
         }
       }
@@ -481,6 +601,12 @@
             "state": "translated",
             "value": "Stemming"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분"
+          }
         }
       }
     },
@@ -503,6 +629,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volgende"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음"
           }
         }
       }
@@ -527,6 +659,12 @@
             "state": "translated",
             "value": "Oké"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보통"
+          }
         }
       }
     },
@@ -549,6 +687,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pols"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "맥박"
           }
         }
       }
@@ -573,6 +717,12 @@
             "state": "translated",
             "value": "Opnieuw proberen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 시도"
+          }
         }
       }
     },
@@ -595,6 +745,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bewaard, wordt met iPhone gesynchroniseerd"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장됨, iPhone과 동기화 예정"
           }
         }
       }
@@ -619,6 +775,12 @@
             "state": "translated",
             "value": "Versturen…"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보내는 중…"
+          }
         }
       }
     },
@@ -641,6 +803,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Log in op je iPhone"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone에서 로그인하세요"
           }
         }
       }
@@ -665,6 +833,12 @@
             "state": "translated",
             "value": "Overgeslagen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건너뜀"
+          }
         }
       }
     },
@@ -687,6 +861,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Synchroniseren…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "동기화 중…"
           }
         }
       }
@@ -711,6 +891,12 @@
             "state": "translated",
             "value": "Systolisch"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "수축기"
+          }
         }
       }
     },
@@ -733,6 +919,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ingenomen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용함"
           }
         }
       }
@@ -757,6 +949,12 @@
             "state": "translated",
             "value": "Vandaag"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘"
+          }
         }
       }
     },
@@ -780,6 +978,12 @@
             "state": "translated",
             "value": "Gewicht"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "체중"
+          }
         }
       }
     },
@@ -799,6 +1003,12 @@
           }
         },
         "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bpm"
+          }
+        },
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "bpm"
@@ -826,6 +1036,12 @@
             "state": "translated",
             "value": "kg"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kg"
+          }
         }
       }
     },
@@ -845,6 +1061,12 @@
           }
         },
         "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mg/dL"
+          }
+        },
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "mg/dL"
@@ -872,6 +1094,12 @@
             "state": "translated",
             "value": "mmHg"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mmHg"
+          }
         }
       }
     },
@@ -894,6 +1122,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "(niet bewaard)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(저장 안 됨)"
           }
         }
       }
@@ -918,6 +1152,12 @@
             "state": "translated",
             "value": "(wordt gesynchroniseerd)"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(동기화 예정)"
+          }
         }
       }
     },
@@ -937,6 +1177,12 @@
           }
         },
         "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mmol/L"
+          }
+        },
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "mmol/L"

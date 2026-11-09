@@ -59,7 +59,7 @@ The demo holds about a year of synthetic data. You can browse all of it, but cha
 - **Apple Watch, widgets and Shortcuts.** A Watch app with complications, home screen and lock screen widgets, App Intents for Siri and Shortcuts ("Did I take my medication?"), and Spotlight search for your medications.
 - **Sharing with your doctor.** You choose what is included, the time range and the format: a link you can revoke, a PDF report, or a ZIP of the record. There is also a doctor report based on FHIR with LOINC codes.
 
-The app is available in English, German and Dutch. How it picks its language and how a new one gets in: [docs/localization.md](docs/localization.md).
+The app is available in English, German, Dutch and Korean. How it picks its language and how a new one gets in: [docs/localization.md](docs/localization.md).
 
 ## What syncs with Apple Health
 
