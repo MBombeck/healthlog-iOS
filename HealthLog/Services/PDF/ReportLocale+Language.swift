@@ -38,7 +38,7 @@ public extension ReportLocale {
     /// Dutch only from ``dutchExportMinimumServerVersion`` and Korean only from
     /// ``koreanExportMinimumServerVersion``, else English, the language an
     /// unknown reader gets everywhere else.
-    func exportServerCode(serverAcceptsDutch: Bool, serverAcceptsKorean: Bool = true) -> String {
+    func exportServerCode(serverAcceptsDutch: Bool, serverAcceptsKorean: Bool = false) -> String {
         switch self {
         case .de, .en: rawValue
         case .nl: serverAcceptsDutch ? rawValue : ReportLocale.en.rawValue

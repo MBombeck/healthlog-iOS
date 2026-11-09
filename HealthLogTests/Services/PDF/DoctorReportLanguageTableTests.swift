@@ -131,7 +131,6 @@ struct DoctorReportLanguageTableTests {
         #expect(ReportLocale.nl.exportServerCode(serverAcceptsDutch: true) == "nl")
         #expect(ReportLocale.ko.exportServerCode(serverAcceptsDutch: false, serverAcceptsKorean: false) == "en")
         #expect(ReportLocale.ko.exportServerCode(serverAcceptsDutch: false, serverAcceptsKorean: true) == "ko")
-        #expect(ReportLocale.ko.exportServerCode(serverAcceptsDutch: false) == "ko")
         let suite = "DoctorReportLanguageTableTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
