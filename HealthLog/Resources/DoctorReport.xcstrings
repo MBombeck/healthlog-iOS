@@ -22,6 +22,12 @@
             "state": "translated",
             "value": "Alle medicatie (%1$lld): %2$lld van %3$lld ingenomen (%4$@) in %5$lld dagen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "전체 약(%1$lld개): %5$lld일간 %3$lld회 중 %2$lld회 복용(%4$@)"
+          }
         }
       }
     },
@@ -45,6 +51,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@: %2$lld van %3$lld ingenomen (%4$@) in %5$lld dagen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%1$@: %5$lld일간 %3$lld회 중 %2$lld회 복용(%4$@)"
           }
         }
       }
@@ -70,6 +82,12 @@
             "state": "translated",
             "value": "%@: geen innameschema in HealthLog, geen therapietrouw"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@: HealthLog 복용 일정 없음, 순응률 없음"
+          }
         }
       }
     },
@@ -93,6 +111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Therapietrouw over de afgelopen %lld dagen, door de HealthLog-server berekend op basis van het innameschema."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "최근 %lld일간의 복약 순응도이며, HealthLog 서버가 복용 일정을 기준으로 계산했습니다."
           }
         }
       }
@@ -118,6 +142,12 @@
             "state": "translated",
             "value": "Therapietrouw"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "복약 순응도"
+          }
         }
       }
     },
@@ -141,6 +171,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Therapietrouw niet beschikbaar: de HealthLog-server was bij het aanmaken van dit rapport niet bereikbaar."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "복약 순응도 제공 불가: 이 리포트를 작성할 때 HealthLog 서버에 연결할 수 없었습니다."
           }
         }
       }
@@ -166,6 +202,12 @@
             "state": "translated",
             "value": "Voor de rapportageperiode van %1$lld dagen levert de server geen therapietrouw; getoond worden de afgelopen %2$lld dagen."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "서버가 %1$lld일 리포트 기간의 복약 순응도를 제공하지 않아 최근 %2$lld일을 표시합니다."
+          }
         }
       }
     },
@@ -189,6 +231,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@: %2$lld datapunten"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: 데이터 %2$lld개"
           }
         }
       }
@@ -214,6 +262,12 @@
             "state": "translated",
             "value": "Verloop"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추이 차트"
+          }
         }
       }
     },
@@ -237,6 +291,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "App-versie"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 버전"
           }
         }
       }
@@ -262,6 +322,12 @@
             "state": "translated",
             "value": "Volledige naam"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "성명"
+          }
         }
       }
     },
@@ -285,6 +351,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aangemaakt op"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "작성일"
           }
         }
       }
@@ -310,6 +382,12 @@
             "state": "translated",
             "value": "Verzekeringsnummer"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보험 번호"
+          }
         }
       }
     },
@@ -333,6 +411,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zorgverzekeraar"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건강보험사"
           }
         }
       }
@@ -358,6 +442,12 @@
             "state": "translated",
             "value": "Patiënt"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "환자"
+          }
         }
       }
     },
@@ -381,6 +471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rapportageperiode"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "리포트 기간"
           }
         }
       }
@@ -406,6 +502,12 @@
             "state": "translated",
             "value": "Lokale export, geen server betrokken, op het apparaat aangemaakt, geen medisch document"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "로컬 내보내기, 서버 미사용, 기기에서 생성, 의료 문서 아님"
+          }
         }
       }
     },
@@ -429,6 +531,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Eerder gebruikt"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "이전에 복용한 약"
           }
         }
       }
@@ -454,6 +562,12 @@
             "state": "translated",
             "value": "Medicatie"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "약"
+          }
         }
       }
     },
@@ -477,6 +591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld registraties, gemiddeld %.1f / 5"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록 %1$lld건, 평균 %2$.1f / 5"
           }
         }
       }
@@ -502,6 +622,12 @@
             "state": "translated",
             "value": "Meest gebruikte tags"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주요 태그"
+          }
         }
       }
     },
@@ -525,6 +651,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stemming"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분"
           }
         }
       }
@@ -550,6 +682,12 @@
             "state": "translated",
             "value": "%1$@ tot %2$@"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ ~ %2$@"
+          }
         }
       }
     },
@@ -573,6 +711,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Artsenrapport"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "진료용 리포트"
           }
         }
       }
@@ -598,6 +742,12 @@
             "state": "translated",
             "value": "Aantal"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건수"
+          }
         }
       }
     },
@@ -621,6 +771,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Max"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최대"
           }
         }
       }
@@ -646,6 +802,12 @@
             "state": "translated",
             "value": "Gemiddelde"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "평균"
+          }
         }
       }
     },
@@ -669,6 +831,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mediaan"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "중앙값"
           }
         }
       }
@@ -694,6 +862,12 @@
             "state": "translated",
             "value": "Meetwaarde"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "항목"
+          }
         }
       }
     },
@@ -718,6 +892,12 @@
             "state": "translated",
             "value": "Min"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최소"
+          }
         }
       }
     },
@@ -741,6 +921,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vitale waarden"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "활력 징후"
           }
         }
       }

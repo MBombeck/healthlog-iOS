@@ -20,6 +20,12 @@
             "state": "translated",
             "value": "Leg bloedglucose vast in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 혈당 기록해 줘"
+          }
         }
       }
     },
@@ -41,6 +47,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Leg mijn bloedsuiker vast in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에 내 혈당 기록"
           }
         }
       }
@@ -64,6 +76,12 @@
             "state": "translated",
             "value": "Voeg een glucosemeting toe aan ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에 혈당 측정값 추가"
+          }
         }
       }
     },
@@ -85,6 +103,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Leg mijn bloedsuiker vast met ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 혈당 기록"
           }
         }
       }
@@ -108,6 +132,12 @@
             "state": "translated",
             "value": "Leg een meting vast in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 측정값 기록"
+          }
         }
       }
     },
@@ -129,6 +159,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sla een meting op in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에 측정값 기록"
           }
         }
       }
@@ -152,6 +188,12 @@
             "state": "translated",
             "value": "Leg ${kind} vast in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 ${kind} 기록"
+          }
         }
       }
     },
@@ -173,6 +215,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Voeg een ${kind}-meting toe aan ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에 ${kind} 측정값 추가"
           }
         }
       }
@@ -196,6 +244,12 @@
             "state": "translated",
             "value": "Leg mijn gewicht vast in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 체중 기록"
+          }
         }
       }
     },
@@ -217,6 +271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Leg een waarde vast in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 값 기록"
           }
         }
       }
@@ -240,6 +300,12 @@
             "state": "translated",
             "value": "Leg ${metric} vast in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 ${metric} 기록"
+          }
         }
       }
     },
@@ -261,6 +327,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Voeg een waarde toe aan ${metric} in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 ${metric}에 값 추가"
           }
         }
       }
@@ -284,6 +356,12 @@
             "state": "translated",
             "value": "Leg bloeddruk vast in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 혈압 기록해 줘"
+          }
         }
       }
     },
@@ -305,6 +383,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Leg mijn bloeddruk vast in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에 내 혈압 기록"
           }
         }
       }
@@ -328,6 +412,12 @@
             "state": "translated",
             "value": "Voeg een bloeddrukmeting toe aan ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에 혈압 측정값 추가"
+          }
         }
       }
     },
@@ -349,6 +439,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Leg mijn stemming vast in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 기분 기록해 줘"
           }
         }
       }
@@ -372,6 +468,12 @@
             "state": "translated",
             "value": "Leg vast hoe ik me voel in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에 내 기분 기록"
+          }
         }
       }
     },
@@ -393,6 +495,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Voeg een stemming toe aan ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에 기분 기록 추가"
           }
         }
       }
@@ -416,6 +524,12 @@
             "state": "translated",
             "value": "Hoe voel ik me in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 지금 기분 기록"
+          }
         }
       }
     },
@@ -437,6 +551,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Markeer medicatie als ingenomen in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 약 복용함으로 표시해 줘"
           }
         }
       }
@@ -460,6 +580,12 @@
             "state": "translated",
             "value": "Ik heb mijn medicatie ingenomen in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 약 먹었어"
+          }
         }
       }
     },
@@ -481,6 +607,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Leg een dosis vast in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 복용 기록"
           }
         }
       }
@@ -504,6 +636,12 @@
             "state": "translated",
             "value": "Heb ik vandaag mijn medicatie ingenomen in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 오늘 약 먹었는지 알려 줘"
+          }
         }
       }
     },
@@ -525,6 +663,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Toon mijn therapietrouw in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 내 복약 순응도 보여 줘"
           }
         }
       }
@@ -548,6 +692,12 @@
             "state": "translated",
             "value": "Heb ik mijn medicijnen ingenomen in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 약 복용했나요"
+          }
         }
       }
     },
@@ -569,6 +719,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Controleer mijn medicatie in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 복약 순응도 확인"
           }
         }
       }
@@ -592,6 +748,12 @@
             "state": "translated",
             "value": "Wat is mijn therapietrouw in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 내 복약 순응도 알려 줘"
+          }
         }
       }
     },
@@ -613,6 +775,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Heb ik mijn ${medication} ingenomen in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 ${medication} 복용했나요"
           }
         }
       }
@@ -636,6 +804,12 @@
             "state": "translated",
             "value": "Heb ik ${medication} ingenomen in ${applicationName}"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 ${medication} 먹었나요"
+          }
         }
       }
     },
@@ -658,6 +832,12 @@
             "state": "translated",
             "value": "Controleer in ${applicationName} of ik ${medication} heb ingenomen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 ${medication} 복용 여부 확인"
+          }
         }
       }
     },
@@ -679,6 +859,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Heb ik vandaag mijn ${medication} ingenomen in ${applicationName}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}에서 오늘 ${medication} 먹었는지 알려 줘"
           }
         }
       }
